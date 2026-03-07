@@ -6,4 +6,4 @@ def start(config):
     if config.get("channels", {}).get("telegram", {}).get("enabled"):
         TelegramChannel(config, agent).run()
     else:
-        print("Nu e activ niciun canal. Rulează `python cli.py agent` pentru chat în consolă.")
+        print("No channel is active. Run `python cli.py agent` for console chat.")

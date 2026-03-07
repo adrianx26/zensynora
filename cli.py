@@ -8,7 +8,7 @@ from myclaw.gateway import start
 def main():
     config = load_config()
     if len(sys.argv) < 2:
-        print("Comenzi: onboard | agent | gateway")
+        print("Commands: onboard | agent | gateway")
         return
 
     cmd = sys.argv[1]
@@ -16,7 +16,7 @@ def main():
         onboard()
     elif cmd == "agent":
         agent = Agent(config)
-        print("💬 MyClaw consolă (scrie 'exit' să ieși)")
+        print("💬 MyClaw console (write 'exit' to exit)")
         while True:
             msg = input("Tu: ")
             if msg.strip().lower() in ["exit", "quit"]:
@@ -25,7 +25,7 @@ def main():
     elif cmd == "gateway":
         start(config)
     else:
-        print("Comandă necunoscută")
+        print("Unknown command")
 
 if __name__ == "__main__":
     main()

@@ -14,5 +14,5 @@ def onboard():
         }
     }
     save_config(config)
-    print(f"Config creat în {CONFIG_DIR}/config.json")
-    print("Pornește Ollama + `ollama run llama3.2` apoi rulează `python cli.py gateway`")
+    print(f"Config created in {CONFIG_DIR}/config.json")
+    print("Start Ollama + `ollama run llama3.2` then run `python cli.py gateway`")
