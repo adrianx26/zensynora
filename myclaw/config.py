@@ -1,8 +1,7 @@
 import json
 import logging
 from pathlib import Path
-from typing import Optional
-from pydantic import BaseModel, SecretStr, field_validator, ValidationError
+from pydantic import BaseModel, SecretStr, ValidationError
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +10,7 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 WORKSPACE = CONFIG_DIR / "workspace"
 
 
-# ── Schema Models ────────────────────────────────────────────────────────────
+# ── Schema Models ─────────────────────────────────────────────────────────────
 
 class TelegramConfig(BaseModel):
     enabled: bool = False
@@ -31,8 +30,16 @@ class AgentDefaults(BaseModel):
     model: str = "llama3.2"
 
 
+class NamedAgentConfig(BaseModel):
+    """A named agent with its own model and optional custom system prompt."""
+    name: str
+    model: str = "llama3.2"
+    system_prompt: str = ""
+
+
 class AgentsConfig(BaseModel):
     defaults: AgentDefaults = AgentDefaults()
+    named: list[NamedAgentConfig] = []  # additional named agents
 
 
 class ChannelsConfig(BaseModel):
@@ -45,44 +52,42 @@ class AppConfig(BaseModel):
     channels: ChannelsConfig = ChannelsConfig()
 
     def get(self, key: str, default=None):
-        """Dict-style .get() for backward compatibility with agent.py / gateway.py."""
+        """Dict-style .get() for backward compatibility."""
         return getattr(self, key, default) or default
 
     def __getitem__(self, key: str):
-        """Dict-style [] access for backward compatibility."""
         try:
             return getattr(self, key)
         except AttributeError:
             raise KeyError(key)
 
 
-# ── Loaders ──────────────────────────────────────────────────────────────────
+# ── Loaders ───────────────────────────────────────────────────────────────────
 
 def load_config() -> AppConfig:
-    """Load and validate config from disk. Exits cleanly on schema errors."""
+    """Load and validate config. Exits with clear message on schema errors."""
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
     WORKSPACE.mkdir(parents=True, exist_ok=True)
 
     if not CONFIG_FILE.exists():
-        return AppConfig()  # safe defaults
+        return AppConfig()
 
     try:
         raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
         return AppConfig(**raw)
     except json.JSONDecodeError as e:
-        logger.error(f"Config file is not valid JSON: {e}")
         raise SystemExit(f"❌ Config error: {CONFIG_FILE} is not valid JSON — {e}")
     except ValidationError as e:
-        logger.error(f"Config validation failed: {e}")
         raise SystemExit(f"❌ Config validation error:\n{e}")
 
 
-def save_config(config: AppConfig):
-    """Save config to disk, serializing SecretStr safely."""
-    raw = config.model_dump()
-    # Re-serialize SecretStr as plain string for storage
-    if "channels" in raw and "telegram" in raw["channels"]:
-        tg = raw["channels"]["telegram"]
-        if hasattr(config.channels.telegram.token, "get_secret_value"):
+def save_config(config):
+    """Save config dict or AppConfig to disk."""
+    if isinstance(config, AppConfig):
+        raw = config.model_dump()
+        tg = raw.get("channels", {}).get("telegram", {})
+        if tg:
             tg["token"] = config.channels.telegram.token.get_secret_value()
+    else:
+        raw = config
     CONFIG_FILE.write_text(json.dumps(raw, indent=2, ensure_ascii=False), encoding="utf-8")

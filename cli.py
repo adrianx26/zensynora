@@ -5,6 +5,21 @@ from onboard import onboard
 from myclaw.gateway import start
 
 
+def _build_registry(config) -> dict:
+    """Build the agent registry from config."""
+    from myclaw import tools as tool_module
+    registry = {"default": Agent(config)}
+    for nc in config.agents.named:
+        registry[nc.name] = Agent(
+            config,
+            model=nc.model,
+            system_prompt=nc.system_prompt or None
+        )
+    tool_module.load_custom_tools()
+    tool_module.set_registry(registry)
+    return registry
+
+
 def main():
     config = load_config()
     if len(sys.argv) < 2:
@@ -12,12 +27,18 @@ def main():
         return
 
     cmd = sys.argv[1]
+
     if cmd == "onboard":
         onboard()
+
     elif cmd == "agent":
-        # Context manager ensures Memory connections are closed on exit
-        with Agent(config) as agent:
-            print("💬 MyClaw console (write 'exit' to exit)")
+        registry = _build_registry(config)
+        agent_names = ", ".join(registry.keys())
+
+        # Use the default agent as the context manager for clean shutdown
+        with registry["default"]:
+            print(f"💬 MyClaw console — agents: {agent_names}")
+            print("   Use @agentname to address a specific agent. Type 'exit' to quit.")
             while True:
                 try:
                     msg = input("Tu: ")
@@ -26,11 +47,25 @@ def main():
                     break
                 if msg.strip().lower() in ["exit", "quit"]:
                     break
-                print("Claw:", agent.think(msg))
+
+                # Feature 2: @agentname routing in CLI too
+                if msg.startswith("@"):
+                    parts = msg.split(None, 1)
+                    name  = parts[0][1:]
+                    text  = parts[1] if len(parts) > 1 else ""
+                    agent = registry.get(name) or registry["default"]
+                else:
+                    agent = registry["default"]
+                    text  = msg
+
+                print("Claw:", agent.think(text))
+
     elif cmd == "gateway":
         start(config)
+
     else:
-        print("Unknown command")
+        print(f"Unknown command: {cmd}")
+        print("Commands: onboard | agent | gateway")
 
 
 if __name__ == "__main__":

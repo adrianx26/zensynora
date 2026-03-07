@@ -12,27 +12,33 @@ SYSTEM_PROMPT = (
     "You are MyClaw, a personal AI agent. "
     "You can call tools by responding ONLY with JSON: "
     '{"tool": "<name>", "args": {<key>: <value>}}. '
-    "Available tools: shell(cmd), read_file(path), write_file(path, content). "
+    "Available tools: shell(cmd), read_file(path), write_file(path, content), "
+    "delegate(agent_name, task), list_tools(), register_tool(name, code), "
+    "schedule(task, delay, every, user_id), cancel_schedule(job_id), list_schedules(). "
     "For all other responses, reply in plain text."
 )
 
-class Agent:
-    """Personal AI agent with per-user memory and native tool calling."""
 
-    def __init__(self, config):
-        # user_id -> Memory instance for session isolation
+class Agent:
+    """Personal AI agent with per-user memory, native tool calling, multi-agent delegation."""
+
+    def __init__(self, config, model: str = None, system_prompt: str = None):
         self._memories: dict[str, Memory] = {}
         self.provider = LLMProvider(config)
-        self.model = config.get("agents", {}).get("defaults", {}).get("model", "llama3.2")
+        # Allow model override (for named agents); fall back to config default
+        try:
+            cfg_model = config.agents.defaults.model
+        except Exception:
+            cfg_model = "llama3.2"
+        self.model = model or cfg_model
+        self.system_prompt = system_prompt or SYSTEM_PROMPT
 
     def _get_memory(self, user_id: str) -> Memory:
-        """Return (or create) a Memory instance for the given user."""
         if user_id not in self._memories:
             self._memories[user_id] = Memory(user_id=user_id)
         return self._memories[user_id]
 
     def close(self):
-        """Close all open memory connections."""
         for mem in self._memories.values():
             mem.close()
         self._memories.clear()
@@ -43,14 +49,16 @@ class Agent:
     def __exit__(self, *args):
         self.close()
 
-    def think(self, user_message: str, user_id: str = "default") -> str:
-        """Process a user message and return the agent's response."""
+    def think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> str:
+        """Process a user message and return the agent's response.
+
+        _depth tracks sub-agent delegation depth — prevents infinite loops.
+        """
         mem = self._get_memory(user_id)
         mem.add("user", user_message)
 
-        # Build proper multi-turn messages list (not a JSON-dumped string)
         history = mem.get_history()
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
+        messages = [{"role": "system", "content": self.system_prompt}] + history
 
         try:
             response, tool_calls = self.provider.chat(messages, self.model)
@@ -58,30 +66,32 @@ class Agent:
             logger.error(f"LLM provider error: {e}")
             return f"Sorry, I encountered an error: {e}"
 
-        # Handle native tool calls returned by Ollama
         if tool_calls:
             results = []
             for tc in tool_calls:
                 tool_name = tc.get("function", {}).get("name", "")
                 args = tc.get("function", {}).get("arguments", {})
+
                 if tool_name not in TOOLS:
                     results.append(f"Unknown tool: {tool_name}")
                     continue
+
+                # Inject delegation depth so delegate() can enforce the limit
+                if tool_name == "delegate":
+                    args["_depth"] = _depth + 1
+
                 try:
                     result = TOOLS[tool_name]["func"](**args)
                     mem.add("tool", f"Tool {tool_name} returned: {result}")
-                    results.append(result)
+                    results.append(str(result))
                 except Exception as e:
-                    logger.error(f"Tool execution error: {e}")
+                    logger.error(f"Tool execution error ({tool_name}): {e}")
                     results.append(f"Tool error: {e}")
 
-            # Second LLM call with tool results
             tool_result_msg = "\n".join(results)
-            followup_messages = messages + [
-                {"role": "tool", "content": tool_result_msg}
-            ]
+            followup = messages + [{"role": "tool", "content": tool_result_msg}]
             try:
-                final_response, _ = self.provider.chat(followup_messages, self.model)
+                final_response, _ = self.provider.chat(followup, self.model)
                 mem.add("assistant", final_response)
                 return final_response
             except Exception as e:

@@ -1,9 +1,29 @@
 from .agent import Agent
 from .channels.telegram import TelegramChannel
+from . import tools as tool_module
+
 
 def start(config):
-    agent = Agent(config)
-    if config.get("channels", {}).get("telegram", {}).get("enabled"):
-        TelegramChannel(config, agent).run()
+    """Build agent registry, initialize tools, and start the active channel."""
+
+    # ── Feature 2: Multi-Agent Registry ──────────────────────────────────────
+    registry = {"default": Agent(config)}
+
+    for nc in config.agents.named:
+        registry[nc.name] = Agent(
+            config,
+            model=nc.model,
+            system_prompt=nc.system_prompt or None
+        )
+
+    # Load any persisted custom tools (Feature 4)
+    tool_module.load_custom_tools()
+
+    # Inject registry into tools module (enables delegation, scheduling)
+    tool_module.set_registry(registry)
+
+    # ── Start channel ─────────────────────────────────────────────────────────
+    if config.channels.telegram.enabled:
+        TelegramChannel(config, registry).run()
     else:
         print("No channel is active. Run `python cli.py agent` for console chat.")

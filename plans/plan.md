@@ -251,3 +251,43 @@ gantt
 2. **Short-term (This Month):** Add reliability (connection management, timeout, cleanup)
 3. **Medium-term (Next Month):** Performance improvements and native tool calling
 4. **Long-term:** Feature additions (multi-channel, context management)
+
+---
+
+## Next Implementations
+
+### Feature 1: Task Scheduler via Telegram `/remind`
+- Add `/remind <seconds> <message>` and `/remind every <seconds> <message>` commands
+- Use `python-telegram-bot`'s built-in `JobQueue` (zero new dependencies)
+- Add `/jobs` and `/cancel <job_id>` commands
+- **Files:** `myclaw/channels/telegram.py`
+- **Effort:** ~2–3 h · Low risk
+
+### Feature 2: Multi-Agent Registry
+- Multiple named `Agent` instances with different models and system prompts
+- Config extension: `agents.named[]` list with `name`, `model`, `prompt`
+- Routing via `@agentname` prefix or `/agent <name>` Telegram command
+- **Files:** `myclaw/config.py`, `myclaw/gateway.py`, `myclaw/channels/telegram.py`
+- **Effort:** ~4 h · Medium risk
+
+### Feature 3: Sub-Agents (Agent Delegates to Agent)
+- New `delegate(agent_name, task)` tool — calls another named agent internally
+- Max delegation depth = 2 (loop prevention)
+- **Files:** `myclaw/tools.py`, `myclaw/gateway.py`, `myclaw/agent.py`, `myclaw/provider.py`
+- **Effort:** ~5 h · Medium-High risk · Requires Feature 2
+
+### Feature 4: Agent Builds Its Own Tools
+- Agent can write a Python function and register it as a live tool at runtime
+- New tools: `register_tool(name, path)`, `list_tools()`
+- Sandbox: `py_compile` validation before loading; `importlib` dynamic load
+- Persistence: custom tools saved to `~/.myclaw/custom_tools.json`
+- **Files:** `myclaw/tools.py`, `myclaw/agent.py`, `myclaw/provider.py`
+- **Effort:** ~6 h · High risk
+
+### Feature 5: Agent-Initiated Scheduling
+- Agent can schedule any task as a tool call — not just via Telegram commands
+- New tools: `schedule(task, delay, every, user_id)`, `cancel_schedule(job_id)`, `list_schedules(user_id)`
+- Jobs persist across restarts via `~/.myclaw/schedules.json`
+- **Files:** `myclaw/tools.py`, `myclaw/provider.py`, `myclaw/gateway.py`, `requirements.txt`
+- **Effort:** ~5 h · Medium risk · New dependency: `apscheduler>=3.10`
+
