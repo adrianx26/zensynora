@@ -1,0 +1,16 @@
+myclaw/
+├── myclaw/
+│   ├── __init__.py
+│   ├── config.py
+│   ├── memory.py
+│   ├── provider.py
+│   ├── tools.py
+│   ├── agent.py
+│   ├── gateway.py
+│   └── channels/
+│       ├── __init__.py
+│       └── telegram.py
+├── onboard.py
+├── cli.py
+├── requirements.txt
+└── config.json.example
