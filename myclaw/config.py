@@ -18,28 +18,82 @@ class TelegramConfig(BaseModel):
     allowFrom: list[str] = []
 
 
+# ── Local Providers ───────────────────────────────────────────────────────────
+
 class OllamaConfig(BaseModel):
     base_url: str = "http://localhost:11434"
 
 
-class ProvidersConfig(BaseModel):
-    ollama: OllamaConfig = OllamaConfig()
+class LMStudioConfig(BaseModel):
+    """LM Studio local server — OpenAI-compatible REST API."""
+    base_url: str = "http://localhost:1234/v1"
+    api_key: SecretStr = SecretStr("lm-studio")   # LM Studio ignores the key but openai SDK requires one
 
+
+class LlamaCppConfig(BaseModel):
+    """llama.cpp server (`llama-server`) — OpenAI-compatible REST API."""
+    base_url: str = "http://localhost:8080/v1"
+    api_key: SecretStr = SecretStr("no-key")
+
+
+# ── Online Providers ──────────────────────────────────────────────────────────
+
+class OpenAIConfig(BaseModel):
+    api_key: SecretStr = SecretStr("")
+    base_url: str = "https://api.openai.com/v1"   # override for Azure, proxies, etc.
+
+
+class AnthropicConfig(BaseModel):
+    api_key: SecretStr = SecretStr("")
+
+
+class GeminiConfig(BaseModel):
+    api_key: SecretStr = SecretStr("")
+
+
+class GroqConfig(BaseModel):
+    api_key: SecretStr = SecretStr("")
+    base_url: str = "https://api.groq.com/openai/v1"
+
+
+class OpenRouterConfig(BaseModel):
+    api_key: SecretStr = SecretStr("")
+    base_url: str = "https://openrouter.ai/api/v1"
+    site_url: str = ""    # optional X-OpenRouter-Site-URL header
+    site_name: str = ""   # optional X-OpenRouter-Title header
+
+
+# ── Providers Container ───────────────────────────────────────────────────────
+
+class ProvidersConfig(BaseModel):
+    ollama:      OllamaConfig      = OllamaConfig()
+    lmstudio:    LMStudioConfig    = LMStudioConfig()
+    llamacpp:    LlamaCppConfig    = LlamaCppConfig()
+    openai:      OpenAIConfig      = OpenAIConfig()
+    anthropic:   AnthropicConfig   = AnthropicConfig()
+    gemini:      GeminiConfig      = GeminiConfig()
+    groq:        GroqConfig        = GroqConfig()
+    openrouter:  OpenRouterConfig  = OpenRouterConfig()
+
+
+# ── Agent Config ──────────────────────────────────────────────────────────────
 
 class AgentDefaults(BaseModel):
-    model: str = "llama3.2"
+    model: str    = "llama3.2"
+    provider: str = "ollama"   # which provider to use by default
 
 
 class NamedAgentConfig(BaseModel):
-    """A named agent with its own model and optional custom system prompt."""
+    """A named agent with its own model, provider, and optional custom system prompt."""
     name: str
-    model: str = "llama3.2"
+    model: str    = "llama3.2"
+    provider: str = ""         # empty = inherit from defaults
     system_prompt: str = ""
 
 
 class AgentsConfig(BaseModel):
     defaults: AgentDefaults = AgentDefaults()
-    named: list[NamedAgentConfig] = []  # additional named agents
+    named: list[NamedAgentConfig] = []
 
 
 class ChannelsConfig(BaseModel):
@@ -48,8 +102,8 @@ class ChannelsConfig(BaseModel):
 
 class AppConfig(BaseModel):
     providers: ProvidersConfig = ProvidersConfig()
-    agents: AgentsConfig = AgentsConfig()
-    channels: ChannelsConfig = ChannelsConfig()
+    agents:    AgentsConfig    = AgentsConfig()
+    channels:  ChannelsConfig  = ChannelsConfig()
 
     def get(self, key: str, default=None):
         """Dict-style .get() for backward compatibility."""
@@ -81,13 +135,32 @@ def load_config() -> AppConfig:
         raise SystemExit(f"❌ Config validation error:\n{e}")
 
 
+def _reveal_secrets(raw: dict) -> dict:
+    """Walk a plain dict and expose SecretStr values so they serialise correctly."""
+    out = {}
+    for k, v in raw.items():
+        if isinstance(v, dict):
+            out[k] = _reveal_secrets(v)
+        else:
+            out[k] = v
+    return out
+
+
 def save_config(config):
     """Save config dict or AppConfig to disk."""
     if isinstance(config, AppConfig):
         raw = config.model_dump()
-        tg = raw.get("channels", {}).get("telegram", {})
-        if tg:
-            tg["token"] = config.channels.telegram.token.get_secret_value()
+
+        # Re-inject plaintext secrets that pydantic hides
+        def _inject_secrets(raw_dict, model_obj):
+            for field_name, field_val in raw_dict.items():
+                obj_val = getattr(model_obj, field_name, None)
+                if isinstance(field_val, dict) and obj_val is not None:
+                    _inject_secrets(field_val, obj_val)
+                elif isinstance(obj_val, SecretStr):
+                    raw_dict[field_name] = obj_val.get_secret_value()
+        _inject_secrets(raw, config)
     else:
         raw = config
+
     CONFIG_FILE.write_text(json.dumps(raw, indent=2, ensure_ascii=False), encoding="utf-8")

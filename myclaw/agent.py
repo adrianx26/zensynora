@@ -1,5 +1,5 @@
 from .memory import Memory
-from .provider import LLMProvider
+from .provider import get_provider, SUPPORTED_PROVIDERS
 from .tools import TOOLS
 from rich.console import Console
 import json
@@ -22,15 +22,32 @@ SYSTEM_PROMPT = (
 class Agent:
     """Personal AI agent with per-user memory, native tool calling, multi-agent delegation."""
 
-    def __init__(self, config, model: str = None, system_prompt: str = None):
+    def __init__(self, config, model: str = None, system_prompt: str = None, provider_name: str = None):
         self._memories: dict[str, Memory] = {}
-        self.provider = LLMProvider(config)
-        # Allow model override (for named agents); fall back to config default
+
+        # ── Resolve provider ──────────────────────────────────────────────────
+        try:
+            default_provider = config.agents.defaults.provider or "ollama"
+        except Exception:
+            default_provider = "ollama"
+        resolved_provider = provider_name or default_provider
+
+        try:
+            self.provider = get_provider(config, resolved_provider)
+        except Exception as e:
+            logger.warning(
+                f"Could not init provider '{resolved_provider}' ({e}). "
+                "Falling back to Ollama."
+            )
+            self.provider = get_provider(config, "ollama")
+
+        # ── Resolve model ─────────────────────────────────────────────────────
         try:
             cfg_model = config.agents.defaults.model
         except Exception:
             cfg_model = "llama3.2"
         self.model = model or cfg_model
+
         self.system_prompt = system_prompt or SYSTEM_PROMPT
 
     def _get_memory(self, user_id: str) -> Memory:

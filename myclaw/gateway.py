@@ -10,10 +10,13 @@ def start(config):
     registry = {"default": Agent(config)}
 
     for nc in config.agents.named:
+        # Named agents can specify their own provider; fall back to defaults.
+        agent_provider = nc.provider or None
         registry[nc.name] = Agent(
             config,
             model=nc.model,
-            system_prompt=nc.system_prompt or None
+            system_prompt=nc.system_prompt or None,
+            provider_name=agent_provider,
         )
 
     # Load any persisted custom tools (Feature 4)

@@ -4,3 +4,11 @@ pyyaml>=6.0
 rich>=13.0
 pydantic>=2.0
 apscheduler>=3.10
+
+# ── LLM provider SDKs (install the ones you need) ─────────────────────────────
+# OpenAI / LM Studio / llama.cpp / Groq / OpenRouter  →  pip install openai
+# Anthropic Claude                                      →  pip install anthropic
+# Google Gemini                                         →  pip install google-generativeai
+openai>=1.0
+# anthropic>=0.25
+# google-generativeai>=0.5

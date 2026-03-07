@@ -1,14 +1,37 @@
-import requests
+"""
+LLM provider layer for MyClaw.
+
+Supported providers
+───────────────────
+Local
+  ollama      – Ollama  (http://localhost:11434)
+  lmstudio    – LM Studio  (OpenAI-compat, http://localhost:1234/v1)
+  llamacpp    – llama-server  (OpenAI-compat, http://localhost:8080/v1)
+
+Online
+  openai      – OpenAI  (gpt-4o, gpt-4-turbo, …)
+  anthropic   – Anthropic Claude  (claude-3-5-sonnet, …)
+  gemini      – Google Gemini  (gemini-1.5-pro, …)
+  groq        – Groq  (llama3-70b-8192, mixtral-8x7b-32768, …)
+  openrouter  – OpenRouter  (any model via openrouter.ai)
+
+Select with  agents.defaults.provider  (or per named-agent  provider  field)
+in ~/.myclaw/config.json.
+"""
+
+from __future__ import annotations
+
 import logging
+from abc import ABC, abstractmethod
 from typing import List, Dict, Tuple, Optional
+
+import requests
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TIMEOUT = 30  # seconds
+DEFAULT_TIMEOUT = 60  # seconds
 
-# ── Tool Schemas (native Ollama function calling) ──────────────────────────────
-# Passed on every /api/chat call so the model knows what tools exist.
-# _depth is intentionally omitted — it is injected by agent.py, not the LLM.
+# ── Tool Schemas (used by providers that support OpenAI-style function calling) ──
 
 TOOL_SCHEMAS = [
     # ── Core ─────────────────────────────────────────────────────────────────
@@ -55,7 +78,7 @@ TOOL_SCHEMAS = [
             }
         }
     },
-    # ── Feature 3: Sub-Agent Delegation ──────────────────────────────────────
+    # ── Sub-Agent Delegation ──────────────────────────────────────────────────
     {
         "type": "function",
         "function": {
@@ -71,7 +94,7 @@ TOOL_SCHEMAS = [
             }
         }
     },
-    # ── Feature 4: Dynamic Tool Building ─────────────────────────────────────
+    # ── Dynamic Tool Building ─────────────────────────────────────────────────
     {
         "type": "function",
         "function": {
@@ -99,7 +122,7 @@ TOOL_SCHEMAS = [
             }
         }
     },
-    # ── Feature 5: Agent-Initiated Scheduling ────────────────────────────────
+    # ── Scheduling ────────────────────────────────────────────────────────────
     {
         "type": "function",
         "function": {
@@ -147,8 +170,53 @@ TOOL_SCHEMAS = [
 ]
 
 
-class LLMProvider:
-    """Ollama LLM provider with native tool calling, timeout, and error handling."""
+# ── Helpers ────────────────────────────────────────────────────────────────────
+
+def _openai_tool_calls_to_dict(tool_calls) -> Optional[List[Dict]]:
+    """Convert openai SDK ToolCall objects to the dict format agent.py expects."""
+    if not tool_calls:
+        return None
+    result = []
+    for tc in tool_calls:
+        import json as _json
+        args = tc.function.arguments
+        if isinstance(args, str):
+            try:
+                args = _json.loads(args)
+            except Exception:
+                args = {}
+        result.append({
+            "function": {
+                "name": tc.function.name,
+                "arguments": args,
+            }
+        })
+    return result or None
+
+
+# ── Abstract Base ──────────────────────────────────────────────────────────────
+
+class BaseLLMProvider(ABC):
+    """All providers implement this interface."""
+
+    @abstractmethod
+    def chat(
+        self,
+        messages: List[Dict],
+        model: str,
+    ) -> Tuple[str, Optional[List[Dict]]]:
+        """Send messages to the LLM.
+
+        Returns:
+            (response_text, tool_calls)
+            tool_calls is None when no tools were invoked.
+        """
+
+
+# ── Local Providers ────────────────────────────────────────────────────────────
+
+class OllamaProvider(BaseLLMProvider):
+    """Ollama native API (http://localhost:11434)."""
 
     def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
         try:
@@ -157,43 +225,360 @@ class LLMProvider:
             self.base_url = "http://localhost:11434"
         self.timeout = timeout
 
-    def chat(
-        self,
-        messages: List[Dict],
-        model: str = "llama3.2"
-    ) -> Tuple[str, Optional[List[Dict]]]:
-        """Send chat request to Ollama with native tool calling.
-
-        Returns:
-            (response_text, tool_calls) — tool_calls is None when no tools invoked.
-        """
+    def chat(self, messages, model="llama3.2"):
         payload = {
             "model": model,
             "messages": messages,
             "stream": False,
-            "tools": TOOL_SCHEMAS
+            "tools": TOOL_SCHEMAS,
         }
         try:
             r = requests.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
-                timeout=self.timeout
+                timeout=self.timeout,
             )
             r.raise_for_status()
             msg = r.json()["message"]
-            tool_calls  = msg.get("tool_calls") or None
-            response_text = msg.get("content", "")
-            return response_text, tool_calls
-
+            tool_calls = msg.get("tool_calls") or None
+            return msg.get("content", ""), tool_calls
         except requests.Timeout:
-            logger.error(f"LLM request timed out after {self.timeout}s")
-            raise TimeoutError(f"LLM request timed out after {self.timeout} seconds")
+            raise TimeoutError(f"Ollama request timed out after {self.timeout}s")
         except requests.ConnectionError as e:
-            logger.error(f"Connection error to Ollama: {e}")
             raise ConnectionError(f"Could not connect to Ollama at {self.base_url}") from e
         except requests.HTTPError as e:
-            logger.error(f"HTTP error from Ollama: {e}")
-            raise RuntimeError(f"Ollama error: {e}") from e
-        except Exception as e:
-            logger.error(f"Unexpected error in LLM call: {e}")
-            raise
+            raise RuntimeError(f"Ollama HTTP error: {e}") from e
+
+
+class OpenAICompatProvider(BaseLLMProvider):
+    """
+    Generic OpenAI-compatible provider.
+
+    Works for: LM Studio, llama.cpp server, Groq, OpenRouter — all expose
+    the same /chat/completions endpoint with OpenAI request/response schema.
+    """
+
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str,
+        timeout: int = DEFAULT_TIMEOUT,
+        extra_headers: Optional[Dict[str, str]] = None,
+    ):
+        try:
+            from openai import OpenAI
+        except ImportError:
+            raise ImportError(
+                "The 'openai' package is required for this provider.\n"
+                "Install it with:  pip install openai"
+            )
+        self.client = OpenAI(
+            api_key=api_key or "no-key",
+            base_url=base_url,
+            timeout=timeout,
+            default_headers=extra_headers or {},
+        )
+
+    def chat(self, messages, model="gpt-4o-mini"):
+        response = self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            tools=TOOL_SCHEMAS,
+        )
+        msg = response.choices[0].message
+        tool_calls = _openai_tool_calls_to_dict(msg.tool_calls)
+        return msg.content or "", tool_calls
+
+
+class LMStudioProvider(OpenAICompatProvider):
+    """LM Studio local server (OpenAI-compat, default http://localhost:1234/v1)."""
+
+    def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
+        try:
+            cfg = config.providers.lmstudio
+            base_url = cfg.base_url
+            api_key  = cfg.api_key.get_secret_value()
+        except Exception:
+            base_url = "http://localhost:1234/v1"
+            api_key  = "lm-studio"
+        super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
+
+
+class LlamaCppProvider(OpenAICompatProvider):
+    """llama-server (llama.cpp) — OpenAI-compat, default http://localhost:8080/v1."""
+
+    def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
+        try:
+            cfg = config.providers.llamacpp
+            base_url = cfg.base_url
+            api_key  = cfg.api_key.get_secret_value()
+        except Exception:
+            base_url = "http://localhost:8080/v1"
+            api_key  = "no-key"
+        super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
+
+
+# ── Online Providers ───────────────────────────────────────────────────────────
+
+class OpenAIProvider(OpenAICompatProvider):
+    """OpenAI cloud (gpt-4o, gpt-4-turbo, gpt-3.5-turbo, …)."""
+
+    def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
+        try:
+            cfg = config.providers.openai
+            api_key  = cfg.api_key.get_secret_value()
+            base_url = cfg.base_url
+        except Exception:
+            api_key  = ""
+            base_url = "https://api.openai.com/v1"
+        if not api_key:
+            raise ValueError("openai.api_key is not set in config.")
+        super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
+
+
+class GroqProvider(OpenAICompatProvider):
+    """Groq cloud (llama3-70b-8192, mixtral-8x7b-32768, gemma-7b-it, …)."""
+
+    def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
+        try:
+            cfg = config.providers.groq
+            api_key  = cfg.api_key.get_secret_value()
+            base_url = cfg.base_url
+        except Exception:
+            api_key  = ""
+            base_url = "https://api.groq.com/openai/v1"
+        if not api_key:
+            raise ValueError("groq.api_key is not set in config.")
+        super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
+
+
+class OpenRouterProvider(OpenAICompatProvider):
+    """OpenRouter cloud — routes to 100+ models via a single API."""
+
+    def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
+        try:
+            cfg = config.providers.openrouter
+            api_key   = cfg.api_key.get_secret_value()
+            base_url  = cfg.base_url
+            site_url  = cfg.site_url
+            site_name = cfg.site_name
+        except Exception:
+            api_key   = ""
+            base_url  = "https://openrouter.ai/api/v1"
+            site_url  = ""
+            site_name = ""
+        if not api_key:
+            raise ValueError("openrouter.api_key is not set in config.")
+        headers = {}
+        if site_url:
+            headers["X-OpenRouter-Site-URL"] = site_url
+        if site_name:
+            headers["X-OpenRouter-Title"] = site_name
+        super().__init__(api_key=api_key, base_url=base_url, timeout=timeout, extra_headers=headers)
+
+
+class AnthropicProvider(BaseLLMProvider):
+    """Anthropic Claude (claude-3-5-sonnet-20241022, claude-3-haiku-20240307, …)."""
+
+    def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
+        try:
+            from anthropic import Anthropic
+        except ImportError:
+            raise ImportError(
+                "The 'anthropic' package is required.\n"
+                "Install it with:  pip install anthropic"
+            )
+        try:
+            api_key = config.providers.anthropic.api_key.get_secret_value()
+        except Exception:
+            api_key = ""
+        if not api_key:
+            raise ValueError("anthropic.api_key is not set in config.")
+        self.client  = Anthropic(api_key=api_key)
+        self.timeout = timeout
+
+    def chat(self, messages, model="claude-3-5-sonnet-20241022"):
+        import json as _json
+
+        # Anthropic separates the system prompt from the conversation
+        system_content = ""
+        conv_messages  = []
+        for m in messages:
+            role = m["role"]
+            content = m.get("content", "")
+            if role == "system":
+                system_content += content + "\n"
+            elif role in ("user", "assistant"):
+                conv_messages.append({"role": role, "content": content})
+            elif role == "tool":
+                # Append tool result as a user turn
+                conv_messages.append({"role": "user", "content": f"[tool result] {content}"})
+
+        # Build Anthropic tool definitions
+        ant_tools = []
+        for ts in TOOL_SCHEMAS:
+            f = ts["function"]
+            ant_tools.append({
+                "name":        f["name"],
+                "description": f.get("description", ""),
+                "input_schema": f.get("parameters", {"type": "object", "properties": {}}),
+            })
+
+        kwargs = dict(
+            model=model,
+            max_tokens=4096,
+            messages=conv_messages,
+            tools=ant_tools,
+        )
+        if system_content.strip():
+            kwargs["system"] = system_content.strip()
+
+        response = self.client.messages.create(**kwargs)
+
+        text_parts  = []
+        tool_calls  = []
+
+        for block in response.content:
+            if block.type == "text":
+                text_parts.append(block.text)
+            elif block.type == "tool_use":
+                args = block.input if isinstance(block.input, dict) else {}
+                tool_calls.append({
+                    "function": {
+                        "name":      block.name,
+                        "arguments": args,
+                    }
+                })
+
+        return "\n".join(text_parts), (tool_calls or None)
+
+
+class GeminiProvider(BaseLLMProvider):
+    """Google Gemini (gemini-1.5-pro, gemini-1.5-flash, gemini-2.0-flash, …)."""
+
+    def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
+        try:
+            import google.generativeai as genai
+        except ImportError:
+            raise ImportError(
+                "The 'google-generativeai' package is required.\n"
+                "Install it with:  pip install google-generativeai"
+            )
+        try:
+            api_key = config.providers.gemini.api_key.get_secret_value()
+        except Exception:
+            api_key = ""
+        if not api_key:
+            raise ValueError("gemini.api_key is not set in config.")
+        genai.configure(api_key=api_key)
+        self._genai    = genai
+        self.timeout   = timeout
+
+    def _build_tools(self):
+        """Convert TOOL_SCHEMAS to Gemini FunctionDeclaration list."""
+        from google.generativeai.types import content_types
+        declarations = []
+        for ts in TOOL_SCHEMAS:
+            f = ts["function"]
+            declarations.append(
+                self._genai.protos.FunctionDeclaration(
+                    name=f["name"],
+                    description=f.get("description", ""),
+                    parameters=self._genai.protos.Schema(
+                        type=self._genai.protos.Type.OBJECT,
+                        properties={
+                            k: self._genai.protos.Schema(
+                                type=self._genai.protos.Type.STRING,
+                                description=v.get("description", ""),
+                            )
+                            for k, v in f.get("parameters", {}).get("properties", {}).items()
+                        },
+                        required=f.get("parameters", {}).get("required", []),
+                    ),
+                )
+            )
+        return [self._genai.protos.Tool(function_declarations=declarations)]
+
+    def chat(self, messages, model="gemini-1.5-flash"):
+        system_parts = []
+        history      = []
+        last_user    = None
+
+        for m in messages:
+            role    = m["role"]
+            content = m.get("content", "")
+            if role == "system":
+                system_parts.append(content)
+            elif role == "user":
+                last_user = content
+                history.append({"role": "user", "parts": [content]})
+            elif role == "assistant":
+                history.append({"role": "model", "parts": [content]})
+            elif role == "tool":
+                history.append({"role": "user", "parts": [f"[tool result] {content}"]})
+
+        gen_model = self._genai.GenerativeModel(
+            model_name=model,
+            system_instruction="\n".join(system_parts) if system_parts else None,
+            tools=self._build_tools(),
+        )
+
+        chat_session = gen_model.start_chat(history=history[:-1] if history else [])
+        response     = chat_session.send_message(last_user or "")
+
+        text_parts = []
+        tool_calls = []
+
+        for part in response.parts:
+            if hasattr(part, "text") and part.text:
+                text_parts.append(part.text)
+            if hasattr(part, "function_call") and part.function_call:
+                fc = part.function_call
+                tool_calls.append({
+                    "function": {
+                        "name":      fc.name,
+                        "arguments": dict(fc.args),
+                    }
+                })
+
+        return "\n".join(text_parts), (tool_calls or None)
+
+
+# ── Provider Factory ──────────────────────────────────────────────────────────
+
+_PROVIDER_MAP = {
+    "ollama":     OllamaProvider,
+    "lmstudio":   LMStudioProvider,
+    "llamacpp":   LlamaCppProvider,
+    "openai":     OpenAIProvider,
+    "anthropic":  AnthropicProvider,
+    "gemini":     GeminiProvider,
+    "groq":       GroqProvider,
+    "openrouter": OpenRouterProvider,
+}
+
+SUPPORTED_PROVIDERS = list(_PROVIDER_MAP.keys())
+
+
+def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
+    """Return an initialised provider instance for *provider_name*.
+
+    Raises:
+        ValueError  – unknown provider name
+        ImportError – required SDK not installed
+        ValueError  – API key missing for cloud providers
+    """
+    name = (provider_name or "ollama").lower().strip()
+    cls  = _PROVIDER_MAP.get(name)
+    if cls is None:
+        raise ValueError(
+            f"Unknown provider '{name}'. "
+            f"Supported: {', '.join(SUPPORTED_PROVIDERS)}"
+        )
+    logger.debug(f"Initialising provider: {name}")
+    return cls(config)
+
+
+# ── Legacy alias (keeps old import `from .provider import LLMProvider` working) ─
+
+LLMProvider = OllamaProvider
