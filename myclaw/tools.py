@@ -1,4 +1,5 @@
 import subprocess
+import shlex
 import logging
 from pathlib import Path
 from typing import Dict
@@ -38,26 +39,26 @@ def validate_path(path: str) -> Path:
 def shell(cmd: str) -> str:
     """Execute shell command in workspace with security restrictions."""
     try:
-        # Extract first command word
-        parts = cmd.strip().split()
+        # Split safely — prevents shell injection via ; | && $() etc.
+        parts = shlex.split(cmd)
         if not parts:
             return "Error: Empty command"
-        
+
         first_cmd = parts[0].lower()
-        
+
         # Check blocklist first (most dangerous)
         if first_cmd in BLOCKED_COMMANDS:
             logger.warning(f"Blocked command attempted: {first_cmd}")
             return f"Error: Command '{first_cmd}' is blocked for security"
-        
+
         # Check allowlist
         if first_cmd not in ALLOWED_COMMANDS:
             return f"Error: Command '{first_cmd}' not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
-        
-        # Execute with timeout and capture output
+
+        # Execute without shell=True to prevent injection
         result = subprocess.run(
-            cmd,
-            shell=True,
+            parts,            # list of args, not a string
+            shell=False,      # no shell expansion — semicolons, pipes, $() are all inert
             cwd=WORKSPACE,
             capture_output=True,
             text=True,

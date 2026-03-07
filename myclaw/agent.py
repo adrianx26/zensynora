@@ -2,64 +2,91 @@ from .memory import Memory
 from .provider import LLMProvider
 from .tools import TOOLS
 from rich.console import Console
+import json
 import logging
 
 console = Console()
 logger = logging.getLogger(__name__)
 
+SYSTEM_PROMPT = (
+    "You are MyClaw, a personal AI agent. "
+    "You can call tools by responding ONLY with JSON: "
+    '{"tool": "<name>", "args": {<key>: <value>}}. '
+    "Available tools: shell(cmd), read_file(path), write_file(path, content). "
+    "For all other responses, reply in plain text."
+)
+
 class Agent:
+    """Personal AI agent with per-user memory and native tool calling."""
+
     def __init__(self, config):
-        self.memory = Memory()
+        # user_id -> Memory instance for session isolation
+        self._memories: dict[str, Memory] = {}
         self.provider = LLMProvider(config)
         self.model = config.get("agents", {}).get("defaults", {}).get("model", "llama3.2")
 
-    def think(self, user_message: str) -> str:
-        self.memory.add("user", user_message)
-        history = self.memory.get_history()
+    def _get_memory(self, user_id: str) -> Memory:
+        """Return (or create) a Memory instance for the given user."""
+        if user_id not in self._memories:
+            self._memories[user_id] = Memory(user_id=user_id)
+        return self._memories[user_id]
 
-        # Simple ReAct-style prompt
-        prompt = f"""You are MyClaw, a personal AI agent.
-You can use tools: shell, read_file, write_file.
+    def close(self):
+        """Close all open memory connections."""
+        for mem in self._memories.values():
+            mem.close()
+        self._memories.clear()
 
-History:
-{json.dumps(history, ensure_ascii=False, indent=2)}
+    def __enter__(self):
+        return self
 
-New message: {user_message}
+    def __exit__(self, *args):
+        self.close()
 
-Reply directly or call tools in JSON format: {{"tool": "shell", "args": {{"cmd": "ls"}}}}"""
+    def think(self, user_message: str, user_id: str = "default") -> str:
+        """Process a user message and return the agent's response."""
+        mem = self._get_memory(user_id)
+        mem.add("user", user_message)
+
+        # Build proper multi-turn messages list (not a JSON-dumped string)
+        history = mem.get_history()
+        messages = [{"role": "system", "content": SYSTEM_PROMPT}] + history
 
         try:
-            response = self.provider.chat([{"role": "user", "content": prompt}], self.model)
+            response, tool_calls = self.provider.chat(messages, self.model)
         except Exception as e:
             logger.error(f"LLM provider error: {e}")
-            self.memory.add("system", f"Error communicating with AI: {e}")
             return f"Sorry, I encountered an error: {e}"
 
-        # Simplu parsing tool (poți extinde cu tool calling real)
-        if '{"tool"' in response:
-            try:
-                tool_call = json.loads(response[response.find('{'):response.rfind('}')+1])
-                tool_name = tool_call["tool"]
-                args = tool_call.get("args", {})
-                
-                # Validate tool exists
+        # Handle native tool calls returned by Ollama
+        if tool_calls:
+            results = []
+            for tc in tool_calls:
+                tool_name = tc.get("function", {}).get("name", "")
+                args = tc.get("function", {}).get("arguments", {})
                 if tool_name not in TOOLS:
-                    return f"Unknown tool: {tool_name}"
-                
-                result = TOOLS[tool_name]["func"](**args)
-                self.memory.add("tool", f"Tool {tool_name} returned: {result}")
-                # al doilea call LLM cu rezultat
+                    results.append(f"Unknown tool: {tool_name}")
+                    continue
                 try:
-                    return self.provider.chat([{"role": "user", "content": f"Tool result: {result}\nFinal answer:"}])
+                    result = TOOLS[tool_name]["func"](**args)
+                    mem.add("tool", f"Tool {tool_name} returned: {result}")
+                    results.append(result)
                 except Exception as e:
-                    logger.error(f"LLM second call error: {e}")
-                    return f"Tool executed but error getting response: {e}"
-            except json.JSONDecodeError as e:
-                logger.error(f"JSON parse error: {e}")
-                return f"Could not parse tool call: {e}"
-            except Exception as e:
-                logger.error(f"Tool execution error: {e}")
-                return f"Tool execution failed: {e}"
+                    logger.error(f"Tool execution error: {e}")
+                    results.append(f"Tool error: {e}")
 
-        self.memory.add("assistant", response)
+            # Second LLM call with tool results
+            tool_result_msg = "\n".join(results)
+            followup_messages = messages + [
+                {"role": "tool", "content": tool_result_msg}
+            ]
+            try:
+                final_response, _ = self.provider.chat(followup_messages, self.model)
+                mem.add("assistant", final_response)
+                return final_response
+            except Exception as e:
+                logger.error(f"LLM second call error: {e}")
+                return f"Tool executed but error getting response: {e}"
+
+        mem.add("assistant", response)
         return response

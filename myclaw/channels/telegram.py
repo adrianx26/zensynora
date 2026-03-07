@@ -31,11 +31,11 @@ class TelegramChannel:
         
         try:
             # Run blocking LLM call in thread pool to not block the event loop
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
+            user_id = str(update.message.from_user.id)
             response = await loop.run_in_executor(
-                _executor, 
-                self.agent.think, 
-                text
+                _executor,
+                lambda: self.agent.think(text, user_id=user_id)
             )
             await update.message.reply_text(response)
         except Exception as e:

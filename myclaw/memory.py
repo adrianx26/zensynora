@@ -8,15 +8,15 @@ from contextlib import contextmanager
 logger = logging.getLogger(__name__)
 
 class Memory:
-    """SQLite-backed conversation memory with context manager support."""
-    
-    def __init__(self, db_path: str = None, auto_cleanup_days: int = 30):
-        if db_path is None:
-            db_path = Path.home() / ".myclaw" / "memory.db"
-        self.db = Path(db_path)
+    """SQLite-backed conversation memory with per-user isolation and context manager support."""
+
+    def __init__(self, user_id: str = "default", auto_cleanup_days: int = 30):
+        # Each user gets their own DB file — full disk-level session isolation
+        db_path = Path.home() / ".myclaw" / f"memory_{user_id}.db"
+        self.db = db_path
         self.db.parent.mkdir(parents=True, exist_ok=True)
         self.auto_cleanup_days = auto_cleanup_days
-        
+
         self.conn = sqlite3.connect(self.db, check_same_thread=False)
         self.conn.execute("""CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY,
@@ -24,16 +24,14 @@ class Memory:
             content TEXT,
             timestamp TEXT
         )""")
-        # Create index for faster timestamp queries
+        # Index for fast timestamp-based queries and cleanup
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp)")
         self.conn.commit()
 
     def __enter__(self):
-        """Support for 'with Memory() as m:' pattern."""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Ensure connection is closed on exit."""
         self.close()
 
     def close(self):
@@ -59,14 +57,18 @@ class Memory:
             logger.error(f"Error adding message: {e}")
             raise
 
-    def get_history(self, limit=20):
-        """Get conversation history with optional limit."""
+    def get_history(self, limit: int = 20) -> list:
+        """Get the last N messages in chronological order, efficiently."""
         try:
+            # Subquery approach: get last N by DESC, then re-order ASC in outer query.
+            # Avoids Python-side reversal and is faster on large tables.
             cur = self.conn.execute(
-                "SELECT role, content FROM messages ORDER BY id DESC LIMIT ?", 
+                "SELECT role, content FROM "
+                "(SELECT role, content, id FROM messages ORDER BY id DESC LIMIT ?) "
+                "ORDER BY id ASC",
                 (limit,)
             )
-            return [{"role": r, "content": c} for r, c in cur.fetchall()][::-1]
+            return [{"role": r, "content": c} for r, c in cur.fetchall()]
         except Exception as e:
             logger.error(f"Error getting history: {e}")
             return []
@@ -75,7 +77,7 @@ class Memory:
         """Delete messages older than specified days. Returns count of deleted messages."""
         if days is None:
             days = self.auto_cleanup_days
-        
+
         try:
             cutoff = datetime.now() - timedelta(days=days)
             cursor = self.conn.execute(
@@ -84,12 +86,11 @@ class Memory:
             )
             self.conn.commit()
             deleted = cursor.rowcount
-            
-            # Vacuum to reclaim space
+
             if deleted > 0:
                 self.conn.execute("VACUUM")
                 logger.info(f"Cleaned up {deleted} old messages")
-            
+
             return deleted
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
