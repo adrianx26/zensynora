@@ -8,10 +8,19 @@ Inspired by MemoPad's Markdown + SQLite approach:
 """
 
 from .db import KnowledgeDB
-from .parser import parse_note, parse_frontmatter, parse_observations, parse_relations
-from .storage import write_note, read_note, delete_note, list_notes
-from .graph import get_related_entities, get_entity_network
-from .sync import sync_knowledge
+from .parser import (
+    parse_note, parse_frontmatter, parse_observations, parse_relations,
+    Observation, Relation, Note
+)
+from .storage import (
+    write_note, read_note, delete_note, list_notes, search_notes,
+    get_all_tags, update_note, get_note_by_tag
+)
+from .graph import (
+    get_related_entities, get_entity_network, find_path,
+    get_central_entities, build_context
+)
+from .sync import sync_knowledge, sync_and_report, verify_sync
 
 __all__ = [
     # Database
@@ -21,14 +30,26 @@ __all__ = [
     "parse_frontmatter",
     "parse_observations",
     "parse_relations",
+    "Observation",
+    "Relation",
+    "Note",
     # Storage
     "write_note",
     "read_note",
     "delete_note",
     "list_notes",
+    "search_notes",
+    "get_all_tags",
+    "update_note",
+    "get_note_by_tag",
     # Graph
     "get_related_entities",
     "get_entity_network",
+    "find_path",
+    "get_central_entities",
+    "build_context",
     # Sync
     "sync_knowledge",
+    "sync_and_report",
+    "verify_sync",
 ]
