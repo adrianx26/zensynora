@@ -21,6 +21,7 @@ in ~/.myclaw/config.json.
 
 from __future__ import annotations
 
+import json as _json
 import logging
 from abc import ABC, abstractmethod
 from typing import List, Dict, Tuple, Optional
@@ -178,7 +179,6 @@ def _openai_tool_calls_to_dict(tool_calls) -> Optional[List[Dict]]:
         return None
     result = []
     for tc in tool_calls:
-        import json as _json
         args = tc.function.arguments
         if isinstance(args, str):
             try:
@@ -398,8 +398,6 @@ class AnthropicProvider(BaseLLMProvider):
         self.timeout = timeout
 
     def chat(self, messages, model="claude-3-5-sonnet-20241022"):
-        import json as _json
-
         # Anthropic separates the system prompt from the conversation
         system_content = ""
         conv_messages  = []
