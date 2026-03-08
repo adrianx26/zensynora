@@ -121,6 +121,130 @@ class TelegramChannel:
             f"Example: @coder write a binary search function"
         )
 
+    # ── Knowledge commands ─────────────────────────────────────────────────────
+
+    async def knowledge_search_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """/knowledge_search <query> — search the knowledge base."""
+        if not self._allowed(update):
+            return
+        
+        if not context.args:
+            await update.message.reply_text(
+                "🔍 Search the knowledge base\n"
+                "Usage: /knowledge_search <query>\n"
+                "Example: /knowledge_search project phoenix"
+            )
+            return
+        
+        query = " ".join(context.args)
+        user_id = str(update.message.from_user.id)
+        
+        try:
+            result = tool_module.search_knowledge(query=query, limit=5, user_id=user_id)
+            await update.message.reply_text(result, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Knowledge search error: {e}")
+            await update.message.reply_text(f"Error searching: {e}")
+
+    async def knowledge_list_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """/knowledge_list — list all knowledge notes."""
+        if not self._allowed(update):
+            return
+        
+        user_id = str(update.message.from_user.id)
+        
+        try:
+            result = tool_module.list_knowledge(limit=20, user_id=user_id)
+            await update.message.reply_text(result, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Knowledge list error: {e}")
+            await update.message.reply_text(f"Error listing: {e}")
+
+    async def knowledge_read_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """/knowledge_read <permalink> — read a specific knowledge note."""
+        if not self._allowed(update):
+            return
+        
+        if not context.args:
+            await update.message.reply_text(
+                "📖 Read a knowledge note\n"
+                "Usage: /knowledge_read <permalink>\n"
+                "Example: /knowledge_read project-phoenix"
+            )
+            return
+        
+        permalink = context.args[0]
+        user_id = str(update.message.from_user.id)
+        
+        try:
+            result = tool_module.read_knowledge(permalink=permalink, user_id=user_id)
+            await update.message.reply_text(result, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Knowledge read error: {e}")
+            await update.message.reply_text(f"Error reading: {e}")
+
+    async def knowledge_write_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """/knowledge_write <title> | <content> — create a new knowledge note."""
+        if not self._allowed(update):
+            return
+        
+        if not context.args:
+            await update.message.reply_text(
+                "📝 Create a knowledge note\n"
+                "Usage: /knowledge_write <title> | <content>\n"
+                "Example: /knowledge_write Meeting Notes | Discussed Q2 roadmap..."
+            )
+            return
+        
+        text = " ".join(context.args)
+        if "|" not in text:
+            await update.message.reply_text("Error: Use | to separate title and content")
+            return
+        
+        title, content = text.split("|", 1)
+        title = title.strip()
+        content = content.strip()
+        user_id = str(update.message.from_user.id)
+        
+        try:
+            result = tool_module.write_to_knowledge(
+                title=title,
+                content=content,
+                user_id=user_id
+            )
+            await update.message.reply_text(result, parse_mode="Markdown")
+        except Exception as e:
+            logger.error(f"Knowledge write error: {e}")
+            await update.message.reply_text(f"Error writing: {e}")
+
+    async def knowledge_sync_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """/knowledge_sync — synchronize knowledge base with files."""
+        if not self._allowed(update):
+            return
+        
+        user_id = str(update.message.from_user.id)
+        
+        try:
+            result = tool_module.sync_knowledge_base(user_id=user_id)
+            await update.message.reply_text(result)
+        except Exception as e:
+            logger.error(f"Knowledge sync error: {e}")
+            await update.message.reply_text(f"Error syncing: {e}")
+
+    async def knowledge_tags_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """/knowledge_tags — list all knowledge tags."""
+        if not self._allowed(update):
+            return
+        
+        user_id = str(update.message.from_user.id)
+        
+        try:
+            result = tool_module.list_knowledge_tags(user_id=user_id)
+            await update.message.reply_text(result)
+        except Exception as e:
+            logger.error(f"Knowledge tags error: {e}")
+            await update.message.reply_text(f"Error listing tags: {e}")
+
     # ── Bot startup ───────────────────────────────────────────────────────────
 
     def run(self):
@@ -135,8 +259,17 @@ class TelegramChannel:
         app.add_handler(CommandHandler("jobs",    self.jobs_command))
         app.add_handler(CommandHandler("cancel",  self.cancel_command))
         app.add_handler(CommandHandler("agents",  self.agents_command))
+        
+        # Knowledge handlers
+        app.add_handler(CommandHandler("knowledge_search", self.knowledge_search_command))
+        app.add_handler(CommandHandler("knowledge_list",   self.knowledge_list_command))
+        app.add_handler(CommandHandler("knowledge_read",   self.knowledge_read_command))
+        app.add_handler(CommandHandler("knowledge_write",  self.knowledge_write_command))
+        app.add_handler(CommandHandler("knowledge_sync",   self.knowledge_sync_command))
+        app.add_handler(CommandHandler("knowledge_tags",   self.knowledge_tags_command))
 
         print("🦞 MyClaw Telegram gateway started.")
         print(f"   Agents: {', '.join(self.registry.keys())}")
         print("   Commands: /remind /jobs /cancel /agents")
+        print("   Knowledge: /knowledge_search /knowledge_list /knowledge_read /knowledge_write /knowledge_sync /knowledge_tags")
         app.run_polling()

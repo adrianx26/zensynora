@@ -169,6 +169,132 @@ TOOL_SCHEMAS = [
             "parameters": {"type": "object", "properties": {}}
         }
     },
+    # ── Knowledge Tools ─────────────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "write_to_knowledge",
+            "description": "Write a new note to the knowledge base for long-term memory storage.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string", "description": "The title/name of the note (becomes permalink)"},
+                    "content": {"type": "string", "description": "Main content/description of the note"},
+                    "tags": {"type": "string", "description": "Comma-separated list of tags (optional)"},
+                    "observations": {"type": "string", "description": "One observation per line, format: 'category | content' (optional)"},
+                    "relations": {"type": "string", "description": "One relation per line, format: 'relation_type | target_entity' (optional)"},
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": ["title", "content"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_knowledge",
+            "description": "Search the knowledge base using full-text search (FTS5).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query (supports FTS5 syntax: AND, OR, NOT, *)"},
+                    "limit": {"type": "integer", "description": "Maximum number of results (default: 5)"},
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_knowledge",
+            "description": "Read a specific knowledge note by permalink.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "permalink": {"type": "string", "description": "The note's permalink/identifier"},
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": ["permalink"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_knowledge",
+            "description": "List recent knowledge notes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "limit": {"type": "integer", "description": "Maximum number of notes to list (default: 20)"},
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_knowledge_context",
+            "description": "Build context for a knowledge entity including related entities (knowledge graph traversal).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "permalink": {"type": "string", "description": "The starting entity's permalink"},
+                    "depth": {"type": "integer", "description": "Relationship depth to traverse (default: 2)"},
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": ["permalink"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_related_knowledge",
+            "description": "Get entities related to a knowledge note.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "permalink": {"type": "string", "description": "The note's permalink"},
+                    "depth": {"type": "integer", "description": "Relationship depth to traverse (default: 1)"},
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": ["permalink"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sync_knowledge_base",
+            "description": "Synchronize the knowledge base with Markdown files (re-index all files).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_knowledge_tags",
+            "description": "List all tags used in the knowledge base.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": []
+            }
+        }
+    },
 ]
 
 

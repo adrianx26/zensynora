@@ -82,10 +82,36 @@ def onboard():
         },
     }
 
+    # ── Knowledge Base ──────────────────────────────────────────────────────────
+    print("\n📚 Knowledge Base:")
+    print("  The knowledge base stores persistent notes in Markdown format.")
+    print("  Files are stored in ~/.myclaw/knowledge/")
+    
+    kb_enabled = input("Enable knowledge base? [Y/n]: ").strip().lower()
+    kb_enabled = kb_enabled in ("", "y", "yes")
+    
+    config["knowledge"] = {
+        "enabled": kb_enabled,
+        "auto_extract": False,
+        "knowledge_dir": "~/.myclaw/knowledge"
+    }
+    
     save_config(config)
     print(f"\n✅ Config saved to {CONFIG_DIR}/config.json")
+    
+    # Create knowledge directory if enabled
+    if kb_enabled:
+        from pathlib import Path
+        kb_dir = Path.home() / ".myclaw" / "knowledge" / "default"
+        kb_dir.mkdir(parents=True, exist_ok=True)
+        print(f"📁 Knowledge directory created: {kb_dir}")
 
     if provider in {"ollama", "lmstudio", "llamacpp"}:
-        print(f"Make sure your {provider} server is running, then: python cli.py agent")
+        print(f"\nMake sure your {provider} server is running, then: python cli.py agent")
     else:
-        print("Run `python cli.py agent` to start chatting.")
+        print("\nRun `python cli.py agent` to start chatting.")
+    
+    print("\nKnowledge commands:")
+    print("  /knowledge search <query>  - Search knowledge base")
+    print("  /knowledge write <title>   - Create a new note")
+    print("  /knowledge list            - List all notes")

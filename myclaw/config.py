@@ -100,10 +100,17 @@ class ChannelsConfig(BaseModel):
     telegram: TelegramConfig = TelegramConfig()
 
 
+class KnowledgeConfig(BaseModel):
+    enabled: bool = True
+    auto_extract: bool = False  # Auto-extract knowledge from conversations
+    knowledge_dir: str = "~/.myclaw/knowledge"
+
+
 class AppConfig(BaseModel):
     providers: ProvidersConfig = ProvidersConfig()
     agents:    AgentsConfig    = AgentsConfig()
     channels:  ChannelsConfig  = ChannelsConfig()
+    knowledge: KnowledgeConfig = KnowledgeConfig()
 
     def get(self, key: str, default=None):
         """Dict-style .get() for backward compatibility."""

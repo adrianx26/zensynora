@@ -1,11 +1,29 @@
 import sqlite3
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from contextlib import contextmanager
+from typing import List, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+# Import knowledge storage for extraction
+from .knowledge.parser import Observation
+from .knowledge.storage import write_note
+
+# Patterns for knowledge extraction
+ENTITY_PATTERNS = [
+    r'\b([A-Z][a-z]+ (?:Project|System|API|Tool|Framework|Library|Database|Server))\b',
+    r'\b([A-Z][a-zA-Z]+(?:\d+)?)\b',  # Capitalized words (potential proper nouns)
+]
+
+RELATION_KEYWORDS = [
+    'uses', 'depends on', 'requires', 'integrates with', 'connects to',
+    'implements', 'extends', 'inherits from', 'calls', 'triggers',
+    'leads to', 'results in', 'causes', 'enables', 'blocks'
+]
 
 class Memory:
     """SQLite-backed conversation memory with per-user isolation and context manager support."""
@@ -110,3 +128,123 @@ class Memory:
         except Exception as e:
             logger.error(f"Error getting stats: {e}")
             return {"error": str(e)}
+
+    def extract_knowledge_candidates(self, limit: int = 50) -> List[Dict]:
+        """
+        Extract potential knowledge entities from recent conversation history.
+        
+        This is a simple extraction that looks for:
+        - Capitalized phrases (potential named entities)
+        - Technical terms
+        - Recurring topics
+        
+        Args:
+            limit: Number of recent messages to analyze
+            
+        Returns:
+            List of candidate knowledge items with confidence scores
+        """
+        try:
+            # Get recent messages
+            cur = self.conn.execute(
+                "SELECT content FROM messages ORDER BY id DESC LIMIT ?",
+                (limit,)
+            )
+            messages = [row[0] for row in cur.fetchall()]
+            
+            # Combine all messages
+            text = ' '.join(messages)
+            
+            candidates = []
+            
+            # Extract capitalized phrases (potential entities)
+            for pattern in ENTITY_PATTERNS:
+                matches = re.findall(pattern, text)
+                for match in matches:
+                    if len(match) > 3:  # Filter out short matches
+                        # Count occurrences as confidence indicator
+                        count = text.count(match)
+                        if count >= 2:  # Must appear at least twice
+                            candidates.append({
+                                'type': 'entity',
+                                'name': match,
+                                'mentions': count,
+                                'confidence': min(count / 5, 1.0),  # Cap at 1.0
+                                'source': 'pattern_match'
+                            })
+            
+            # Look for "X is Y" patterns (definitions/facts)
+            definition_pattern = r'([A-Z][\w\s]+)\s+is\s+(?:a|an|the)\s+([\w\s]+)'
+            definitions = re.findall(definition_pattern, text)
+            for entity, definition in definitions:
+                entity_clean = entity.strip()
+                if len(entity_clean) > 3:
+                    candidates.append({
+                        'type': 'definition',
+                        'name': entity_clean,
+                        'definition': definition.strip(),
+                        'confidence': 0.7,
+                        'source': 'definition_pattern'
+                    })
+            
+            # Deduplicate by name
+            seen = set()
+            unique_candidates = []
+            for c in candidates:
+                name = c['name'].lower()
+                if name not in seen:
+                    seen.add(name)
+                    unique_candidates.append(c)
+            
+            # Sort by confidence
+            unique_candidates.sort(key=lambda x: x['confidence'], reverse=True)
+            
+            return unique_candidates[:20]  # Return top 20
+            
+        except Exception as e:
+            logger.error(f"Error extracting knowledge: {e}")
+            return []
+
+    def save_extracted_knowledge(
+        self,
+        entity_name: str,
+        observations: List[str] = None,
+        tags: List[str] = None,
+        user_id: str = "default"
+    ) -> Optional[str]:
+        """
+        Save an extracted knowledge entity to the knowledge base.
+        
+        Args:
+            entity_name: Name of the entity
+            observations: List of observations/facts
+            tags: List of tags
+            user_id: User ID for isolation
+            
+        Returns:
+            Permalink if successful, None otherwise
+        """
+        try:
+            obs_objects = []
+            if observations:
+                for obs in observations:
+                    obs_objects.append(Observation(
+                        category='extracted',
+                        content=obs,
+                        tags=[]
+                    ))
+            
+            permalink = write_note(
+                name=entity_name,
+                title=entity_name,
+                observations=obs_objects,
+                tags=tags or ['auto-extracted'],
+                user_id=user_id
+            )
+            
+            logger.info(f"Saved extracted knowledge: {entity_name} ({permalink})")
+            return permalink
+            
+        except Exception as e:
+            logger.error(f"Error saving extracted knowledge: {e}")
+            return None

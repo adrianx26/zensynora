@@ -1,18 +1,18 @@
 mkdir myclaw && cd myclaw
-# copiază toate fișierele de mai sus
+# copy all files from above
 
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
 python onboard.py
-# editează ~/.myclaw/config.json cu token-ul tău Telegram + user ID
+# edit ~/.myclaw/config.json with your Telegram token + user ID
 
-# Pornește Ollama local
+# Start local Ollama
 ollama run llama3.2
 
-# Test în consolă
+# Test in console
 python cli.py agent
 
-# Sau gateway Telegram
+# Or Telegram gateway
 python cli.py gateway

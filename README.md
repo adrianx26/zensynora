@@ -106,11 +106,11 @@ python cli.py gateway
 ### Console Commands
 
 ```
-Tu: Hello
+You: Hello
 Claw: [response]
 
-Tu: @agentname message  # Route to specific agent
-Tu: exit                # Quit
+You: @agentname message  # Route to specific agent
+You: exit                # Quit
 ```
 
 ### Available Tools
@@ -124,8 +124,19 @@ Tu: exit                # Quit
 | `list_tools()` | List all available tools |
 | `register_tool(name, code)` | Create a new Python tool |
 | `schedule(task, delay, every)` | Schedule a task |
+| `edit_schedule(job_id, ...)` | Edit active schedule task/delay |
+| `split_schedule(job_id, tasks)` | Split job into sub-tasks (JSON array) |
+| `suspend_schedule(job_id)` | Pause an active scheduled job |
+| `resume_schedule(job_id)` | Resume a suspended job |
 | `cancel_schedule(job_id)` | Cancel a scheduled job |
 | `list_schedules()` | List active scheduled jobs |
+| `write_to_knowledge(title, content)` | Save note to knowledge base |
+| `search_knowledge(query)` | Search knowledge with FTS5 |
+| `read_knowledge(permalink)` | Read a knowledge note |
+| `get_knowledge_context(permalink, depth)` | Get related knowledge |
+| `list_knowledge()` | List all knowledge notes |
+| `sync_knowledge_base()` | Sync knowledge with files |
+| `list_knowledge_tags()` | List all knowledge tags |
 
 ### Telegram Commands
 
@@ -137,6 +148,95 @@ Tu: exit                # Quit
 | `/cancel <job_id>` | Cancel a job |
 | `/agents` | List available agents |
 | `@agentname <message>` | Route to specific agent |
+| `/knowledge_search <query>` | Search knowledge base |
+| `/knowledge_list` | List all knowledge notes |
+| `/knowledge_read <permalink>` | Read a specific note |
+| `/knowledge_write <title> | <content>` | Create a new note |
+| `/knowledge_sync` | Sync knowledge with files |
+| `/knowledge_tags` | List all tags |
+
+---
+
+## 📚 Knowledge Base
+
+MyClaw includes a powerful **knowledge storage system** inspired by [MemoPad](https://github.com/adrianx26/memopad), using Markdown files with SQLite indexing.
+
+### Features
+
+- **Markdown-first**: All notes are stored as plain Markdown files
+- **Full-text search**: SQLite FTS5 for fast searching
+- **Knowledge graph**: Relations between entities
+- **Observations**: Structured facts with categories and tags
+- **Multi-user**: Per-user isolation with separate directories
+
+### Storage Location
+
+Knowledge files are stored in:
+```
+~/.myclaw/knowledge/{user_id}/
+```
+
+Each user has their own:
+- Directory: `~/.myclaw/knowledge/{user_id}/`
+- Database: `~/.myclaw/knowledge_{user_id}.db`
+
+### Markdown Format
+
+```markdown
+---
+title: "Project Phoenix"
+permalink: project-phoenix
+tags: [work, urgent]
+created: 2026-03-08T10:00:00
+updated: 2026-03-08T15:30:00
+---
+
+# Project Phoenix
+
+## Observations
+- [status] Active development phase #work
+- [milestone] Backend API completed on March 5th
+- [risk] Database migration needs testing
+
+## Relations
+- leads [[team-backend]]
+- depends_on [[infrastructure-v2]]
+- blocks [[mobile-app-v3]]
+```
+
+### CLI Commands
+
+```bash
+# Search knowledge
+python cli.py knowledge search "project phoenix"
+
+# Create a new note (interactive)
+python cli.py knowledge write
+
+# Read a specific note
+python cli.py knowledge read project-phoenix
+
+# List all notes
+python cli.py knowledge list
+
+# Sync database with files
+python cli.py knowledge sync
+
+# List all tags
+python cli.py knowledge tags
+```
+
+### Using in Conversations
+
+The agent automatically searches the knowledge base when processing messages. You can also reference knowledge explicitly:
+
+```
+You: Tell me about memory://project-phoenix
+Claw: [Searches knowledge and responds with relevant info]
+
+You: Save this: Project Phoenix is now in testing phase
+Claw: [Uses write_to_knowledge tool to save the note]
+```
 
 ---
 
@@ -152,9 +252,16 @@ myclaw/
 │   ├── memory.py            # SQLite persistence
 │   ├── provider.py          # LLM Provider abstraction
 │   ├── tools.py             # Tool definitions
-│   └── channels/
+│   ├── channels/
+│   │   ├── __init__.py
+│   │   └── telegram.py      # Telegram bot
+│   └── knowledge/           # Knowledge storage system
 │       ├── __init__.py
-│       └── telegram.py      # Telegram bot
+│       ├── db.py            # SQLite database
+│       ├── parser.py        # Markdown parsing
+│       ├── storage.py       # File operations
+│       ├── graph.py         # Graph traversal
+│       └── sync.py          # File-DB sync
 ├── onboard.py               # Setup wizard
 ├── cli.py                   # CLI entry point
 ├── requirements.txt         # Dependencies

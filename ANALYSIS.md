@@ -43,7 +43,7 @@ The `read_file` and `write_file` tools can access **any file** in the workspace,
 ### 3. Missing `__init__.py` Files
 **Status**: ✅ FIXED
 
-The `Structura.txt` showed `myclaw/__init__.py` and `myclaw/channels/__init__.py` were missing - causing import errors.
+The `Structure.txt` showed `myclaw/__init__.py` and `myclaw/channels/__init__.py` were missing - causing import errors.
 
 ---
 
