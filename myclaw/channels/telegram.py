@@ -8,7 +8,7 @@ from .. import tools as tool_module
 
 logger = logging.getLogger(__name__)
 
-_executor = ThreadPoolExecutor(max_workers=4)
+_executor = ThreadPoolExecutor(max_workers=20)
 
 
 class TelegramChannel:
@@ -52,10 +52,7 @@ class TelegramChannel:
 
         try:
             loop     = asyncio.get_running_loop()
-            response = await loop.run_in_executor(
-                _executor,
-                lambda: agent.think(cleaned, user_id=user_id)
-            )
+            response = await agent.think(cleaned, user_id=user_id)
             await update.message.reply_text(response)
         except Exception as e:
             logger.error(f"Message handling error: {e}")
