@@ -26,6 +26,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import List, Dict, Tuple, Optional
 
+import httpx
 import requests
 
 logger = logging.getLogger(__name__)
@@ -200,7 +201,7 @@ class BaseLLMProvider(ABC):
     """All providers implement this interface."""
 
     @abstractmethod
-    def chat(
+    async def chat(
         self,
         messages: List[Dict],
         model: str,
@@ -225,7 +226,7 @@ class OllamaProvider(BaseLLMProvider):
             self.base_url = "http://localhost:11434"
         self.timeout = timeout
 
-    def chat(self, messages, model="llama3.2"):
+    async def chat(self, messages, model="llama3.2"):
         payload = {
             "model": model,
             "messages": messages,
@@ -233,20 +234,22 @@ class OllamaProvider(BaseLLMProvider):
             "tools": TOOL_SCHEMAS,
         }
         try:
-            r = requests.post(
-                f"{self.base_url}/api/chat",
-                json=payload,
-                timeout=self.timeout,
-            )
+            async with httpx.AsyncClient() as client:
+                r = await client.post(
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                    timeout=self.timeout,
+                )
+                r.raise_for_status()
             r.raise_for_status()
             msg = r.json()["message"]
             tool_calls = msg.get("tool_calls") or None
             return msg.get("content", ""), tool_calls
-        except requests.Timeout:
+        except httpx.TimeoutException:
             raise TimeoutError(f"Ollama request timed out after {self.timeout}s")
-        except requests.ConnectionError as e:
+        except httpx.ConnectError as e:
             raise ConnectionError(f"Could not connect to Ollama at {self.base_url}") from e
-        except requests.HTTPError as e:
+        except httpx.HTTPStatusError as e:
             raise RuntimeError(f"Ollama HTTP error: {e}") from e
 
 
@@ -279,7 +282,7 @@ class OpenAICompatProvider(BaseLLMProvider):
             default_headers=extra_headers or {},
         )
 
-    def chat(self, messages, model="gpt-4o-mini"):
+    async def chat(self, messages, model="gpt-4o-mini"):
         response = self.client.chat.completions.create(
             model=model,
             messages=messages,
@@ -382,7 +385,7 @@ class AnthropicProvider(BaseLLMProvider):
 
     def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
         try:
-            from anthropic import Anthropic
+            from anthropic import AsyncAnthropic
         except ImportError:
             raise ImportError(
                 "The 'anthropic' package is required.\n"
@@ -394,7 +397,7 @@ class AnthropicProvider(BaseLLMProvider):
             api_key = ""
         if not api_key:
             raise ValueError("anthropic.api_key is not set in config.")
-        self.client  = Anthropic(api_key=api_key)
+        self.client  = AsyncAnthropic(api_key=api_key)
         self.timeout = timeout
 
     def chat(self, messages, model="claude-3-5-sonnet-20241022"):
@@ -431,7 +434,7 @@ class AnthropicProvider(BaseLLMProvider):
         if system_content.strip():
             kwargs["system"] = system_content.strip()
 
-        response = self.client.messages.create(**kwargs)
+        response = await self.client.messages.create(**kwargs)
 
         text_parts  = []
         tool_calls  = []
@@ -497,7 +500,7 @@ class GeminiProvider(BaseLLMProvider):
             )
         return [self._genai.protos.Tool(function_declarations=declarations)]
 
-    def chat(self, messages, model="gemini-1.5-flash"):
+    async def chat(self, messages, model="gemini-1.5-flash"):
         system_parts = []
         history      = []
         last_user    = None
@@ -522,7 +525,7 @@ class GeminiProvider(BaseLLMProvider):
         )
 
         chat_session = gen_model.start_chat(history=history[:-1] if history else [])
-        response     = chat_session.send_message(last_user or "")
+        response     = await chat_session.send_message_async(last_user or "")
 
         text_parts = []
         tool_calls = []

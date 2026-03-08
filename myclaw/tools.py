@@ -19,7 +19,7 @@ CUSTOM_TOOLS_REG  = Path.home() / ".myclaw" / "custom_tools.json"
 ALLOWED_COMMANDS = frozenset({
     'ls', 'dir', 'cat', 'type', 'find', 'grep', 'findstr',
     'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'awk',
-    'git', 'python', 'python3', 'pip', 'pip3', 'node', 'npm'
+    'git'
 })
 
 BLOCKED_COMMANDS = frozenset({
@@ -118,7 +118,7 @@ def write_file(path: str, content: str) -> str:
 
 # ── Feature 3: Sub-Agent Delegation ──────────────────────────────────────────
 
-def delegate(agent_name: str, task: str, _depth: int = 0) -> str:
+async def delegate(agent_name: str, task: str, _depth: int = 0) -> str:
     """Delegate a task to another named agent and return its response.
 
     agent_name: name of the agent (see /agents for available names)
@@ -132,7 +132,7 @@ def delegate(agent_name: str, task: str, _depth: int = 0) -> str:
         available = ", ".join(_agent_registry.keys())
         return f"Error: Unknown agent '{agent_name}'. Available: {available}"
     try:
-        return _agent_registry[agent_name].think(task, user_id="__delegate__", _depth=_depth)
+        return await _agent_registry[agent_name].think(task, user_id="__delegate__", _depth=_depth)
     except Exception as e:
         logger.error(f"Delegation error: {e}")
         return f"Delegation failed: {e}"
@@ -242,7 +242,7 @@ def schedule(task: str, delay: int = 0, every: int = 0, user_id: str = "default"
         agent = _agent_registry.get("default")
         if not agent:
             return
-        result = agent.think(task, user_id=user_id)
+        result = await agent.think(task, user_id=user_id)
         if chat_id:
             await context.bot.send_message(
                 chat_id=chat_id,

@@ -27,6 +27,7 @@ class Memory:
         # Index for fast timestamp-based queries and cleanup
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp)")
         self.conn.commit()
+        self.cleanup(self.auto_cleanup_days)
 
     def __enter__(self):
         return self
