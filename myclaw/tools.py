@@ -18,8 +18,7 @@ CUSTOM_TOOLS_REG  = Path.home() / ".myclaw" / "custom_tools.json"
 
 ALLOWED_COMMANDS = frozenset({
     'ls', 'dir', 'cat', 'type', 'find', 'grep', 'findstr',
-    'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'awk',
-    'git', 'python', 'python3', 'pip', 'pip3', 'node', 'npm'
+    'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'git'
 })
 
 BLOCKED_COMMANDS = frozenset({
