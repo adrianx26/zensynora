@@ -400,7 +400,7 @@ class AnthropicProvider(BaseLLMProvider):
         self.client  = AsyncAnthropic(api_key=api_key)
         self.timeout = timeout
 
-    def chat(self, messages, model="claude-3-5-sonnet-20241022"):
+    async def chat(self, messages, model="claude-3-5-sonnet-20241022"):
         # Anthropic separates the system prompt from the conversation
         system_content = ""
         conv_messages  = []

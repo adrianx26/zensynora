@@ -43,7 +43,7 @@ def main():
                 print("   Use @agentname to address a specific agent. Type 'exit' to quit.")
                 while True:
                     try:
-                    # In true async we should use aioconsole or run_in_executor for input, but input() is fine for MVP CLI
+                        # In true async we should use aioconsole or run_in_executor for input, but input() is fine for MVP CLI
                         import asyncio
                         msg = await asyncio.to_thread(input, "Tu: ")
                     except (EOFError, KeyboardInterrupt):

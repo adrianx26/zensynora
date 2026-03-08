@@ -18,6 +18,6 @@ def test_disallowed_commands(cmd):
 
 def test_allowed_commands():
     """Verify that safe commands are still allowed."""
-    result = shell("ls --version")
-    assert "ls" in result.lower()
+    result = shell("git --version")
+    assert "git" in result.lower()
     assert "Error" not in result
