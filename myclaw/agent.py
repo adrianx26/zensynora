@@ -4,6 +4,8 @@ from .tools import TOOLS
 from rich.console import Console
 import json
 import logging
+import asyncio
+import inspect
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -66,7 +68,7 @@ class Agent:
     def __exit__(self, *args):
         self.close()
 
-    def think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> str:
+    async def think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> str:
         """Process a user message and return the agent's response.
 
         _depth tracks sub-agent delegation depth — prevents infinite loops.
@@ -75,10 +77,26 @@ class Agent:
         mem.add("user", user_message)
 
         history = mem.get_history()
+
+        # Feature: Context Summarization
+        if len(history) > 10:
+            to_summarize = history[:-5]
+            recent = history[-5:]
+            summary_prompt = "Summarize the following conversation context briefly in one paragraph:\n"
+            for m in to_summarize:
+                summary_prompt += f"{m['role']}: {m['content']}\n"
+            summary_msgs = [{"role": "system", "content": "You summarize conversations."}, {"role": "user", "content": summary_prompt}]
+            try:
+                summary_text, _ = await self.provider.chat(summary_msgs, self.model)
+                history = [{"role": "system", "content": f"Previous conversation summary: {summary_text}"}] + recent
+            except Exception as e:
+                logger.error(f"Error summarizing history: {e}")
+                # fallback to raw history if summary fails
+
         messages = [{"role": "system", "content": self.system_prompt}] + history
 
         try:
-            response, tool_calls = self.provider.chat(messages, self.model)
+            response, tool_calls = await self.provider.chat(messages, self.model)
         except Exception as e:
             logger.error(f"LLM provider error: {e}")
             return f"Sorry, I encountered an error: {e}"
@@ -98,7 +116,11 @@ class Agent:
                     args["_depth"] = _depth + 1
 
                 try:
-                    result = TOOLS[tool_name]["func"](**args)
+                    func = TOOLS[tool_name]["func"]
+                    if inspect.iscoroutinefunction(func):
+                        result = await func(**args)
+                    else:
+                        result = await asyncio.to_thread(func, **args)
                     mem.add("tool", f"Tool {tool_name} returned: {result}")
                     results.append(str(result))
                 except Exception as e:
@@ -108,7 +130,7 @@ class Agent:
             tool_result_msg = "\n".join(results)
             followup = messages + [{"role": "tool", "content": tool_result_msg}]
             try:
-                final_response, _ = self.provider.chat(followup, self.model)
+                final_response, _ = await self.provider.chat(followup, self.model)
                 mem.add("assistant", final_response)
                 return final_response
             except Exception as e:
