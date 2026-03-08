@@ -1,12 +1,12 @@
 # 🦞 MyClaw — Personal AI Agent
 
-A powerful personal AI agent that runs locally using [Ollama](https://github.com/ollama/ollama) with llama3.2, featuring Telegram integration, persistent SQLite memory, multi-agent support, dynamic tool building, and task scheduling.
+A powerful personal AI agent that runs locally or in the cloud using various LLM providers, featuring Telegram integration, persistent SQLite memory, multi-agent support, dynamic tool building, and task scheduling.
 
 ## ✨ Features
 
 ### Core Capabilities
-- **Local LLM** — Runs entirely on your machine using [Ollama](https://github.com/ollama/ollama) (llama3.2 by default). No cloud dependencies, complete privacy.
-- **Persistent Memory** — SQLite-backed conversation history with per-user isolation. Your chats are stored locally.
+- **Flexible LLM Providers** — Run locally using [Ollama](https://github.com/ollama/ollama), LM Studio, or llama.cpp, or connect to cloud providers like OpenAI, Anthropic, Gemini, Groq, and OpenRouter. Complete flexibility to choose your model and privacy level.
+- **Persistent Memory** — SQLite-backed conversation history with per-user isolation. Your chats are stored securely.
 - **Tool System** — Execute shell commands, read/write files, and more—all within a secure workspace.
 
 ### Advanced Features
@@ -36,7 +36,8 @@ A powerful personal AI agent that runs locally using [Ollama](https://github.com
 │                         Agent                                │
 │   ┌──────────────┐  ┌─────────────┐  ┌──────────────────┐  │
 │   │    Memory    │  │  Provider  │  │      Tools       │  │
-│   │   (SQLite)   │  │  (Ollama)  │  │ shell, file, etc │  │
+│   │   (SQLite)   │  │ (Ollama,   │  │ shell, file, etc │  │
+│   │              │  │  OpenAI,..)│  │                  │  │
 │   └──────────────┘  └─────────────┘  └──────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -48,14 +49,14 @@ A powerful personal AI agent that runs locally using [Ollama](https://github.com
 ### Prerequisites
 
 - Python 3.10+
-- [Ollama](https://github.com/ollama/ollama) installed and running
+- [Optional] [Ollama](https://github.com/ollama/ollama), LM Studio, or API keys for Cloud Providers
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/myclaw.git
-cd myclaw
+git clone https://github.com/adrianx26/zensynora.git
+cd zensynora
 
 # Create virtual environment
 python -m venv venv
@@ -80,8 +81,7 @@ python cli.py onboard
 Edit `~/.myclaw/config.json` to configure:
 - Telegram bot token (get from [@BotFather](https://tbot.botfather/))
 - Your Telegram user ID (use [@userinfobot](https://t.me/userinfobot))
-- Ollama endpoint (default: `http://localhost:11434`)
-- Default model (default: `llama3.2`)
+- **Providers:** Configure APIs for Ollama, OpenAI, Anthropic, Gemini, Groq, OpenRouter, LM Studio, or llama.cpp.
 
 ### Running
 
@@ -92,7 +92,7 @@ python cli.py agent
 
 **Telegram Gateway:**
 ```bash
-# First, start Ollama
+# First, ensure your chosen provider is running or configured
 ollama run llama3.2
 
 # Then start the Telegram bot
@@ -150,7 +150,7 @@ myclaw/
 │   ├── config.py            # Configuration management
 │   ├── gateway.py           # Channel routing
 │   ├── memory.py            # SQLite persistence
-│   ├── provider.py          # Ollama API client
+│   ├── provider.py          # LLM Provider abstraction
 │   ├── tools.py             # Tool definitions
 │   └── channels/
 │       ├── __init__.py
@@ -172,16 +172,24 @@ Configuration is stored in `~/.myclaw/config.json`:
   "providers": {
     "ollama": {
       "base_url": "http://localhost:11434"
+    },
+    "openai": {
+      "api_key": "YOUR_OPENAI_KEY"
+    },
+    "anthropic": {
+      "api_key": "YOUR_ANTHROPIC_KEY"
     }
   },
   "agents": {
     "defaults": {
+      "provider": "ollama",
       "model": "llama3.2"
     },
     "named": [
       {
         "name": "coder",
-        "model": "llama3.2",
+        "provider": "openai",
+        "model": "gpt-4o",
         "system_prompt": "You are a coding assistant..."
       }
     ]
@@ -196,11 +204,16 @@ Configuration is stored in `~/.myclaw/config.json`:
 }
 ```
 
+### Supported Providers
+- **Local**: `ollama`, `lmstudio`, `llamacpp`
+- **Cloud**: `openai`, `anthropic`, `gemini`, `groq`, `openrouter`
+
 ### Creating Named Agents
 
 Add agents to the `agents.named` array in your config. Each agent can have:
 - `name` — Agent identifier (use with `@name` prefix)
-- `model` — Ollama model to use
+- `provider` — The LLM provider to use (e.g., `openai`, `ollama`)
+- `model` — Provider-specific model name
 - `system_prompt` — Custom system instructions
 
 ---
