@@ -94,6 +94,7 @@ class NamedAgentConfig(BaseModel):
 class AgentsConfig(BaseModel):
     defaults: AgentDefaults = AgentDefaults()
     named: list[NamedAgentConfig] = []
+    profiles_dir: str = "~/.myclaw/profiles"
 
 
 class ChannelsConfig(BaseModel):

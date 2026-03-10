@@ -11,6 +11,7 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 
 ### Advanced Features
 - **Multi-Agent Support** — Create and manage multiple named agents with custom prompts and models
+- **Per-Agent Prompt Profiles** — Manage individual agent system prompts using dedicated Markdown files (`~/.myclaw/profiles/{name}.md`)
 - **Agent Delegation** — Delegate tasks to specialized agents (e.g., `@coder write a function`)
 - **Dynamic Tool Building** — The agent can create and register new Python tools at runtime
 - **Task Scheduling** — Schedule one-shot or recurring tasks with Telegram notifications
@@ -342,6 +343,9 @@ Add agents to the `agents.named` array in your config. Each agent can have:
 - `provider` — The LLM provider to use (e.g., `openai`, `ollama`)
 - `model` — Provider-specific model name
 - `system_prompt` — Custom system instructions
+
+**Per-Agent Prompt Profiles:**
+Alternatively, an agent's individual system prompt can be managed via dedicated Markdown files instead of the config. MyClaw will automatically load the prompt from `~/.myclaw/profiles/{name}.md` upon startup if the file exists. This allows for rich, multi-line instructions easily.
 
 ---
 

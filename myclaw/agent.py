@@ -8,6 +8,7 @@ import logging
 import asyncio
 import inspect
 import re
+from pathlib import Path
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -32,7 +33,8 @@ SYSTEM_PROMPT = (
 class Agent:
     """Personal AI agent with per-user memory, native tool calling, multi-agent delegation."""
 
-    def __init__(self, config, model: str = None, system_prompt: str = None, provider_name: str = None):
+    def __init__(self, config, name: str = "default", model: str = None, system_prompt: str = None, provider_name: str = None):
+        self.name = name
         self._memories: dict[str, Memory] = {}
 
         # ── Resolve provider ──────────────────────────────────────────────────
@@ -58,7 +60,15 @@ class Agent:
             cfg_model = "llama3.2"
         self.model = model or cfg_model
 
-        self.system_prompt = system_prompt or SYSTEM_PROMPT
+        profiles_dir_str = getattr(config.agents, "profiles_dir", "~/.myclaw/profiles")
+        profiles_dir = Path(profiles_dir_str).expanduser()
+        profiles_dir.mkdir(parents=True, exist_ok=True)
+        
+        profile_path = profiles_dir / f"{self.name}.md"
+        if profile_path.exists():
+            self.system_prompt = profile_path.read_text(encoding="utf-8").strip()
+        else:
+            self.system_prompt = system_prompt or SYSTEM_PROMPT
 
     def _get_memory(self, user_id: str) -> Memory:
         if user_id not in self._memories:

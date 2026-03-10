@@ -13,10 +13,11 @@ from myclaw.knowledge import (
 def _build_registry(config) -> dict:
     """Build the agent registry from config."""
     from myclaw import tools as tool_module
-    registry = {"default": Agent(config)}
+    registry = {"default": Agent(config, name="default")}
     for nc in config.agents.named:
         registry[nc.name] = Agent(
             config,
+            name=nc.name,
             model=nc.model,
             system_prompt=nc.system_prompt or None
         )
