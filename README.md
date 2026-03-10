@@ -53,19 +53,39 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 
 ### Installation
 
+#### 🐧 Linux / Ubuntu (recommended)
+
+Use the automated install script — it checks and installs every system package, Python dependency, and optional LLM SDK:
+
+```bash
+git clone https://github.com/adrianx26/zensynora.git
+cd zensynora
+chmod +x install.sh
+./install.sh
+```
+
+The script handles:
+- ✅ System packages (`python3`, `pip`, `venv`, `git`, `curl`, `sqlite3`, etc.)
+- ✅ Python ≥ 3.10 (auto-upgrades via deadsnakes PPA if needed)
+- ✅ Virtual environment creation & activation
+- ✅ All pip dependencies from `requirements.txt`
+- ✅ Optional LLM SDKs (Anthropic, Gemini — prompted interactively)
+- ✅ Optional [Ollama](https://github.com/ollama/ollama) install for local models
+- ✅ Required data directories (`~/.myclaw/`)
+- ✅ Optional systemd service to auto-start the Telegram gateway on boot
+- ✅ Final import verification of all installed packages
+
+#### 🪟 Windows / Manual
+
 ```bash
 # Clone the repository
 git clone https://github.com/adrianx26/zensynora.git
 cd zensynora
 
-# Create virtual environment
+# Create & activate virtual environment
 python -m venv venv
-
-# Activate (Linux/macOS)
-source venv/bin/activate
-
-# Activate (Windows)
-venv\Scripts\activate
+venv\Scripts\activate      # Windows
+# source venv/bin/activate  # macOS / Linux (manual)
 
 # Install dependencies
 pip install -r requirements.txt
@@ -79,7 +99,7 @@ python cli.py onboard
 ```
 
 Edit `~/.myclaw/config.json` to configure:
-- Telegram bot token (get from [@BotFather](https://tbot.botfather/))
+- Telegram bot token (get from [@BotFather](https://t.me/botfather))
 - Your Telegram user ID (use [@userinfobot](https://t.me/userinfobot))
 - **Providers:** Configure APIs for Ollama, OpenAI, Anthropic, Gemini, Groq, OpenRouter, LM Studio, or llama.cpp.
 
