@@ -344,7 +344,7 @@ For LM Studio integration (running on a remote server):
 {
   "providers": {
     "lmstudio": {
-      "base_url": "http://192.168.8.112:1234/v1",
+      "base_url": "http://localhost:1234/v1",
       "api_key": "test123"
     }
   },
