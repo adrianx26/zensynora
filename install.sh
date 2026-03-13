@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-#  MyClaw — Ubuntu Install Script
-#  Tested on: Ubuntu 22.04 / 24.04 (LTS)
+#  MyClaw — Cross-Platform Install Script
+#  Tested on: Ubuntu 22.04 / 24.04 (LTS), macOS 13+, Windows (WSL2)
 #  Usage:  chmod +x install.sh && ./install.sh
 #
 #  What this script does:
@@ -31,30 +31,76 @@ header()  { echo -e "\n${BOLD}── $* ─────────────�
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$SCRIPT_DIR/venv"
 
+# ── Platform Detection ────────────────────────────────────────────────────────
+OS="$(uname -s)"
+ARCH="$(uname -m)"
+
+case "$OS" in
+    Linux*)
+        PLATFORM="linux"
+        ;;
+    Darwin*)
+        PLATFORM="macos"
+        ;;
+    MINGW*|MSYS*|CYGWIN*)
+        PLATFORM="windows"
+        warn "Windows detected. This script works best with WSL2."
+        ;;
+    *)
+        error "Unsupported operating system: $OS"
+        ;;
+esac
+
 echo -e "${BOLD}"
-echo "  🦞  MyClaw — Ubuntu Installer"
+echo "  🦞  MyClaw — Installer"
 echo "  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo -e "  Platform: ${OS} ${ARCH}"
 echo -e "${RESET}"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HELPER: check if an apt package is installed; install if missing
+# System Package Management
 # ─────────────────────────────────────────────────────────────────────────────
-APT_UPDATED=0
-ensure_apt() {
-    local pkg="$1"
-    if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
-        skip "apt: $pkg already installed"
-    else
-        if [[ "$APT_UPDATED" -eq 0 ]]; then
-            info "Running apt-get update..."
-            sudo apt-get update -qq
-            APT_UPDATED=1
+
+if [ "$PLATFORM" = "linux" ]; then
+    APT_UPDATED=0
+    ensure_apt() {
+        local pkg="$1"
+        if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
+            skip "apt: $pkg already installed"
+        else
+            if [[ "$APT_UPDATED" -eq 0 ]]; then
+                info "Running apt-get update..."
+                sudo apt-get update -qq
+                APT_UPDATED=1
+            fi
+            info "Installing apt package: $pkg"
+            sudo apt-get install -y -qq "$pkg"
+            success "apt: $pkg installed"
         fi
-        info "Installing apt package: $pkg"
-        sudo apt-get install -y -qq "$pkg"
-        success "apt: $pkg installed"
+    }
+elif [ "$PLATFORM" = "macos" ]; then
+    ensure_brew() {
+        local pkg="$1"
+        if brew list "$pkg" &>/dev/null; then
+            skip "brew: $pkg already installed"
+        else
+            info "Installing Homebrew package: $pkg"
+            brew install "$pkg"
+            success "brew: $pkg installed"
+        fi
+    }
+    # Check if Homebrew is installed
+    if ! command -v brew &>/dev/null; then
+        info "Homebrew not found. Installing Homebrew..."
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        # Add Homebrew to PATH temporarily for this session
+        if [ -x "/opt/homebrew/bin/brew" ]; then
+            eval "$(/opt/homebrew/bin/brew shellenv)"
+        elif [ -x "/usr/local/bin/brew" ]; then
+            eval "$(/usr/local/bin/brew shellenv)"
+        fi
     fi
-}
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HELPER: check if a pip package is installed inside the venv; install if not
@@ -78,20 +124,47 @@ ensure_pip() {
 # ─────────────────────────────────────────────────────────────────────────────
 header "1. System packages"
 
-ensure_apt "python3"
-ensure_apt "python3-pip"
-ensure_apt "python3-venv"
-ensure_apt "python3-dev"
-ensure_apt "git"
-ensure_apt "curl"
-ensure_apt "wget"
-ensure_apt "sqlite3"
-ensure_apt "libsqlite3-dev"
-ensure_apt "build-essential"
-ensure_apt "libssl-dev"
-ensure_apt "libffi-dev"
-ensure_apt "ca-certificates"
-ensure_apt "software-properties-common"
+if [ "$PLATFORM" = "linux" ]; then
+    # Linux (Debian/Ubuntu) packages
+    ensure_apt "python3"
+    ensure_apt "python3-pip"
+    ensure_apt "python3-venv"
+    ensure_apt "python3-dev"
+    ensure_apt "git"
+    ensure_apt "curl"
+    ensure_apt "wget"
+    ensure_apt "sqlite3"
+    ensure_apt "libsqlite3-dev"
+    ensure_apt "build-essential"
+    ensure_apt "libssl-dev"
+    ensure_apt "libffi-dev"
+    ensure_apt "ca-certificates"
+    ensure_apt "software-properties-common"
+elif [ "$PLATFORM" = "macos" ]; then
+    # macOS packages
+    ensure_brew "python3"
+    ensure_brew "git"
+    ensure_brew "curl"
+    ensure_brew "wget"
+    ensure_brew "sqlite3"
+else
+    # Windows (WSL2) falls through to Linux
+    warn "Windows/WSL2 detected, assuming Linux compatibility"
+    ensure_apt "python3"
+    ensure_apt "python3-pip"
+    ensure_apt "python3-venv"
+    ensure_apt "python3-dev"
+    ensure_apt "git"
+    ensure_apt "curl"
+    ensure_apt "wget"
+    ensure_apt "sqlite3"
+    ensure_apt "libsqlite3-dev"
+    ensure_apt "build-essential"
+    ensure_apt "libssl-dev"
+    ensure_apt "libffi-dev"
+    ensure_apt "ca-certificates"
+    ensure_apt "software-properties-common"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. PYTHON VERSION CHECK

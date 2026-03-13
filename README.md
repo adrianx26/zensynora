@@ -336,6 +336,29 @@ Configuration is stored in `~/.myclaw/config.json`:
 - **Local**: `ollama`, `lmstudio`, `llamacpp`
 - **Cloud**: `openai`, `anthropic`, `gemini`, `groq`, `openrouter`
 
+### LM Studio Configuration
+
+For LM Studio integration (running on a remote server):
+
+```json
+{
+  "providers": {
+    "lmstudio": {
+      "base_url": "http://192.168.8.112:1234/v1",
+      "api_key": "test123"
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "llama-3.2-3b-instruct-uncensored@q4_k_s",
+      "provider": "lmstudio"
+    }
+  }
+}
+```
+
+**Note**: LM Studio API token can be any non-empty string for testing purposes.
+
 ### Creating Named Agents
 
 Add agents to the `agents.named` array in your config. Each agent can have:
@@ -354,12 +377,43 @@ Alternatively, an agent's individual system prompt can be managed via dedicated 
 ### Running Tests
 
 ```bash
-# Tests coming soon
+# Activate virtual environment
+source venv/bin/activate
+
+# Run all tests
+python -m pytest tests/ -v
+
+# Run specific test files
+python -m pytest tests/test_agent.py -v
+python -m pytest tests/test_knowledge.py -v
+python -m pytest tests/test_tools.py -v
+python -m pytest tests/test_memory.py -v
+
+# Run tests with coverage
+pip install coverage
+coverage run -m pytest tests/ -v
+coverage report -m
 ```
 
 ### Adding Custom Tools
 
 Place custom tools in `~/.myclaw/tools/` or let the agent create them dynamically using `register_tool()`.
+
+### Cleanup
+
+A `cleanup.sh` script is provided to remove temporary files:
+
+```bash
+chmod +x cleanup.sh
+./cleanup.sh
+```
+
+This will:
+- Remove test files (`test_*.py`)
+- Remove temporary files (`*.tmp`)
+- Remove downloaded archives (`*.zip`)
+- Remove Putty tools directory (`putty/`)
+- Remove pytest cache (`__pycache__/`, `.pytest_cache/`)
 
 ---
 
