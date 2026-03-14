@@ -141,9 +141,13 @@ You: exit                # Quit
 | `shell(cmd)` | Execute allowed shell commands |
 | `read_file(path)` | Read a file from workspace |
 | `write_file(path, content)` | Write a file to workspace |
+| `browse(url, max_length)` | Browse a URL and return text content |
+| `download_file(url, path)` | Download a file from URL to workspace |
 | `delegate(agent_name, task)` | Delegate to another agent |
 | `list_tools()` | List all available tools |
-| `register_tool(name, code)` | Create a new Python tool |
+| `register_tool(name, code, documentation)` | Create a new Python tool in TOOLBOX |
+| `list_toolbox()` | List all tools stored in TOOLBOX |
+| `get_tool_documentation(name)` | Get documentation for a TOOLBOX tool |
 | `schedule(task, delay, every)` | Schedule a task |
 | `edit_schedule(job_id, ...)` | Edit active schedule task/delay |
 | `split_schedule(job_id, tasks)` | Split job into sub-tasks (JSON array) |
@@ -395,9 +399,82 @@ coverage run -m pytest tests/ -v
 coverage report -m
 ```
 
-### Adding Custom Tools
+### Adding Custom Tools (TOOLBOX)
 
-Place custom tools in `~/.myclaw/tools/` or let the agent create them dynamically using `register_tool()`.
+MyClaw includes a **TOOLBOX** system for creating, storing, and sharing custom tools between agents.
+
+#### TOOLBOX Features
+
+- **Centralized Storage**: All custom tools are stored in `~/.myclaw/TOOLBOX/`
+- **Documentation Required**: Each tool must include documentation and a README
+- **Duplicate Prevention**: Agents must check for existing tools before creating new ones
+- **Error Logging**: Built-in error logging system for debugging and improvement
+- **Version Control**: Each tool tracks its creation date and errors
+
+#### Creating Tools
+
+When an agent creates a tool using `register_tool(name, code, documentation)`, it must:
+
+1. **Check for Duplicates**: Use `list_toolbox()` first to see if a similar tool exists
+2. **Include Documentation**: Provide detailed documentation explaining the tool's purpose
+3. **Add Error Handling**: Code must include try-except blocks
+4. **Log Errors**: Use `logger.error()` for error logging
+5. **Include Docstring**: Code must have a proper docstring
+
+Example:
+```python
+register_tool(
+    "calculate_sum",
+    '''def calculate_sum(a, b):
+        """Calculate the sum of two numbers.
+        
+        Args:
+            a: First number
+            b: Second number
+            
+        Returns:
+            The sum of a and b
+        """
+        try:
+            result = a + b
+            return result
+        except Exception as e:
+            logger.error(f"Error in calculate_sum: {e}")
+            return f"Error: {e}"
+    ''',
+    "Tool to calculate the sum of two numbers with proper error handling"
+)
+```
+
+#### TOOLBOX Commands
+
+| Command | Description |
+|---------|-------------|
+| `list_toolbox()` | List all tools in TOOLBOX with metadata |
+| `get_tool_documentation(name)` | Get detailed docs for a specific tool |
+| `register_tool(name, code, docs)` | Create and store a new tool |
+
+#### Tool Storage
+
+- **Code**: `~/.myclaw/TOOLBOX/{tool_name}.py`
+- **Documentation**: `~/.myclaw/TOOLBOX/{tool_name}_README.md`
+- **Registry**: `~/.myclaw/TOOLBOX/toolbox_registry.json`
+- **Master README**: `~/.myclaw/TOOLBOX/README.md`
+
+### Internet & Download Tools
+
+MyClaw now includes built-in tools for browsing the internet and downloading files:
+
+| Tool | Description | Example |
+|------|-------------|---------|
+| `browse(url, max_length)` | Browse a URL and return text content | `browse("https://example.com")` |
+| `download_file(url, path)` | Download a file to workspace | `download_file("https://example.com/file.pdf", "downloads/file.pdf")` |
+
+These tools include:
+- Automatic User-Agent headers
+- Timeout protection (30s for browse, 60s for download)
+- Path validation for security
+- Error handling and logging
 
 ### Cleanup
 

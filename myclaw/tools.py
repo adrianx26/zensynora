@@ -4,6 +4,7 @@ import logging
 import json
 import time
 import importlib.util
+import requests
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List
@@ -18,8 +19,9 @@ from .knowledge.storage import get_knowledge_dir
 logger = logging.getLogger(__name__)
 
 WORKSPACE         = Path.home() / ".myclaw" / "workspace"
-CUSTOM_TOOLS_DIR  = Path.home() / ".myclaw" / "tools"
-CUSTOM_TOOLS_REG  = Path.home() / ".myclaw" / "custom_tools.json"
+TOOLBOX_DIR       = Path.home() / ".myclaw" / "TOOLBOX"
+TOOLBOX_REG       = Path.home() / ".myclaw" / "TOOLBOX" / "toolbox_registry.json"
+TOOLBOX_DOCS      = Path.home() / ".myclaw" / "TOOLBOX" / "README.md"
 
 # ── Security lists ────────────────────────────────────────────────────────────
 
@@ -122,6 +124,80 @@ def write_file(path: str, content: str) -> str:
         return f"Error: {e}"
 
 
+# ── Internet & Download Tools ────────────────────────────────────────────────
+
+def browse(url: str, max_length: int = 5000) -> str:
+    """
+    Browse a URL and return the text content.
+    
+    url: The URL to browse
+    max_length: Maximum number of characters to return (default: 5000)
+    """
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(url, headers=headers, timeout=30)
+        response.raise_for_status()
+        
+        # Get text content
+        text = response.text
+        
+        # Limit length
+        if len(text) > max_length:
+            text = text[:max_length] + "\n\n[Content truncated - reached max_length limit]"
+        
+        return f"URL: {url}\nStatus: {response.status_code}\n\nContent:\n{text}"
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Browse error for {url}: {e}")
+        return f"Error browsing {url}: {e}"
+    except Exception as e:
+        logger.error(f"Unexpected browse error: {e}")
+        return f"Error: {e}"
+
+
+def download_file(url: str, path: str) -> str:
+    """
+    Download a file from a URL and save it to the workspace.
+    
+    url: The URL to download from
+    path: The path (relative to workspace) to save the file
+    """
+    try:
+        # Validate the path
+        target = validate_path(path)
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=60, stream=True)
+        response.raise_for_status()
+        
+        # Ensure parent directory exists
+        target.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Download and save
+        with open(target, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                f.write(chunk)
+        
+        # Get file size
+        size = target.stat().st_size
+        
+        logger.info(f"Downloaded file from {url} to {path} ({size} bytes)")
+        return f"[OK] Downloaded file from {url} to {path} ({size} bytes)"
+        
+    except ValueError as e:
+        return f"Error: {e}"
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Download error for {url}: {e}")
+        return f"Error downloading from {url}: {e}"
+    except Exception as e:
+        logger.error(f"Unexpected download error: {e}")
+        return f"Error: {e}"
+
+
 # ── Feature 3: Sub-Agent Delegation ──────────────────────────────────────────
 
 async def delegate(agent_name: str, task: str, _depth: int = 0) -> str:
@@ -151,17 +227,54 @@ def list_tools() -> str:
     return "Available tools: " + ", ".join(sorted(TOOLS.keys()))
 
 
-def register_tool(name: str, code: str) -> str:
-    """Dynamically create a new tool from Python source code.
+def register_tool(name: str, code: str, documentation: str = "") -> str:
+    """Dynamically create a new tool from Python source code and store it in TOOLBOX.
 
     name: valid Python identifier — must match the function name defined in code
     code: full Python source for the function (use \\n for newlines)
+    documentation: detailed documentation explaining what the tool does, its parameters, return values, and usage examples
 
+    IMPORTANT: Before creating a tool, you must check if a similar tool already exists in TOOLBOX.
+    Use list_toolbox() to see existing tools first.
+
+    The tool must include:
+    1. A proper docstring explaining its purpose and usage
+    2. Error handling with try-except blocks
+    3. Logging of errors using logger.error()
+    
     Example:
-        register_tool("greet", "def greet(who='world'):\\n    return f'Hello {who}!'")
+        register_tool("greet", "def greet(who='world'):\\n    \\"\\"\\"Greet someone.\\"\\"\\"\\n    try:\\n        return f'Hello {who}!'\\n    except Exception as e:\\n        logger.error(f'Error in greet: {e}')\\n        return f'Error: {e}'\\n", "Tool to greet someone with their name")
     """
     if not name.isidentifier():
         return f"Error: '{name}' is not a valid Python identifier."
+
+    # Check if tool already exists in TOOLBOX
+    if name in TOOLS and name not in ["shell", "read_file", "write_file", "browse", "download_file",
+                                       "delegate", "list_tools", "register_tool", "schedule",
+                                       "edit_schedule", "split_schedule", "suspend_schedule",
+                                       "resume_schedule", "cancel_schedule", "list_schedules",
+                                       "write_to_knowledge", "search_knowledge", "read_knowledge",
+                                       "list_knowledge", "get_knowledge_context", "get_related_knowledge",
+                                       "sync_knowledge_base", "list_knowledge_tags"]:
+        return f"Error: Tool '{name}' already exists in TOOLBOX. Use list_tools() to see all available tools."
+
+    # Check if file already exists in TOOLBOX directory
+    TOOLBOX_DIR.mkdir(parents=True, exist_ok=True)
+    tool_path = TOOLBOX_DIR / f"{name}.py"
+    if tool_path.exists():
+        return f"Error: Tool file '{name}.py' already exists in TOOLBOX. Please choose a different name or modify the existing tool."
+
+    # Check for similar tools based on name similarity
+    existing_tools = [t for t in TOOLS.keys() if t not in ["shell", "read_file", "write_file", "browse", "download_file",
+                                       "delegate", "list_tools", "register_tool", "schedule",
+                                       "edit_schedule", "split_schedule", "suspend_schedule",
+                                       "resume_schedule", "cancel_schedule", "list_schedules",
+                                       "write_to_knowledge", "search_knowledge", "read_knowledge",
+                                       "list_knowledge", "get_knowledge_context", "get_related_knowledge",
+                                       "sync_knowledge_base", "list_knowledge_tags"]]
+    similar_tools = [t for t in existing_tools if name.lower() in t.lower() or t.lower() in name.lower()]
+    if similar_tools:
+        return f"Error: Similar tool(s) already exist in TOOLBOX: {', '.join(similar_tools)}. Please check if an existing tool meets your needs using list_tools() or choose a more specific name."
 
     # Syntax validation before anything hits disk
     try:
@@ -169,10 +282,42 @@ def register_tool(name: str, code: str) -> str:
     except SyntaxError as e:
         return f"Syntax error in tool code: {e}"
 
+    # Validate that the code has a docstring and error handling
+    if '"""' not in code and "'''" not in code:
+        return "Error: Tool code must include a docstring explaining its purpose and usage."
+    
+    if 'try:' not in code or 'except' not in code:
+        return "Error: Tool code must include error handling with try-except blocks."
+    
+    if 'logger.error' not in code:
+        return "Error: Tool code must include error logging using logger.error()."
+
     # Write to disk
-    CUSTOM_TOOLS_DIR.mkdir(parents=True, exist_ok=True)
-    tool_path = CUSTOM_TOOLS_DIR / f"{name}.py"
     tool_path.write_text(code, encoding="utf-8")
+
+    # Create documentation file
+    if documentation:
+        doc_path = TOOLBOX_DIR / f"{name}_README.md"
+        doc_content = f"""# {name}
+
+## Description
+{documentation}
+
+## Code
+```python
+{code}
+```
+
+## Created
+{datetime.now().isoformat()}
+
+## Error Logging
+Errors are logged to the standard logging system and can be found in the application logs.
+"""
+        doc_path.write_text(doc_content, encoding="utf-8")
+
+    # Update main TOOLBOX README
+    _update_toolbox_readme()
 
     # Dynamic load
     try:
@@ -181,6 +326,7 @@ def register_tool(name: str, code: str) -> str:
         spec.loader.exec_module(mod)
         func = getattr(mod, name)
     except AttributeError:
+        tool_path.unlink(missing_ok=True)
         return f"Error: code must define a function named '{name}'."
     except Exception as e:
         tool_path.unlink(missing_ok=True)
@@ -190,28 +336,114 @@ def register_tool(name: str, code: str) -> str:
 
     # Persist registry so tool survives restarts
     registry = {}
-    if CUSTOM_TOOLS_REG.exists():
+    if TOOLBOX_REG.exists():
         try:
-            registry = json.loads(CUSTOM_TOOLS_REG.read_text())
+            registry = json.loads(TOOLBOX_REG.read_text())
         except Exception:
             pass
-    registry[name] = str(tool_path)
-    CUSTOM_TOOLS_REG.write_text(json.dumps(registry, indent=2))
+    registry[name] = {
+        "path": str(tool_path),
+        "documentation": documentation,
+        "created": datetime.now().isoformat(),
+        "errors": []
+    }
+    TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
 
-    logger.info(f"Custom tool registered: {name}")
-    return f"Tool '{name}' registered and available immediately."
+    logger.info(f"Tool registered in TOOLBOX: {name}")
+    return f"Tool '{name}' registered in TOOLBOX and available immediately. Documentation saved to {name}_README.md"
+
+
+def _update_toolbox_readme():
+    """Update the main TOOLBOX README with a list of all tools."""
+    readme_content = """# TOOLBOX
+
+This directory contains custom tools created by agents.
+
+## Tools
+
+"""
+    if TOOLBOX_REG.exists():
+        try:
+            registry = json.loads(TOOLBOX_REG.read_text())
+            for name, info in sorted(registry.items()):
+                readme_content += f"### {name}\n"
+                readme_content += f"- Created: {info.get('created', 'Unknown')}\n"
+                readme_content += f"- Documentation: {name}_README.md\n"
+                readme_content += f"- Description: {info.get('documentation', 'No documentation provided')[:100]}...\n\n"
+        except Exception:
+            readme_content += "No tools registered yet.\n"
+    else:
+        readme_content += "No tools registered yet.\n"
+
+    readme_content += """
+## Creating New Tools
+
+When creating a new tool, the agent must:
+1. Check if a similar tool already exists (use list_tools())
+2. Provide comprehensive documentation
+3. Include error handling with try-except blocks
+4. Log errors using logger.error()
+5. Include a proper docstring explaining usage
+
+## Error Logging
+
+All tools in the TOOLBOX use the standard Python logging system. Errors are logged and can be reviewed to improve tools.
+"""
+    
+    TOOLBOX_DOCS.write_text(readme_content, encoding="utf-8")
+
+
+def list_toolbox() -> str:
+    """List all tools stored in the TOOLBOX with their documentation."""
+    if not TOOLBOX_REG.exists():
+        return "TOOLBOX is empty. No custom tools have been created yet."
+    
+    try:
+        registry = json.loads(TOOLBOX_REG.read_text())
+        if not registry:
+            return "TOOLBOX is empty."
+        
+        lines = ["[TOOLBOX] Contents:", ""]
+        for name, info in sorted(registry.items()):
+            lines.append(f"[TOOL] {name}")
+            lines.append(f"   Created: {info.get('created', 'Unknown')}")
+            lines.append(f"   Docs: {info.get('documentation', 'No documentation')[:80]}...")
+            lines.append("")
+        
+        return "\n".join(lines)
+    except Exception as e:
+        logger.error(f"Error listing TOOLBOX: {e}")
+        return f"Error listing TOOLBOX: {e}"
+
+
+def get_tool_documentation(name: str) -> str:
+    """Get the documentation for a specific tool in TOOLBOX."""
+    doc_path = TOOLBOX_DIR / f"{name}_README.md"
+    if not doc_path.exists():
+        return f"No documentation found for tool '{name}'. Create documentation when registering the tool."
+    
+    try:
+        return doc_path.read_text(encoding="utf-8")
+    except Exception as e:
+        logger.error(f"Error reading documentation for {name}: {e}")
+        return f"Error reading documentation: {e}"
 
 
 def load_custom_tools():
-    """Load persisted custom tools at startup — called by gateway.py / cli.py."""
-    if not CUSTOM_TOOLS_REG.exists():
+    """Load persisted custom tools from TOOLBOX at startup — called by gateway.py / cli.py."""
+    if not TOOLBOX_REG.exists():
         return
     try:
-        registry = json.loads(CUSTOM_TOOLS_REG.read_text())
-        for name, path in registry.items():
-            tool_path = Path(path)
+        registry = json.loads(TOOLBOX_REG.read_text())
+        for name, info in registry.items():
+            if isinstance(info, dict):
+                tool_path = Path(info.get("path", ""))
+            else:
+                # Handle old format where registry was just path strings
+                tool_path = Path(info)
+            
             if not tool_path.exists():
-                logger.warning(f"Custom tool file missing: {path}")
+                logger.warning(f"Tool file missing from TOOLBOX: {tool_path}")
                 continue
             try:
                 spec = importlib.util.spec_from_file_location(name, tool_path)
@@ -219,11 +451,14 @@ def load_custom_tools():
                 spec.loader.exec_module(mod)
                 func = getattr(mod, name)
                 TOOLS[name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {name}"}
-                logger.info(f"Loaded custom tool: {name}")
+                logger.info(f"Loaded tool from TOOLBOX: {name}")
             except Exception as e:
-                logger.warning(f"Failed to load custom tool '{name}': {e}")
+                logger.warning(f"Failed to load tool '{name}' from TOOLBOX: {e}")
+        
+        # Update the TOOLBOX README
+        _update_toolbox_readme()
     except Exception as e:
-        logger.error(f"Error loading custom tools registry: {e}")
+        logger.error(f"Error loading TOOLBOX registry: {e}")
 
 
 # ── Feature 5: Agent-Initiated Scheduling ────────────────────────────────────
@@ -623,11 +858,16 @@ TOOLS: Dict[str, dict] = {
     "shell":                {"func": shell,                "desc": "Execute a shell command"},
     "read_file":            {"func": read_file,            "desc": "Read a file from workspace"},
     "write_file":           {"func": write_file,           "desc": "Write a file to workspace"},
+    # Internet & Download
+    "browse":               {"func": browse,               "desc": "Browse a URL and return text content"},
+    "download_file":        {"func": download_file,        "desc": "Download a file from URL to workspace"},
     # Feature 3
     "delegate":             {"func": delegate,             "desc": "Delegate a task to a named agent"},
     # Feature 4
     "list_tools":           {"func": list_tools,           "desc": "List all available tools"},
-    "register_tool":        {"func": register_tool,        "desc": "Build and register a new Python tool"},
+    "register_tool":        {"func": register_tool,        "desc": "Build and register a new Python tool in TOOLBOX"},
+    "list_toolbox":         {"func": list_toolbox,         "desc": "List all tools stored in TOOLBOX"},
+    "get_tool_documentation":{"func": get_tool_documentation,"desc": "Get documentation for a specific TOOLBOX tool"},
     # Feature 5
     "schedule":             {"func": schedule,             "desc": "Schedule a future task (delay= or every=)"},
     "edit_schedule":        {"func": edit_schedule,        "desc": "Edit an active scheduled job (new task, delay, or every)"},
