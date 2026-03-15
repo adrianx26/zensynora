@@ -94,6 +94,9 @@ class NamedAgentConfig(BaseModel):
 class AgentsConfig(BaseModel):
     defaults: AgentDefaults = AgentDefaults()
     named: list[NamedAgentConfig] = []
+    # Fallback profiles directory (local workspace profiles take precedence)
+    # Local profiles are loaded from: myclaw/profiles/{agent_name}.md
+    # Fallback profiles are loaded from: profiles_dir/{agent_name}.md
     profiles_dir: str = "~/.myclaw/profiles"
 
 

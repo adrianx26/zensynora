@@ -351,7 +351,16 @@ myclaw/
 │   ├── channels/
 │   │   ├── __init__.py
 │   │   └── telegram.py      # Telegram bot
-│   └── knowledge/           # Knowledge storage system
+│   ├── knowledge/           # Knowledge storage system
+│   └── profiles/            # Agent profile templates
+│       ├── default.md       # Default agent profile
+│       ├── agent.md         # Core capabilities
+│       ├── soul.md          # Ethical guidelines
+│       ├── identity.md      # Personality definition
+│       ├── user.md          # User preferences
+│       ├── heartbeat.md     # System monitoring
+│       ├── bootstrap.md     # Initialization
+│       └── memory.md        # Memory management
 │       ├── __init__.py
 │       ├── db.py            # SQLite database
 │       ├── parser.py        # Markdown parsing
@@ -412,6 +421,7 @@ Configuration is stored in `~/.myclaw/config.json`:
 ### Supported Providers
 - **Local**: `ollama`, `lmstudio`, `llamacpp`
 - **Cloud**: `openai`, `anthropic`, `gemini`, `groq`, `openrouter`
+- **Hybrid/Remote**: `ollama` (can run on remote servers via `base_url` configuration)
 
 ### LM Studio Configuration
 
@@ -436,6 +446,33 @@ For LM Studio integration (running on a remote server):
 
 **Note**: LM Studio API token can be any non-empty string for testing purposes.
 
+### Ollama Cloud/Remote Configuration
+
+Ollama can be deployed on cloud servers or remote machines. Configure the `base_url` to point to your Ollama instance:
+
+```json
+{
+  "providers": {
+    "ollama": {
+      "base_url": "https://your-ollama-server.com:11434"
+    }
+  },
+  "agents": {
+    "defaults": {
+      "provider": "ollama",
+      "model": "llama3.2"
+    }
+  }
+}
+```
+
+**Cloud Deployment Options:**
+- **Self-hosted**: Run Ollama on your own VPS/cloud server
+- **GPU Cloud**: Deploy on RunPod, Vast.ai, or similar GPU cloud providers
+- **Home Server**: Access Ollama running on a home server via reverse proxy
+
+**Security Note**: When exposing Ollama to the internet, use HTTPS and consider adding authentication via a reverse proxy (nginx, Caddy, etc.).
+
 ### Creating Named Agents
 
 Add agents to the `agents.named` array in your config. Each agent can have:
@@ -445,7 +482,23 @@ Add agents to the `agents.named` array in your config. Each agent can have:
 - `system_prompt` — Custom system instructions
 
 **Per-Agent Prompt Profiles:**
-Alternatively, an agent's individual system prompt can be managed via dedicated Markdown files instead of the config. MyClaw will automatically load the prompt from `~/.myclaw/profiles/{name}.md` upon startup if the file exists. This allows for rich, multi-line instructions easily.
+Alternatively, an agent's individual system prompt can be managed via dedicated Markdown files instead of the config. MyClaw will automatically load the prompt from profile files upon startup. This allows for rich, multi-line instructions easily.
+
+**Profile Loading Priority:**
+1. **Local Workspace** (checked first): `myclaw/profiles/{name}.md`
+2. **User Home** (fallback): `~/.myclaw/profiles/{name}.md`
+3. **Config** (final fallback): `system_prompt` from config.json
+
+**Built-in Profiles:**
+The following profile templates are included in `myclaw/profiles/`:
+- `default.md` — Default agent with all capabilities
+- `agent.md` — Core agent capabilities reference
+- `soul.md` — Ethical guidelines and principles
+- `identity.md` — Agent personality and communication style
+- `user.md` — User preferences template
+- `heartbeat.md` — System monitoring and health checks
+- `bootstrap.md` — Initialization and startup sequence
+- `memory.md` — Memory management guidelines
 
 ---
 

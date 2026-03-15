@@ -66,15 +66,22 @@ class Agent:
             cfg_model = "llama3.2"
         self.model = model or cfg_model
 
-        profiles_dir_str = getattr(config.agents, "profiles_dir", "~/.myclaw/profiles")
-        profiles_dir = Path(profiles_dir_str).expanduser()
-        profiles_dir.mkdir(parents=True, exist_ok=True)
+        # Check for local workspace profiles first, then fall back to user home
+        local_profiles_dir = Path(__file__).parent / "profiles"
+        user_profiles_dir = Path(getattr(config.agents, "profiles_dir", "~/.myclaw/profiles")).expanduser()
         
-        profile_path = profiles_dir / f"{self.name}.md"
+        # Try local workspace profiles first
+        profile_path = local_profiles_dir / f"{self.name}.md"
         if profile_path.exists():
             self.system_prompt = profile_path.read_text(encoding="utf-8").strip()
         else:
-            self.system_prompt = system_prompt or SYSTEM_PROMPT
+            # Fall back to user home profiles
+            user_profiles_dir.mkdir(parents=True, exist_ok=True)
+            profile_path = user_profiles_dir / f"{self.name}.md"
+            if profile_path.exists():
+                self.system_prompt = profile_path.read_text(encoding="utf-8").strip()
+            else:
+                self.system_prompt = system_prompt or SYSTEM_PROMPT
 
     def _get_memory(self, user_id: str) -> Memory:
         if user_id not in self._memories:
