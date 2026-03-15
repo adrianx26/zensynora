@@ -13,6 +13,7 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - **Multi-Agent Support** — Create and manage multiple named agents with custom prompts and models
 - **Per-Agent Prompt Profiles** — Manage individual agent system prompts using dedicated Markdown files (`~/.myclaw/profiles/{name}.md`)
 - **Agent Delegation** — Delegate tasks to specialized agents (e.g., `@coder write a function`)
+- **🐝 Agent Swarms** — Coordinate multiple agents using parallel, sequential, hierarchical, or voting strategies for complex tasks
 - **Dynamic Tool Building** — The agent can create and register new Python tools at runtime
 - **Task Scheduling** — Schedule one-shot or recurring tasks with Telegram notifications
 - **Telegram Gateway** — Full-featured Telegram bot with commands: `/remind`, `/jobs`, `/cancel`, `/agents`
@@ -266,6 +267,69 @@ Claw: [Uses write_to_knowledge tool to save the note]
 
 ---
 
+## 🐝 Agent Swarms
+
+Agent Swarms enable multiple AI agents to collaborate on complex tasks using different coordination strategies.
+
+### Swarm Strategies
+
+| Strategy | Description | Best For |
+|----------|-------------|----------|
+| **Parallel** | All agents work simultaneously | Multi-perspective analysis, brainstorming |
+| **Sequential** | Pipeline execution | Content creation workflows |
+| **Hierarchical** | Coordinator + workers | Complex multi-part tasks |
+| **Voting** | Consensus-based decisions | Decision making, quality validation |
+
+### Quick Example
+
+```
+# Create a research swarm with 3 agents
+You: Create a swarm named "ai_research" with strategy parallel using agents researcher1, researcher2, researcher3
+
+Claw: ✅ Swarm created successfully!
+   ID: swarm_abc123def456
+   Name: ai_research
+   Strategy: parallel
+
+# Assign a task
+You: Assign task to swarm_abc123def456: Research the latest AI developments in 2024
+
+Claw: 🐝 Swarm Execution Complete
+   Confidence: 0.85
+   Execution Time: 12.34s
+
+🎯 Final Result:
+[Combined insights from all 3 researchers]
+```
+
+### Swarm Tools
+
+- `swarm_create(name, strategy, workers, coordinator, aggregation)` - Create swarm
+- `swarm_assign(swarm_id, task)` - Execute task
+- `swarm_status(swarm_id)` - Check status
+- `swarm_result(swarm_id)` - Get results
+- `swarm_terminate(swarm_id)` - Stop execution
+- `swarm_list(status)` - List swarms
+- `swarm_stats()` - View statistics
+
+### Configuration
+
+```json
+{
+  "swarm": {
+    "enabled": true,
+    "max_concurrent_swarms": 3,
+    "default_strategy": "parallel",
+    "default_aggregation": "synthesis",
+    "timeout_seconds": 300
+  }
+}
+```
+
+See [docs/agent_swarm_guide.md](docs/agent_swarm_guide.md) for detailed documentation.
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -278,6 +342,12 @@ myclaw/
 │   ├── memory.py            # SQLite persistence
 │   ├── provider.py          # LLM Provider abstraction
 │   ├── tools.py             # Tool definitions
+│   ├── swarm/               # 🐝 Agent Swarm system
+│   │   ├── __init__.py
+│   │   ├── models.py        # Data models
+│   │   ├── storage.py       # SQLite persistence
+│   │   ├── strategies.py    # Execution strategies
+│   │   └── orchestrator.py  # Coordination logic
 │   ├── channels/
 │   │   ├── __init__.py
 │   │   └── telegram.py      # Telegram bot
@@ -288,6 +358,8 @@ myclaw/
 │       ├── storage.py       # File operations
 │       ├── graph.py         # Graph traversal
 │       └── sync.py          # File-DB sync
+├── docs/                    # Documentation
+│   └── agent_swarm_guide.md # Swarm documentation
 ├── onboard.py               # Setup wizard
 ├── cli.py                   # CLI entry point
 ├── requirements.txt         # Dependencies
