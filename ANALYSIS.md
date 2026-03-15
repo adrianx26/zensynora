@@ -7,6 +7,7 @@ MyClaw is a personal AI agent that combines:
 - **Telegram** integration for messaging
 - **SQLite** memory for persistent conversations
 - **Tool system** for shell commands and file operations
+- **Agent Swarms** for multi-agent collaboration
 
 ### Architecture Overview
 
@@ -15,8 +16,29 @@ Channels (CLI, Telegram)
         ↓
      Agent
    ↙    ↓    ↘
-Memory  Provider  Tools
-(SQLite) (Ollama) (shell, read_file, write_file)
+Memory  Provider  Tools  Swarms
+(SQLite) (Ollama) (shell,...) (Multi-Agent)
+```
+
+### Agent Swarms
+
+MyClaw now supports **Agent Swarms** - a powerful multi-agent coordination system:
+
+- **Parallel Strategy** - All agents work simultaneously on the same task
+- **Sequential Strategy** - Agents work in pipeline (output feeds to next)
+- **Hierarchical Strategy** - Coordinator delegates tasks to workers
+- **Voting Strategy** - Multiple agents vote on solutions
+
+**Key Benefits:**
+- Solve complex problems requiring multiple perspectives
+- Distribute workloads across specialized agents
+- Validate results through consensus
+- Create powerful multi-stage workflows
+
+**Usage:**
+```
+swarm_create("research_team", "parallel", "agent1,agent2,agent3")
+swarm_assign("swarm_xxx", "Research AI developments")
 ```
 
 ---
@@ -94,9 +116,43 @@ Memory  Provider  Tools
 
 ## 🎯 Remaining Priority
 
-1. **Feature**: Expand integration support via Discord / Webhooks.
-2. **Feature**: Implement strong Pydantic typing in configuration definitions.
-3. **Enhancement**: Apply streaming logic to large generated prompts. 
+1. **Feature**: ✅ Agent Swarms - Multi-agent coordination system implemented.
+2. **Feature**: Expand integration support via Discord / Webhooks.
+3. **Enhancement**: Apply streaming logic to large generated prompts.
+
+## 🐝 Agent Swarm Features
+
+### Implemented Strategies
+| Strategy | Status | Description |
+|----------|--------|-------------|
+| Parallel | ✅ | All agents work simultaneously |
+| Sequential | ✅ | Pipeline execution |
+| Hierarchical | ✅ | Coordinator + workers |
+| Voting | ✅ | Consensus-based decisions |
+
+### Swarm Tools
+- `swarm_create()` - Create new swarms
+- `swarm_assign()` - Execute tasks
+- `swarm_status()` - Check status
+- `swarm_result()` - Get results
+- `swarm_terminate()` - Stop execution
+- `swarm_list()` - List swarms
+- `swarm_stats()` - View statistics
+
+### Configuration
+```json
+{
+  "swarm": {
+    "enabled": true,
+    "max_concurrent_swarms": 3,
+    "default_strategy": "parallel",
+    "default_aggregation": "synthesis",
+    "timeout_seconds": 300
+  }
+}
+```
+
+See [docs/agent_swarm_guide.md](docs/agent_swarm_guide.md) for detailed documentation.
 
 ---
 
@@ -105,19 +161,29 @@ Memory  Provider  Tools
 ```
 myclaw/
 ├── myclaw/
-│   ├── __init__.py       # ✅ Created
-│   ├── config.py         # Config loading
-│   ├── memory.py         # SQLite persistence
-│   ├── provider.py       # API Client abstraction 
-│   ├── tools.py          # Shell, files, network, tasks, rules 
-│   ├── agent.py          # Main agent routing
-│   ├── gateway.py        # Channel endpoints
-│   ├── knowledge/        # MemoPad knowledge engine integration
+│   ├── __init__.py          # ✅ Created
+│   ├── config.py            # Config loading with SwarmConfig
+│   ├── memory.py            # SQLite persistence
+│   ├── provider.py          # API Client abstraction with swarm schemas
+│   ├── tools.py             # Shell, files, network, tasks, rules, SWARM TOOLS
+│   ├── agent.py             # Main agent routing with swarm context
+│   ├── gateway.py           # Channel endpoints
+│   ├── swarm/               # 🐝 Agent Swarm System
+│   │   ├── __init__.py      # Package exports
+│   │   ├── models.py        # SwarmConfig, SwarmTask, SwarmResult
+│   │   ├── storage.py       # SQLite persistence for swarms
+│   │   ├── strategies.py    # Execution strategies
+│   │   └── orchestrator.py  # Main coordination logic
+│   ├── knowledge/           # MemoPad knowledge engine integration
 │   └── channels/
-│       ├── __init__.py   # ✅ Created
-│       └── telegram.py   # Telegram bot
-├── onboard.py            # Setup wizard
-├── cli.py                # Command-line interface
-├── requirements.txt      # Dependencies
-└── config.json.example   # Config template
+│       ├── __init__.py      # ✅ Created
+│       └── telegram.py      # Telegram bot
+├── docs/
+│   └── agent_swarm_guide.md # 📚 Swarm documentation
+├── plans/
+│   └── agent_swarm_implementation_plan.md # Implementation details
+├── onboard.py               # Setup wizard
+├── cli.py                   # Command-line interface
+├── requirements.txt         # Dependencies
+└── config.json.example      # Config template
 ```

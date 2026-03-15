@@ -107,11 +107,22 @@ class KnowledgeConfig(BaseModel):
     knowledge_dir: str = "~/.myclaw/knowledge"
 
 
+class SwarmConfig(BaseModel):
+    """Configuration for Agent Swarm functionality."""
+    enabled: bool = True
+    max_concurrent_swarms: int = 3
+    default_strategy: str = "parallel"
+    default_aggregation: str = "synthesis"
+    timeout_seconds: int = 300
+    swarm_memory_limit: int = 50  # Max messages per swarm
+
+
 class AppConfig(BaseModel):
     providers: ProvidersConfig = ProvidersConfig()
     agents:    AgentsConfig    = AgentsConfig()
     channels:  ChannelsConfig  = ChannelsConfig()
     knowledge: KnowledgeConfig = KnowledgeConfig()
+    swarm:     SwarmConfig     = SwarmConfig()
 
     def get(self, key: str, default=None):
         """Dict-style .get() for backward compatibility."""

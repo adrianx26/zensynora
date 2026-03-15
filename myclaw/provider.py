@@ -295,6 +295,113 @@ TOOL_SCHEMAS = [
             }
         }
     },
+    # ── Agent Swarm Tools ───────────────────────────────────────────────────────
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_create",
+            "description": "Create a new agent swarm for collaborative multi-agent task execution. Swarms allow multiple agents to work together using strategies like parallel, sequential, hierarchical, or voting.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Descriptive name for the swarm (e.g., 'research_team', 'code_reviewers')"},
+                    "strategy": {"type": "string", "enum": ["parallel", "sequential", "hierarchical", "voting"], "description": "Execution strategy"},
+                    "workers": {"type": "string", "description": "Comma-separated list of agent names (e.g., 'agent1,agent2,agent3')"},
+                    "coordinator": {"type": "string", "description": "Coordinator agent name (required for hierarchical strategy)"},
+                    "aggregation": {"type": "string", "enum": ["consensus", "best_pick", "concatenation", "synthesis"], "description": "How to combine results from agents"},
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": ["name", "strategy", "workers"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_assign",
+            "description": "Assign a task to a swarm for execution. The swarm will coordinate its agents according to the configured strategy and return an aggregated result.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "swarm_id": {"type": "string", "description": "The swarm ID returned by swarm_create()"},
+                    "task": {"type": "string", "description": "The task description or prompt for the swarm"},
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": ["swarm_id", "task"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_status",
+            "description": "Get the current status of a swarm including configuration and execution state.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "swarm_id": {"type": "string", "description": "The swarm ID"}
+                },
+                "required": ["swarm_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_result",
+            "description": "Get the final aggregated result from a completed swarm execution.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "swarm_id": {"type": "string", "description": "The swarm ID"}
+                },
+                "required": ["swarm_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_terminate",
+            "description": "Force terminate a running swarm before it completes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "swarm_id": {"type": "string", "description": "The swarm ID to terminate"}
+                },
+                "required": ["swarm_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_list",
+            "description": "List all swarms for the user, optionally filtered by status.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {"type": "string", "enum": ["pending", "running", "completed", "failed", "terminated"], "description": "Optional status filter"},
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_stats",
+            "description": "Get swarm statistics including counts, confidence scores, and execution times.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
+                },
+                "required": []
+            }
+        }
+    },
 ]
 
 
