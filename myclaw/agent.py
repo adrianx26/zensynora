@@ -79,62 +79,64 @@ class Agent:
         return self._memories[user_id]
 
     def _search_knowledge_context(self, message: str, user_id: str, max_results: int = 3) -> str:
-        """
-        Auto-search knowledge base for relevant context.
-        
-        Extracts key terms from the message and searches the knowledge base.
-        Returns formatted context string for injection into system prompt.
+        """Auto-search the knowledge base for context relevant to message.
+
+        Uses a multi-strategy search:
+        1. Resolves any explicit memory:// permalink references
+        2. Searches using the full message (FTS5 ranked)
+        3. Falls back to bigram + keyword OR-query for fuzzy matching
+
+        Args:
+            message: The user's message to extract search terms from
+            user_id: User ID for per-user knowledge isolation
+            max_results: Maximum notes to retrieve (default: 3)
+
+        Returns:
+            Formatted '## Relevant Knowledge' context block, or '' if nothing found.
         """
         try:
-            # Extract potential search terms (nouns, proper names, etc.)
-            # Simple approach: use the whole message or key phrases
             search_terms = []
-            
-            # Look for memory:// references in the message
+
+            # Resolve explicit memory:// references
             memory_refs = re.findall(r'memory://([\w\-]+)', message)
             search_terms.extend(memory_refs)
-            
-            # Also try searching with the whole message (FTS5 will rank results)
-            # Clean up the message for searching
+
+            # Clean the message for keyword extraction
             cleaned = re.sub(r'[^\w\s]', ' ', message.lower())
             words = [w for w in cleaned.split() if len(w) > 3]
-            
+
+            notes = []
             if words:
-                # Try different search strategies
-                # First: search for exact phrase
+                # Strategy 1: search with full message text (FTS5 ranked)
                 notes = search_notes(message, user_id, limit=max_results)
-                
-                if not notes and len(words) > 0:
-                    # Try searching for top keywords
-                    query = " OR ".join(words[:5])  # Use up to 5 keywords
+
+                if not notes:
+                    # Strategy 2: bigram + single-keyword OR query
+                    bigrams = [f"{words[i]} {words[i+1]}" for i in range(len(words) - 1)]
+                    candidates = bigrams[:3] + words[:5]
+                    query = " OR ".join(f'"{t}"' if ' ' in t else t for t in candidates)
                     notes = search_notes(query, user_id, limit=max_results)
-            else:
-                notes = []
-            
+
             if not notes and not memory_refs:
                 return ""
-            
-            # Build context from results
+
             context_lines = ["## Relevant Knowledge"]
-            
+
             for note in notes:
                 context_lines.append(f"\n**{note.title}** ({note.permalink}):")
-                
-                # Add observations
+
                 if note.observations:
-                    for obs in note.observations[:3]:  # Limit to 3 observations
+                    for obs in note.observations[:3]:
                         context_lines.append(f"- [{obs.category}] {obs.content}")
-                
-                # If this note was directly referenced, include more details
+
                 if note.permalink in memory_refs:
-                    # Get full context with related entities
                     full_context = build_context(note.permalink, user_id, depth=1)
                     context_lines.append("\nRelated context:")
                     context_lines.append(full_context[:500] + "..." if len(full_context) > 500 else full_context)
-            
+
             context_lines.append("\n---\n")
             return "\n".join(context_lines)
-            
+
         except Exception as e:
             logger.error(f"Error searching knowledge: {e}")
             return ""

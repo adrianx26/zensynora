@@ -1,0 +1,26 @@
+timestamp	skill	task_id	description	correctness	reliability	clarity	coverage	total	status	notes
+2026-03-15T11:38:09	SK-1.2	file-write-01	Write a file to workspace	1.00	1.00	0.40	1.00	0.880	PASS	
+2026-03-15T11:38:09	SK-1.1	file-read-01	Read a file from workspace	1.00	1.00	0.40	1.00	0.880	PASS	
+2026-03-15T11:38:09	SK-1.1	file-read-traversal	Reject path traversal in read_file	1.00	1.00	0.40	1.00	0.880	PASS	
+2026-03-15T11:38:09	SK-1.2	file-write-nested	Write to nested subdirectory	1.00	1.00	0.40	1.00	0.880	PASS	
+2026-03-15T11:38:09	SK-1.2	file-write-traversal	Reject path traversal in write_file	1.00	1.00	0.40	1.00	0.880	PASS	
+2026-03-15T11:38:09	SK-2.1	shell-empty	Empty command returns error	1.00	1.00	0.40	1.00	0.880	PASS	
+2026-03-15T11:38:09	SK-2.1	shell-blocked	Blocked command rejected	1.00	1.00	0.40	1.00	0.880	PASS	
+2026-03-15T11:38:09	SK-2.1	shell-not-allowed	Unlisted command rejected with helpful message	1.00	1.00	0.40	1.00	0.880	PASS	
+2026-03-15T11:38:09	SK-2.1	shell-allowed-ls	Allowed command executes successfully	1.00	1.00	0.40	1.00	0.880	PASS	
+2026-03-15T11:38:09	SK-3.1	browse-success	Browse URL returns content	1.00	1.00	0.80	0.70	0.930	PASS	Returns raw HTML, not stripped text
+2026-03-15T11:38:09	SK-3.1	browse-truncation	Browse truncates at max_length	1.00	1.00	0.80	1.00	0.960	PASS	
+2026-03-15T11:38:09	SK-3.1	browse-http-error	Browse handles 404 gracefully	1.00	1.00	0.80	1.00	0.960	PASS	
+2026-03-15T11:38:09	SK-3.2	download-success	Download file saves to workspace	1.00	1.00	0.80	1.00	0.960	PASS	
+2026-03-15T11:38:09	SK-7.1	toolbox-register-valid	Register valid tool succeeds	1.00	1.00	1.00	1.00	1.000	PASS	
+2026-03-15T11:38:09	SK-7.1	toolbox-register-duplicate	Duplicate tool rejected	1.00	1.00	1.00	1.00	1.000	PASS	
+2026-03-15T11:38:09	SK-7.1	toolbox-register-no-docstring	Tool without docstring rejected	1.00	1.00	1.00	1.00	1.000	PASS	
+2026-03-15T11:38:09	SK-7.1	toolbox-register-bad-name	Invalid identifier rejected	1.00	1.00	1.00	1.00	1.000	PASS	
+2026-03-15T11:38:09	SK-7.2	toolbox-list	list_toolbox shows registered tools	1.00	1.00	0.40	1.00	0.880	PASS	
+2026-03-15T11:38:09	SK-7.3	toolbox-docs	get_tool_documentation returns content	1.00	1.00	0.40	1.00	0.880	PASS	
+2026-03-15T11:38:09	SK-6.1	knowledge-write	Write note to knowledge base	1.00	1.00	0.80	1.00	0.960	PASS	
+2026-03-15T11:38:09	SK-6.2	knowledge-search	Search knowledge returns results	1.00	1.00	0.80	1.00	0.960	PASS	
+2026-03-15T11:38:09	SK-6.2	knowledge-search-empty	Search returns no-results message	1.00	1.00	0.80	1.00	0.960	PASS	
+2026-03-15T11:38:09	SK-6.3	knowledge-read	Read knowledge note by permalink	1.00	1.00	0.80	1.00	0.960	PASS	
+2026-03-15T11:38:09	SK-6.3	knowledge-read-notfound	Read missing note returns error	1.00	1.00	0.80	1.00	0.960	PASS	
+2026-03-15T11:38:09	SK-6.5	knowledge-sync	Sync knowledge base returns summary	1.00	1.00	0.80	1.00	0.960	PASS	

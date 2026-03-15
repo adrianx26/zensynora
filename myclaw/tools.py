@@ -4,6 +4,7 @@ import logging
 import json
 import time
 import importlib.util
+import re
 import requests
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -27,7 +28,8 @@ TOOLBOX_DOCS      = Path.home() / ".myclaw" / "TOOLBOX" / "README.md"
 
 ALLOWED_COMMANDS = frozenset({
     'ls', 'dir', 'cat', 'type', 'find', 'grep', 'findstr',
-    'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'git'
+    'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'git',
+    'echo', 'pwd', 'python', 'python3', 'pip', 'curl', 'wget'
 })
 
 BLOCKED_COMMANDS = frozenset({
@@ -76,7 +78,25 @@ def validate_path(path: str) -> Path:
 
 
 def shell(cmd: str) -> str:
-    """Execute an allowed shell command in the workspace directory."""
+    """Execute an allowed shell command in the workspace directory.
+
+    Runs a command from the strict allowlist in ~/.myclaw/workspace.
+    Commands not in the allowlist are rejected with a helpful message.
+    Dangerous commands (rm, del, powershell, etc.) are blocked entirely.
+
+    Args:
+        cmd: Shell command string (e.g. 'ls -la', 'grep pattern file.txt')
+
+    Returns:
+        Combined stdout+stderr as a string on success.
+        'Error: Empty command' if cmd is blank.
+        'Error: Command X is blocked for security' if cmd is in BLOCKED_COMMANDS.
+        'Error: X not allowed. Allowed: ...' if cmd is not in ALLOWED_COMMANDS.
+        'Error: Command timed out after 30 seconds' on timeout.
+
+    Allowed commands: ls, dir, cat, type, find, grep, findstr, head, tail,
+        wc, sort, uniq, cut, git, echo, pwd, python, python3, pip, curl, wget
+    """
     try:
         parts = shlex.split(cmd)
         if not parts:
@@ -100,7 +120,20 @@ def shell(cmd: str) -> str:
 
 
 def read_file(path: str) -> str:
-    """Read a file from the workspace directory."""
+    """Read a file from the workspace directory (~/.myclaw/workspace).
+
+    All paths are validated against directory traversal before reading.
+    Only files within the workspace boundary are accessible.
+
+    Args:
+        path: Relative path to the file within the workspace
+              (e.g. 'notes.txt', 'subdir/data.json')
+
+    Returns:
+        File contents as a string on success.
+        'Error: Invalid path: ...' if path escapes the workspace.
+        'Error: ...' on any other failure (file not found, permission denied).
+    """
     try:
         return validate_path(path).read_text()
     except ValueError as e:
@@ -111,7 +144,21 @@ def read_file(path: str) -> str:
 
 
 def write_file(path: str, content: str) -> str:
-    """Write content to a file in the workspace directory."""
+    """Write content to a file in the workspace directory (~/.myclaw/workspace).
+
+    Creates parent directories automatically. Overwrites existing files.
+    All paths are validated against directory traversal.
+
+    Args:
+        path: Relative path within the workspace (e.g. 'output.txt', 'data/result.json').
+              Supports nested paths — parent directories are created automatically.
+        content: String content to write to the file.
+
+    Returns:
+        'File written: {path}' on success.
+        'Error: Invalid path: ...' if path escapes the workspace.
+        'Error: ...' on any other failure.
+    """
     try:
         p = validate_path(path)
         p.parent.mkdir(parents=True, exist_ok=True)
@@ -126,12 +173,36 @@ def write_file(path: str, content: str) -> str:
 
 # ── Internet & Download Tools ────────────────────────────────────────────────
 
+def _strip_html(html: str) -> str:
+    """Strip HTML tags and collapse whitespace to produce clean plain text."""
+    # Remove <script> and <style> blocks entirely
+    html = re.sub(r'<(script|style)[^>]*>.*?</(\1)>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    # Remove all remaining tags
+    html = re.sub(r'<[^>]+>', ' ', html)
+    # Decode common HTML entities
+    html = html.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>') \
+               .replace('&quot;', '"').replace('&#39;', "'").replace('&nbsp;', ' ')
+    # Collapse whitespace
+    html = re.sub(r'[ \t]+', ' ', html)
+    html = re.sub(r'\n{3,}', '\n\n', html)
+    return html.strip()
+
+
 def browse(url: str, max_length: int = 5000) -> str:
-    """
-    Browse a URL and return the text content.
-    
-    url: The URL to browse
-    max_length: Maximum number of characters to return (default: 5000)
+    """Browse a URL and return its plain-text content (HTML is stripped).
+
+    Fetches a web page, strips HTML tags, script/style blocks, and HTML entities,
+    then returns clean readable text. Truncates to max_length characters.
+
+    Args:
+        url: Full URL to fetch (e.g. 'https://example.com')
+        max_length: Maximum characters to return (default: 5000).
+                    Pages longer than this are truncated with a notice.
+
+    Returns:
+        'URL: {url}\nStatus: {code}\n\nContent:\n{plain_text}' on success.
+        'Error browsing {url}: ...' on HTTP or network errors.
+        'Error: ...' on unexpected failures.
     """
     try:
         headers = {
@@ -139,14 +210,14 @@ def browse(url: str, max_length: int = 5000) -> str:
         }
         response = requests.get(url, headers=headers, timeout=30)
         response.raise_for_status()
-        
-        # Get text content
-        text = response.text
-        
+
+        # Strip HTML to plain text
+        text = _strip_html(response.text)
+
         # Limit length
         if len(text) > max_length:
             text = text[:max_length] + "\n\n[Content truncated - reached max_length limit]"
-        
+
         return f"URL: {url}\nStatus: {response.status_code}\n\nContent:\n{text}"
     except requests.exceptions.RequestException as e:
         logger.error(f"Browse error for {url}: {e}")
@@ -394,7 +465,17 @@ All tools in the TOOLBOX use the standard Python logging system. Errors are logg
 
 
 def list_toolbox() -> str:
-    """List all tools stored in the TOOLBOX with their documentation."""
+    """List all custom tools stored in the TOOLBOX with metadata.
+
+    Reads the TOOLBOX registry and returns a formatted list of all
+    agent-created tools, including creation date and documentation preview.
+    Use this before register_tool() to check for existing similar tools.
+
+    Returns:
+        Formatted list of tool names, creation dates, and doc previews.
+        'TOOLBOX is empty.' if no custom tools have been created.
+        'Error listing TOOLBOX: ...' on registry read failure.
+    """
     if not TOOLBOX_REG.exists():
         return "TOOLBOX is empty. No custom tools have been created yet."
     
@@ -417,7 +498,20 @@ def list_toolbox() -> str:
 
 
 def get_tool_documentation(name: str) -> str:
-    """Get the documentation for a specific tool in TOOLBOX."""
+    """Get the full documentation for a specific TOOLBOX tool by name.
+
+    Reads and returns the {name}_README.md documentation file for the given tool.
+    Documentation is created automatically when a tool is registered with
+    register_tool(name, code, documentation).
+
+    Args:
+        name: Tool name as registered in TOOLBOX (e.g. 'calculate_sum')
+
+    Returns:
+        Full Markdown documentation string on success.
+        'No documentation found for tool {name}.' if not in TOOLBOX.
+        'Error reading documentation: ...' on read failure.
+    """
     doc_path = TOOLBOX_DIR / f"{name}_README.md"
     if not doc_path.exists():
         return f"No documentation found for tool '{name}'. Create documentation when registering the tool."

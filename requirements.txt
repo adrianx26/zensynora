@@ -4,6 +4,7 @@ pyyaml>=6.0
 rich>=13.0
 pydantic>=2.0
 apscheduler>=3.10
+scrapling[all]>=0.4.2
 
 # ── LLM provider SDKs (install the ones you need) ─────────────────────────────
 # OpenAI / LM Studio / llama.cpp / Groq / OpenRouter  →  pip install openai

@@ -239,6 +239,11 @@ ensure_pip "openai"     "openai"     ">=1.0"
 ensure_pip "httpx"      "httpx"      ""
 ensure_pip "pytest"     "pytest"     ""
 ensure_pip "pytest_asyncio" "pytest-asyncio" ""
+ensure_pip "scrapling"  "scrapling[all]" ">=0.4.2"
+
+info "Installing Scrapling browser dependencies..."
+"$VENV_DIR/bin/scrapling" install --force
+success "Scrapling browsers installed"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. OPTIONAL LLM PROVIDER SDKs
@@ -379,6 +384,7 @@ check_import apscheduler
 check_import openai
 check_import httpx
 check_import pytest
+check_import scrapling
 
 echo ""
 if [[ "$FAILED" -eq 0 ]]; then

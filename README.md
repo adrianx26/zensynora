@@ -16,6 +16,7 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - **Dynamic Tool Building** — The agent can create and register new Python tools at runtime
 - **Task Scheduling** — Schedule one-shot or recurring tasks with Telegram notifications
 - **Telegram Gateway** — Full-featured Telegram bot with commands: `/remind`, `/jobs`, `/cancel`, `/agents`
+- **Advanced Web Scraping** — Built-in integration with [Scrapling](https://github.com/D4Vinci/Scrapling) for anti-bot bypass and adaptive web scraping.
 
 ### Security
 - Command allowlist/blocklist for shell execution
@@ -141,7 +142,7 @@ You: exit                # Quit
 | `shell(cmd)` | Execute allowed shell commands |
 | `read_file(path)` | Read a file from workspace |
 | `write_file(path, content)` | Write a file to workspace |
-| `browse(url, max_length)` | Browse a URL and return text content |
+| `browse(url, max_length)` | Browse a URL, strip HTML and return plain text |
 | `download_file(url, path)` | Download a file from URL to workspace |
 | `delegate(agent_name, task)` | Delegate to another agent |
 | `list_tools()` | List all available tools |
@@ -467,12 +468,13 @@ MyClaw now includes built-in tools for browsing the internet and downloading fil
 
 | Tool | Description | Example |
 |------|-------------|---------|
-| `browse(url, max_length)` | Browse a URL and return text content | `browse("https://example.com")` |
+| `browse(url, max_length)` | Browse a URL, strip HTML and return plain text | `browse("https://example.com")` |
 | `download_file(url, path)` | Download a file to workspace | `download_file("https://example.com/file.pdf", "downloads/file.pdf")` |
 
 These tools include:
 - Automatic User-Agent headers
 - Timeout protection (30s for browse, 60s for download)
+- **HTML stripping** — `browse()` removes script/style blocks and all HTML tags, returning clean plain text
 - Path validation for security
 - Error handling and logging
 
@@ -491,6 +493,49 @@ This will:
 - Remove downloaded archives (`*.zip`)
 - Remove Putty tools directory (`putty/`)
 - Remove pytest cache (`__pycache__/`, `.pytest_cache/`)
+
+### Shell Allowed Commands
+
+The `shell()` tool enforces a strict allowlist for security:
+
+```
+ls, dir, cat, type, find, grep, findstr, head, tail, wc, sort, uniq, cut, git,
+echo, pwd, python, python3, pip, curl, wget
+```
+
+Edit `ALLOWED_COMMANDS` in `myclaw/tools.py` to customize.
+
+### Agent Skills Evaluation
+
+MyClaw includes an autoresearch-inspired evaluation harness to score and improve agent skills.
+
+#### Skill Reference
+
+All agent skills are documented in [`myclaw/skills.md`](myclaw/skills.md) with:
+- Per-skill I/O contracts, edge cases, and known limitations
+- Scoring rubric: `Score = 0.4×Correctness + 0.3×Reliability + 0.2×Clarity + 0.1×Coverage`
+- Version history with baseline vs improved scores
+
+**Current evaluation results (v0.1):**
+| Metric | Baseline | Improved |
+|--------|----------|----------|
+| Overall avg score | 0.880 | **0.989** |
+| Tasks passing | 26/26 | **25/25** |
+
+#### Running Evaluations
+
+```bash
+# Run baseline evaluation
+python eval/eval_agent_skills.py --mode baseline
+
+# Run improved evaluation
+python eval/eval_agent_skills.py --mode improved
+
+# Compare baseline vs improved (KEEP / DISCARD verdict)
+python eval/eval_agent_skills.py --compare eval/results/baseline_results.tsv eval/results/improved_results.tsv
+```
+
+Results are saved to `eval/results/` as TSV files.
 
 ---
 
