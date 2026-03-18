@@ -1,3 +1,4 @@
+import asyncio
 import subprocess
 import shlex
 import logging
@@ -8,7 +9,8 @@ import re
 import requests
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, List
+from typing import Dict, List, Optional
+from collections import defaultdict
 
 from .knowledge import (
     write_note, read_note, delete_note, list_notes, search_notes,
@@ -39,11 +41,109 @@ BLOCKED_COMMANDS = frozenset({
     'wmic', 'msiexec', 'control', 'explorer', 'shutdown', 'restart'
 })
 
-# ── Module-level references injected by gateway / telegram ───────────────────
+
+# ── 5.1 Rate Limiter for Tool Execution ──────────────────────────────────────────
+
+class RateLimiter:
+    """Per-tool rate limiter using token bucket algorithm.
+    
+    Limits tool execution to prevent abuse. Default: 10 calls per minute per tool.
+    """
+    def __init__(self):
+        # _limits: tool_name -> (timestamps list, max_calls, window_seconds)
+        self._limits = defaultdict(lambda: ([], 10, 60))
+    
+    def check(self, tool_name: str, max_calls: int = 10, window: int = 60) -> bool:
+        """Check if tool can be executed. Returns True if allowed, False if rate limited."""
+        now = time.time()
+        timestamps, _, _ = self._limits[tool_name]
+        # Remove old timestamps outside the window
+        self._limits[tool_name] = (
+            [t for t in timestamps if now - t < window],
+            max_calls,
+            window
+        )
+        
+        timestamps, max_calls, window = self._limits[tool_name]
+        if len(timestamps) >= max_calls:
+            return False
+        timestamps.append(now)
+        return True
+    
+    def get_remaining(self, tool_name: str) -> int:
+        """Get remaining calls available for the tool in current window."""
+        now = time.time()
+        timestamps, max_calls, window = self._limits[tool_name]
+        current_calls = len([t for t in timestamps if now - t < window])
+        return max(0, max_calls - current_calls)
+
+_rate_limiter = RateLimiter()
+
+
+# ── 5.3 Runtime Allowlist Updates ────────────────────────────────────────────────
+
+def update_allowlist(new_commands: List[str]) -> None:
+    """Update the allowed commands list at runtime.
+    
+    Args:
+        new_commands: List of command names to allow
+    
+    Note: This does NOT affect BLOCKED_COMMANDS which remain enforced.
+    """
+    global ALLOWED_COMMANDS
+    ALLOWED_COMMANDS = frozenset(new_commands)
+    logger.info(f"Updated ALLOWED_COMMANDS with {len(new_commands)} commands")
+
+
+# ── 5.4 Tool Execution Audit Logging ─────────────────────────────────────────────
+
+class ToolAuditLogger:
+    """Structured audit logger for tool executions."""
+    
+    def __init__(self):
+        self._logs: List[Dict] = []
+        self._max_logs = 1000
+    
+    def log(self, tool_name: str, user: str, duration_ms: float, success: bool, 
+            error: Optional[str] = None) -> None:
+        """Log a tool execution event."""
+        entry = {
+            "timestamp": datetime.utcnow().isoformat(),
+            "tool": tool_name,
+            "user": user or "system",
+            "duration_ms": duration_ms,
+            "success": success,
+            "error": error
+        }
+        self._logs.append(entry)
+        # Keep only recent logs in memory
+        if len(self._logs) > self._max_logs:
+            self._logs = self._logs[-self._max_logs:]
+        
+        # Log to standard logger
+        if success:
+            logger.info(f"AUDIT: {tool_name} executed by {user or 'system'} "
+                       f"in {duration_ms:.2f}ms")
+        else:
+            logger.warning(f"AUDIT: {tool_name} failed for {user or 'system'} "
+                          f"in {duration_ms:.2f}ms: {error}")
+    
+    def get_logs(self, limit: int = 100, tool_name: Optional[str] = None) -> List[Dict]:
+        """Get recent audit logs, optionally filtered by tool name."""
+        logs = self._logs[-limit:]
+        if tool_name:
+            logs = [l for l in logs if l["tool"] == tool_name]
+        return logs
+
+_tool_audit_logger = ToolAuditLogger()
+
+
+# ── Module-level references injected by gateway / telegram / whatsapp ──────────
 
 _agent_registry: dict = {}   # name -> Agent  (Feature 2 / 3)
 _job_queue      = None        # python-telegram-bot JobQueue  (Feature 1 / 5)
 _user_chat_ids: dict = {}     # user_id -> chat_id  (Feature 5 notifications)
+_notification_callback = None  # Callback: async fn(user_id, message) for channel-agnostic notifications
 
 
 def set_registry(registry: dict):
@@ -56,6 +156,16 @@ def set_job_queue(jq):
     """Called by telegram.py after the Application is built."""
     global _job_queue
     _job_queue = jq
+
+
+def set_notification_callback(callback):
+    """Set the notification callback: async fn(user_id, message).
+    
+    Used by WhatsApp (and future channels) so scheduled jobs can
+    send results back without depending on Telegram's bot object.
+    """
+    global _notification_callback
+    _notification_callback = callback
 
 
 def register_chat_id(user_id: str, chat_id: int):
@@ -77,6 +187,69 @@ def validate_path(path: str) -> Path:
         raise ValueError(f"Invalid path: {path}") from e
 
 
+async def shell_async(cmd: str, timeout: int = 30) -> str:
+    """Execute an allowed shell command asynchronously in the workspace directory.
+
+    Async version of shell() for better async performance.
+    Runs a command from the strict allowlist in ~/.myclaw/workspace.
+
+    Args:
+        cmd: Shell command string (e.g. 'ls -la', 'grep pattern file.txt')
+        timeout: Timeout in seconds (default: 30)
+
+    Returns:
+        Combined stdout+stderr as a string on success.
+        'Error: Empty command' if cmd is blank.
+        'Error: Command X is blocked for security' if cmd is in BLOCKED_COMMANDS.
+        'Error: X not allowed. Allowed: ...' if cmd is not in ALLOWED_COMMANDS.
+        'Error: Command timed out after X seconds' on timeout.
+        'Error: Rate limit exceeded for shell tool' if rate limited.
+    """
+    start_time = time.time()
+    try:
+        # 5.1: Rate limiting check
+        if not _rate_limiter.check("shell", max_calls=10, window=60):
+            _tool_audit_logger.log("shell_async", "", 0, False, "Rate limit exceeded")
+            return "Error: Rate limit exceeded for shell tool (10 calls/minute)"
+        
+        parts = shlex.split(cmd)
+        if not parts:
+            return "Error: Empty command"
+        first_cmd = parts[0].lower()
+        if first_cmd in BLOCKED_COMMANDS:
+            logger.warning(f"Blocked command attempted: {first_cmd}")
+            _tool_audit_logger.log("shell_async", "", 0, False, f"Blocked command: {first_cmd}")
+            return f"Error: Command '{first_cmd}' is blocked for security"
+        if first_cmd not in ALLOWED_COMMANDS:
+            return f"Error: '{first_cmd}' not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
+        
+        # Use the full command string for shell execution
+        process = await asyncio.create_subprocess_shell(
+            cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=WORKSPACE
+        )
+        
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+            duration_ms = (time.time() - start_time) * 1000
+            # 5.4: Audit logging
+            _tool_audit_logger.log("shell_async", "", duration_ms, True)
+            return stdout.decode() + stderr.decode()
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
+            duration_ms = (time.time() - start_time) * 1000
+            _tool_audit_logger.log("shell_async", "", duration_ms, False, "Command timed out")
+            return f"Error: Command timed out after {timeout} seconds"
+    except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        _tool_audit_logger.log("shell_async", "", duration_ms, False, str(e))
+        logger.error(f"Shell async error: {e}")
+        return f"Error: {e}"
+
+
 def shell(cmd: str) -> str:
     """Execute an allowed shell command in the workspace directory.
 
@@ -93,17 +266,25 @@ def shell(cmd: str) -> str:
         'Error: Command X is blocked for security' if cmd is in BLOCKED_COMMANDS.
         'Error: X not allowed. Allowed: ...' if cmd is not in ALLOWED_COMMANDS.
         'Error: Command timed out after 30 seconds' on timeout.
+        'Error: Rate limit exceeded for shell tool' if rate limited.
 
     Allowed commands: ls, dir, cat, type, find, grep, findstr, head, tail,
         wc, sort, uniq, cut, git, echo, pwd, python, python3, pip, curl, wget
     """
+    start_time = time.time()
     try:
+        # 5.1: Rate limiting check
+        if not _rate_limiter.check("shell", max_calls=10, window=60):
+            _tool_audit_logger.log("shell", "", 0, False, "Rate limit exceeded")
+            return "Error: Rate limit exceeded for shell tool (10 calls/minute)"
+        
         parts = shlex.split(cmd)
         if not parts:
             return "Error: Empty command"
         first_cmd = parts[0].lower()
         if first_cmd in BLOCKED_COMMANDS:
             logger.warning(f"Blocked command attempted: {first_cmd}")
+            _tool_audit_logger.log("shell", "", 0, False, f"Blocked command: {first_cmd}")
             return f"Error: Command '{first_cmd}' is blocked for security"
         if first_cmd not in ALLOWED_COMMANDS:
             return f"Error: '{first_cmd}' not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
@@ -111,10 +292,17 @@ def shell(cmd: str) -> str:
             parts, shell=False, cwd=WORKSPACE,
             capture_output=True, text=True, timeout=30
         )
+        duration_ms = (time.time() - start_time) * 1000
+        # 5.4: Audit logging
+        _tool_audit_logger.log("shell", "", duration_ms, True)
         return result.stdout + result.stderr
     except subprocess.TimeoutExpired:
+        duration_ms = (time.time() - start_time) * 1000
+        _tool_audit_logger.log("shell", "", duration_ms, False, "Command timed out")
         return "Error: Command timed out after 30 seconds"
     except Exception as e:
+        duration_ms = (time.time() - start_time) * 1000
+        _tool_audit_logger.log("shell", "", duration_ms, False, str(e))
         logger.error(f"Shell error: {e}")
         return f"Error: {e}"
 
@@ -319,15 +507,17 @@ def register_tool(name: str, code: str, documentation: str = "") -> str:
     if not name.isidentifier():
         return f"Error: '{name}' is not a valid Python identifier."
 
-    # Check if tool already exists in TOOLBOX
-    if name in TOOLS and name not in ["shell", "read_file", "write_file", "browse", "download_file",
+    # Check if tool already exists in TOOLBOX or is a core tool
+    if name in TOOLS or name in ["shell", "read_file", "write_file", "browse", "download_file",
                                        "delegate", "list_tools", "register_tool", "schedule",
                                        "edit_schedule", "split_schedule", "suspend_schedule",
                                        "resume_schedule", "cancel_schedule", "list_schedules",
                                        "write_to_knowledge", "search_knowledge", "read_knowledge",
                                        "list_knowledge", "get_knowledge_context", "get_related_knowledge",
-                                       "sync_knowledge_base", "list_knowledge_tags"]:
-        return f"Error: Tool '{name}' already exists in TOOLBOX. Use list_tools() to see all available tools."
+                                       "sync_knowledge_base", "list_knowledge_tags",
+                                       "swarm_create", "swarm_assign", "swarm_status", "swarm_result",
+                                       "swarm_terminate", "swarm_list", "swarm_stats"]:
+        return f"Error: Tool '{name}' already exists or is a protected core tool. Use list_tools() to see all available tools."
 
     # Check if file already exists in TOOLBOX directory
     TOOLBOX_DIR.mkdir(parents=True, exist_ok=True)
@@ -336,14 +526,7 @@ def register_tool(name: str, code: str, documentation: str = "") -> str:
         return f"Error: Tool file '{name}.py' already exists in TOOLBOX. Please choose a different name or modify the existing tool."
 
     # Check for similar tools based on name similarity
-    existing_tools = [t for t in TOOLS.keys() if t not in ["shell", "read_file", "write_file", "browse", "download_file",
-                                       "delegate", "list_tools", "register_tool", "schedule",
-                                       "edit_schedule", "split_schedule", "suspend_schedule",
-                                       "resume_schedule", "cancel_schedule", "list_schedules",
-                                       "write_to_knowledge", "search_knowledge", "read_knowledge",
-                                       "list_knowledge", "get_knowledge_context", "get_related_knowledge",
-                                       "sync_knowledge_base", "list_knowledge_tags"]]
-    similar_tools = [t for t in existing_tools if name.lower() in t.lower() or t.lower() in name.lower()]
+    similar_tools = [t for t in TOOLS.keys() if name.lower() in t.lower() or t.lower() in name.lower()]
     if similar_tools:
         return f"Error: Similar tool(s) already exist in TOOLBOX: {', '.join(similar_tools)}. Please check if an existing tool meets your needs using list_tools() or choose a more specific name."
 
@@ -352,6 +535,27 @@ def register_tool(name: str, code: str, documentation: str = "") -> str:
         compile(code, "<agent-tool>", "exec")
     except SyntaxError as e:
         return f"Syntax error in tool code: {e}"
+
+    # AST validation to prevent dangerous operations
+    import ast
+    try:
+        tree = ast.parse(code)
+        forbidden_imports = {"os", "sys", "subprocess", "shutil", "socket", "urllib", "http", "pty", "commands"}
+        forbidden_calls = {"eval", "exec", "open", "__import__", "globals", "locals", "compile"}
+        
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.split('.')[0] in forbidden_imports:
+                        return f"Error: Importing '{alias.name}' is forbidden for security reasons."
+            elif isinstance(node, ast.ImportFrom):
+                if node.module and node.module.split('.')[0] in forbidden_imports:
+                    return f"Error: Importing from '{node.module}' is forbidden for security reasons."
+            elif isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id in forbidden_calls:
+                    return f"Error: Calling '{node.func.id}' is forbidden for security reasons."
+    except Exception as e:
+        return f"AST validation error: {e}"
 
     # Validate that the code has a docstring and error handling
     if '"""' not in code and "'''" not in code:
@@ -404,6 +608,10 @@ Errors are logged to the standard logging system and can be found in the applica
         return f"Error loading tool: {e}"
 
     TOOLS[name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {name}"}
+
+    # Update dynamic schemas for LLMs
+    TOOL_SCHEMAS.clear()
+    TOOL_SCHEMAS.extend(_generate_schemas())
 
     # Persist registry so tool survives restarts
     registry = {}
@@ -551,6 +759,10 @@ def load_custom_tools():
         
         # Update the TOOLBOX README
         _update_toolbox_readme()
+        
+        # Sync dynamic schemas for LLMs after loading all tools
+        TOOL_SCHEMAS.clear()
+        TOOL_SCHEMAS.extend(_generate_schemas())
     except Exception as e:
         logger.error(f"Error loading TOOLBOX registry: {e}")
 
@@ -573,10 +785,19 @@ def _create_job_internal(task: str, delay: int, every: int, user_id: str, job_id
         if not agent:
             return
         result = await agent.think(jd["task"], user_id=jd["user_id"])
-        if jd["chat_id"]:
+        msg = f"⏰ Scheduled task '{jd['task']}' result:\n{result}"
+        # Try channel-agnostic callback first (WhatsApp, future channels)
+        if _notification_callback:
+            try:
+                import asyncio
+                asyncio.ensure_future(_notification_callback(jd["user_id"], msg))
+            except Exception as e:
+                logger.error(f"Notification callback error: {e}")
+        # Fall back to Telegram bot.send_message
+        elif jd["chat_id"] and hasattr(context, 'bot'):
             await context.bot.send_message(
                 chat_id=jd["chat_id"],
-                text=f"⏰ Scheduled task '{jd['task']}' result:\n{result}"
+                text=msg
             )
 
     if every > 0:
@@ -589,8 +810,8 @@ def _create_job_internal(task: str, delay: int, every: int, user_id: str, job_id
 
 def schedule(task: str, delay: int = 0, every: int = 0, user_id: str = "default") -> str:
     """Schedule a task to run in the future, executed by the default agent."""
-    if _job_queue is None:
-        return "Error: Scheduler not available (no Telegram gateway running)."
+    if _job_queue is None and _notification_callback is None:
+        return "Error: Scheduler not available (no channel gateway running)."
     if delay <= 0 and every <= 0:
         return "Error: Specify 'delay' (one-shot) or 'every' (recurring) in seconds."
 
@@ -1311,3 +1532,45 @@ TOOLS: Dict[str, dict] = {
     "swarm_list":           {"func": swarm_list,           "desc": "List all swarms"},
     "swarm_stats":          {"func": swarm_stats,          "desc": "Get swarm statistics"},
 }
+
+import inspect
+
+def _generate_schemas() -> list[dict]:
+    schemas = []
+    for name, info in TOOLS.items():
+        func = info["func"]
+        try:
+            sig = inspect.signature(func)
+        except ValueError:
+            continue
+            
+        params = {}
+        required = []
+        for param_name, param in sig.parameters.items():
+            if param_name in ("user_id", "_depth", "context"):
+                continue
+                
+            ptype = "string"
+            if param.annotation == int: ptype = "integer"
+            elif param.annotation == bool: ptype = "boolean"
+            elif param.annotation == float: ptype = "number"
+            
+            params[param_name] = {"type": ptype, "description": ""}
+            if param.default == inspect.Parameter.empty:
+                required.append(param_name)
+                
+        schemas.append({
+            "type": "function",
+            "function": {
+                "name": name,
+                "description": info["desc"] or "",
+                "parameters": {
+                    "type": "object",
+                    "properties": params,
+                    "required": required
+                }
+            }
+        })
+    return schemas
+
+TOOL_SCHEMAS = _generate_schemas()

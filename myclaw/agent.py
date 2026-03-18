@@ -8,10 +8,50 @@ import logging
 import asyncio
 import inspect
 import re
+import threading
 from pathlib import Path
+from typing import AsyncIterator
 
 console = Console()
 logger = logging.getLogger(__name__)
+
+# Profile cache for faster loading
+_profile_cache: dict[str, str] = {}
+_profile_cache_lock = threading.Lock()
+
+
+def _get_profile_cache_key(name: str, profile_path: Path) -> str:
+    """Generate cache key based on name and file mtime."""
+    try:
+        mtime = profile_path.stat().st_mtime
+        return f"{name}:{mtime}"
+    except Exception:
+        return f"{name}:0"
+
+
+def _load_profile_cached(name: str, profile_path: Path) -> str:
+    """Load profile with caching based on file modification time."""
+    cache_key = _get_profile_cache_key(name, profile_path)
+    
+    with _profile_cache_lock:
+        if cache_key in _profile_cache:
+            return _profile_cache[cache_key]
+    
+    # Load and cache
+    content = profile_path.read_text(encoding="utf-8").strip()
+    
+    with _profile_cache_lock:
+        _profile_cache[cache_key] = content
+        
+        # Limit cache size
+        if len(_profile_cache) > 100:
+            # Remove oldest entries (simple FIFO)
+            keys_to_remove = list(_profile_cache.keys())[:50]
+            for key in keys_to_remove:
+                del _profile_cache[key]
+    
+    return content
+
 
 SYSTEM_PROMPT = (
     "You are MyClaw, a personal AI agent with access to a knowledge base, TOOLBOX, and Agent Swarms. "
@@ -43,21 +83,16 @@ class Agent:
         self.name = name
         self._memories: dict[str, Memory] = {}
 
-        # ── Resolve provider ──────────────────────────────────────────────────
+        # ── Lazy provider initialization ────────────────────────────────────────
+        # Store config and provider name for lazy initialization
+        self._config = config
+        self._provider = None  # Will be initialized on first access
+        
         try:
             default_provider = config.agents.defaults.provider or "ollama"
         except Exception:
             default_provider = "ollama"
-        resolved_provider = provider_name or default_provider
-
-        try:
-            self.provider = get_provider(config, resolved_provider)
-        except Exception as e:
-            logger.warning(
-                f"Could not init provider '{resolved_provider}' ({e}). "
-                "Falling back to Ollama."
-            )
-            self.provider = get_provider(config, "ollama")
+        self._provider_name = provider_name or default_provider
 
         # ── Resolve model ─────────────────────────────────────────────────────
         try:
@@ -73,20 +108,42 @@ class Agent:
         # Try local workspace profiles first
         profile_path = local_profiles_dir / f"{self.name}.md"
         if profile_path.exists():
-            self.system_prompt = profile_path.read_text(encoding="utf-8").strip()
+            self.system_prompt = _load_profile_cached(self.name, profile_path)
         else:
             # Fall back to user home profiles
             user_profiles_dir.mkdir(parents=True, exist_ok=True)
             profile_path = user_profiles_dir / f"{self.name}.md"
             if profile_path.exists():
-                self.system_prompt = profile_path.read_text(encoding="utf-8").strip()
+                self.system_prompt = _load_profile_cached(self.name, profile_path)
             else:
                 self.system_prompt = system_prompt or SYSTEM_PROMPT
+        
+        # Store config for later use
+        self.config = config
 
     def _get_memory(self, user_id: str) -> Memory:
         if user_id not in self._memories:
             self._memories[user_id] = Memory(user_id=user_id)
         return self._memories[user_id]
+
+    @property
+    def provider(self):
+        """Lazy provider initialization - initializes on first access.
+        
+        This improves startup performance by deferring provider initialization
+        until the provider is actually needed (e.g., on first think() call).
+        """
+        if self._provider is None:
+            try:
+                self._provider = get_provider(self._config, self._provider_name)
+            except Exception as e:
+                logger.warning(
+                    f"Could not init provider '{self._provider_name}' ({e}). "
+                    "Falling back to Ollama."
+                )
+                self._provider = get_provider(self._config, "ollama")
+                self._provider_name = "ollama"
+        return self._provider
 
     def _search_knowledge_context(self, message: str, user_id: str, max_results: int = 3) -> str:
         """Auto-search the knowledge base for context relevant to message.
@@ -173,7 +230,8 @@ class Agent:
         history = mem.get_history()
 
         # Feature: Context Summarization
-        if len(history) > 10:
+        threshold = getattr(self.config.agents, 'summarization_threshold', 10)
+        if len(history) > threshold:
             to_summarize = history[:-5]
             recent = history[-5:]
             summary_prompt = "Summarize the following conversation context briefly in one paragraph:\n"
@@ -211,11 +269,17 @@ class Agent:
 
                 if tool_name not in TOOLS:
                     results.append(f"Unknown tool: {tool_name}")
+                    logger.warning(f"Unknown tool called: {tool_name}")
                     continue
 
                 # Inject delegation depth so delegate() can enforce the limit
                 if tool_name == "delegate":
                     args["_depth"] = _depth + 1
+
+                # Audit log: tool execution start
+                import time
+                start_time = time.time()
+                logger.info(f"[AUDIT] Tool execution started: {tool_name} with args: {args}")
 
                 try:
                     func = TOOLS[tool_name]["func"]
@@ -225,8 +289,13 @@ class Agent:
                         result = await asyncio.to_thread(func, **args)
                     mem.add("tool", f"Tool {tool_name} returned: {result}")
                     results.append(str(result))
+                    # Audit log: tool execution success
+                    duration = time.time() - start_time
+                    logger.info(f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)")
                 except Exception as e:
                     logger.error(f"Tool execution error ({tool_name}): {e}")
+                    # Audit log: tool execution failure
+                    logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
                     results.append(f"Tool error: {e}")
 
             tool_result_msg = "\n".join(results)
@@ -241,3 +310,71 @@ class Agent:
 
         mem.add("assistant", response)
         return response
+
+    async def stream_think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> AsyncIterator[str]:
+        """Process a user message and yield response chunks in real-time.
+
+        This is a streaming version of think() that yields content chunks
+        as they arrive from the provider, enabling real-time display.
+
+        _depth tracks sub-agent delegation depth — prevents infinite loops.
+
+        Yields:
+            Content chunks as they arrive from the LLM provider.
+        """
+        mem = self._get_memory(user_id)
+        mem.add("user", user_message)
+
+        history = mem.get_history()
+
+        # Feature: Context Summarization
+        threshold = getattr(self.config.agents, 'summarization_threshold', 10)
+        if len(history) > threshold:
+            to_summarize = history[:-5]
+            recent = history[-5:]
+            summary_prompt = "Summarize the following conversation context briefly in one paragraph:\n"
+            for m in to_summarize:
+                summary_prompt += f"{m['role']}: {m['content']}\n"
+            summary_msgs = [{"role": "system", "content": "You summarize conversations."}, {"role": "user", "content": summary_prompt}]
+            try:
+                summary_text, _ = await self.provider.chat(summary_msgs, self.model)
+                history = [{"role": "system", "content": f"Previous conversation summary: {summary_text}"}] + recent
+            except Exception as e:
+                logger.error(f"Error summarizing history: {e}")
+                # fallback to raw history if summary fails
+
+        # Search knowledge base for relevant context
+        knowledge_context = self._search_knowledge_context(user_message, user_id)
+        
+        # Build system prompt with knowledge context
+        system_content = self.system_prompt
+        if knowledge_context:
+            system_content = f"{self.system_prompt}\n\n{knowledge_context}"
+        
+        messages = [{"role": "system", "content": system_content}] + history
+
+        try:
+            # Use stream_chat for streaming response
+            stream_iterator = await self.provider.chat(messages, self.model, stream=True)
+        except Exception as e:
+            logger.error(f"LLM provider error: {e}")
+            yield f"Sorry, I encountered an error: {e}"
+            return
+
+        full_response = ""
+        tool_calls = None
+        
+        # Iterate over the stream
+        try:
+            async for chunk in stream_iterator:
+                full_response += chunk
+                yield chunk
+        except Exception as e:
+            logger.error(f"Error in streaming: {e}")
+            yield f"Error streaming response: {e}"
+            return
+
+        # Note: Tool calls are not supported in streaming mode yet
+        # The full response is returned as chunks
+        mem.add("assistant", full_response)
+        yield "[TOOL_CALLS_NONE]"  # Signal that streaming is complete

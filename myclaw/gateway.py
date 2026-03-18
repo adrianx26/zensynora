@@ -1,33 +1,61 @@
 from .agent import Agent
 from .channels.telegram import TelegramChannel
+from .channels.whatsapp import WhatsAppChannel
 from . import tools as tool_module
 
+
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
 def start(config):
     """Build agent registry, initialize tools, and start the active channel."""
 
-    # ── Feature 2: Multi-Agent Registry ──────────────────────────────────────
-    registry = {"default": Agent(config, name="default")}
+    # ── Setup Global Bounded ThreadPool & Graceful Shutdown ──────────────────
+    # Create an executor and set it as default for the asyncio event loop.
+    # This bounds the global threads spawned by `asyncio.to_thread` across all modules.
+    # 7.1: Use configurable max_workers from config.channels.telegram.max_workers
+    max_workers = config.channels.telegram.max_workers if hasattr(config.channels, 'telegram') else 20
+    executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="MyClawWorker")
 
-    for nc in config.agents.named:
-        # Named agents can specify their own provider; fall back to defaults.
-        agent_provider = nc.provider or None
-        registry[nc.name] = Agent(
-            config,
-            name=nc.name,
-            model=nc.model,
-            system_prompt=nc.system_prompt or None,
-            provider_name=agent_provider,
-        )
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-    # Load any persisted custom tools (Feature 4)
-    tool_module.load_custom_tools()
+    loop.set_default_executor(executor)
 
-    # Inject registry into tools module (enables delegation, scheduling)
-    tool_module.set_registry(registry)
+    try:
+        # ── Feature 2: Multi-Agent Registry ──────────────────────────────────────
+        registry = {"default": Agent(config, name="default")}
 
-    # ── Start channel ─────────────────────────────────────────────────────────
-    if config.channels.telegram.enabled:
-        TelegramChannel(config, registry).run()
-    else:
-        print("No channel is active. Run `python cli.py agent` for console chat.")
+        for nc in config.agents.named:
+            # Named agents can specify their own provider; fall back to defaults.
+            agent_provider = nc.provider or None
+            registry[nc.name] = Agent(
+                config,
+                name=nc.name,
+                model=nc.model,
+                system_prompt=nc.system_prompt or None,
+                provider_name=agent_provider,
+            )
+
+        # Load any persisted custom tools (Feature 4)
+        tool_module.load_custom_tools()
+
+        # Inject registry into tools module (enables delegation, scheduling)
+        tool_module.set_registry(registry)
+        
+        # Inject config into tools module (enables timeout configuration)
+        tool_module.set_config(config)
+
+        # ── Start channel ─────────────────────────────────────────────────────────
+        if config.channels.telegram.enabled:
+            TelegramChannel(config, registry).run()
+        elif config.channels.whatsapp.enabled:
+            WhatsAppChannel(config, registry).run()
+        else:
+            print("No channel is active. Run `python cli.py agent` for console chat.")
+    finally:
+        print("\nShutting down global ThreadPoolExecutor gracefully...")
+        executor.shutdown(wait=True)

@@ -288,6 +288,58 @@ class SwarmInfo:
     completed_at: Optional[datetime] = None
     user_id: str = "default"
     
+@dataclass
+class ActiveExecution:
+    """Represents an active async execution state for persistence.
+    
+    Optimization 4.4: Persistent active execution tracking
+    
+    This tracks async task executions that can survive orchestrator restarts.
+    When the orchestrator restarts, it can reload these executions and either
+    resume them or mark them as failed/terminated.
+    
+    Attributes:
+        execution_id: Unique identifier for this execution
+        swarm_id: Reference to the swarm being executed
+        task_description: Description of the task being executed
+        input_data: Input data for the task
+        status: Current execution status
+        started_at: When execution started
+        updated_at: Last status update timestamp
+    """
+    execution_id: str
+    swarm_id: str
+    task_description: str
+    input_data: Dict[str, Any] = field(default_factory=dict)
+    status: TaskStatus = TaskStatus.RUNNING
+    started_at: datetime = field(default_factory=datetime.now)
+    updated_at: datetime = field(default_factory=datetime.now)
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "execution_id": self.execution_id,
+            "swarm_id": self.swarm_id,
+            "task_description": self.task_description,
+            "input_data": self.input_data,
+            "status": self.status.value,
+            "started_at": self.started_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ActiveExecution":
+        """Create from dictionary."""
+        return cls(
+            execution_id=data["execution_id"],
+            swarm_id=data["swarm_id"],
+            task_description=data.get("task_description", ""),
+            input_data=data.get("input_data", {}),
+            status=TaskStatus(data.get("status", "running")),
+            started_at=datetime.fromisoformat(data["started_at"]) if data.get("started_at") else datetime.now(),
+            updated_at=datetime.fromisoformat(data["updated_at"]) if data.get("updated_at") else datetime.now(),
+        )
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return {
@@ -302,3 +354,19 @@ class SwarmInfo:
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "user_id": self.user_id,
         }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "SwarmInfo":
+        """Create from dictionary."""
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            strategy=SwarmStrategy(data.get("strategy", "parallel")),
+            status=TaskStatus(data.get("status", "pending")),
+            coordinator=data.get("coordinator"),
+            workers=data.get("workers", []),
+            aggregation_method=AggregationMethod(data.get("aggregation_method", "synthesis")),
+            created_at=datetime.fromisoformat(data["created_at"]) if data.get("created_at") else datetime.now(),
+            completed_at=datetime.fromisoformat(data["completed_at"]) if data.get("completed_at") else None,
+            user_id=data.get("user_id", "default"),
+        )

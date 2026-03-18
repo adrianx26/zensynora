@@ -1,5 +1,8 @@
 import sys
 import asyncio
+import signal
+import atexit
+import logging
 from myclaw.config import load_config
 from myclaw.agent import Agent
 from onboard import onboard
@@ -8,6 +11,45 @@ from myclaw.knowledge import (
     search_notes, list_notes, read_note, sync_knowledge, get_all_tags,
     write_note, Observation
 )
+
+logger = logging.getLogger(__name__)
+
+
+def _graceful_shutdown():
+    """6.3: Graceful shutdown handler - close all pools and connections."""
+    logger.info("Shutting down gracefully...")
+    try:
+        # Close HTTP client pool
+        import myclaw.provider
+        if hasattr(myclaw.provider, 'HTTPClientPool'):
+            asyncio.run(myclaw.provider.HTTPClientPool.close())
+    except Exception as e:
+        logger.error(f"Error closing HTTP pool: {e}")
+    
+    try:
+        # Close SQLite pool
+        import myclaw.memory
+        if hasattr(myclaw.memory, 'SQLitePool'):
+            myclaw.memory.SQLitePool.close_all()
+    except Exception as e:
+        logger.error(f"Error closing SQLite pool: {e}")
+    
+    logger.info("Graceful shutdown complete")
+
+
+def _setup_shutdown_handlers():
+    """6.3: Setup signal handlers for graceful shutdown."""
+    def signal_handler(signum, frame):
+        logger.info(f"Received signal {signum}, initiating graceful shutdown...")
+        _graceful_shutdown()
+        sys.exit(0)
+    
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    atexit.register(_graceful_shutdown)
+
+
+_setup_shutdown_handlers()
 
 
 def _build_registry(config) -> dict:
@@ -27,6 +69,13 @@ def _build_registry(config) -> dict:
 
 
 def main():
+    # 9.3: Standardized comprehensive system-wide logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
+    )
+
     config = load_config()
     if len(sys.argv) < 2:
         print("Commands: onboard | agent | gateway | knowledge")

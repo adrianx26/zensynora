@@ -2,28 +2,159 @@
 Storage layer for the Agent Swarm system.
 
 Provides persistent storage for swarm state, tasks, messages, and results
-using SQLite.
+using SQLite. Includes in-memory result caching with TTL for optimization 4.3.
 """
 
+import hashlib
 import json
 import logging
 import sqlite3
+import threading
+import time
 import uuid
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 
 from .models import (
     SwarmInfo, SwarmTask, SwarmResult, SwarmMessage,
     TaskStatus, MessageType, SwarmStrategy, AggregationMethod,
-    AgentResult
+    AgentResult, ActiveExecution
 )
+
+# Import SQLitePool for connection pooling (Optimization 4.2)
+try:
+    from myclaw.memory import SQLitePool
+except ImportError:
+    SQLitePool = None
 
 logger = logging.getLogger(__name__)
 
 # Database path
 SWARM_DB_DIR = Path.home() / ".myclaw"
 SWARM_DB_PATH = SWARM_DB_DIR / "swarm.db"
+
+# Cache TTL in seconds (1 hour)
+RESULT_CACHE_TTL = 3600
+
+
+class ResultCache:
+    """Thread-safe in-memory cache for swarm results with TTL.
+    
+    Optimization 4.3: Swarm result caching
+    
+    Caches swarm results keyed by swarm_id + input_hash to avoid
+    re-computing results for identical inputs.
+    """
+    
+    def __init__(self, ttl_seconds: int = RESULT_CACHE_TTL):
+        """Initialize cache with specified TTL.
+        
+        Args:
+            ttl_seconds: Time-to-live for cache entries in seconds.
+                        Default is 3600 (1 hour).
+        """
+        self._cache: Dict[str, Dict[str, Any]] = {}
+        self._lock = threading.RLock()
+        self._ttl = ttl_seconds
+    
+    def _make_key(self, swarm_id: str, input_hash: str) -> str:
+        """Generate cache key from swarm_id and input_hash."""
+        return f"{swarm_id}:{input_hash}"
+    
+    def get(self, swarm_id: str, input_hash: str) -> Optional['SwarmResult']:
+        """Get cached result if present and not expired.
+        
+        Args:
+            swarm_id: The swarm identifier
+            input_hash: Hash of the input data
+            
+        Returns:
+            Cached SwarmResult if found and not expired, None otherwise.
+        """
+        key = self._make_key(swarm_id, input_hash)
+        
+        with self._lock:
+            entry = self._cache.get(key)
+            if entry is None:
+                return None
+            
+            # Check if expired
+            if time.time() - entry['cached_at'] > self._ttl:
+                # Remove expired entry
+                del self._cache[key]
+                return None
+            
+            return entry['result']
+    
+    def set(self, swarm_id: str, input_hash: str, result: 'SwarmResult'):
+        """Store result in cache with current timestamp.
+        
+        Args:
+            swarm_id: The swarm identifier
+            input_hash: Hash of the input data
+            result: The SwarmResult to cache
+        """
+        key = self._make_key(swarm_id, input_hash)
+        
+        with self._lock:
+            self._cache[key] = {
+                'result': result,
+                'cached_at': time.time()
+            }
+    
+    def invalidate(self, swarm_id: str, input_hash: Optional[str] = None):
+        """Invalidate cache entries for a swarm.
+        
+        Args:
+            swarm_id: The swarm identifier
+            input_hash: Optional specific input hash to invalidate.
+                       If None, invalidates all entries for the swarm.
+        """
+        with self._lock:
+            if input_hash:
+                key = self._make_key(swarm_id, input_hash)
+                self._cache.pop(key, None)
+            else:
+                # Remove all entries for this swarm
+                keys_to_remove = [
+                    k for k in self._cache.keys()
+                    if k.startswith(f"{swarm_id}:")
+                ]
+                for k in keys_to_remove:
+                    del self._cache[k]
+    
+    def clear(self):
+        """Clear all cache entries."""
+        with self._lock:
+            self._cache.clear()
+    
+    def cleanup_expired(self) -> int:
+        """Remove all expired entries from cache.
+        
+        Returns:
+            Number of entries removed.
+        """
+        now = time.time()
+        removed = 0
+        
+        with self._lock:
+            keys_to_remove = []
+            for key, entry in self._cache.items():
+                if now - entry['cached_at'] > self._ttl:
+                    keys_to_remove.append(key)
+            
+            for key in keys_to_remove:
+                del self._cache[key]
+                removed += 1
+        
+        return removed
+    
+    def size(self) -> int:
+        """Return current number of cached entries."""
+        with self._lock:
+            return len(self._cache)
 
 
 class SwarmStorage:
@@ -36,19 +167,62 @@ class SwarmStorage:
     - Final results
     
     Each user has isolated data via user_id field.
+    
+    Optimizations:
+    - 4.2: Supports shared connection pool via SQLitePool parameter
+    - 4.3: In-memory result caching with TTL (1 hour) for swarm results
     """
     
-    def __init__(self, db_path: Optional[Path] = None):
-        """Initialize storage with optional custom path."""
+    def __init__(
+        self,
+        db_path: Optional[Path] = None,
+        pool: Optional[object] = None,
+        enable_cache: bool = True
+    ):
+        """Initialize storage with optional custom path and connection pool.
+        
+        Args:
+            db_path: Optional custom database path. Defaults to ~/.myclaw/swarm.db
+            pool: Optional SQLitePool instance for shared connections.
+                  If provided, uses pooled connections for better performance.
+            enable_cache: Enable in-memory result caching (Optimization 4.3).
+                         Default is True. Set to False to disable caching.
+        """
         self.db_path = db_path or SWARM_DB_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Use provided pool or fall back to creating new connections
+        self._pool = pool
+        self._use_pool = pool is not None and SQLitePool is not None
+        
+        # Initialize result cache (Optimization 4.3)
+        self._cache = ResultCache() if enable_cache else None
+        self._enable_cache = enable_cache
+        
         self._init_db()
     
-    def _get_connection(self) -> sqlite3.Connection:
-        """Get a database connection with row factory."""
-        conn = sqlite3.connect(self.db_path, check_same_thread=False)
-        conn.row_factory = sqlite3.Row
-        return conn
+    @contextmanager
+    def _get_connection(self):
+        """Get a database connection with row factory.
+        
+        Uses connection pool if available, otherwise creates new connection.
+        """
+        if self._use_pool:
+            # Use pooled connection
+            conn = self._pool.get_connection(self.db_path)
+            conn.row_factory = sqlite3.Row
+            try:
+                yield conn
+            finally:
+                self._pool.release_connection(self.db_path)
+        else:
+            # Fall back to creating new connection (legacy behavior)
+            conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            try:
+                yield conn
+            finally:
+                conn.close()
     
     def _init_db(self):
         """Initialize database schema."""
@@ -112,6 +286,19 @@ class SwarmStorage:
                     execution_time_seconds REAL DEFAULT 0.0,
                     created_at TEXT NOT NULL,
                     metadata TEXT  -- JSON
+                )
+            """)
+            
+            # Active executions (Optimization 4.4: Persistent active execution tracking)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS active_executions (
+                    execution_id TEXT PRIMARY KEY,
+                    swarm_id TEXT NOT NULL REFERENCES swarms(id) ON DELETE CASCADE,
+                    task_description TEXT NOT NULL,
+                    input_data TEXT,  -- JSON
+                    status TEXT DEFAULT 'running',
+                    started_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
                 )
             """)
             
@@ -434,8 +621,31 @@ class SwarmStorage:
     
     # ── Result Operations ────────────────────────────────────────────────────
     
-    def save_result(self, result: SwarmResult):
-        """Save a swarm result."""
+    def _compute_input_hash(self, input_data: Dict[str, Any]) -> str:
+        """Compute hash for input data.
+        
+        Args:
+            input_data: Input data dictionary to hash
+            
+        Returns:
+            SHA256 hash of the JSON-sorted input data
+        """
+        # Sort keys for consistent hashing
+        data_str = json.dumps(input_data, sort_keys=True, default=str)
+        return hashlib.sha256(data_str.encode()).hexdigest()[:16]
+    
+    def save_result(
+        self,
+        result: SwarmResult,
+        input_hash: Optional[str] = None
+    ):
+        """Save a swarm result and optionally cache it.
+        
+        Args:
+            result: The swarm result to save
+            input_hash: Optional hash of input data for caching.
+                       If provided, result will be cached for 1 hour.
+        """
         with self._get_connection() as conn:
             conn.execute(
                 """
@@ -456,9 +666,36 @@ class SwarmStorage:
                 )
             )
             conn.commit()
+        
+        # Cache the result if caching is enabled and input_hash provided (Optimization 4.3)
+        if self._enable_cache and self._cache and input_hash:
+            self._cache.set(result.swarm_id, input_hash, result)
+            logger.debug(f"Cached result for swarm {result.swarm_id} with input_hash {input_hash}")
     
-    def get_result(self, swarm_id: str) -> Optional[SwarmResult]:
-        """Get result for a swarm."""
+    def get_result(
+        self,
+        swarm_id: str,
+        input_hash: Optional[str] = None
+    ) -> Optional[SwarmResult]:
+        """Get result for a swarm, optionally from cache.
+        
+        Args:
+            swarm_id: The swarm identifier
+            input_hash: Optional hash of input data for cache lookup.
+                       If provided and cache is enabled, checks cache first.
+        
+        Returns:
+            SwarmResult if found, None otherwise.
+        """
+        # Try cache first if enabled and input_hash provided (Optimization 4.3)
+        if self._enable_cache and self._cache and input_hash:
+            cached = self._cache.get(swarm_id, input_hash)
+            if cached:
+                logger.debug(f"Cache hit for swarm {swarm_id} with input_hash {input_hash}")
+                return cached
+            logger.debug(f"Cache miss for swarm {swarm_id} with input_hash {input_hash}")
+        
+        # Fall back to database
         with self._get_connection() as conn:
             row = conn.execute(
                 "SELECT * FROM swarm_results WHERE swarm_id = ?",
@@ -473,7 +710,7 @@ class SwarmStorage:
                 for k, v in json.loads(row["individual_results"]).items()
             }
             
-            return SwarmResult(
+            result = SwarmResult(
                 swarm_id=row["swarm_id"],
                 aggregation_method=AggregationMethod(row["aggregation_method"]),
                 individual_results=individual_results,
@@ -483,6 +720,42 @@ class SwarmStorage:
                 created_at=datetime.fromisoformat(row["created_at"]),
                 metadata=json.loads(row["metadata"]) if row["metadata"] else {}
             )
+        
+        # Cache the result if caching is enabled and input_hash provided
+        if self._enable_cache and self._cache and input_hash:
+            self._cache.set(swarm_id, input_hash, result)
+        
+        return result
+    
+    def invalidate_result_cache(
+        self,
+        swarm_id: str,
+        input_hash: Optional[str] = None
+    ):
+        """Invalidate cached result for a swarm.
+        
+        Args:
+            swarm_id: The swarm identifier
+            input_hash: Optional specific input hash to invalidate.
+                       If None, invalidates all entries for the swarm.
+        """
+        if self._cache:
+            self._cache.invalidate(swarm_id, input_hash)
+    
+    def get_cache_stats(self) -> Dict[str, Any]:
+        """Get cache statistics.
+        
+        Returns:
+            Dictionary with cache stats including size and TTL.
+        """
+        if not self._enable_cache or not self._cache:
+            return {"enabled": False}
+        
+        return {
+            "enabled": True,
+            "size": self._cache.size(),
+            "ttl_seconds": self._cache._ttl
+        }
     
     # ── Cleanup ───────────────────────────────────────────────────────────────
     
@@ -500,3 +773,165 @@ class SwarmStorage:
             if deleted > 0:
                 logger.info(f"Cleaned up {deleted} old swarms")
             return deleted
+    
+    # ── Active Execution Operations (Optimization 4.4) ────────────────────────
+    
+    def save_execution_state(
+        self,
+        execution_id: str,
+        swarm_id: str,
+        task_description: str,
+        input_data: Optional[Dict[str, Any]] = None
+    ):
+        """Save execution state to persistent storage.
+        
+        This is called when starting an async task execution to persist
+        the execution state so it can be recovered after a restart.
+        
+        Args:
+            execution_id: Unique identifier for this execution
+            swarm_id: Reference to the swarm being executed
+            task_description: Description of the task being executed
+            input_data: Optional input data for the task
+        """
+        now = datetime.now().isoformat()
+        
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO active_executions
+                (execution_id, swarm_id, task_description, input_data, status, started_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    execution_id,
+                    swarm_id,
+                    task_description,
+                    json.dumps(input_data or {}),
+                    TaskStatus.RUNNING.value,
+                    now,
+                    now
+                )
+            )
+            conn.commit()
+        
+        logger.debug(f"Saved execution state for {execution_id} (swarm {swarm_id})")
+    
+    def update_execution_state(
+        self,
+        execution_id: str,
+        status: Optional[TaskStatus] = None
+    ):
+        """Update execution state in persistent storage.
+        
+        Args:
+            execution_id: Unique identifier for this execution
+            status: Optional new status (e.g., completed, failed, terminated)
+        """
+        now = datetime.now().isoformat()
+        
+        with self._get_connection() as conn:
+            if status:
+                conn.execute(
+                    "UPDATE active_executions SET status = ?, updated_at = ? WHERE execution_id = ?",
+                    (status.value, now, execution_id)
+                )
+            else:
+                conn.execute(
+                    "UPDATE active_executions SET updated_at = ? WHERE execution_id = ?",
+                    (now, execution_id)
+                )
+            conn.commit()
+        
+        logger.debug(f"Updated execution state for {execution_id}")
+    
+    def remove_execution_state(self, execution_id: str):
+        """Remove execution state from persistent storage.
+        
+        This is called when an execution completes (success or failure).
+        
+        Args:
+            execution_id: Unique identifier for this execution
+        """
+        with self._get_connection() as conn:
+            conn.execute(
+                "DELETE FROM active_executions WHERE execution_id = ?",
+                (execution_id,)
+            )
+            conn.commit()
+        
+        logger.debug(f"Removed execution state for {execution_id}")
+    
+    def load_active_executions(self) -> List[ActiveExecution]:
+        """Load all active executions from persistent storage.
+        
+        This is called on orchestrator startup to recover any executions
+        that were running when the orchestrator last stopped.
+        
+        Returns:
+            List of ActiveExecution objects for all running executions
+        """
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM active_executions WHERE status = ?",
+                (TaskStatus.RUNNING.value,)
+            ).fetchall()
+            
+            return [
+                ActiveExecution(
+                    execution_id=row["execution_id"],
+                    swarm_id=row["swarm_id"],
+                    task_description=row["task_description"],
+                    input_data=json.loads(row["input_data"]) if row["input_data"] else {},
+                    status=TaskStatus(row["status"]),
+                    started_at=datetime.fromisoformat(row["started_at"]),
+                    updated_at=datetime.fromisoformat(row["updated_at"]),
+                )
+                for row in rows
+            ]
+    
+    def recover_stale_executions(self, max_age_seconds: int = 3600) -> int:
+        """Mark stale executions as failed/terminated.
+        
+        This should be called on startup to recover from crashes where
+        the orchestrator was killed while executions were running.
+        
+        Args:
+            max_age_seconds: Maximum age in seconds before an execution
+                           is considered stale (default: 1 hour)
+        
+        Returns:
+            Number of executions recovered
+        """
+        cutoff = datetime.now() - __import__('datetime').timedelta(seconds=max_age_seconds)
+        now = datetime.now().isoformat()
+        
+        with self._get_connection() as conn:
+            # Find stale executions
+            cursor = conn.execute(
+                """
+                SELECT execution_id, swarm_id FROM active_executions
+                WHERE status = ? AND updated_at < ?
+                """,
+                (TaskStatus.RUNNING.value, cutoff.isoformat())
+            )
+            stale = cursor.fetchall()
+            
+            # Mark them as terminated (they likely crashed)
+            for row in stale:
+                conn.execute(
+                    "UPDATE active_executions SET status = ?, updated_at = ? WHERE execution_id = ?",
+                    (TaskStatus.TERMINATED.value, now, row["execution_id"])
+                )
+                # Also update swarm status
+                conn.execute(
+                    "UPDATE swarms SET status = ?, completed_at = ? WHERE id = ?",
+                    (TaskStatus.TERMINATED.value, now, row["swarm_id"])
+                )
+            
+            conn.commit()
+            
+            if stale:
+                logger.info(f"Recovered {len(stale)} stale executions")
+            
+            return len(stale)

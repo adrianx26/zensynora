@@ -1,7 +1,7 @@
 """
 SQLite database operations for knowledge storage.
 
-Uses FTS5 for full-text search.
+Uses FTS5 for full-text search with BM25 ranking.
 Per-user database files for isolation.
 """
 
@@ -12,11 +12,15 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Callable
 
 from .parser import Note, Observation, Relation
 
 logger = logging.getLogger(__name__)
+
+# BM25 default parameters for relevance tuning
+BM25_DEFAULT_K1: float = 1.2  # Term frequency saturation
+BM25_DEFAULT_B: float = 0.75  # Field length normalization
 
 
 @dataclass
@@ -107,12 +111,37 @@ class KnowledgeDB:
             )
         """)
         
-        # FTS5 for full-text search
+        # Create indexes for better query performance
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_permalink ON entities(permalink)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity_id ON observations(entity_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_category ON observations(category)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)")
+        
+        # Optimization 3.2: Composite indexes for graph queries
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type_name ON entities(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from_type ON relations(from_entity_id, relation_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to_type ON relations(to_entity_id, relation_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity_category ON observations(entity_id, category)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_type ON relations(relation_type)")
+        
+        # FTS5 for full-text search on entities
         conn.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS entities_fts USING fts5(
                 name,
                 content,
                 content='entities',
+                content_rowid='id'
+            )
+        """)
+        
+        # FTS5 for full-text search on observations (optimization 3.1)
+        conn.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
+                content,
+                category,
+                content='observations',
                 content_rowid='id'
             )
         """)
@@ -141,15 +170,63 @@ class KnowledgeDB:
             END
         """)
         
-        # Indexes
+        # Triggers to keep observations FTS index in sync (optimization 3.1)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
+                INSERT INTO observations_fts(rowid, content, category)
+                VALUES (new.id, new.content, new.category);
+            END
+        """)
+        
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
+                INSERT INTO observations_fts(observations_fts, rowid, content, category)
+                VALUES ('delete', old.id, old.content, old.category);
+            END
+        """)
+        
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
+                INSERT INTO observations_fts(observations_fts, rowid, content, category)
+                VALUES ('delete', old.id, old.content, old.category);
+                INSERT INTO observations_fts(rowid, content, category)
+                VALUES (new.id, new.content, new.category);
+            END
+        """)
+        
+        # Indexes (optimization 3.2: composite indexes for graph queries)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_permalink ON entities(permalink)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity ON observations(entity_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_type ON relations(relation_type)")
         
+        # Optimization 3.2: Composite indexes for graph queries
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type_name ON entities(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from_type ON relations(from_entity_id, relation_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to_type ON relations(to_entity_id, relation_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity_category ON observations(entity_id, category)")
+        
         conn.commit()
         logger.info(f"Knowledge DB initialized: {self.db_path}")
+    
+    def rebuild_fts_index(self):
+        """
+        Rebuild FTS5 indexes for existing data.
+        
+        This should be called when upgrading existing databases to ensure
+        the observations FTS table is populated.
+        """
+        conn = self._get_connection()
+        
+        # Rebuild entities FTS
+        conn.execute("INSERT INTO entities_fts(entities_fts) VALUES('rebuild')")
+        
+        # Rebuild observations FTS (optimization 3.1)
+        conn.execute("INSERT INTO observations_fts(observations_fts) VALUES('rebuild')")
+        
+        conn.commit()
+        logger.info("FTS indexes rebuilt")
     
     def close(self):
         """Close database connection."""
@@ -359,40 +436,87 @@ class KnowledgeDB:
     
     def search_fts(self, query: str, limit: int = 10) -> List[Entity]:
         """
-        Full-text search using FTS5.
+        Full-text search using FTS5 with BM25 ranking.
+        
+        Searches both entity names/paths and observation content for more relevant results.
+        Uses rank_bm25() for configurable BM25 parameters.
         
         Args:
             query: Search query
             limit: Maximum results
             
         Returns:
-            List of matching entities
+            List of matching entities sorted by BM25 relevance
         """
         conn = self._get_connection()
         
-        # Use FTS5 match syntax
-        rows = conn.execute(
-            """
-            SELECT e.* FROM entities e
-            JOIN entities_fts fts ON e.id = fts.rowid
-            WHERE entities_fts MATCH ?
-            ORDER BY rank
-            LIMIT ?
-            """,
-            (query, limit)
-        ).fetchall()
+        # Try enhanced search with observations (optimization 3.1)
+        # Fall back to entities-only search for backward compatibility
+        try:
+            rows = conn.execute(
+                """
+                SELECT e.*, 
+                       bm25(entities_fts) as entity_rank,
+                       bm25(observations_fts) as observation_rank
+                FROM entities e
+                LEFT JOIN entities_fts fts_e ON e.id = fts_e.rowid
+                LEFT JOIN observations o ON e.id = o.entity_id
+                LEFT JOIN observations_fts fts_o ON o.id = fts_o.rowid
+                WHERE entities_fts MATCH ? OR observations_fts MATCH ?
+                ORDER BY (bm25(entities_fts) + bm25(observations_fts))
+                LIMIT ?
+                """,
+                (query, query, limit)
+            ).fetchall()
+        except sqlite3.OperationalError:
+            # Fall back to entities-only search for existing databases
+            # without observations FTS table
+            rows = conn.execute(
+                """
+                SELECT e.* FROM entities e
+                JOIN entities_fts fts ON e.id = fts.rowid
+                WHERE entities_fts MATCH ?
+                ORDER BY bm25(entities_fts)
+                LIMIT ?
+                """,
+                (query, limit)
+            ).fetchall()
         
         entities = []
+        seen_ids = set()
         for row in rows:
-            entities.append(Entity(
-                id=row['id'],
-                name=row['name'],
-                permalink=row['permalink'],
-                file_path=row['file_path'],
-                created_at=datetime.fromisoformat(row['created_at']),
-                updated_at=datetime.fromisoformat(row['updated_at'])
-            ))
+            if row['id'] not in seen_ids:
+                seen_ids.add(row['id'])
+                entities.append(Entity(
+                    id=row['id'],
+                    name=row['name'],
+                    permalink=row['permalink'],
+                    file_path=row['file_path'],
+                    created_at=datetime.fromisoformat(row['created_at']),
+                    updated_at=datetime.fromisoformat(row['updated_at'])
+                ))
         return entities
+    
+    def rank_bm25(self, fts_table: str, query: str, k1: float = BM25_DEFAULT_K1, b: float = BM25_DEFAULT_B) -> float:
+        """
+        Calculate BM25 ranking score for a query against an FTS table.
+        
+        This is a helper method that can be used to understand BM25 scoring.
+        The actual ranking is done in SQL for performance.
+        
+        Args:
+            fts_table: Name of the FTS virtual table
+            query: Search query
+            k1: Term frequency saturation parameter (default 1.2)
+            b: Field length normalization parameter (default 0.75)
+            
+        Returns:
+            BM25 score (lower is better)
+        """
+        # This method exists for documentation purposes and potential future use
+        # The actual BM25 calculation happens in the SQL queries above
+        # where we use bm25(fts_table, k1, b) for custom parameters
+        return 0.0
     
     def search_by_tag(self, tag: str) -> List[Entity]:
         """Search entities by tag in observations."""

@@ -9,7 +9,8 @@ myclaw/
 │   ├── gateway.py
 │   └── channels/
 │       ├── __init__.py
-│       └── telegram.py
+│       ├── telegram.py
+│       └── whatsapp.py
 ├── onboard.py
 ├── cli.py
 ├── requirements.txt

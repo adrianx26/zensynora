@@ -2,6 +2,7 @@ import sqlite3
 import json
 import logging
 import re
+import threading
 from datetime import datetime, timedelta
 from pathlib import Path
 from contextlib import contextmanager
@@ -25,17 +26,85 @@ RELATION_KEYWORDS = [
     'leads to', 'results in', 'causes', 'enables', 'blocks'
 ]
 
+
+# ── SQLite Connection Pool ───────────────────────────────────────────────────────
+
+class SQLitePool:
+    """Simple connection pool for SQLite databases."""
+    
+    _pools: dict[str, sqlite3.Connection] = {}
+    _locks: dict[str, threading.Lock] = {}
+    _refcounts: dict[str, int] = {}
+    _pool_lock = threading.Lock()
+    
+    @classmethod
+    def get_connection(cls, db_path: Path) -> sqlite3.Connection:
+        """Get or create a pooled connection."""
+        key = str(db_path)
+        
+        with cls._pool_lock:
+            if key not in cls._locks:
+                cls._locks[key] = threading.Lock()
+                cls._refcounts[key] = 0
+        
+        # Use lock for this specific DB
+        cls._locks[key].acquire()
+        
+        if key not in cls._pools:
+            conn = sqlite3.connect(db_path, check_same_thread=False)
+            conn.execute("PRAGMA journal_mode=WAL")  # Enable WAL for better concurrency
+            conn.execute("PRAGMA synchronous=NORMAL")  # Balance safety/speed
+            cls._pools[key] = conn
+        
+        with cls._pool_lock:
+            cls._refcounts[key] += 1
+            
+        return cls._pools[key]
+    
+    @classmethod
+    def release_connection(cls, db_path: Path):
+        """Release a connection back to the pool."""
+        key = str(db_path)
+        with cls._pool_lock:
+            cls._refcounts[key] -= 1
+        
+        if key in cls._locks:
+            cls._locks[key].release()
+    
+    @classmethod
+    def close_all(cls):
+        """Close all pooled connections."""
+        with cls._pool_lock:
+            for conn in cls._pools.values():
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            cls._pools.clear()
+            cls._refcounts.clear()
+
+
+def cleanup_on_shutdown():
+    """Call this on application shutdown to clean up resources."""
+    SQLitePool.close_all()
+    logger.info("Memory pool shutdown complete")
+
 class Memory:
     """SQLite-backed conversation memory with per-user isolation and context manager support."""
 
-    def __init__(self, user_id: str = "default", auto_cleanup_days: int = 30):
+    # Class-level tracking for VACUUM optimization
+    _cleanup_count: int = 0
+    
+    def __init__(self, user_id: str = "default", auto_cleanup_days: int = 30, auto_cleanup_enabled: bool = True):
         # Each user gets their own DB file — full disk-level session isolation
         db_path = Path.home() / ".myclaw" / f"memory_{user_id}.db"
         self.db = db_path
         self.db.parent.mkdir(parents=True, exist_ok=True)
         self.auto_cleanup_days = auto_cleanup_days
+        self.auto_cleanup_enabled = auto_cleanup_enabled
 
-        self.conn = sqlite3.connect(self.db, check_same_thread=False)
+        # Use pooled connection
+        self.conn = SQLitePool.get_connection(self.db)
         self.conn.execute("""CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY,
             role TEXT,
@@ -45,7 +114,9 @@ class Memory:
         # Index for fast timestamp-based queries and cleanup
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp)")
         self.conn.commit()
-        self.cleanup(self.auto_cleanup_days)
+        # 6.2: Only run cleanup if enabled
+        if self.auto_cleanup_enabled:
+            self.cleanup(self.auto_cleanup_days)
 
     def __enter__(self):
         return self
@@ -57,12 +128,10 @@ class Memory:
         """Close the database connection."""
         if hasattr(self, 'conn') and self.conn:
             try:
-                self.conn.close()
-                logger.info("Database connection closed")
+                SQLitePool.release_connection(self.db)
+                logger.info(f"Database connection released: {self.db.name}")
             except Exception as e:
-                logger.error(f"Error closing database: {e}")
-            finally:
-                self.conn = None
+                logger.error(f"Error releasing database connection: {e}")
 
     def add(self, role: str, content: str):
         """Add a message to the conversation history."""
@@ -76,18 +145,44 @@ class Memory:
             logger.error(f"Error adding message: {e}")
             raise
 
-    def get_history(self, limit: int = 20) -> list:
-        """Get the last N messages in chronological order, efficiently."""
+    def get_history(self, limit: int = 20, columns: Optional[List[str]] = None) -> list:
+        """Get the last N messages in chronological order, efficiently.
+
+        Args:
+            limit: Maximum number of messages to retrieve.
+            columns: List of column names to retrieve. If None, defaults to ["role", "content"].
+                     Allowed columns: "id", "role", "content", "timestamp".
+
+        Returns:
+            List of dictionaries, each representing a message with the requested columns.
+        """
         try:
-            # Subquery approach: get last N by DESC, then re-order ASC in outer query.
-            # Avoids Python-side reversal and is faster on large tables.
-            cur = self.conn.execute(
-                "SELECT role, content FROM "
-                "(SELECT role, content, id FROM messages ORDER BY id DESC LIMIT ?) "
-                "ORDER BY id ASC",
-                (limit,)
-            )
-            return [{"role": r, "content": c} for r, c in cur.fetchall()]
+            if columns is None:
+                columns = ["role", "content"]
+            allowed_columns = {"id", "role", "content", "timestamp"}
+            if not set(columns).issubset(allowed_columns):
+                raise ValueError(f"Invalid column(s). Allowed columns are: {allowed_columns}")
+
+            # Ensure we have the id for ordering in the inner query, but avoid duplicating in the inner select
+            inner_columns = list(dict.fromkeys(columns + ["id"]))  # preserves order and removes duplicates
+
+            # Build the query
+            inner_select = ", ".join(inner_columns)
+            outer_select = ", ".join(columns)
+            query = f"""
+                SELECT {outer_select} 
+                FROM (
+                    SELECT {inner_select} 
+                    FROM messages 
+                    ORDER BY id DESC 
+                    LIMIT ?
+                ) 
+                ORDER BY id ASC
+            """
+            cur = self.conn.execute(query, (limit,))
+            rows = cur.fetchall()
+            # Build list of dictionaries
+            return [dict(zip(columns, row)) for row in rows]
         except Exception as e:
             logger.error(f"Error getting history: {e}")
             return []
@@ -107,7 +202,12 @@ class Memory:
             deleted = cursor.rowcount
 
             if deleted > 0:
-                self.conn.execute("VACUUM")
+                # Increment cleanup counter and run VACUUM every 100 cleanups
+                Memory._cleanup_count += 1
+                if Memory._cleanup_count >= 100:
+                    self.conn.execute("VACUUM")
+                    Memory._cleanup_count = 0
+                    logger.info("VACUUM performed after 100 cleanups")
                 logger.info(f"Cleaned up {deleted} old messages")
 
             return deleted

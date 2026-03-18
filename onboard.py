@@ -55,6 +55,24 @@ def onboard():
     tg_user  = input("Your Telegram user ID (leave blank to skip): ").strip()
     tg_enabled = bool(tg_token and tg_user)
 
+    # ── WhatsApp ──────────────────────────────────────────────────────────────
+    print("\n📱 WhatsApp Business Cloud API (optional):")
+    print("   Requires a Meta Business account and WhatsApp Business app.")
+    print("   See plans/whatsapp_implementation_plan.md for setup guide.")
+    wa_phone_id = input("WhatsApp Phone Number ID (leave blank to skip): ").strip()
+    wa_enabled = False
+    wa_biz_id = ""
+    wa_access_token = ""
+    wa_verify_token = ""
+    wa_allow_from = []
+    if wa_phone_id:
+        wa_biz_id = input("WhatsApp Business Account ID: ").strip()
+        wa_access_token = input("WhatsApp Access Token: ").strip()
+        wa_verify_token = input("WhatsApp Verify Token (custom string for webhook): ").strip() or "myclaw_verify"
+        wa_phone = input("Your WhatsApp phone number (e.g. 1234567890): ").strip()
+        wa_allow_from = [wa_phone] if wa_phone else []
+        wa_enabled = bool(wa_phone_id and wa_access_token)
+
     # ── Build config ──────────────────────────────────────────────────────────
     config = {
         "providers": {
@@ -78,6 +96,14 @@ def onboard():
                 "enabled":   tg_enabled,
                 "token":     tg_token or "YOUR_TOKEN",
                 "allowFrom": [tg_user] if tg_user else ["YOUR_USER_ID"],
+            },
+            "whatsapp": {
+                "enabled":             wa_enabled,
+                "phone_number_id":     wa_phone_id or "YOUR_PHONE_NUMBER_ID",
+                "business_account_id": wa_biz_id or "YOUR_BUSINESS_ACCOUNT_ID",
+                "access_token":        wa_access_token or "YOUR_ACCESS_TOKEN",
+                "verify_token":        wa_verify_token or "YOUR_VERIFY_TOKEN",
+                "allowFrom":           wa_allow_from or ["YOUR_PHONE_NUMBER"],
             }
         },
     }

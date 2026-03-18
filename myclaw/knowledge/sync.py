@@ -4,6 +4,7 @@ File-to-database synchronization for knowledge storage.
 Ensures the SQLite index stays in sync with Markdown files.
 """
 
+import asyncio
 import logging
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
@@ -14,6 +15,34 @@ from .parser import parse_note
 from .storage import get_knowledge_dir
 
 logger = logging.getLogger(__name__)
+
+# Background task reference for auto-extraction
+_background_extraction_task: asyncio.Task | None = None
+
+# Cache for parsed notes
+_parsed_note_cache: dict[str, tuple] = {}  # path -> (note, mtime)
+
+
+def _get_cached_note(file_path: Path):
+    """Get note from cache or parse and cache it."""
+    path_str = str(file_path)
+    mtime = file_path.stat().st_mtime
+    
+    if path_str in _parsed_note_cache:
+        cached_mtime, cached_note = _parsed_note_cache[path_str]
+        if cached_mtime == mtime:
+            return cached_note
+    
+    # Parse and cache
+    note = parse_note(file_path)
+    _parsed_note_cache[path_str] = (mtime, note)
+    return note
+
+
+def clear_note_cache():
+    """Clear the parsed note cache."""
+    global _parsed_note_cache
+    _parsed_note_cache = {}
 
 
 def scan_markdown_files(user_id: str = "default") -> Set[Path]:
@@ -68,7 +97,8 @@ def detect_changes(
     
     for file_path in files:
         try:
-            note = parse_note(file_path)
+            # Use cached parsing instead of parse_note directly
+            note = _get_cached_note(file_path)
             
             if note.permalink not in db_mapping:
                 # New file
@@ -135,7 +165,8 @@ def sync_knowledge(user_id: str = "default", force: bool = False) -> Dict[str, i
             files = scan_markdown_files(user_id)
             for file_path in files:
                 try:
-                    note = parse_note(file_path)
+                    # Use cached parsing
+                    note = _get_cached_note(file_path)
                     db.sync_entity_from_note(note)
                     stats["added"] += 1
                     logger.info(f"Synced: {note.permalink}")
@@ -254,3 +285,109 @@ def sync_and_report(user_id: str = "default") -> str:
     lines.append(f"Total changes: {total}")
     
     return "\n".join(lines)
+
+
+# ── Background Knowledge Extraction ─────────────────────────────────────────────
+
+async def _background_extraction_loop(user_id: str, interval_seconds: int = 60):
+    """
+    Background loop that periodically extracts knowledge from markdown files.
+    
+    Args:
+        user_id: User ID for isolation
+        interval_seconds: How often to run the sync (default: 60 seconds)
+    """
+    logger.info(f"Starting background knowledge extraction for user: {user_id}")
+    
+    while True:
+        try:
+            # Run sync in thread to avoid blocking the event loop
+            stats = await asyncio.to_thread(sync_knowledge, user_id)
+            
+            total_changes = stats['added'] + stats['updated'] + stats['deleted']
+            if total_changes > 0:
+                logger.info(f"Background sync completed: {total_changes} changes ({stats['added']} added, {stats['updated']} updated, {stats['deleted']} deleted)")
+            
+        except asyncio.CancelledError:
+            logger.info("Background knowledge extraction cancelled")
+            raise
+        except Exception as e:
+            logger.error(f"Background knowledge extraction error: {e}")
+        
+        # Wait for next interval
+        await asyncio.sleep(interval_seconds)
+
+
+def start_background_extraction(
+    user_id: str = "default",
+    interval_seconds: int = 60,
+    loop: asyncio.AbstractEventLoop | None = None
+) -> asyncio.Task:
+    """
+    Start background knowledge extraction as an asyncio task.
+    
+    Args:
+        user_id: User ID for isolation
+        interval_seconds: How often to run the sync (default: 60 seconds)
+        loop: Optional event loop to use. If None, uses asyncio.get_event_loop()
+        
+    Returns:
+        The created asyncio Task
+    """
+    global _background_extraction_task
+    
+    # Cancel existing task if running
+    if _background_extraction_task is not None and not _background_extraction_task.done():
+        _background_extraction_task.cancel()
+        logger.info("Cancelled existing background extraction task")
+    
+    # Get or create event loop
+    if loop is None:
+        try:
+            loop = asyncio.get_running_loop()
+            # If we're in an existing loop, we need to create the task in that loop
+            _background_extraction_task = loop.create_task(
+                _background_extraction_loop(user_id, interval_seconds)
+            )
+        except RuntimeError:
+            # No running loop, create a new one
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            _background_extraction_task = loop.create_task(
+                _background_extraction_loop(user_id, interval_seconds)
+            )
+    else:
+        _background_extraction_task = loop.create_task(
+            _background_extraction_loop(user_id, interval_seconds)
+        )
+    
+    logger.info(f"Background knowledge extraction started (interval: {interval_seconds}s)")
+    return _background_extraction_task
+
+
+def stop_background_extraction() -> bool:
+    """
+    Stop the background knowledge extraction task.
+    
+    Returns:
+        True if a task was stopped, False if no task was running
+    """
+    global _background_extraction_task
+    
+    if _background_extraction_task is not None and not _background_extraction_task.done():
+        _background_extraction_task.cancel()
+        _background_extraction_task = None
+        logger.info("Background knowledge extraction stopped")
+        return True
+    
+    return False
+
+
+def is_background_extraction_running() -> bool:
+    """
+    Check if background knowledge extraction is currently running.
+    
+    Returns:
+        True if running, False otherwise
+    """
+    return _background_extraction_task is not None and not _background_extraction_task.done()

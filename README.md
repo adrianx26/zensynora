@@ -1,6 +1,6 @@
 # 🦞 MyClaw — Personal AI Agent
 
-A powerful personal AI agent that runs locally or in the cloud using various LLM providers, featuring Telegram integration, persistent SQLite memory, multi-agent support, dynamic tool building, and task scheduling.
+A powerful personal AI agent that runs locally or in the cloud using various LLM providers, featuring Telegram and WhatsApp integration, persistent SQLite memory, multi-agent support, dynamic tool building, and task scheduling.
 
 ## ✨ Features
 
@@ -15,8 +15,9 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - **Agent Delegation** — Delegate tasks to specialized agents (e.g., `@coder write a function`)
 - **🐝 Agent Swarms** — Coordinate multiple agents using parallel, sequential, hierarchical, or voting strategies for complex tasks
 - **Dynamic Tool Building** — The agent can create and register new Python tools at runtime
-- **Task Scheduling** — Schedule one-shot or recurring tasks with Telegram notifications
+- **Task Scheduling** — Schedule one-shot or recurring tasks with notifications via Telegram or WhatsApp
 - **Telegram Gateway** — Full-featured Telegram bot with commands: `/remind`, `/jobs`, `/cancel`, `/agents`
+- **WhatsApp Gateway** — Full-featured WhatsApp Business Cloud API integration with webhook server, all commands, and agent routing
 - **Advanced Web Scraping** — Built-in integration with [Scrapling](https://github.com/D4Vinci/Scrapling) for anti-bot bypass and adaptive web scraping.
 
 ### Security
@@ -24,6 +25,7 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - Path validation to prevent directory traversal attacks
 - Per-user memory isolation
 - Configurable Telegram access control (whitelist by user ID)
+- Configurable WhatsApp access control (whitelist by phone number)
 
 ---
 
@@ -31,7 +33,7 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                    Channels (CLI, Telegram)                  │
+│              Channels (CLI, Telegram, WhatsApp)              │
 └──────────────────────────┬──────────────────────────────────┘
                            │
                            ▼
@@ -104,6 +106,7 @@ python cli.py onboard
 Edit `~/.myclaw/config.json` to configure:
 - Telegram bot token (get from [@BotFather](https://t.me/botfather))
 - Your Telegram user ID (use [@userinfobot](https://t.me/userinfobot))
+- WhatsApp Business credentials (see [WhatsApp Setup Guide](plans/whatsapp_implementation_plan.md#step-1-create-a-meta-developer-account))
 - **Providers:** Configure APIs for Ollama, OpenAI, Anthropic, Gemini, Groq, OpenRouter, LM Studio, or llama.cpp.
 
 ### Running
@@ -120,6 +123,16 @@ ollama run llama3.2
 
 # Then start the Telegram bot
 python cli.py gateway
+```
+
+**WhatsApp Gateway:**
+```bash
+# First, ensure your chosen provider is running or configured
+ollama run llama3.2
+
+# Then start the WhatsApp webhook server
+python cli.py gateway
+# Requires WhatsApp enabled in config and a public webhook URL (use ngrok for dev)
 ```
 
 ---
@@ -181,6 +194,27 @@ You: exit                # Quit
 | `/knowledge_write <title> | <content>` | Create a new note |
 | `/knowledge_sync` | Sync knowledge with files |
 | `/knowledge_tags` | List all tags |
+
+### WhatsApp Commands
+
+All the same commands are available on WhatsApp using the `/` prefix:
+
+| Command | Description |
+|---------|-------------|
+| `/remind <seconds> <message>` | Set a one-shot reminder |
+| `/remind every <seconds> <message>` | Set a recurring reminder |
+| `/jobs` | List all scheduled jobs |
+| `/cancel <job_id>` | Cancel a job |
+| `/agents` | List available agents |
+| `@agentname <message>` | Route to specific agent |
+| `/knowledge_search <query>` | Search knowledge base |
+| `/knowledge_list` | List all knowledge notes |
+| `/knowledge_read <permalink>` | Read a specific note |
+| `/knowledge_write <title> \| <content>` | Create a new note |
+| `/knowledge_sync` | Sync knowledge with files |
+| `/knowledge_tags` | List all tags |
+
+> **Note:** WhatsApp uses the WhatsApp Business Cloud API. See [plans/whatsapp_implementation_plan.md](plans/whatsapp_implementation_plan.md) for setup instructions.
 
 ---
 
@@ -350,7 +384,8 @@ myclaw/
 │   │   └── orchestrator.py  # Coordination logic
 │   ├── channels/
 │   │   ├── __init__.py
-│   │   └── telegram.py      # Telegram bot
+│   │   ├── telegram.py      # Telegram bot
+│   │   └── whatsapp.py      # WhatsApp Business Cloud API bot
 │   ├── knowledge/           # Knowledge storage system
 │   └── profiles/            # Agent profile templates
 │       ├── default.md       # Default agent profile
@@ -413,6 +448,14 @@ Configuration is stored in `~/.myclaw/config.json`:
       "enabled": true,
       "token": "YOUR_BOT_TOKEN",
       "allowFrom": ["YOUR_USER_ID"]
+    },
+    "whatsapp": {
+      "enabled": false,
+      "phone_number_id": "YOUR_PHONE_NUMBER_ID",
+      "business_account_id": "YOUR_BUSINESS_ACCOUNT_ID",
+      "access_token": "YOUR_ACCESS_TOKEN",
+      "verify_token": "YOUR_VERIFY_TOKEN",
+      "allowFrom": ["PHONE_NUMBER"]
     }
   }
 }

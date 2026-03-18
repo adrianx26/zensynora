@@ -12,7 +12,7 @@
 #   5. Prompts to install optional LLM provider SDKs
 #   6. Optionally installs Ollama for local model support
 #   7. Creates required data directories
-#   8. Optionally installs a systemd service for the Telegram gateway
+#   8. Optionally installs a systemd service for the Telegram/WhatsApp gateway
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -euo pipefail
@@ -240,6 +240,7 @@ ensure_pip "httpx"      "httpx"      ""
 ensure_pip "pytest"     "pytest"     ""
 ensure_pip "pytest_asyncio" "pytest-asyncio" ""
 ensure_pip "scrapling"  "scrapling[all]" ">=0.4.2"
+ensure_pip "watchdog"   "watchdog"    ">=3.0.0"  # 6.1: Config file watching
 
 info "Installing Scrapling browser dependencies..."
 "$VENV_DIR/bin/scrapling" install --force
@@ -329,13 +330,13 @@ SERVICE_FILE="/etc/systemd/system/myclaw.service"
 if [[ -f "$SERVICE_FILE" ]]; then
     skip "systemd service already installed at $SERVICE_FILE"
 else
-    echo "  Installs a service so the Telegram gateway starts automatically on boot."
+    echo "  Installs a service so the Telegram/WhatsApp gateway starts automatically on boot."
     read -rp "  Install systemd service? [y/N]: " OPT
     if [[ "${OPT,,}" == "y" || "${OPT,,}" == "yes" ]]; then
         info "Creating $SERVICE_FILE ..."
         sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
-Description=MyClaw Telegram Gateway
+Description=MyClaw Telegram/WhatsApp Gateway
 After=network-online.target
 Wants=network-online.target
 
@@ -385,6 +386,7 @@ check_import openai
 check_import httpx
 check_import pytest
 check_import scrapling
+check_import whatsapp
 
 echo ""
 if [[ "$FAILED" -eq 0 ]]; then
@@ -416,7 +418,10 @@ echo "  4. Start the console agent:"
 echo -e "     ${CYAN}python cli.py agent${RESET}"
 echo ""
 echo "  5. Or start the Telegram gateway:"
-echo -e "     ${CYAN}python cli.py gateway${RESET}"
+echo -e "     ${CYAN}python cli.py gateway${RESET}""
+echo ""
+echo "  5b. Or start the WhatsApp gateway:"
+echo -e "     ${CYAN}python cli.py gateway --channel whatsapp${RESET}"
 echo ""
 echo "  ─ Knowledge base ───────────────────────────────"
 echo "  python cli.py knowledge list"

@@ -23,386 +23,183 @@ from __future__ import annotations
 
 import json as _json
 import logging
+import asyncio
+import time
+import hashlib
 from abc import ABC, abstractmethod
-from typing import List, Dict, Tuple, Optional
+from functools import wraps, lru_cache
+from typing import List, Dict, Tuple, Optional, AsyncIterator
+from collections import OrderedDict
 
 import httpx
 import requests
+
+from .tools import TOOL_SCHEMAS
+
+
+# ── LRU Cache with TTL Decorator ─────────────────────────────────────────────────
+
+class LRUCacheWithTTL:
+    """Thread-safe LRU cache with TTL support."""
+    
+    def __init__(self, maxsize: int = 128, ttl: int = 300):
+        self.maxsize = maxsize
+        self.ttl = ttl
+        self._cache = OrderedDict()
+        self._timestamps = {}
+    
+    def _make_key(self, *args, **kwargs):
+        """Create a hashable cache key from arguments."""
+        # For chat methods, first arg is self, second is messages
+        # We want to hash the messages and model
+        key_parts = []
+        for i, arg in enumerate(args):
+            if i >= 1:  # Skip self (index 0)
+                key_parts.append(str(arg))
+        for k, v in sorted(kwargs.items()):
+            key_parts.append(f"{k}={v}")
+        content = ":".join(key_parts)
+        return hashlib.md5(content.encode()).hexdigest()
+    
+    def _is_expired(self, key: str) -> bool:
+        """Check if cache entry has expired."""
+        if key not in self._timestamps:
+            return True
+        return time.time() - self._timestamps[key] > self.ttl
+    
+    def get(self, key: str):
+        """Get value from cache if exists and not expired."""
+        if key in self._cache and not self._is_expired(key):
+            # Move to end (most recently used)
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return None
+    
+    def set(self, key: str, value):
+        """Set value in cache with current timestamp."""
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        else:
+            if len(self._cache) >= self.maxsize:
+                # Remove oldest (first) item
+                oldest_key = next(iter(self._cache))
+                del self._cache[oldest_key]
+                self._timestamps.pop(oldest_key, None)
+        self._cache[key] = value
+        self._timestamps[key] = time.time()
+    
+    def clear(self):
+        """Clear all cache entries."""
+        self._cache.clear()
+        self._timestamps.clear()
+
+
+def lru_cache_with_ttl(maxsize: int = 128, ttl: int = 300):
+    """Decorator that adds LRU caching with TTL to an async function.
+    
+    Args:
+        maxsize: Maximum number of entries to cache (default 128)
+        ttl: Time-to-live in seconds (default 300 = 5 minutes)
+    """
+    def decorator(func):
+        cache = LRUCacheWithTTL(maxsize=maxsize, ttl=ttl)
+        
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Generate cache key from messages and model
+            cache_key = cache._make_key(*args, **kwargs)
+            
+            # Try to get from cache
+            cached_value = cache.get(cache_key)
+            if cached_value is not None:
+                return cached_value
+            
+            # Call the original function
+            result = await func(*args, **kwargs)
+            
+            # Store in cache
+            cache.set(cache_key, result)
+            return result
+        
+        # Add cache clear method to wrapper
+        wrapper.clear_cache = cache.clear
+        return wrapper
+    return decorator
+
+
+# Global cache instance for provider chat methods
+_provider_chat_cache = LRUCacheWithTTL(maxsize=128, ttl=300)
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 60  # seconds
 
-# ── Tool Schemas (used by providers that support OpenAI-style function calling) ──
 
-TOOL_SCHEMAS = [
-    # ── Core ─────────────────────────────────────────────────────────────────
-    {
-        "type": "function",
-        "function": {
-            "name": "shell",
-            "description": "Execute an allowed shell command in the workspace.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "cmd": {"type": "string", "description": "Shell command to run"}
-                },
-                "required": ["cmd"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_file",
-            "description": "Read a file from the workspace directory.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path": {"type": "string", "description": "Relative path within workspace"}
-                },
-                "required": ["path"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "write_file",
-            "description": "Write content to a file in the workspace directory.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "path":    {"type": "string", "description": "Relative path within workspace"},
-                    "content": {"type": "string", "description": "Content to write"}
-                },
-                "required": ["path", "content"]
-            }
-        }
-    },
-    # ── Sub-Agent Delegation ──────────────────────────────────────────────────
-    {
-        "type": "function",
-        "function": {
-            "name": "delegate",
-            "description": "Delegate a task to another named agent and return its response.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "agent_name": {"type": "string", "description": "Name of the target agent"},
-                    "task":       {"type": "string", "description": "Instruction for the target agent"}
-                },
-                "required": ["agent_name", "task"]
-            }
-        }
-    },
-    # ── Dynamic Tool Building ─────────────────────────────────────────────────
-    {
-        "type": "function",
-        "function": {
-            "name": "list_tools",
-            "description": "Return a list of all currently available tool names.",
-            "parameters": {"type": "object", "properties": {}}
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "register_tool",
-            "description": (
-                "Write a Python function as source code and register it as a new tool. "
-                "The function name must match the 'name' argument. "
-                "Use \\n for newlines in the code string."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "Tool name (valid Python identifier)"},
-                    "code": {"type": "string", "description": "Full Python source of the function"}
-                },
-                "required": ["name", "code"]
-            }
-        }
-    },
-    # ── Scheduling ────────────────────────────────────────────────────────────
-    {
-        "type": "function",
-        "function": {
-            "name": "schedule",
-            "description": (
-                "Schedule a task to run in the future. "
-                "Use 'delay' for a one-shot job (fires once after N seconds). "
-                "Use 'every' for a recurring job (fires every N seconds). "
-                "The task will be executed by the agent and the result sent back via Telegram."
-            ),
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "task":    {"type": "string",  "description": "Instruction to execute at trigger time"},
-                    "delay":   {"type": "integer", "description": "Seconds until one-shot execution"},
-                    "every":   {"type": "integer", "description": "Recurring interval in seconds"},
-                    "user_id": {"type": "string",  "description": "User ID for memory context"}
-                },
-                "required": ["task"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "cancel_schedule",
-            "description": "Cancel an active scheduled job by its ID.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "job_id": {"type": "string", "description": "Job ID returned by schedule()"}
-                },
-                "required": ["job_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_schedules",
-            "description": "List all currently active scheduled jobs.",
-            "parameters": {"type": "object", "properties": {}}
-        }
-    },
-    # ── Knowledge Tools ─────────────────────────────────────────────────────────
-    {
-        "type": "function",
-        "function": {
-            "name": "write_to_knowledge",
-            "description": "Write a new note to the knowledge base for long-term memory storage.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string", "description": "The title/name of the note (becomes permalink)"},
-                    "content": {"type": "string", "description": "Main content/description of the note"},
-                    "tags": {"type": "string", "description": "Comma-separated list of tags (optional)"},
-                    "observations": {"type": "string", "description": "One observation per line, format: 'category | content' (optional)"},
-                    "relations": {"type": "string", "description": "One relation per line, format: 'relation_type | target_entity' (optional)"},
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": ["title", "content"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_knowledge",
-            "description": "Search the knowledge base using full-text search (FTS5).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string", "description": "Search query (supports FTS5 syntax: AND, OR, NOT, *)"},
-                    "limit": {"type": "integer", "description": "Maximum number of results (default: 5)"},
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": ["query"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "read_knowledge",
-            "description": "Read a specific knowledge note by permalink.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "permalink": {"type": "string", "description": "The note's permalink/identifier"},
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": ["permalink"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_knowledge",
-            "description": "List recent knowledge notes.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "limit": {"type": "integer", "description": "Maximum number of notes to list (default: 20)"},
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_knowledge_context",
-            "description": "Build context for a knowledge entity including related entities (knowledge graph traversal).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "permalink": {"type": "string", "description": "The starting entity's permalink"},
-                    "depth": {"type": "integer", "description": "Relationship depth to traverse (default: 2)"},
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": ["permalink"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "get_related_knowledge",
-            "description": "Get entities related to a knowledge note.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "permalink": {"type": "string", "description": "The note's permalink"},
-                    "depth": {"type": "integer", "description": "Relationship depth to traverse (default: 1)"},
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": ["permalink"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "sync_knowledge_base",
-            "description": "Synchronize the knowledge base with Markdown files (re-index all files).",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "list_knowledge_tags",
-            "description": "List all tags used in the knowledge base.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": []
-            }
-        }
-    },
-    # ── Agent Swarm Tools ───────────────────────────────────────────────────────
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_create",
-            "description": "Create a new agent swarm for collaborative multi-agent task execution. Swarms allow multiple agents to work together using strategies like parallel, sequential, hierarchical, or voting.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "Descriptive name for the swarm (e.g., 'research_team', 'code_reviewers')"},
-                    "strategy": {"type": "string", "enum": ["parallel", "sequential", "hierarchical", "voting"], "description": "Execution strategy"},
-                    "workers": {"type": "string", "description": "Comma-separated list of agent names (e.g., 'agent1,agent2,agent3')"},
-                    "coordinator": {"type": "string", "description": "Coordinator agent name (required for hierarchical strategy)"},
-                    "aggregation": {"type": "string", "enum": ["consensus", "best_pick", "concatenation", "synthesis"], "description": "How to combine results from agents"},
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": ["name", "strategy", "workers"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_assign",
-            "description": "Assign a task to a swarm for execution. The swarm will coordinate its agents according to the configured strategy and return an aggregated result.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "swarm_id": {"type": "string", "description": "The swarm ID returned by swarm_create()"},
-                    "task": {"type": "string", "description": "The task description or prompt for the swarm"},
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": ["swarm_id", "task"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_status",
-            "description": "Get the current status of a swarm including configuration and execution state.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "swarm_id": {"type": "string", "description": "The swarm ID"}
-                },
-                "required": ["swarm_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_result",
-            "description": "Get the final aggregated result from a completed swarm execution.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "swarm_id": {"type": "string", "description": "The swarm ID"}
-                },
-                "required": ["swarm_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_terminate",
-            "description": "Force terminate a running swarm before it completes.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "swarm_id": {"type": "string", "description": "The swarm ID to terminate"}
-                },
-                "required": ["swarm_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_list",
-            "description": "List all swarms for the user, optionally filtered by status.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "status": {"type": "string", "enum": ["pending", "running", "completed", "failed", "terminated"], "description": "Optional status filter"},
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": []
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_stats",
-            "description": "Get swarm statistics including counts, confidence scores, and execution times.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "user_id": {"type": "string", "description": "User ID for multi-user isolation (optional, default: 'default')"}
-                },
-                "required": []
-            }
-        }
-    },
-]
+# ── HTTP Connection Pool ───────────────────────────────────────────────────────────
+
+class HTTPClientPool:
+    """Shared HTTP client with connection pooling."""
+    
+    _instance: Optional[httpx.AsyncClient] = None
+    _timeout: int = DEFAULT_TIMEOUT
+    
+    @classmethod
+    def get_client(cls, timeout: int = None) -> httpx.AsyncClient:
+        """Get or create the shared async client with connection pooling."""
+        if timeout is not None:
+            cls._timeout = timeout
+        
+        if cls._instance is None:
+            cls._instance = httpx.AsyncClient(
+                timeout=httpx.Timeout(cls._timeout),
+                limits=httpx.Limits(
+                    max_keepalive_connections=20,
+                    max_connections=100,
+                    keepalive_expiry=30.0
+                ),
+                http2=True  # Enable HTTP/2 for better multiplexing
+            )
+        return cls._instance
+    
+    @classmethod
+    async def close(cls):
+        """Close the shared client."""
+        if cls._instance is not None:
+            await cls._instance.aclose()
+            cls._instance = None
+
+
+# ── Retry Logic with Exponential Backoff ─────────────────────────────────────────
+
+def retry_with_backoff(
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+    max_delay: float = 30.0,
+    exponential_base: float = 2.0,
+    retriable_exceptions: tuple = (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError)
+):
+    """Decorator for retrying async functions with exponential backoff."""
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            last_exception = None
+            for attempt in range(max_retries + 1):
+                try:
+                    return await func(*args, **kwargs)
+                except retriable_exceptions as e:
+                    last_exception = e
+                    if attempt < max_retries:
+                        delay = min(base_delay * (exponential_base ** attempt), max_delay)
+                        logger.warning(
+                            f"Attempt {attempt + 1}/{max_retries + 1} failed: {e}. "
+                            f"Retrying in {delay:.1f}s..."
+                        )
+                        await asyncio.sleep(delay)
+                    else:
+                        logger.error(f"All {max_retries + 1} attempts failed")
+            raise last_exception
+        return wrapper
+    return decorator
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -438,13 +235,35 @@ class BaseLLMProvider(ABC):
         self,
         messages: List[Dict],
         model: str,
+        stream: bool = False,
     ) -> Tuple[str, Optional[List[Dict]]]:
         """Send messages to the LLM.
 
+        Args:
+            messages: List of message dicts with 'role' and 'content' keys.
+            model: Model identifier string.
+            stream: If True, return an async iterator yielding content chunks.
+
         Returns:
-            (response_text, tool_calls)
-            tool_calls is None when no tools were invoked.
+            If stream=False: (response_text, tool_calls) - tool_calls is None when no tools were invoked.
+            If stream=True: (async_iterator, None) - iterator yields content chunks for streaming.
         """
+
+    async def stream_chat(
+        self,
+        messages: List[Dict],
+        model: str,
+    ) -> AsyncIterator[str]:
+        """Stream chat response as an async iterator.
+        
+        Default implementation falls back to non-streaming and yields chunks.
+        Override this in subclasses for true streaming support.
+        """
+        response, _ = await self.chat(messages, model, stream=False)
+        # Yield in small chunks to simulate streaming
+        for i in range(0, len(response), 4):
+            yield response[i:i+4]
+            await asyncio.sleep(0.01)
 
 
 # ── Local Providers ────────────────────────────────────────────────────────────
@@ -459,31 +278,56 @@ class OllamaProvider(BaseLLMProvider):
             self.base_url = "http://localhost:11434"
         self.timeout = timeout
 
-    async def chat(self, messages, model="llama3.2"):
+    @retry_with_backoff(max_retries=3, base_delay=1.0)
+    @lru_cache_with_ttl(maxsize=128, ttl=300)
+    async def chat(self, messages, model="llama3.2", stream: bool = False):
         payload = {
             "model": model,
             "messages": messages,
-            "stream": False,
+            "stream": stream,
             "tools": TOOL_SCHEMAS,
         }
         try:
-            async with httpx.AsyncClient() as client:
-                r = await client.post(
-                    f"{self.base_url}/api/chat",
-                    json=payload,
-                    timeout=self.timeout,
-                )
-                r.raise_for_status()
+            # Use pooled client instead of creating new one
+            client = HTTPClientPool.get_client(self.timeout)
+            
+            if stream:
+                # Streaming response
+                async def generate():
+                    async with client.stream("POST", f"{self.base_url}/api/chat", json=payload) as r:
+                        r.raise_for_status()
+                        async for line in r.aiter_lines():
+                            if line.strip():
+                                try:
+                                    data = _json.loads(line)
+                                    if "message" in data and "content" in data["message"]:
+                                        content = data["message"]["content"]
+                                        if content:
+                                            yield content
+                                except _json.JSONDecodeError:
+                                    continue
+                return generate(), None
+            
+            r = await client.post(
+                f"{self.base_url}/api/chat",
+                json=payload,
+            )
             r.raise_for_status()
             msg = r.json()["message"]
             tool_calls = msg.get("tool_calls") or None
-            return msg.get("content", ""), tool_calls
+            result = (msg.get("content", ""), tool_calls)
+            return result
         except httpx.TimeoutException:
             raise TimeoutError(f"Ollama request timed out after {self.timeout}s")
         except httpx.ConnectError as e:
             raise ConnectionError(f"Could not connect to Ollama at {self.base_url}") from e
         except httpx.HTTPStatusError as e:
             raise RuntimeError(f"Ollama HTTP error: {e}") from e
+
+    async def stream_chat(self, messages: List[Dict], model: str = "llama3.2") -> AsyncIterator[str]:
+        """Stream chat response from Ollama."""
+        async for chunk in await self.chat(messages, model, stream=True):
+            yield chunk
 
 
 class OpenAICompatProvider(BaseLLMProvider):
@@ -515,7 +359,25 @@ class OpenAICompatProvider(BaseLLMProvider):
             default_headers=extra_headers or {},
         )
 
-    async def chat(self, messages, model="gpt-4o-mini"):
+    @retry_with_backoff(max_retries=3, base_delay=1.0)
+    @lru_cache_with_ttl(maxsize=128, ttl=300)
+    async def chat(self, messages, model="gpt-4o-mini", stream: bool = False):
+        if stream:
+            # Streaming response
+            async def generate():
+                response = self.client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    tools=TOOL_SCHEMAS,
+                    stream=True,
+                )
+                for chunk in response:
+                    if chunk.choices and len(chunk.choices) > 0:
+                        delta = chunk.choices[0].delta
+                        if delta and delta.content:
+                            yield delta.content
+            return generate(), None
+        
         response = self.client.chat.completions.create(
             model=model,
             messages=messages,
@@ -523,7 +385,13 @@ class OpenAICompatProvider(BaseLLMProvider):
         )
         msg = response.choices[0].message
         tool_calls = _openai_tool_calls_to_dict(msg.tool_calls)
-        return msg.content or "", tool_calls
+        result = (msg.content or "", tool_calls)
+        return result
+
+    async def stream_chat(self, messages: List[Dict], model: str = "gpt-4o-mini") -> AsyncIterator[str]:
+        """Stream chat response from OpenAI-compatible providers."""
+        async for chunk in await self.chat(messages, model, stream=True):
+            yield chunk
 
 
 class LMStudioProvider(OpenAICompatProvider):
@@ -633,7 +501,8 @@ class AnthropicProvider(BaseLLMProvider):
         self.client  = AsyncAnthropic(api_key=api_key)
         self.timeout = timeout
 
-    async def chat(self, messages, model="claude-3-5-sonnet-20241022"):
+    @lru_cache_with_ttl(maxsize=128, ttl=300)
+    async def chat(self, messages, model="claude-3-5-sonnet-20241022", stream: bool = False):
         # Anthropic separates the system prompt from the conversation
         system_content = ""
         conv_messages  = []
@@ -667,6 +536,14 @@ class AnthropicProvider(BaseLLMProvider):
         if system_content.strip():
             kwargs["system"] = system_content.strip()
 
+        if stream:
+            # Streaming response
+            async def generate():
+                async with self.client.messages.stream(**kwargs) as stream_response:
+                    async for text in stream_response.text_stream:
+                        yield text
+            return generate(), None
+
         response = await self.client.messages.create(**kwargs)
 
         text_parts  = []
@@ -684,7 +561,13 @@ class AnthropicProvider(BaseLLMProvider):
                     }
                 })
 
-        return "\n".join(text_parts), (tool_calls or None)
+        result = ("\n".join(text_parts), (tool_calls or None))
+        return result
+
+    async def stream_chat(self, messages: List[Dict], model: str = "claude-3-5-sonnet-20241022") -> AsyncIterator[str]:
+        """Stream chat response from Anthropic."""
+        async for chunk in await self.chat(messages, model, stream=True):
+            yield chunk
 
 
 class GeminiProvider(BaseLLMProvider):
@@ -733,7 +616,8 @@ class GeminiProvider(BaseLLMProvider):
             )
         return [self._genai.protos.Tool(function_declarations=declarations)]
 
-    async def chat(self, messages, model="gemini-1.5-flash"):
+    @lru_cache_with_ttl(maxsize=128, ttl=300)
+    async def chat(self, messages, model="gemini-1.5-flash", stream: bool = False):
         system_parts = []
         history      = []
         last_user    = None
@@ -758,6 +642,17 @@ class GeminiProvider(BaseLLMProvider):
         )
 
         chat_session = gen_model.start_chat(history=history[:-1] if history else [])
+        
+        if stream:
+            # Streaming response
+            async def generate():
+                response = await chat_session.send_message_async(last_user or "", stream=True)
+                async for chunk in response:
+                    for part in chunk.parts:
+                        if hasattr(part, "text") and part.text:
+                            yield part.text
+            return generate(), None
+
         response     = await chat_session.send_message_async(last_user or "")
 
         text_parts = []
@@ -775,7 +670,13 @@ class GeminiProvider(BaseLLMProvider):
                     }
                 })
 
-        return "\n".join(text_parts), (tool_calls or None)
+        result = ("\n".join(text_parts), (tool_calls or None))
+        return result
+
+    async def stream_chat(self, messages: List[Dict], model: str = "gemini-1.5-flash") -> AsyncIterator[str]:
+        """Stream chat response from Gemini."""
+        async for chunk in await self.chat(messages, model, stream=True):
+            yield chunk
 
 
 # ── Provider Factory ──────────────────────────────────────────────────────────
@@ -793,6 +694,9 @@ _PROVIDER_MAP = {
 
 SUPPORTED_PROVIDERS = list(_PROVIDER_MAP.keys())
 
+# Lazy provider caching - only create provider instance when needed
+_provider_cache: dict = {}
+
 
 def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
     """Return an initialised provider instance for *provider_name*.
@@ -803,6 +707,11 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
         ValueError  – API key missing for cloud providers
     """
     name = (provider_name or "ollama").lower().strip()
+    
+    # Return cached provider if already created
+    if name in _provider_cache:
+        return _provider_cache[name]
+    
     cls  = _PROVIDER_MAP.get(name)
     if cls is None:
         raise ValueError(
@@ -810,7 +719,15 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
             f"Supported: {', '.join(SUPPORTED_PROVIDERS)}"
         )
     logger.debug(f"Initialising provider: {name}")
-    return cls(config)
+    provider = cls(config)
+    _provider_cache[name] = provider
+    return provider
+
+
+def clear_provider_cache():
+    """Clear the provider cache (useful for testing or config changes)."""
+    global _provider_cache
+    _provider_cache = {}
 
 
 # ── Legacy alias (keeps old import `from .provider import LLMProvider` working) ─

@@ -12,10 +12,17 @@ from typing import Any, Dict, List, Optional
 
 from .models import (
     SwarmConfig, SwarmInfo, SwarmTask, SwarmResult,
-    SwarmStrategy, AggregationMethod, TaskStatus, MessageType
+    SwarmStrategy, AggregationMethod, TaskStatus, MessageType,
+    ActiveExecution
 )
 from .storage import SwarmStorage
 from .strategies import AggregationEngine, get_strategy
+
+# Import SQLitePool for shared connection (Optimization 4.2)
+try:
+    from myclaw.memory import SQLitePool
+except ImportError:
+    SQLitePool = None
 
 logger = logging.getLogger(__name__)
 
@@ -68,10 +75,23 @@ class SwarmOrchestrator:
         """
         self.agent_registry = agent_registry
         self.config = config
-        self.storage = storage or SwarmStorage()
+        
+        # Optimization 4.2: Use shared SQLite pool for swarm storage
+        # This reduces connection overhead when used alongside other storage
+        if storage is None:
+            pool = SQLitePool if SQLitePool else None
+            self.storage = SwarmStorage(pool=pool)
+        else:
+            self.storage = storage
         
         # Track active swarm executions
         self._active_executions: Dict[str, asyncio.Task] = {}
+        
+        # Semaphore for concurrency control
+        self._semaphore: Optional[asyncio.Semaphore] = None
+        
+        # Result cache for faster retrieval
+        self._result_cache: Dict[str, Any] = {}
         
         # Load swarm configuration
         self._load_config()
@@ -87,6 +107,9 @@ class SwarmOrchestrator:
             self.enabled = getattr(swarm_config, 'enabled', True)
             self.max_concurrent_swarms = getattr(swarm_config, 'max_concurrent_swarms', 3)
             self.default_timeout = getattr(swarm_config, 'timeout_seconds', 300)
+        
+        # Initialize semaphore for concurrency control
+        self._semaphore = asyncio.Semaphore(self.max_concurrent_swarms)
     
     async def create_swarm(
         self,
@@ -146,11 +169,35 @@ class SwarmOrchestrator:
         logger.info(f"Created swarm {swarm_id} ({config.name}) for user {user_id}")
         return swarm_id
     
+    async def execute(
+        self,
+        swarm_id: str,
+        task_description: str,
+        input_data: Optional[Dict[str, Any]] = None,
+        timeout: Optional[float] = None
+    ) -> SwarmResult:
+        """4.1: Execute a task using the specified swarm with timeout enforcement.
+        
+        This is the primary method for executing swarm tasks with proper timeout
+        and cancellation handling.
+        
+        Args:
+            swarm_id: Swarm identifier
+            task_description: Task description/prompt
+            input_data: Optional structured input data
+            timeout: Optional timeout in seconds (uses default if not specified)
+            
+        Returns:
+            SwarmResult with aggregated output
+        """
+        return await self.execute_task(swarm_id, task_description, input_data, timeout)
+    
     async def execute_task(
         self,
         swarm_id: str,
         task_description: str,
-        input_data: Optional[Dict[str, Any]] = None
+        input_data: Optional[Dict[str, Any]] = None,
+        timeout: Optional[float] = None
     ) -> SwarmResult:
         """
         Execute a task using the specified swarm.
@@ -159,6 +206,7 @@ class SwarmOrchestrator:
             swarm_id: Swarm identifier
             task_description: Task description/prompt
             input_data: Optional structured input data
+            timeout: Optional timeout in seconds (uses default if not specified)
             
         Returns:
             SwarmResult with aggregated output
@@ -199,8 +247,8 @@ class SwarmOrchestrator:
             self.storage
         )
         
-        # Execute with timeout
-        timeout = self.default_timeout
+        # Execute with timeout (use provided timeout or fall back to default)
+        timeout = timeout if timeout is not None else self.default_timeout
         try:
             result = await asyncio.wait_for(
                 strategy.execute(
@@ -258,7 +306,8 @@ class SwarmOrchestrator:
         self,
         swarm_id: str,
         task_description: str,
-        input_data: Optional[Dict[str, Any]] = None
+        input_data: Optional[Dict[str, Any]] = None,
+        timeout: Optional[float] = None
     ) -> str:
         """
         Start async task execution and return immediately.
@@ -267,23 +316,40 @@ class SwarmOrchestrator:
             swarm_id: Swarm identifier
             task_description: Task description
             input_data: Optional input data
+            timeout: Optional timeout in seconds
             
         Returns:
             Task ID for status tracking
         """
         task_id = f"async_task_{uuid.uuid4().hex[:8]}"
         
-        # Create async task
-        execution_task = asyncio.create_task(
-            self.execute_task(swarm_id, task_description, input_data)
+        # Save execution state for crash recovery (Optimization 4.4)
+        self.storage.save_execution_state(
+            execution_id=task_id,
+            swarm_id=swarm_id,
+            task_description=task_description,
+            input_data=input_data
         )
+        
+        # Optimization 4.5: Semaphore-based concurrency control
+        # Define the task to run with semaphore
+        async def run_with_semaphore():
+            async with self._semaphore:
+                return await self.execute_task(swarm_id, task_description, input_data, timeout)
+
+        # Create async task
+        execution_task = asyncio.create_task(run_with_semaphore())
         
         self._active_executions[task_id] = execution_task
         
         # Clean up when done
-        execution_task.add_done_callback(
-            lambda t: self._active_executions.pop(task_id, None)
-        )
+        def cleanup(done_task):
+            # Remove from active executions
+            self._active_executions.pop(task_id, None)
+            # Remove execution state from persistent storage (Optimization 4.4)
+            self.storage.remove_execution_state(task_id)
+        
+        execution_task.add_done_callback(cleanup)
         
         return task_id
     
@@ -478,3 +544,47 @@ class SwarmOrchestrator:
             "avg_confidence": round(avg_confidence, 2),
             "avg_execution_time": round(avg_execution_time, 2),
         }
+    
+    def load_active_executions(self) -> List[Dict[str, Any]]:
+        """Load and recover active executions from persistent storage.
+        
+        Optimization 4.4: Persistent active execution tracking
+        
+        This method is called on orchestrator startup to recover any executions
+        that were running when the orchestrator last stopped. It loads the
+        execution states from SQLite and returns information about them.
+        
+        The caller can use this information to decide whether to:
+        - Reschedule/resume the execution
+        - Mark the execution as failed/terminated
+        - Notify users about interrupted executions
+        
+        Returns:
+            List of dictionaries containing execution information:
+            - execution_id: Unique identifier
+            - swarm_id: Swarm being executed
+            - task_description: Task description
+            - input_data: Input data
+            - started_at: When execution started
+            - updated_at: Last status update
+        """
+        # First, recover any stale executions (likely crashed)
+        recovered_count = self.storage.recover_stale_executions()
+        
+        # Load all active executions
+        active_executions = self.storage.load_active_executions()
+        
+        logger.info(f"Loaded {len(active_executions)} active executions from storage")
+        
+        # Convert to dictionaries for return
+        return [
+            {
+                "execution_id": exec.execution_id,
+                "swarm_id": exec.swarm_id,
+                "task_description": exec.task_description,
+                "input_data": exec.input_data,
+                "started_at": exec.started_at.isoformat(),
+                "updated_at": exec.updated_at.isoformat(),
+            }
+            for exec in active_executions
+        ]
