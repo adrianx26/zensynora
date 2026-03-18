@@ -120,7 +120,7 @@ class KnowledgeDB:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)")
         
         # Optimization 3.2: Composite indexes for graph queries
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type_name ON entities(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type_name ON entities(type, name)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from_type ON relations(from_entity_id, relation_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to_type ON relations(to_entity_id, relation_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity_category ON observations(entity_id, category)")
@@ -202,7 +202,7 @@ class KnowledgeDB:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_type ON relations(relation_type)")
         
         # Optimization 3.2: Composite indexes for graph queries
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type_name ON entities(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type_name ON entities(type, name)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from_type ON relations(from_entity_id, relation_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to_type ON relations(to_entity_id, relation_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity_category ON observations(entity_id, category)")

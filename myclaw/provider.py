@@ -37,6 +37,135 @@ import requests
 from .tools import TOOL_SCHEMAS
 
 
+# ── Swarm Tool Schemas ──────────────────────────────────────────────────────────────────
+# Explicit schemas for swarm tools as per agent_swarm_implementation_plan.md
+
+SWARM_TOOL_SCHEMAS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_create",
+            "description": "Create a new agent swarm for collaborative task execution",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Name for the swarm"},
+                    "strategy": {
+                        "type": "string",
+                        "enum": ["parallel", "sequential", "hierarchical", "voting"],
+                        "description": "Execution strategy for the swarm"
+                    },
+                    "workers": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of worker agent names"
+                    },
+                    "coordinator": {
+                        "type": "string",
+                        "description": "Coordinator agent name (required for hierarchical strategy)"
+                    },
+                    "aggregation": {
+                        "type": "string",
+                        "enum": ["consensus", "best_pick", "concatenation", "synthesis"],
+                        "description": "Method for aggregating results",
+                        "default": "synthesis"
+                    }
+                },
+                "required": ["name", "strategy", "workers"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_assign",
+            "description": "Assign a task to a swarm for execution",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "swarm_id": {"type": "string", "description": "The swarm identifier"},
+                    "task": {"type": "string", "description": "Task description/prompt"},
+                    "user_id": {"type": "string", "description": "User identifier", "default": "default"}
+                },
+                "required": ["swarm_id", "task"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_status",
+            "description": "Get the current status of a swarm execution",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "swarm_id": {"type": "string", "description": "The swarm identifier"}
+                },
+                "required": ["swarm_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_result",
+            "description": "Get the final aggregated result from a swarm execution",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "swarm_id": {"type": "string", "description": "The swarm identifier"}
+                },
+                "required": ["swarm_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_terminate",
+            "description": "Force terminate a running swarm",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "swarm_id": {"type": "string", "description": "The swarm identifier to terminate"}
+                },
+                "required": ["swarm_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_list",
+            "description": "List all swarms, optionally filtered by status",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "status": {
+                        "type": "string",
+                        "description": "Optional status filter (pending, running, completed, failed)"
+                    },
+                    "user_id": {"type": "string", "description": "User identifier", "default": "default"}
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "swarm_stats",
+            "description": "Get swarm statistics for a user",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "user_id": {"type": "string", "description": "User identifier", "default": "default"}
+                }
+            }
+        }
+    }
+]
+
+
 # ── LRU Cache with TTL Decorator ─────────────────────────────────────────────────
 
 class LRUCacheWithTTL:

@@ -19,6 +19,14 @@ from .knowledge import (
 )
 from .knowledge.storage import get_knowledge_dir
 
+# Module-level config reference for timeout settings
+_config = None
+
+def set_config(config):
+    """Called by gateway to provide config for timeout settings."""
+    global _config
+    _config = config
+
 logger = logging.getLogger(__name__)
 
 WORKSPACE         = Path.home() / ".myclaw" / "workspace"
@@ -288,9 +296,13 @@ def shell(cmd: str) -> str:
             return f"Error: Command '{first_cmd}' is blocked for security"
         if first_cmd not in ALLOWED_COMMANDS:
             return f"Error: '{first_cmd}' not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
+        # Get timeout from config (default 30 seconds)
+        timeout = 30
+        if _config and hasattr(_config, 'timeouts'):
+            timeout = _config.timeouts.shell_seconds
         result = subprocess.run(
             parts, shell=False, cwd=WORKSPACE,
-            capture_output=True, text=True, timeout=30
+            capture_output=True, text=True, timeout=timeout
         )
         duration_ms = (time.time() - start_time) * 1000
         # 5.4: Audit logging
@@ -299,7 +311,7 @@ def shell(cmd: str) -> str:
     except subprocess.TimeoutExpired:
         duration_ms = (time.time() - start_time) * 1000
         _tool_audit_logger.log("shell", "", duration_ms, False, "Command timed out")
-        return "Error: Command timed out after 30 seconds"
+        return f"Error: Command timed out after {timeout} seconds"
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         _tool_audit_logger.log("shell", "", duration_ms, False, str(e))
