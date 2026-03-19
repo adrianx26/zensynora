@@ -12,6 +12,13 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from collections import defaultdict
 
+from .exceptions import (
+    ToolValidationError,
+    ToolPermissionError,
+    ToolNotFoundError,
+    KnowledgeBaseError,
+    KnowledgeNotFoundError,
+)
 from .knowledge import (
     write_note, read_note, delete_note, list_notes, search_notes,
     get_related_entities, build_context, sync_knowledge, get_all_tags,
@@ -189,10 +196,20 @@ def validate_path(path: str) -> Path:
     try:
         target = (workspace / path).resolve()
         if not str(target).startswith(str(workspace)):
-            raise ValueError(f"Path traversal detected: {path}")
+            raise ToolPermissionError(
+                f"Path traversal detected: {path}",
+                reason="Path traversal attempt blocked",
+                tool_name="validate_path"
+            )
         return target
+    except ToolPermissionError:
+        raise
     except Exception as e:
-        raise ValueError(f"Invalid path: {path}") from e
+        raise ToolValidationError(
+            f"Invalid path: {path}",
+            tool_name="validate_path",
+            validation_errors={"path": str(e)}
+        ) from e
 
 
 async def shell_async(cmd: str, timeout: int = 30) -> str:
@@ -868,9 +885,19 @@ def split_schedule(job_id: str, sub_tasks_json: str) -> str:
     try:
         tasks = json.loads(sub_tasks_json)
         if not isinstance(tasks, list):
-            raise ValueError()
-    except:
-        return "Error: sub_tasks_json must be a valid JSON array of strings."
+            raise ToolValidationError(
+                "sub_tasks_json must be a valid JSON array of strings",
+                tool_name="schedule_complex_task",
+                validation_errors={"sub_tasks_json": "Must be a JSON array"}
+            )
+    except json.JSONDecodeError as e:
+        raise ToolValidationError(
+            "Invalid JSON in sub_tasks_json",
+            tool_name="schedule_complex_task",
+            validation_errors={"sub_tasks_json": str(e)}
+        )
+    except ToolValidationError:
+        raise
         
     job = jobs[0]
     data = job.data or {}

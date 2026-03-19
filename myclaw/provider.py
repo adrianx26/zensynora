@@ -34,6 +34,13 @@ from collections import OrderedDict
 import httpx
 import requests
 
+from .exceptions import (
+    ProviderError,
+    ProviderNotFoundError,
+    ProviderTimeoutError,
+    ProviderConnectionError,
+    ProviderAuthenticationError,
+)
 from .tools import TOOL_SCHEMAS
 
 
@@ -447,11 +454,19 @@ class OllamaProvider(BaseLLMProvider):
             result = (msg.get("content", ""), tool_calls)
             return result
         except httpx.TimeoutException:
-            raise TimeoutError(f"Ollama request timed out after {self.timeout}s")
+            raise ProviderTimeoutError(
+                f"Ollama request timed out after {self.timeout}s",
+                timeout_seconds=self.timeout,
+                provider="ollama"
+            )
         except httpx.ConnectError as e:
-            raise ConnectionError(f"Could not connect to Ollama at {self.base_url}") from e
+            raise ProviderConnectionError(
+                f"Could not connect to Ollama at {self.base_url}",
+                provider="ollama",
+                base_url=self.base_url
+            ) from e
         except httpx.HTTPStatusError as e:
-            raise RuntimeError(f"Ollama HTTP error: {e}") from e
+            raise ProviderError(f"Ollama HTTP error: {e}") from e
 
     async def stream_chat(self, messages: List[Dict], model: str = "llama3.2") -> AsyncIterator[str]:
         """Stream chat response from Ollama."""
@@ -565,7 +580,10 @@ class OpenAIProvider(OpenAICompatProvider):
             api_key  = ""
             base_url = "https://api.openai.com/v1"
         if not api_key:
-            raise ValueError("openai.api_key is not set in config.")
+            raise ProviderAuthenticationError(
+                "openai.api_key is not set in config.",
+                provider="openai"
+            )
         super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
 
 
@@ -581,7 +599,10 @@ class GroqProvider(OpenAICompatProvider):
             api_key  = ""
             base_url = "https://api.groq.com/openai/v1"
         if not api_key:
-            raise ValueError("groq.api_key is not set in config.")
+            raise ProviderAuthenticationError(
+                "groq.api_key is not set in config.",
+                provider="groq"
+            )
         super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
 
 
@@ -601,7 +622,10 @@ class OpenRouterProvider(OpenAICompatProvider):
             site_url  = ""
             site_name = ""
         if not api_key:
-            raise ValueError("openrouter.api_key is not set in config.")
+            raise ProviderAuthenticationError(
+                "openrouter.api_key is not set in config.",
+                provider="openrouter"
+            )
         headers = {}
         if site_url:
             headers["X-OpenRouter-Site-URL"] = site_url
@@ -626,7 +650,10 @@ class AnthropicProvider(BaseLLMProvider):
         except Exception:
             api_key = ""
         if not api_key:
-            raise ValueError("anthropic.api_key is not set in config.")
+            raise ProviderAuthenticationError(
+                "anthropic.api_key is not set in config.",
+                provider="anthropic"
+            )
         self.client  = AsyncAnthropic(api_key=api_key)
         self.timeout = timeout
 
@@ -715,7 +742,10 @@ class GeminiProvider(BaseLLMProvider):
         except Exception:
             api_key = ""
         if not api_key:
-            raise ValueError("gemini.api_key is not set in config.")
+            raise ProviderAuthenticationError(
+                "gemini.api_key is not set in config.",
+                provider="gemini"
+            )
         genai.configure(api_key=api_key)
         self._genai    = genai
         self.timeout   = timeout
@@ -843,9 +873,10 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
     
     cls  = _PROVIDER_MAP.get(name)
     if cls is None:
-        raise ValueError(
-            f"Unknown provider '{name}'. "
-            f"Supported: {', '.join(SUPPORTED_PROVIDERS)}"
+        raise ProviderNotFoundError(
+            f"Unknown provider '{name}'.",
+            provider_name=name,
+            available_providers=list(SUPPORTED_PROVIDERS)
         )
     logger.debug(f"Initialising provider: {name}")
     provider = cls(config)

@@ -11,6 +11,8 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 import json
 
+from ...exceptions import SwarmValidationError
+
 
 class SwarmStrategy(Enum):
     """Available swarm execution strategies."""
@@ -72,9 +74,15 @@ class SwarmConfig:
     def __post_init__(self):
         """Validate configuration."""
         if self.strategy == SwarmStrategy.HIERARCHICAL and not self.coordinator:
-            raise ValueError("Hierarchical strategy requires a coordinator agent")
+            raise SwarmValidationError(
+                "Hierarchical strategy requires a coordinator agent",
+                validation_errors={"coordinator": "Required for HIERARCHICAL strategy"}
+            )
         if not self.workers:
-            raise ValueError("At least one worker agent is required")
+            raise SwarmValidationError(
+                "At least one worker agent is required",
+                validation_errors={"workers": "Cannot be empty"}
+            )
 
 
 @dataclass

@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
+from ..exceptions import KnowledgeBaseError, KnowledgeParseError
 from .parser import Note, Observation, Relation, parse_note, generate_markdown
 from .db import KnowledgeDB
 
@@ -37,7 +38,7 @@ def validate_permalink(permalink: str) -> str:
         ValueError: If permalink is invalid
     """
     if not permalink:
-        raise ValueError("Permalink cannot be empty")
+        raise KnowledgeBaseError("Permalink cannot be empty")
     
     # Convert to lowercase, replace spaces with hyphens
     cleaned = permalink.lower().strip()
@@ -46,7 +47,10 @@ def validate_permalink(permalink: str) -> str:
     cleaned = cleaned.strip('-')
     
     if not cleaned:
-        raise ValueError(f"Invalid permalink: {permalink}")
+        raise KnowledgeParseError(
+            f"Invalid permalink: {permalink}",
+            permalink=permalink
+        )
     
     return cleaned
 
@@ -58,7 +62,8 @@ def write_note(
     relations: List[Relation] = None,
     tags: List[str] = None,
     user_id: str = "default",
-    content: Optional[str] = None  # Optional raw content
+    content: Optional[str] = None,  # Optional raw content
+    db_path: Optional[Path] = None
 ) -> str:
     """
     Write a new note to the knowledge base.
@@ -105,13 +110,13 @@ def write_note(
     logger.info(f"Created note: {file_path}")
     
     # Sync to database
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         db.sync_entity_from_note(parse_note(file_path))
     
     return permalink
 
 
-def read_note(permalink: str, user_id: str = "default") -> Optional[Note]:
+def read_note(permalink: str, user_id: str = "default", db_path: Optional[Path] = None) -> Optional[Note]:
     """
     Read a note from the knowledge base.
     
@@ -131,7 +136,7 @@ def read_note(permalink: str, user_id: str = "default") -> Optional[Note]:
     return parse_note(file_path)
 
 
-def delete_note(permalink: str, user_id: str = "default") -> bool:
+def delete_note(permalink: str, user_id: str = "default", db_path: Optional[Path] = None) -> bool:
     """
     Delete a note from the knowledge base.
     
@@ -152,7 +157,7 @@ def delete_note(permalink: str, user_id: str = "default") -> bool:
     file_path.unlink()
     
     # Remove from database
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         db.delete_entity(permalink)
     
     logger.info(f"Deleted note: {permalink}")
@@ -161,7 +166,8 @@ def delete_note(permalink: str, user_id: str = "default") -> bool:
 
 def list_notes(
     user_id: str = "default",
-    tags: Optional[List[str]] = None
+    tags: Optional[List[str]] = None,
+    db_path: Optional[Path] = None
 ) -> List[Note]:
     """
     List all notes in the knowledge base.
@@ -191,7 +197,7 @@ def list_notes(
     return notes
 
 
-def update_note(permalink: str, user_id: str = "default", **kwargs) -> bool:
+def update_note(permalink: str, user_id: str = "default", db_path: Optional[Path] = None, **kwargs) -> bool:
     """
     Update an existing note.
     
@@ -203,7 +209,7 @@ def update_note(permalink: str, user_id: str = "default", **kwargs) -> bool:
     Returns:
         True if updated, False if not found
     """
-    note = read_note(permalink, user_id)
+    note = read_note(permalink, user_id, db_path=db_path)
     if not note:
         return False
     
@@ -224,7 +230,7 @@ def update_note(permalink: str, user_id: str = "default", **kwargs) -> bool:
     note.file_path.write_text(content, encoding='utf-8')
     
     # Resync to database
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         db.sync_entity_from_note(note)
     
     logger.info(f"Updated note: {permalink}")
@@ -234,7 +240,8 @@ def update_note(permalink: str, user_id: str = "default", **kwargs) -> bool:
 def search_notes(
     query: str,
     user_id: str = "default",
-    limit: int = 10
+    limit: int = 10,
+    db_path: Optional[Path] = None
 ) -> List[Note]:
     """
     Search notes using FTS5.
@@ -247,19 +254,19 @@ def search_notes(
     Returns:
         List of matching Note objects
     """
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         entities = db.search_fts(query, limit)
     
     notes = []
     for entity in entities:
-        note = read_note(entity.permalink, user_id)
+        note = read_note(entity.permalink, user_id, db_path=db_path)
         if note:
             notes.append(note)
     
     return notes
 
 
-def get_note_by_tag(tag: str, user_id: str = "default") -> List[Note]:
+def get_note_by_tag(tag: str, user_id: str = "default", db_path: Optional[Path] = None) -> List[Note]:
     """
     Get all notes with a specific tag.
     
@@ -270,19 +277,19 @@ def get_note_by_tag(tag: str, user_id: str = "default") -> List[Note]:
     Returns:
         List of matching Note objects
     """
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         entities = db.search_by_tag(tag)
     
     notes = []
     for entity in entities:
-        note = read_note(entity.permalink, user_id)
+        note = read_note(entity.permalink, user_id, db_path=db_path)
         if note:
             notes.append(note)
     
     return notes
 
 
-def get_all_tags(user_id: str = "default") -> List[str]:
+def get_all_tags(user_id: str = "default", db_path: Optional[Path] = None) -> List[str]:
     """
     Get all unique tags from all notes.
     
@@ -293,7 +300,7 @@ def get_all_tags(user_id: str = "default") -> List[str]:
         Sorted list of unique tags
     """
     tags = set()
-    for note in list_notes(user_id):
+    for note in list_notes(user_id, db_path=db_path):
         tags.update(note.tags)
         for obs in note.observations:
             tags.update(obs.tags)

@@ -10,6 +10,13 @@ import logging
 import uuid
 from typing import Any, Dict, List, Optional
 
+from ..exceptions import (
+    SwarmError,
+    SwarmNotFoundError,
+    SwarmValidationError,
+    SwarmConcurrencyError,
+    AgentNotFoundError,
+)
 from .models import (
     SwarmConfig, SwarmInfo, SwarmTask, SwarmResult,
     SwarmStrategy, AggregationMethod, TaskStatus, MessageType,
@@ -131,14 +138,16 @@ class SwarmOrchestrator:
             ValueError: If configuration is invalid
         """
         if not self.enabled:
-            raise RuntimeError("Swarm functionality is disabled")
+            raise SwarmError("Swarm functionality is disabled")
         
         # Check concurrent limit
         active_count = self.storage.count_active_swarms(user_id)
         if active_count >= self.max_concurrent_swarms:
-            raise RuntimeError(
+            raise SwarmConcurrencyError(
                 f"Maximum concurrent swarms ({self.max_concurrent_swarms}) reached. "
-                "Terminate some swarms before creating new ones."
+                "Terminate some swarms before creating new ones.",
+                max_concurrent=self.max_concurrent_swarms,
+                current_count=active_count
             )
         
         # Validate agents exist
@@ -149,9 +158,10 @@ class SwarmOrchestrator:
         missing = [name for name in all_agents if name not in self.agent_registry]
         if missing:
             available = ", ".join(self.agent_registry.keys())
-            raise ValueError(
-                f"Agents not found in registry: {', '.join(missing)}. "
-                f"Available: {available}"
+            raise AgentNotFoundError(
+                f"Agents not found in registry: {', '.join(missing)}.",
+                agent_name=", ".join(missing),
+                available_agents=list(self.agent_registry.keys())
             )
         
         # Create swarm in storage
@@ -214,10 +224,13 @@ class SwarmOrchestrator:
         # Get swarm info
         swarm_info = self.storage.get_swarm(swarm_id)
         if not swarm_info:
-            raise ValueError(f"Swarm {swarm_id} not found")
+            raise SwarmNotFoundError(
+                f"Swarm {swarm_id} not found",
+                swarm_id=swarm_id
+            )
         
         if swarm_info.status == TaskStatus.RUNNING:
-            raise RuntimeError(f"Swarm {swarm_id} is already running a task")
+            raise SwarmError(f"Swarm {swarm_id} is already running a task")
         
         # Update status
         self.storage.update_swarm_status(swarm_id, TaskStatus.RUNNING)

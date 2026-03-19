@@ -59,29 +59,32 @@ def scan_markdown_files(user_id: str = "default") -> Set[Path]:
     return set(knowledge_dir.glob("*.md"))
 
 
-def get_db_file_mapping(user_id: str = "default") -> Dict[str, str]:
+def get_db_file_mapping(user_id: str = "default", db_path: Path = None) -> Dict[str, str]:
     """
     Get mapping of permalinks to file paths from database.
     
     Args:
         user_id: User ID for isolation
+        db_path: Optional path to database
         
     Returns:
         Dict mapping permalink -> file_path
     """
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         entities = db.list_all_entities()
         return {e.permalink: e.file_path for e in entities}
 
 
 def detect_changes(
-    user_id: str = "default"
+    user_id: str = "default",
+    db_path: Path = None
 ) -> Tuple[List[Path], List[str], List[str]]:
     """
     Detect changes between filesystem and database.
     
     Args:
         user_id: User ID for isolation
+        db_path: Optional path to database
         
     Returns:
         Tuple of (to_add, to_update, to_delete)
@@ -90,7 +93,7 @@ def detect_changes(
         - to_delete: List of permalinks to remove
     """
     files = scan_markdown_files(user_id)
-    db_mapping = get_db_file_mapping(user_id)
+    db_mapping = get_db_file_mapping(user_id, db_path=db_path)
     
     to_add = []
     to_update = []
@@ -109,7 +112,7 @@ def detect_changes(
             else:
                 # Check if file was modified
                 db_entity = None
-                with KnowledgeDB(user_id) as db:
+                with KnowledgeDB(user_id, db_path=db_path) as db:
                     db_entity = db.get_entity_by_permalink(note.permalink)
                 
                 if db_entity:
@@ -137,20 +140,21 @@ def detect_changes(
     return to_add, to_update, to_delete
 
 
-def sync_knowledge(user_id: str = "default", force: bool = False) -> Dict[str, int]:
+def sync_knowledge(user_id: str = "default", force: bool = False, db_path: Path = None) -> Dict[str, int]:
     """
     Synchronize filesystem with database.
     
     Args:
         user_id: User ID for isolation
         force: If True, re-sync all files regardless of timestamps
+        db_path: Optional path to database
         
     Returns:
         Stats dict with counts of added, updated, deleted, errors
     """
     stats = {"added": 0, "updated": 0, "deleted": 0, "errors": 0}
     
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         if force:
             # Full re-sync: clear and re-add all
             logger.info("Performing full re-sync...")
@@ -175,7 +179,7 @@ def sync_knowledge(user_id: str = "default", force: bool = False) -> Dict[str, i
                     logger.error(f"Failed to sync {file_path}: {e}")
         else:
             # Incremental sync
-            to_add, to_update, to_delete = detect_changes(user_id)
+            to_add, to_update, to_delete = detect_changes(user_id, db_path=db_path)
             
             # Add new files
             for file_path in to_add:

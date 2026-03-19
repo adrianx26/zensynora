@@ -9,6 +9,8 @@ from contextlib import contextmanager
 from typing import List, Dict, Optional
 from functools import lru_cache
 
+from .exceptions import MemoryError, MemoryQueryError
+
 logger = logging.getLogger(__name__)
 
 # Import knowledge storage for extraction
@@ -266,7 +268,12 @@ class Memory:
                 columns = ["role", "content"]
             allowed_columns = {"id", "role", "content", "timestamp"}
             if not set(columns).issubset(allowed_columns):
-                raise ValueError(f"Invalid column(s). Allowed columns are: {allowed_columns}")
+                from .exceptions import MemoryValidationError
+                raise MemoryValidationError(
+                    f"Invalid column(s). Allowed columns are: {allowed_columns}",
+                    column=", ".join(set(columns) - set(allowed_columns)),
+                    allowed_values=allowed_columns
+                )
 
             # Check cache first
             columns_tuple = tuple(columns)

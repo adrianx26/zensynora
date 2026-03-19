@@ -100,11 +100,7 @@ class TestDatabase:
     def db(self):
         """Create a temporary database for testing."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            db = KnowledgeDB(user_id="test")
-            # Override the database path
-            db.db_path = Path(tmpdir) / "test.db"
-            db._conn = None
-            db._init_db()
+            db = KnowledgeDB(user_id="test", db_path=Path(tmpdir) / "test.db")
             yield db
             db.close()
     
@@ -157,11 +153,10 @@ class TestStorage:
     def setup_teardown(self):
         """Setup and cleanup for storage tests."""
         import myclaw.knowledge.storage as storage
-        # Save original
         original_dir = storage.get_knowledge_dir
         
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Override knowledge directory
+            self.temp_db = Path(tmpdir) / "test.db"
             def mock_get_knowledge_dir(user_id="default"):
                 path = Path(tmpdir) / user_id
                 path.mkdir(parents=True, exist_ok=True)
@@ -179,12 +174,13 @@ class TestStorage:
                 Observation(category="fact", content="This is a test", tags=[])
             ],
             tags=["test"],
-            user_id="test"
+            user_id="test",
+            db_path=self.temp_db
         )
         
         assert permalink == "test-note"
         
-        note = read_note(permalink, user_id="test")
+        note = read_note(permalink, user_id="test", db_path=self.temp_db)
         assert note is not None
         assert note.title == "Test Note"
         assert len(note.observations) == 1
@@ -194,30 +190,32 @@ class TestStorage:
         permalink = write_note(
             name="To Delete",
             title="To Delete",
-            user_id="test"
+            user_id="test",
+            db_path=self.temp_db
         )
         
-        assert delete_note(permalink, user_id="test") is True
-        assert read_note(permalink, user_id="test") is None
-        assert delete_note(permalink, user_id="test") is False
+        assert delete_note(permalink, user_id="test", db_path=self.temp_db) is True
+        assert read_note(permalink, user_id="test", db_path=self.temp_db) is None
+        assert delete_note(permalink, user_id="test", db_path=self.temp_db) is False
     
     def test_list_notes(self):
-        write_note(name="Note 1", title="Note 1", tags=["work"], user_id="test")
-        write_note(name="Note 2", title="Note 2", tags=["personal"], user_id="test")
-        write_note(name="Note 3", title="Note 3", tags=["work"], user_id="test")
+        write_note(name="Note 1", title="Note 1", tags=["work"], user_id="test", db_path=self.temp_db)
+        write_note(name="Note 2", title="Note 2", tags=["personal"], user_id="test", db_path=self.temp_db)
+        write_note(name="Note 3", title="Note 3", tags=["work"], user_id="test", db_path=self.temp_db)
         
-        all_notes = list_notes(user_id="test")
+        all_notes = list_notes(user_id="test", db_path=self.temp_db)
         assert len(all_notes) == 3
         
-        work_notes = list_notes(user_id="test", tags=["work"])
+        work_notes = list_notes(user_id="test", tags=["work"], db_path=self.temp_db)
         assert len(work_notes) == 2
     
     def test_validate_permalink(self):
+        from myclaw.exceptions import KnowledgeBaseError
         assert validate_permalink("Hello World") == "hello-world"
         assert validate_permalink("Test-Note-123") == "test-note-123"
         assert validate_permalink("  Spaces  ") == "spaces"
         
-        with pytest.raises(ValueError):
+        with pytest.raises(KnowledgeBaseError):
             validate_permalink("")
 
 
@@ -228,17 +226,22 @@ class TestGraph:
     def setup_teardown(self):
         """Setup and cleanup for graph tests."""
         import myclaw.knowledge.storage as storage
-        original_dir = storage.get_knowledge_dir
+        import myclaw.knowledge.sync as sync
+        original_storage_dir = storage.get_knowledge_dir
+        original_sync_dir = sync.get_knowledge_dir
         
         with tempfile.TemporaryDirectory() as tmpdir:
+            self.temp_db = Path(tmpdir) / "test.db"
             def mock_get_knowledge_dir(user_id="default"):
                 path = Path(tmpdir) / user_id
                 path.mkdir(parents=True, exist_ok=True)
                 return path
             
             storage.get_knowledge_dir = mock_get_knowledge_dir
+            sync.get_knowledge_dir = mock_get_knowledge_dir
             yield
-            storage.get_knowledge_dir = original_dir
+            storage.get_knowledge_dir = original_storage_dir
+            sync.get_knowledge_dir = original_sync_dir
     
     def test_get_related_entities(self):
         # Create related notes
@@ -246,19 +249,21 @@ class TestGraph:
             name="Project Alpha",
             title="Project Alpha",
             relations=[Relation("depends_on", "infrastructure")],
-            user_id="test"
+            user_id="test",
+            db_path=self.temp_db
         )
         write_note(
             name="Infrastructure",
             title="Infrastructure",
-            user_id="test"
+            user_id="test",
+            db_path=self.temp_db
         )
         
         # Sync to database
-        sync_knowledge(user_id="test", force=True)
+        sync_knowledge(user_id="test", force=True, db_path=self.temp_db)
         
         # Test graph traversal
-        related = get_related_entities("project-alpha", user_id="test", depth=1)
+        related = get_related_entities("project-alpha", user_id="test", depth=1, db_path=self.temp_db)
         assert len(related) >= 0  # May be empty if relation not found
 
 
@@ -267,33 +272,44 @@ class TestGraph:
 class TestSync:
     @pytest.fixture(autouse=True)
     def setup_teardown(self):
+        """Setup and cleanup for sync tests."""
         import myclaw.knowledge.storage as storage
-        original_dir = storage.get_knowledge_dir
+        import myclaw.knowledge.sync as sync
+        original_storage_dir = storage.get_knowledge_dir
+        original_sync_dir = sync.get_knowledge_dir
         
         with tempfile.TemporaryDirectory() as tmpdir:
+            self.temp_db = Path(tmpdir) / "test.db"
             def mock_get_knowledge_dir(user_id="default"):
                 path = Path(tmpdir) / user_id
                 path.mkdir(parents=True, exist_ok=True)
                 return path
             
             storage.get_knowledge_dir = mock_get_knowledge_dir
+            sync.get_knowledge_dir = mock_get_knowledge_dir
             yield
-            storage.get_knowledge_dir = original_dir
+            storage.get_knowledge_dir = original_storage_dir
+            sync.get_knowledge_dir = original_sync_dir
     
     def test_sync_knowledge(self):
-        # Create some notes
-        write_note(name="Note 1", title="Note 1", user_id="test")
-        write_note(name="Note 2", title="Note 2", user_id="test")
+        # Create some notes manually to test sync
+        import myclaw.knowledge.storage as storage
+        knowledge_dir = storage.get_knowledge_dir("test")
+        
+        # Note 1
+        (knowledge_dir / "note-1.md").write_text("---\ntitle: Note 1\npermalink: note-1\n---\n\n# Note 1", encoding='utf-8')
+        # Note 2
+        (knowledge_dir / "note-2.md").write_text("---\ntitle: Note 2\npermalink: note-2\n---\n\n# Note 2", encoding='utf-8')
         
         # Sync
-        stats = sync_knowledge(user_id="test")
+        stats = sync_knowledge(user_id="test", force=False, db_path=self.temp_db)
         
         assert stats['added'] == 2
         assert stats['updated'] == 0
         assert stats['deleted'] == 0
         
         # Re-sync should find nothing new
-        stats = sync_knowledge(user_id="test")
+        stats = sync_knowledge(user_id="test", force=False, db_path=self.temp_db)
         assert stats['added'] == 0
 
 
