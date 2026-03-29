@@ -1,7 +1,8 @@
 from .memory import Memory
 from .provider import get_provider, SUPPORTED_PROVIDERS
-from .tools import TOOLS, trigger_hook, _HOOKS
+from .tools import TOOLS, trigger_hook, _HOOKS, get_parallel_executor, is_tool_independent
 from .knowledge import search_notes, build_context
+from .skill_preloader import get_skill_preloader, start_preloader, stop_preloader
 from rich.console import Console
 import json
 import logging
@@ -10,7 +11,7 @@ import inspect
 import re
 import threading
 from pathlib import Path
-from typing import AsyncIterator
+from typing import AsyncIterator, List, Dict, Tuple, Optional
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -123,15 +124,19 @@ class Agent:
         if dialectic_path.exists():
             dialectic_content = dialectic_path.read_text(encoding="utf-8").strip()
             if dialectic_content and dialectic_content != self.system_prompt:
-                # Append dialectic profile to system prompt
                 self.system_prompt = f"{self.system_prompt}\n\n## User Profile\n{dialectic_content}"
+        
+        # Initialize skill preloader for this agent
+        self._skill_preloader = get_skill_preloader()
         
         # Store config for later use
         self.config = config
 
-    def _get_memory(self, user_id: str) -> Memory:
+    async def _get_memory(self, user_id: str) -> Memory:
         if user_id not in self._memories:
-            self._memories[user_id] = Memory(user_id=user_id)
+            mem = Memory(user_id=user_id)
+            await mem.initialize()
+            self._memories[user_id] = mem
         return self._memories[user_id]
 
     @property
@@ -216,16 +221,16 @@ class Agent:
             logger.error(f"Error searching knowledge: {e}")
             return ""
 
-    def close(self):
+    async def close(self):
         for mem in self._memories.values():
-            mem.close()
+            await mem.close()
         self._memories.clear()
 
-    def __enter__(self):
+    async def __aenter__(self):
         return self
 
-    def __exit__(self, *args):
-        self.close()
+    async def __aexit__(self, *args):
+        await self.close()
 
     async def think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> str:
         """Process a user message and return the agent's response.
@@ -247,16 +252,17 @@ class Agent:
         except Exception:
             pass
         
-        mem = self._get_memory(user_id)
-        mem.add("user", user_message)
+        mem = await self._get_memory(user_id)
+        await mem.add("user", user_message)
 
-        # Trigger on_session_start hook
         trigger_hook("on_session_start", user_id, self.name)
 
-        # Track message count for on_session_end
-        message_count_start = len(mem.get_history()) if hasattr(mem, 'get_history') else 0
+        message_count_start = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
 
-        history = mem.get_history()
+        history = await mem.get_history()
+        
+        # Optimization #4: Proactive skill pre-loading
+        asyncio.create_task(self._skill_preloader.predict_and_preload(history, user_message))
 
         # Feature: Context Summarization with trajectory compression
         threshold = getattr(self.config.agents, 'summarization_threshold', 10)
@@ -313,41 +319,57 @@ class Agent:
                 response, tool_calls = result  # Allow hooks to modify response/tool_calls
 
         if tool_calls:
-            results = []
-            for tc in tool_calls:
-                tool_name = tc.get("function", {}).get("name", "")
-                args = tc.get("function", {}).get("arguments", {})
-
-                if tool_name not in TOOLS:
-                    results.append(f"Unknown tool: {tool_name}")
-                    logger.warning(f"Unknown tool called: {tool_name}")
-                    continue
-
-                # Inject delegation depth so delegate() can enforce the limit
-                if tool_name == "delegate":
-                    args["_depth"] = _depth + 1
-
-                # Audit log: tool execution start
-                import time
-                start_time = time.time()
-                logger.info(f"[AUDIT] Tool execution started: {tool_name} with args: {args}")
-
-                try:
-                    func = TOOLS[tool_name]["func"]
-                    if inspect.iscoroutinefunction(func):
-                        result = await func(**args)
+            # Determine if we can use parallel execution
+            independent_tools = [tc for tc in tool_calls if is_tool_independent(tc.get("function", {}).get("name", ""))]
+            
+            if len(independent_tools) > 1:
+                # Use parallel execution for independent tools
+                logger.info(f"Executing {len(independent_tools)} tools in parallel")
+                executor = get_parallel_executor()
+                exec_results = await executor.execute_tools(independent_tools, user_id)
+                
+                # Format results for the LLM
+                result_parts = []
+                for r in exec_results:
+                    if r["success"]:
+                        result_parts.append(f"Tool {r['tool_name']} returned: {r['result']}")
                     else:
-                        result = await asyncio.to_thread(func, **args)
-                    mem.add("tool", f"Tool {tool_name} returned: {result}")
-                    results.append(str(result))
-                    # Audit log: tool execution success
-                    duration = time.time() - start_time
-                    logger.info(f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)")
-                except Exception as e:
-                    logger.error(f"Tool execution error ({tool_name}): {e}")
-                    # Audit log: tool execution failure
-                    logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
-                    results.append(f"Tool error: {e}")
+                        result_parts.append(f"Tool {r['tool_name']} error: {r['error']}")
+                
+                results = result_parts
+            else:
+                # Fall back to sequential execution for single tool or dependent tools
+                results = []
+                for tc in tool_calls:
+                    tool_name = tc.get("function", {}).get("name", "")
+                    args = tc.get("function", {}).get("arguments", {})
+
+                    if tool_name not in TOOLS:
+                        results.append(f"Unknown tool: {tool_name}")
+                        logger.warning(f"Unknown tool called: {tool_name}")
+                        continue
+
+                    if tool_name == "delegate":
+                        args["_depth"] = _depth + 1
+
+                    import time
+                    start_time = time.time()
+                    logger.info(f"[AUDIT] Tool execution started: {tool_name} with args: {args}")
+
+                    try:
+                        func = TOOLS[tool_name]["func"]
+                        if inspect.iscoroutinefunction(func):
+                            result = await func(**args)
+                        else:
+                            result = await asyncio.to_thread(func, **args)
+                        await mem.add("tool", f"Tool {tool_name} returned: {result}")
+                        results.append(str(result))
+                        duration = time.time() - start_time
+                        logger.info(f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)")
+                    except Exception as e:
+                        logger.error(f"Tool execution error ({tool_name}): {e}")
+                        logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
+                        results.append(f"Tool error: {e}")
 
             tool_result_msg = "\n".join(results)
             followup = messages + [{"role": "tool", "content": tool_result_msg}]
@@ -364,10 +386,10 @@ class Agent:
                 # Trigger post_llm_call hooks for followup
                 trigger_hook("post_llm_call", final_response, None)
                 
-                mem.add("assistant", final_response)
+                await mem.add("assistant", final_response)
                 
                 # Trigger on_session_end hook
-                message_count = len(mem.get_history()) if hasattr(mem, 'get_history') else 0
+                message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
                 trigger_hook("on_session_end", user_id, self.name, message_count)
                 
                 return final_response
@@ -375,10 +397,10 @@ class Agent:
                 logger.error(f"LLM second call error: {e}")
                 return f"Tool executed but error getting response: {e}"
 
-        mem.add("assistant", response)
+        await mem.add("assistant", response)
         
         # Trigger on_session_end hook
-        message_count = len(mem.get_history()) if hasattr(mem, 'get_history') else 0
+        message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
         trigger_hook("on_session_end", user_id, self.name, message_count)
         
         return response
@@ -394,13 +416,13 @@ class Agent:
         Yields:
             Content chunks as they arrive from the LLM provider.
         """
-        mem = self._get_memory(user_id)
-        mem.add("user", user_message)
+        mem = await self._get_memory(user_id)
+        await mem.add("user", user_message)
 
         # Trigger on_session_start hook
         trigger_hook("on_session_start", user_id, self.name)
 
-        history = mem.get_history()
+        history = await mem.get_history()
 
         # Feature: Context Summarization with trajectory compression
         threshold = getattr(self.config.agents, 'summarization_threshold', 10)
@@ -443,7 +465,7 @@ class Agent:
             stream_iterator = await self.provider.chat(messages, self.model, stream=True)
         except Exception as e:
             logger.error(f"LLM provider error: {e}")
-            trigger_hook("on_session_end", user_id, self.name, len(mem.get_history()))
+            trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
             yield f"Sorry, I encountered an error: {e}"
             return
 
@@ -465,9 +487,9 @@ class Agent:
 
         # Note: Tool calls are not supported in streaming mode yet
         # The full response is returned as chunks
-        mem.add("assistant", full_response)
+        await mem.add("assistant", full_response)
         
         # Trigger on_session_end hook
-        trigger_hook("on_session_end", user_id, self.name, len(mem.get_history()))
+        trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
         
         yield "[TOOL_CALLS_NONE]"  # Signal that streaming is complete

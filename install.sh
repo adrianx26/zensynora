@@ -389,6 +389,18 @@ ensure_pip "pytest"     "pytest"     ""
 ensure_pip "pytest_asyncio" "pytest-asyncio" ""
 ensure_pip "scrapling"  "scrapling[all]" ">=0.4.2"
 ensure_pip "watchdog"   "watchdog"    ">=3.0.0"  # 6.1: Config file watching
+ensure_pip "aiohttp"    "aiohttp"    ">=3.9.0"  # Feature 4: Web Search
+ensure_pip "Pillow"     "Pillow"     ">=10.0.0" # Feature 2: Multi-modal Tools
+ensure_pip "opencv"     "opencv-python" ">=4.8.0" # Feature 2: Video processing
+ensure_pip "mss"        "mss"        ">=9.0.0"  # Feature 2: Screenshot capture
+ensure_pip "gtts"       "gtts"       ">=2.4.0"  # Feature 3: Voice TTS
+ensure_pip "pyttsx3"    "pyttsx3"    ">=2.90"   # Feature 3: Offline TTS
+ensure_pip "pydub"     "pydub"      ">=0.25.0" # Feature 3: Audio processing
+ensure_pip "fastapi"    "fastapi"    ">=0.109.0" # Feature 8: REST API Server
+ensure_pip "uvicorn"    "uvicorn"    ">=0.27.0" # Feature 8: REST API Server
+ensure_pip "sse_starlette" "sse-starlette" ">=2.0.0" # Feature 8: Server-Sent Events
+ensure_pip "jinja2"     "jinja2"     ">=3.1.0"  # Feature 10: Web Dashboard
+ensure_pip "websockets" "websockets" ">=12.0.0" # Feature 8: WebSocket support
 
 info "Installing Scrapling browser dependencies..."
 run "$VENV_DIR/bin/scrapling" install --force
@@ -486,6 +498,11 @@ make_dir "$HOME/.myclaw/workspace"
 make_dir "$HOME/.myclaw/knowledge"
 make_dir "$HOME/.myclaw/knowledge/default"
 make_dir "$HOME/.myclaw/tools"
+make_dir "$HOME/.myclaw/preferences"        # Feature 7: Semantic Memory
+make_dir "$HOME/.myclaw/plugins"            # Feature 9: Plugin System
+make_dir "$HOME/.myclaw/sandbox"            # Feature 12: Security Sandbox
+make_dir "$HOME/.myclaw/skills"             # Feature 5: Skill Generator
+make_dir "$HOME/.myclaw/backups"            # Feature 6: Self-Healer
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 8. OPTIONAL: systemd service (Telegram gateway auto-start)
@@ -570,7 +587,18 @@ else
     check_import "httpx"
     check_import "pytest"
     check_import "scrapling"
-    check_import "whatsapp"
+
+    # Feature-specific imports
+    check_import "aiohttp" "aiohttp (Feature 4: Web Search)"
+    check_import "PIL" "PIL/Pillow (Feature 2: Multi-modal)"
+    check_import "cv2" "opencv-python (Feature 2: Video)"
+    check_import "mss" "mss (Feature 2: Screenshot)"
+    check_import "gtts" "gtts (Feature 3: Voice TTS)"
+    check_import "pyttsx3" "pyttsx3 (Feature 3: Offline TTS)"
+    check_import "fastapi" "fastapi (Feature 8: REST API)"
+    check_import "uvicorn" "uvicorn (Feature 8: REST API)"
+    check_import "jinja2" "jinja2 (Feature 10: Dashboard)"
+    check_import "websockets" "websockets (Feature 8: WebSocket)"
 
     echo ""
     if [[ "$FAILED" -eq 0 ]]; then
