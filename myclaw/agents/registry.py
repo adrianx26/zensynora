@@ -83,6 +83,7 @@ class AgentCapability(Enum):
     # Data/AI
     AI = "ai"
     ML = "ml"
+    MLOPS = "mlops"
     DATA = "data"
     NLP = "nlp"
 
