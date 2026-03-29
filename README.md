@@ -365,6 +365,68 @@ See [docs/agent_swarm_guide.md](docs/agent_swarm_guide.md) for detailed document
 
 ---
 
+## 🤖 Specialized Agent System (136+ Agents)
+
+MyClaw includes a comprehensive registry of **136+ specialized agents** modeled after the VoltAgent Codex subagents. These agents are organized across 10 categories and can be discovered and delegated to for specialized tasks.
+
+### Agent Categories
+
+| Category | Count | Examples |
+|----------|-------|----------|
+| Core Development | 12 | `backend-developer`, `frontend-developer`, `api-designer` |
+| Language Specialists | 27 | `python-pro`, `typescript-pro`, `golang-pro` |
+| Infrastructure | 16 | `devops-engineer`, `kubernetes-specialist`, `terraform-engineer` |
+| Quality & Security | 16 | `code-reviewer`, `security-auditor`, `penetration-tester` |
+| Data & AI | 12 | `llm-architect`, `ml-engineer`, `data-engineer` |
+| Developer Experience | 13 | `documentation-engineer`, `git-workflow-manager` |
+| Specialized Domains | 12 | `fintech-engineer`, `payment-integration` |
+| Business & Product | 11 | `product-manager`, `scrum-master` |
+| Meta & Orchestration | 12 | `multi-agent-coordinator`, `workflow-orchestrator` |
+| Research & Analysis | 7 | `competitive-analyst`, `trend-analyst` |
+
+### Using Specialized Agents
+
+```python
+from myclaw.agents import (
+    get_agent,
+    list_agents,
+    AgentDiscovery,
+    AgentCategory,
+)
+
+# Get a specific agent
+agent = get_agent("backend-developer")
+
+# Find agents for a task
+discovery = AgentDiscovery()
+matches = discovery.find_agents_for_task("I need to build a REST API")
+
+# List all agents in a category
+backend_agents = list_agents(category=AgentCategory.CORE_DEVELOPMENT)
+
+# Search agents by capability
+security_agents = list_agents(capability=AgentCapability.SECURITY)
+```
+
+### Agent Profiles
+
+Agent profiles are stored in `myclaw/agent_profiles/{category}/` and include:
+- Core competencies and guidelines
+- Best practices and checklists
+- Code patterns and examples
+- Model routing recommendations
+
+### Discovery & Integration
+
+The Agent Discovery system provides:
+- **Task-based matching**: Find best agents for specific tasks
+- **Swarm composition**: Suggest agent combinations for complex tasks
+- **Capability mapping**: Match required capabilities to agent skills
+
+See [docs/agent_catalog.md](docs/agent_catalog.md) for the complete agent catalog.
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -372,6 +434,27 @@ myclaw/
 ├── myclaw/
 │   ├── __init__.py          # Package init
 │   ├── agent.py             # Core agent logic
+│   ├── agent_profiles/      # 🤖 Specialized agent profiles
+│   │   ├── core-development/
+│   │   │   ├── backend-developer.md
+│   │   │   └── frontend-developer.md
+│   │   ├── language-specialists/
+│   │   │   └── python-pro.md
+│   │   ├── infrastructure/
+│   │   │   └── devops-engineer.md
+│   │   ├── quality-security/
+│   │   │   └── code-reviewer.md
+│   │   ├── data-ai/
+│   │   │   └── llm-architect.md
+│   │   └── meta-orchestration/
+│   │       └── multi-agent-coordinator.md
+│   ├── agents/              # 🤖 Agent system
+│   │   ├── __init__.py
+│   │   ├── registry.py      # 136+ agent definitions
+│   │   ├── discovery.py    # Agent discovery
+│   │   ├── medic_agent.py  # Health monitoring
+│   │   ├── newtech_agent.py # Tech tracking
+│   │   └── skill_adapter.py # Skill adaptation
 │   ├── config.py            # Configuration management
 │   ├── gateway.py           # Channel routing
 │   ├── memory.py            # SQLite persistence
