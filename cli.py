@@ -5,7 +5,6 @@ import atexit
 import logging
 from myclaw.config import load_config
 from myclaw.agent import Agent
-from myclaw.logging_config import configure_logging, get_logger
 from onboard import onboard
 from myclaw.gateway import start
 from myclaw.knowledge import (
@@ -13,9 +12,7 @@ from myclaw.knowledge import (
     write_note, Observation
 )
 
-# Configure logging with standardized format
-configure_logging()
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 def _graceful_shutdown():

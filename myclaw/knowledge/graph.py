@@ -5,7 +5,6 @@ Provides graph traversal and network analysis over entity relations.
 """
 
 import logging
-from pathlib import Path
 from typing import List, Dict, Set, Optional, Tuple
 from collections import deque
 
@@ -20,8 +19,7 @@ def get_related_entities(
     permalink: str,
     user_id: str = "default",
     depth: int = 1,
-    relation_type: Optional[str] = None,
-    db_path: Optional[Path] = None
+    relation_type: Optional[str] = None
 ) -> List[Dict]:
     """
     Get entities related to the given entity.
@@ -35,7 +33,7 @@ def get_related_entities(
     Returns:
         List of dicts with entity info and path
     """
-    with KnowledgeDB(user_id, db_path=db_path) as db:
+    with KnowledgeDB(user_id) as db:
         start_entity = db.get_entity_by_permalink(permalink)
         if not start_entity:
             return []
@@ -81,8 +79,7 @@ def get_related_entities(
 def get_entity_network(
     permalink: str,
     user_id: str = "default",
-    max_depth: int = 2,
-    db_path: Optional[Path] = None
+    max_depth: int = 2
 ) -> Dict:
     """
     Get the complete network around an entity.
@@ -95,7 +92,7 @@ def get_entity_network(
     Returns:
         Dict with nodes and edges for graph visualization
     """
-    with KnowledgeDB(user_id, db_path=db_path) as db:
+    with KnowledgeDB(user_id) as db:
         start_entity = db.get_entity_by_permalink(permalink)
         if not start_entity:
             return {"nodes": [], "edges": []}
@@ -177,8 +174,7 @@ def find_path(
     from_permalink: str,
     to_permalink: str,
     user_id: str = "default",
-    max_depth: int = 5,
-    db_path: Optional[Path] = None
+    max_depth: int = 5
 ) -> Optional[List[Tuple[str, str]]]:
     """
     Find a path between two entities.
@@ -192,7 +188,7 @@ def find_path(
     Returns:
         List of (relation_type, permalink) tuples forming the path, or None
     """
-    with KnowledgeDB(user_id, db_path=db_path) as db:
+    with KnowledgeDB(user_id) as db:
         start = db.get_entity_by_permalink(from_permalink)
         target = db.get_entity_by_permalink(to_permalink)
         
@@ -224,7 +220,7 @@ def find_path(
         return None
 
 
-def get_central_entities(user_id: str = "default", limit: int = 10, db_path: Optional[Path] = None) -> List[Dict]:
+def get_central_entities(user_id: str = "default", limit: int = 10) -> List[Dict]:
     """
     Get the most connected entities (highest degree centrality).
     
@@ -235,7 +231,7 @@ def get_central_entities(user_id: str = "default", limit: int = 10, db_path: Opt
     Returns:
         List of entities with connection counts
     """
-    with KnowledgeDB(user_id, db_path=db_path) as db:
+    with KnowledgeDB(user_id) as db:
         # Count outgoing and incoming relations
         conn = db._get_connection()
         rows = conn.execute("""
@@ -266,8 +262,7 @@ def build_context(
     permalink: str,
     user_id: str = "default",
     depth: int = 2,
-    include_observations: bool = True,
-    db_path: Optional[Path] = None
+    include_observations: bool = True
 ) -> str:
     """
     Build a text context for an entity including related entities.
@@ -298,7 +293,7 @@ def build_context(
         lines.append("")
     
     # Get related entities
-    related = get_related_entities(permalink, user_id, depth, db_path=db_path)
+    related = get_related_entities(permalink, user_id, depth)
     
     if related:
         lines.append("## Related Knowledge")

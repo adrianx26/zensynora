@@ -9,8 +9,6 @@ from contextlib import contextmanager
 from typing import List, Dict, Optional
 from functools import lru_cache
 
-from .exceptions import MemoryError, MemoryQueryError
-
 logger = logging.getLogger(__name__)
 
 # Import knowledge storage for extraction
@@ -98,12 +96,6 @@ class Memory:
     # Class-level tracking for VACUUM optimization
     _cleanup_count: int = 0
     
-    # Class-level LRU cache for history (shared across instances with same user_id)
-    _history_cache: dict = {}
-    _history_cache_order: list = []
-    _cache_max_size: int = 10
-    _cache_lock = threading.Lock()
-    
     def __init__(self, user_id: str = "default", auto_cleanup_days: int = 30, auto_cleanup_enabled: bool = True):
         # Each user gets their own DB file — full disk-level session isolation
         db_path = Path.home() / ".myclaw" / f"memory_{user_id}.db"
@@ -111,13 +103,27 @@ class Memory:
         self.db.parent.mkdir(parents=True, exist_ok=True)
         self.auto_cleanup_days = auto_cleanup_days
         self.auto_cleanup_enabled = auto_cleanup_enabled
-        
-        # Batch mode state
-        self._batch_mode = False
-        self._batch_size = 0
+
+        # VACUUM optimization: track cleanups and only VACUUM periodically
+        self.cleanup_count = 0
+        self.vacuum_interval = 100  # Run VACUUM every 100 cleanups
+
+        # LRU cache for history retrieval
+        self._history_cache = {}  # Simple cache: (limit) -> result
+        self._cache_max_size = 5  # Number of different limit values to cache
+
+        # Batch writing configuration
+        self._pending_messages = []  # Buffer for pending messages
+        self._batch_size = 10  # Number of messages to batch before commit
+        self._batch_timeout = 1.0  # Max seconds to wait before auto-flush
+        self._last_flush = datetime.now()  # Track last flush time
+
+        # Chunked cleanup configuration
+        self._cleanup_chunk_size = 100  # Delete messages in chunks of 100
 
         # Use pooled connection
         self.conn = SQLitePool.get_connection(self.db)
+
         self.conn.execute("""CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY,
             role TEXT,
@@ -128,72 +134,32 @@ class Memory:
         self.conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp)")
         
         # Create FTS5 virtual table for full-text search
-        self.conn.execute("""
-            CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
-                content,
-                content=messages,
-                content_rowid=id,
-                tokenize='porter unicode61'
-            )
-        """)
+        self.conn.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
+            content,
+            content=messages,
+            content_rowid=id
+        )""")
         
-        # Create triggers to keep FTS table in sync
-        self.conn.execute("""
-            CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
-                INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
-            END
-        """)
-        self.conn.execute("""
-            CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
-                INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
-            END
-        """)
-        self.conn.execute("""
-            CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
-                INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
-                INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
-            END
-        """)
+        # Trigger for INSERT
+        self.conn.execute("""CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN
+            INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+        END""")
+        
+        # Trigger for DELETE
+        self.conn.execute("""CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN
+            INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+        END""")
+        
+        # Trigger for UPDATE
+        self.conn.execute("""CREATE TRIGGER IF NOT EXISTS messages_au AFTER UPDATE ON messages BEGIN
+            INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', old.id, old.content);
+            INSERT INTO messages_fts(rowid, content) VALUES (new.id, new.content);
+        END""")
         
         self.conn.commit()
         # 6.2: Only run cleanup if enabled
         if self.auto_cleanup_enabled:
             self.cleanup(self.auto_cleanup_days)
-
-    @classmethod
-    def _get_cache_key(cls, db_path: Path, limit: int, columns: tuple) -> str:
-        """Generate cache key for history query."""
-        return f"{db_path}:{limit}:{columns}"
-    
-    @classmethod
-    def _get_cached_history(cls, db_path: Path, limit: int, columns: tuple) -> Optional[list]:
-        """Get cached history if available."""
-        key = cls._get_cache_key(db_path, limit, columns)
-        with cls._cache_lock:
-            return cls._history_cache.get(key)
-    
-    @classmethod
-    def _set_cached_history(cls, db_path: Path, limit: int, columns: tuple, value: list):
-        """Set cached history with LRU eviction."""
-        key = cls._get_cache_key(db_path, limit, columns)
-        with cls._cache_lock:
-            # Evict oldest if at capacity
-            if len(cls._history_cache_order) >= cls._cache_max_size:
-                oldest_key = cls._history_cache_order.pop(0)
-                cls._history_cache.pop(oldest_key, None)
-            
-            cls._history_cache[key] = value
-            cls._history_cache_order.append(key)
-    
-    @classmethod
-    def _invalidate_cache(cls, db_path: Path):
-        """Invalidate all cache entries for a specific database."""
-        with cls._cache_lock:
-            keys_to_remove = [k for k in cls._history_cache if k.startswith(str(db_path))]
-            for key in keys_to_remove:
-                cls._history_cache.pop(key, None)
-                if key in cls._history_cache_order:
-                    cls._history_cache_order.remove(key)
 
     def __enter__(self):
         return self
@@ -203,6 +169,8 @@ class Memory:
 
     def close(self):
         """Close the database connection."""
+        # Flush any pending messages first
+        self.flush()
         if hasattr(self, 'conn') and self.conn:
             try:
                 SQLitePool.release_connection(self.db)
@@ -210,77 +178,72 @@ class Memory:
             except Exception as e:
                 logger.error(f"Error releasing database connection: {e}")
 
-    @contextmanager
-    def batch_mode(self):
-        """Context manager for batch writes - delays commit until exit.
+    def flush(self) -> int:
+        """Flush any pending messages to the database. Returns count of flushed messages."""
+        if not self._pending_messages:
+            return 0
         
-        Usage:
-            with mem.batch_mode():
-                mem.add("user", "message 1")
-                mem.add("user", "message 2")
-                mem.add("user", "message 3")
-            # All messages committed at once
-        """
-        self._batch_mode = True
-        self._batch_size = 0
         try:
-            yield self
-        finally:
-            if self._batch_size > 0:
-                self.conn.commit()
-                self._invalidate_cache(self.db)
-            self._batch_mode = False
-            self._batch_size = 0
+            # Use executemany for batch insert
+            self.conn.executemany(
+                "INSERT INTO messages (role, content, timestamp) VALUES (?, ?, ?)",
+                self._pending_messages
+            )
+            self.conn.commit()
+            
+            # Clear pending and update timestamp
+            count = len(self._pending_messages)
+            self._pending_messages = []
+            self._last_flush = datetime.now()
+            
+            # Clear history cache since we added new messages
+            if hasattr(self, '_history_cache'):
+                self._history_cache.clear()
+            
+            logger.info(f"Flushed {count} messages to database")
+            return count
+        except Exception as e:
+            logger.error(f"Error flushing messages: {e}")
+            return 0
 
     def add(self, role: str, content: str):
-        """Add a message to the conversation history."""
-        try:
-            self.conn.execute(
-                "INSERT INTO messages (role, content, timestamp) VALUES (?, ?, ?)",
-                (role, content, datetime.now().isoformat())
-            )
-            
-            # Check if in batch mode
-            if hasattr(self, '_batch_mode') and self._batch_mode:
-                self._batch_size += 1
-            else:
-                self.conn.commit()
-                # Invalidate cache when new messages are added
-                self._invalidate_cache(self.db)
-        except Exception as e:
-            logger.error(f"Error adding message: {e}")
-            raise
+        """Add a message to the conversation history (with batching)."""
+        # Add to pending batch
+        self._pending_messages.append((role, content, datetime.now().isoformat()))
+        
+        # Check if we should flush
+        should_flush = (
+            len(self._pending_messages) >= self._batch_size or
+            (datetime.now() - self._last_flush).total_seconds() >= self._batch_timeout
+        )
+        
+        if should_flush:
+            self.flush()
 
-    def get_history(self, limit: int = 20, columns: Optional[List[str]] = None, use_cache: bool = True) -> list:
-        """Get the last N messages in chronological order, efficiently.
+    def get_history(self, limit: int = 20, columns: Optional[List[str]] = None) -> list:
+        """Get the last N messages in chronological order, efficiently with caching.
 
         Args:
             limit: Maximum number of messages to retrieve.
             columns: List of column names to retrieve. If None, defaults to ["role", "content"].
                      Allowed columns: "id", "role", "content", "timestamp".
-            use_cache: Whether to use the LRU cache (default True).
 
         Returns:
             List of dictionaries, each representing a message with the requested columns.
         """
+        # Caching check (only if columns is default)
+        is_default_columns = columns is None or columns == ["role", "content"]
+        if is_default_columns:
+            cache_key = limit
+            if hasattr(self, '_history_cache') and cache_key in self._history_cache:
+                return self._history_cache[cache_key]
+
         try:
             if columns is None:
                 columns = ["role", "content"]
             allowed_columns = {"id", "role", "content", "timestamp"}
             if not set(columns).issubset(allowed_columns):
-                from .exceptions import MemoryValidationError
-                raise MemoryValidationError(
-                    f"Invalid column(s). Allowed columns are: {allowed_columns}",
-                    column=", ".join(set(columns) - set(allowed_columns)),
-                    allowed_values=allowed_columns
-                )
-
-            # Check cache first
-            columns_tuple = tuple(columns)
-            if use_cache:
-                cached = self._get_cached_history(self.db, limit, columns_tuple)
-                if cached is not None:
-                    return cached
+                raise ValueError(f"Invalid column(s). Allowed columns are: {allowed_columns}")
 
             # Ensure we have the id for ordering in the inner query, but avoid duplicating in the inner select
             inner_columns = list(dict.fromkeys(columns + ["id"]))  # preserves order and removes duplicates
@@ -300,72 +263,67 @@ class Memory:
             """
             cur = self.conn.execute(query, (limit,))
             rows = cur.fetchall()
+            
             # Build list of dictionaries
             result = [dict(zip(columns, row)) for row in rows]
-            
-            # Cache the result
-            if use_cache:
-                self._set_cached_history(self.db, limit, columns_tuple, result)
-            
+
+            # Cache the result if default columns
+            if is_default_columns and hasattr(self, '_history_cache'):
+                if len(self._history_cache) >= self._cache_max_size:
+                    oldest_key = next(iter(self._history_cache))
+                    del self._history_cache[oldest_key]
+                self._history_cache[cache_key] = result
+
             return result
+
         except Exception as e:
             logger.error(f"Error getting history: {e}")
             return []
 
-    def cleanup(self, days: int = None, incremental: bool = True, chunk_size: int = 1000) -> int:
-        """Delete messages older than specified days. Returns count of deleted messages.
-        
-        Args:
-            days: Number of days to keep (defaults to auto_cleanup_days)
-            incremental: If True, deletes in chunks to avoid long locks (default True)
-            chunk_size: Number of messages to delete per chunk (default 1000)
-        """
+    def cleanup(self, days: int = None) -> int:
+        """Delete messages older than specified days in chunks. Returns count of deleted messages."""
         if days is None:
             days = self.auto_cleanup_days
 
+        total_deleted = 0
+        
         try:
             cutoff = datetime.now() - timedelta(days=days)
-            total_deleted = 0
+
             
-            if incremental:
-                # Incremental cleanup - delete in chunks
-                while True:
-                    cursor = self.conn.execute(
-                        "DELETE FROM messages WHERE timestamp < ? LIMIT ?",
-                        (cutoff.isoformat(), chunk_size)
-                    )
-                    self.conn.commit()
-                    deleted = cursor.rowcount
-                    total_deleted += deleted
-                    
-                    if deleted < chunk_size:
-                        break
-                    
-                    logger.debug(f"Incremental cleanup: deleted {deleted} messages")
-            else:
-                # Bulk delete (original behavior)
+            while True:
+                # Delete in chunks to avoid locking for long periods
                 cursor = self.conn.execute(
-                    "DELETE FROM messages WHERE timestamp < ?",
-                    (cutoff.isoformat(),)
+                    "DELETE FROM messages WHERE timestamp < ? LIMIT ?",
+                    (cutoff.isoformat(), self._cleanup_chunk_size)
                 )
                 self.conn.commit()
-                total_deleted = cursor.rowcount
-
+                deleted = cursor.rowcount
+                
+                if deleted == 0:
+                    break
+                    
+                total_deleted += deleted
+                logger.debug(f"Cleaned up chunk of {deleted} messages (total: {total_deleted})")
+            
             if total_deleted > 0:
-                # Increment cleanup counter and run VACUUM every 100 cleanups
-                Memory._cleanup_count += 1
-                if Memory._cleanup_count >= 100:
+                # Increment cleanup counter and run VACUUM periodically
+                self.cleanup_count += 1
+                if self.cleanup_count >= self.vacuum_interval:
                     self.conn.execute("VACUUM")
-                    Memory._cleanup_count = 0
-                    logger.info("VACUUM performed after 100 cleanups")
+                    self.cleanup_count = 0
+                    logger.info(f"VACUUM performed after {self.vacuum_interval} cleanups")
+                
+                # Clear history cache after cleanup
+                if hasattr(self, '_history_cache'):
+                    self._history_cache.clear()
                 logger.info(f"Cleaned up {total_deleted} old messages")
-                # Invalidate cache after cleanup
-                self._invalidate_cache(self.db)
-
+            
             return total_deleted
+
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
-            return 0
+            return total_deleted
 
     def get_stats(self) -> dict:
         """Get memory statistics."""
@@ -380,44 +338,6 @@ class Memory:
         except Exception as e:
             logger.error(f"Error getting stats: {e}")
             return {"error": str(e)}
-
-    def search(self, query: str, limit: int = 20) -> list:
-        """
-        Search messages using full-text search (FTS5).
-        
-        Args:
-            query: Search query (supports FTS5 query syntax: AND, OR, NOT, *, etc.)
-            limit: Maximum number of results to return.
-            
-        Returns:
-            List of matching messages with relevance ranking.
-        """
-        try:
-            # Use FTS5 MATCH for full-text search with ranking
-            fts_query = f"""
-                SELECT m.id, m.role, m.content, m.timestamp,
-                       bm25(messages_fts) as rank
-                FROM messages m
-                JOIN messages_fts fts ON m.id = fts.rowid
-                WHERE messages_fts MATCH ?
-                ORDER BY rank
-                LIMIT ?
-            """
-            cur = self.conn.execute(fts_query, (query, limit))
-            rows = cur.fetchall()
-            return [
-                {
-                    "id": row[0],
-                    "role": row[1],
-                    "content": row[2],
-                    "timestamp": row[3],
-                    "rank": row[4]
-                }
-                for row in rows
-            ]
-        except Exception as e:
-            logger.error(f"Error searching messages: {e}")
-            return []
 
     def extract_knowledge_candidates(self, limit: int = 50) -> List[Dict]:
         """
@@ -538,3 +458,17 @@ class Memory:
         except Exception as e:
             logger.error(f"Error saving extracted knowledge: {e}")
             return None
+
+    def search(self, query: str, limit: int = 20) -> list:
+        """Search messages using full-text search."""
+        try:
+            cur = self.conn.execute(
+                "SELECT m.role, m.content, m.timestamp FROM messages m "
+                "JOIN messages_fts fts ON m.id = fts.rowid "
+                "WHERE messages_fts MATCH ? ORDER BY rank LIMIT ?",
+                (query, limit)
+            )
+            return [{"role": r, "content": c, "timestamp": t} for r, c, t in cur.fetchall()]
+        except Exception as e:
+            logger.error(f"Error searching: {e}")
+            return []

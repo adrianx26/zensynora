@@ -14,7 +14,6 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Callable
 
-from ..exceptions import KnowledgeBaseError, KnowledgeNotFoundError
 from .parser import Note, Observation, Relation
 
 logger = logging.getLogger(__name__)
@@ -29,7 +28,6 @@ class Entity:
     """Database entity representation."""
     id: int
     name: str
-    type: str
     permalink: str
     file_path: str
     created_at: datetime
@@ -52,13 +50,9 @@ class KnowledgeDB:
     - ~/.myclaw/knowledge_{user_id}.db
     """
     
-    def __init__(self, user_id: str = "default", db_path: Optional[Path] = None):
+    def __init__(self, user_id: str = "default"):
         self.user_id = user_id
-        if db_path:
-            self.db_path = Path(db_path)
-        else:
-            self.db_path = Path.home() / ".myclaw" / f"knowledge_{user_id}.db"
-        
+        self.db_path = Path.home() / ".myclaw" / f"knowledge_{user_id}.db"
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         
         self._conn: Optional[sqlite3.Connection] = None
@@ -83,7 +77,6 @@ class KnowledgeDB:
             CREATE TABLE IF NOT EXISTS entities (
                 id INTEGER PRIMARY KEY,
                 name TEXT UNIQUE NOT NULL,
-                type TEXT NOT NULL DEFAULT 'note',
                 permalink TEXT UNIQUE NOT NULL,
                 file_path TEXT NOT NULL,
                 created_at TEXT NOT NULL,
@@ -121,23 +114,25 @@ class KnowledgeDB:
         # Create indexes for better query performance
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_permalink ON entities(permalink)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type_name ON entities(type, name)")
-        
         conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity_id ON observations(entity_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_category ON observations(category)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity_category ON observations(entity_id, category)")
-        
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_type ON relations(relation_type)")
+        
+        # Optimization 3.2: Composite indexes for graph queries
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type_name ON entities(name)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from_type ON relations(from_entity_id, relation_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to_type ON relations(to_entity_id, relation_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity_category ON observations(entity_id, category)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_type ON relations(relation_type)")
         
         # FTS5 for full-text search on entities
         conn.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS entities_fts USING fts5(
                 name,
-                content
+                content,
+                content='entities',
+                content_rowid='id'
             )
         """)
         
@@ -145,7 +140,9 @@ class KnowledgeDB:
         conn.execute("""
             CREATE VIRTUAL TABLE IF NOT EXISTS observations_fts USING fts5(
                 content,
-                category
+                category,
+                content='observations',
+                content_rowid='id'
             )
         """)
         
@@ -159,13 +156,15 @@ class KnowledgeDB:
         
         conn.execute("""
             CREATE TRIGGER IF NOT EXISTS entities_ad AFTER DELETE ON entities BEGIN
-                DELETE FROM entities_fts WHERE rowid = old.id;
+                INSERT INTO entities_fts(entities_fts, rowid, name, content)
+                VALUES ('delete', old.id, old.name, old.file_path);
             END
         """)
         
         conn.execute("""
             CREATE TRIGGER IF NOT EXISTS entities_au AFTER UPDATE ON entities BEGIN
-                DELETE FROM entities_fts WHERE rowid = old.id;
+                INSERT INTO entities_fts(entities_fts, rowid, name, content)
+                VALUES ('delete', old.id, old.name, old.file_path);
                 INSERT INTO entities_fts(rowid, name, content)
                 VALUES (new.id, new.name, new.file_path);
             END
@@ -181,19 +180,32 @@ class KnowledgeDB:
         
         conn.execute("""
             CREATE TRIGGER IF NOT EXISTS observations_ad AFTER DELETE ON observations BEGIN
-                DELETE FROM observations_fts WHERE rowid = old.id;
+                INSERT INTO observations_fts(observations_fts, rowid, content, category)
+                VALUES ('delete', old.id, old.content, old.category);
             END
         """)
         
         conn.execute("""
             CREATE TRIGGER IF NOT EXISTS observations_au AFTER UPDATE ON observations BEGIN
-                DELETE FROM observations_fts WHERE rowid = old.id;
+                INSERT INTO observations_fts(observations_fts, rowid, content, category)
+                VALUES ('delete', old.id, old.content, old.category);
                 INSERT INTO observations_fts(rowid, content, category)
                 VALUES (new.id, new.content, new.category);
             END
         """)
         
-        # FTS5 triggers are handled above.
+        # Indexes (optimization 3.2: composite indexes for graph queries)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_permalink ON entities(permalink)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity ON observations(entity_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_type ON relations(relation_type)")
+        
+        # Optimization 3.2: Composite indexes for graph queries
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type_name ON entities(name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from_type ON relations(from_entity_id, relation_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to_type ON relations(to_entity_id, relation_type)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity_category ON observations(entity_id, category)")
         
         conn.commit()
         logger.info(f"Knowledge DB initialized: {self.db_path}")
@@ -247,19 +259,16 @@ class KnowledgeDB:
         try:
             cursor = conn.execute(
                 """
-                INSERT INTO entities (name, type, permalink, file_path, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO entities (name, permalink, file_path, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
                 """,
-                (name, "note", permalink, str(file_path), now, now)
+                (name, permalink, str(file_path), now, now)
             )
             conn.commit()
             return cursor.lastrowid
         except sqlite3.IntegrityError as e:
             logger.error(f"Entity already exists: {permalink}")
-            raise KnowledgeBaseError(
-                f"Entity with permalink '{permalink}' already exists",
-                permalink=permalink
-            ) from e
+            raise ValueError(f"Entity with permalink '{permalink}' already exists") from e
     
     def get_entity_by_permalink(self, permalink: str) -> Optional[Entity]:
         """Get entity by permalink."""
@@ -273,7 +282,6 @@ class KnowledgeDB:
             return Entity(
                 id=row['id'],
                 name=row['name'],
-                type=row['type'],
                 permalink=row['permalink'],
                 file_path=row['file_path'],
                 created_at=datetime.fromisoformat(row['created_at']),
@@ -293,7 +301,6 @@ class KnowledgeDB:
             return Entity(
                 id=row['id'],
                 name=row['name'],
-                type=row['type'],
                 permalink=row['permalink'],
                 file_path=row['file_path'],
                 created_at=datetime.fromisoformat(row['created_at']),
@@ -483,7 +490,6 @@ class KnowledgeDB:
                 entities.append(Entity(
                     id=row['id'],
                     name=row['name'],
-                    type=row['type'],
                     permalink=row['permalink'],
                     file_path=row['file_path'],
                     created_at=datetime.fromisoformat(row['created_at']),
@@ -529,7 +535,6 @@ class KnowledgeDB:
             entities.append(Entity(
                 id=row['id'],
                 name=row['name'],
-                type=row['type'],
                 permalink=row['permalink'],
                 file_path=row['file_path'],
                 created_at=datetime.fromisoformat(row['created_at']),
@@ -549,7 +554,6 @@ class KnowledgeDB:
             entities.append(Entity(
                 id=row['id'],
                 name=row['name'],
-                type=row['type'],
                 permalink=row['permalink'],
                 file_path=row['file_path'],
                 created_at=datetime.fromisoformat(row['created_at']),

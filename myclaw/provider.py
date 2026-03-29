@@ -34,143 +34,7 @@ from collections import OrderedDict
 import httpx
 import requests
 
-from .exceptions import (
-    ProviderError,
-    ProviderNotFoundError,
-    ProviderTimeoutError,
-    ProviderConnectionError,
-    ProviderAuthenticationError,
-)
 from .tools import TOOL_SCHEMAS
-
-
-# ── Swarm Tool Schemas ──────────────────────────────────────────────────────────────────
-# Explicit schemas for swarm tools as per agent_swarm_implementation_plan.md
-
-SWARM_TOOL_SCHEMAS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_create",
-            "description": "Create a new agent swarm for collaborative task execution",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string", "description": "Name for the swarm"},
-                    "strategy": {
-                        "type": "string",
-                        "enum": ["parallel", "sequential", "hierarchical", "voting"],
-                        "description": "Execution strategy for the swarm"
-                    },
-                    "workers": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "List of worker agent names"
-                    },
-                    "coordinator": {
-                        "type": "string",
-                        "description": "Coordinator agent name (required for hierarchical strategy)"
-                    },
-                    "aggregation": {
-                        "type": "string",
-                        "enum": ["consensus", "best_pick", "concatenation", "synthesis"],
-                        "description": "Method for aggregating results",
-                        "default": "synthesis"
-                    }
-                },
-                "required": ["name", "strategy", "workers"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_assign",
-            "description": "Assign a task to a swarm for execution",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "swarm_id": {"type": "string", "description": "The swarm identifier"},
-                    "task": {"type": "string", "description": "Task description/prompt"},
-                    "user_id": {"type": "string", "description": "User identifier", "default": "default"}
-                },
-                "required": ["swarm_id", "task"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_status",
-            "description": "Get the current status of a swarm execution",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "swarm_id": {"type": "string", "description": "The swarm identifier"}
-                },
-                "required": ["swarm_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_result",
-            "description": "Get the final aggregated result from a swarm execution",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "swarm_id": {"type": "string", "description": "The swarm identifier"}
-                },
-                "required": ["swarm_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_terminate",
-            "description": "Force terminate a running swarm",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "swarm_id": {"type": "string", "description": "The swarm identifier to terminate"}
-                },
-                "required": ["swarm_id"]
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_list",
-            "description": "List all swarms, optionally filtered by status",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "status": {
-                        "type": "string",
-                        "description": "Optional status filter (pending, running, completed, failed)"
-                    },
-                    "user_id": {"type": "string", "description": "User identifier", "default": "default"}
-                }
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "swarm_stats",
-            "description": "Get swarm statistics for a user",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "user_id": {"type": "string", "description": "User identifier", "default": "default"}
-                }
-            }
-        }
-    }
-]
 
 
 # ── LRU Cache with TTL Decorator ─────────────────────────────────────────────────
@@ -454,19 +318,11 @@ class OllamaProvider(BaseLLMProvider):
             result = (msg.get("content", ""), tool_calls)
             return result
         except httpx.TimeoutException:
-            raise ProviderTimeoutError(
-                f"Ollama request timed out after {self.timeout}s",
-                timeout_seconds=self.timeout,
-                provider="ollama"
-            )
+            raise TimeoutError(f"Ollama request timed out after {self.timeout}s")
         except httpx.ConnectError as e:
-            raise ProviderConnectionError(
-                f"Could not connect to Ollama at {self.base_url}",
-                provider="ollama",
-                base_url=self.base_url
-            ) from e
+            raise ConnectionError(f"Could not connect to Ollama at {self.base_url}") from e
         except httpx.HTTPStatusError as e:
-            raise ProviderError(f"Ollama HTTP error: {e}") from e
+            raise RuntimeError(f"Ollama HTTP error: {e}") from e
 
     async def stream_chat(self, messages: List[Dict], model: str = "llama3.2") -> AsyncIterator[str]:
         """Stream chat response from Ollama."""
@@ -580,10 +436,7 @@ class OpenAIProvider(OpenAICompatProvider):
             api_key  = ""
             base_url = "https://api.openai.com/v1"
         if not api_key:
-            raise ProviderAuthenticationError(
-                "openai.api_key is not set in config.",
-                provider="openai"
-            )
+            raise ValueError("openai.api_key is not set in config.")
         super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
 
 
@@ -599,10 +452,7 @@ class GroqProvider(OpenAICompatProvider):
             api_key  = ""
             base_url = "https://api.groq.com/openai/v1"
         if not api_key:
-            raise ProviderAuthenticationError(
-                "groq.api_key is not set in config.",
-                provider="groq"
-            )
+            raise ValueError("groq.api_key is not set in config.")
         super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
 
 
@@ -622,10 +472,7 @@ class OpenRouterProvider(OpenAICompatProvider):
             site_url  = ""
             site_name = ""
         if not api_key:
-            raise ProviderAuthenticationError(
-                "openrouter.api_key is not set in config.",
-                provider="openrouter"
-            )
+            raise ValueError("openrouter.api_key is not set in config.")
         headers = {}
         if site_url:
             headers["X-OpenRouter-Site-URL"] = site_url
@@ -650,10 +497,7 @@ class AnthropicProvider(BaseLLMProvider):
         except Exception:
             api_key = ""
         if not api_key:
-            raise ProviderAuthenticationError(
-                "anthropic.api_key is not set in config.",
-                provider="anthropic"
-            )
+            raise ValueError("anthropic.api_key is not set in config.")
         self.client  = AsyncAnthropic(api_key=api_key)
         self.timeout = timeout
 
@@ -742,10 +586,7 @@ class GeminiProvider(BaseLLMProvider):
         except Exception:
             api_key = ""
         if not api_key:
-            raise ProviderAuthenticationError(
-                "gemini.api_key is not set in config.",
-                provider="gemini"
-            )
+            raise ValueError("gemini.api_key is not set in config.")
         genai.configure(api_key=api_key)
         self._genai    = genai
         self.timeout   = timeout
@@ -873,10 +714,9 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
     
     cls  = _PROVIDER_MAP.get(name)
     if cls is None:
-        raise ProviderNotFoundError(
-            f"Unknown provider '{name}'.",
-            provider_name=name,
-            available_providers=list(SUPPORTED_PROVIDERS)
+        raise ValueError(
+            f"Unknown provider '{name}'. "
+            f"Supported: {', '.join(SUPPORTED_PROVIDERS)}"
         )
     logger.debug(f"Initialising provider: {name}")
     provider = cls(config)

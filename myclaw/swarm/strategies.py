@@ -374,8 +374,7 @@ class HierarchicalStrategy(BaseStrategy):
     ) -> SwarmResult:
         """Execute task using coordinator and workers."""
         if not coordinator:
-            from ..exceptions import SwarmValidationError
-            raise SwarmValidationError("Hierarchical strategy requires a coordinator agent")
+            raise ValueError("Hierarchical strategy requires a coordinator agent")
         
         logger.info(f"Executing hierarchical strategy with coordinator {coordinator} and {len(workers)} workers")
         
@@ -563,7 +562,6 @@ def get_strategy(
     
     strategy_class = strategies.get(strategy_type)
     if not strategy_class:
-        from ..exceptions import SwarmValidationError
-        raise SwarmValidationError(f"Unknown strategy type: {strategy_type}")
+        raise ValueError(f"Unknown strategy type: {strategy_type}")
     
     return strategy_class(aggregator, agent_registry, storage)

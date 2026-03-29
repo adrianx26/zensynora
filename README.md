@@ -177,6 +177,7 @@ You: exit                # Quit
 | `list_knowledge()` | List all knowledge notes |
 | `sync_knowledge_base()` | Sync knowledge with files |
 | `list_knowledge_tags()` | List all knowledge tags |
+| `swarm_message(swarm_id, message, from_agent, to_agent)` | Send message to agents in a swarm |
 
 ### Telegram Commands
 

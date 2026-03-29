@@ -320,7 +320,7 @@ class AppConfig(BaseModel):
         try:
             return getattr(self, key)
         except AttributeError:
-            raise ConfigNotFoundError(key)
+            raise KeyError(key)
 
 
 # ── Loaders ───────────────────────────────────────────────────────────────────

@@ -12,27 +12,12 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from collections import defaultdict
 
-from .exceptions import (
-    ToolValidationError,
-    ToolPermissionError,
-    ToolNotFoundError,
-    KnowledgeBaseError,
-    KnowledgeNotFoundError,
-)
 from .knowledge import (
     write_note, read_note, delete_note, list_notes, search_notes,
     get_related_entities, build_context, sync_knowledge, get_all_tags,
     Observation, Relation
 )
 from .knowledge.storage import get_knowledge_dir
-
-# Module-level config reference for timeout settings
-_config = None
-
-def set_config(config):
-    """Called by gateway to provide config for timeout settings."""
-    global _config
-    _config = config
 
 logger = logging.getLogger(__name__)
 
@@ -196,20 +181,10 @@ def validate_path(path: str) -> Path:
     try:
         target = (workspace / path).resolve()
         if not str(target).startswith(str(workspace)):
-            raise ToolPermissionError(
-                f"Path traversal detected: {path}",
-                reason="Path traversal attempt blocked",
-                tool_name="validate_path"
-            )
+            raise ValueError(f"Path traversal detected: {path}")
         return target
-    except ToolPermissionError:
-        raise
     except Exception as e:
-        raise ToolValidationError(
-            f"Invalid path: {path}",
-            tool_name="validate_path",
-            validation_errors={"path": str(e)}
-        ) from e
+        raise ValueError(f"Invalid path: {path}") from e
 
 
 async def shell_async(cmd: str, timeout: int = 30) -> str:
@@ -313,13 +288,9 @@ def shell(cmd: str) -> str:
             return f"Error: Command '{first_cmd}' is blocked for security"
         if first_cmd not in ALLOWED_COMMANDS:
             return f"Error: '{first_cmd}' not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
-        # Get timeout from config (default 30 seconds)
-        timeout = 30
-        if _config and hasattr(_config, 'timeouts'):
-            timeout = _config.timeouts.shell_seconds
         result = subprocess.run(
             parts, shell=False, cwd=WORKSPACE,
-            capture_output=True, text=True, timeout=timeout
+            capture_output=True, text=True, timeout=30
         )
         duration_ms = (time.time() - start_time) * 1000
         # 5.4: Audit logging
@@ -328,7 +299,7 @@ def shell(cmd: str) -> str:
     except subprocess.TimeoutExpired:
         duration_ms = (time.time() - start_time) * 1000
         _tool_audit_logger.log("shell", "", duration_ms, False, "Command timed out")
-        return f"Error: Command timed out after {timeout} seconds"
+        return "Error: Command timed out after 30 seconds"
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         _tool_audit_logger.log("shell", "", duration_ms, False, str(e))
@@ -885,19 +856,9 @@ def split_schedule(job_id: str, sub_tasks_json: str) -> str:
     try:
         tasks = json.loads(sub_tasks_json)
         if not isinstance(tasks, list):
-            raise ToolValidationError(
-                "sub_tasks_json must be a valid JSON array of strings",
-                tool_name="schedule_complex_task",
-                validation_errors={"sub_tasks_json": "Must be a JSON array"}
-            )
-    except json.JSONDecodeError as e:
-        raise ToolValidationError(
-            "Invalid JSON in sub_tasks_json",
-            tool_name="schedule_complex_task",
-            validation_errors={"sub_tasks_json": str(e)}
-        )
-    except ToolValidationError:
-        raise
+            raise ValueError()
+    except:
+        return "Error: sub_tasks_json must be a valid JSON array of strings."
         
     job = jobs[0]
     data = job.data or {}
@@ -1527,6 +1488,56 @@ def swarm_stats(user_id: str = "default") -> str:
         return f"Error getting stats: {e}"
 
 
+async def swarm_message(
+    swarm_id: str,
+    message: str,
+    from_agent: str = "user",
+    to_agent: str = None
+) -> str:
+    """Send a message to agents in a swarm for inter-agent communication.
+    
+    swarm_id: The swarm ID to send message to
+    message: The message content to send
+    from_agent: The sender agent name (default: "user")
+    to_agent: Optional specific recipient agent (None for broadcast to all)
+    
+    Returns:
+        Success or error message.
+    """
+    try:
+        orchestrator = _get_swarm_orchestrator()
+        
+        # Validate swarm exists
+        swarm_info = orchestrator.get_status(swarm_id)
+        if not swarm_info:
+            return f"❌ Swarm {swarm_id} not found"
+        
+        # Validate from_agent exists in the swarm
+        all_agents = swarm_info.workers.copy()
+        if swarm_info.coordinator:
+            all_agents.append(swarm_info.coordinator)
+        
+        if from_agent != "user" and from_agent not in all_agents:
+            return f"❌ Agent '{from_agent}' is not part of swarm {swarm_id}"
+        
+        # Validate to_agent if specified
+        if to_agent and to_agent not in all_agents:
+            return f"❌ Agent '{to_agent}' is not part of swarm {swarm_id}"
+        
+        message_id = orchestrator.send_message(
+            swarm_id=swarm_id,
+            from_agent=from_agent,
+            message=message,
+            to_agent=to_agent
+        )
+        
+        recipient = f"all agents" if not to_agent else f"agent '{to_agent}'"
+        return f"✅ Message sent to {recipient} in swarm {swarm_id} (ID: {message_id})"
+    except Exception as e:
+        logger.error(f"Failed to send swarm message: {e}")
+        return f"Error sending message: {e}"
+
+
 # ── Tool Registry ─────────────────────────────────────────────────────────────
 # NOTE: new custom tools are added to this dict at runtime by register_tool()
 
@@ -1560,7 +1571,7 @@ TOOLS: Dict[str, dict] = {
     "list_knowledge":       {"func": list_knowledge,       "desc": "List all knowledge notes"},
     "get_knowledge_context":{"func": get_knowledge_context,"desc": "Build context from knowledge graph"},
     "get_related_knowledge":{"func": get_related_knowledge,"desc": "Get related entities from knowledge base"},
-    "sync_knowledge_base":  {"func": sync_knowledge_base,  "desc": "Sync knowledge base with files"},
+    "sync_knowledge_base":  {"func": sync_knowledge,       "desc": "Sync knowledge base with files"},
     "list_knowledge_tags":  {"func": list_knowledge_tags,  "desc": "List all knowledge tags"},
     # Agent Swarm Tools
     "swarm_create":         {"func": swarm_create,         "desc": "Create a new agent swarm"},
@@ -1570,6 +1581,7 @@ TOOLS: Dict[str, dict] = {
     "swarm_terminate":      {"func": swarm_terminate,      "desc": "Terminate a running swarm"},
     "swarm_list":           {"func": swarm_list,           "desc": "List all swarms"},
     "swarm_stats":          {"func": swarm_stats,          "desc": "Get swarm statistics"},
+    "swarm_message":        {"func": swarm_message,        "desc": "Send message to agents in a swarm"},
 }
 
 import inspect

@@ -110,7 +110,7 @@ swarm_assign("swarm_xxx", "Research AI developments")
 | LLM calls | 🚧 PENDING | Streaming responses not yet enabled |
 | Memory | ✅ FIXED | Sliding window summaries implemented |
 | DB | ✅ FIXED | Added `idx_timestamp` on chat entries |
-| Config | 🚧 PENDING | Validate config against Pydantic schemas |
+| Config | ✅ FIXED | Pydantic validation schema implemented |
 
 ---
 
@@ -160,14 +160,24 @@ See [docs/agent_swarm_guide.md](docs/agent_swarm_guide.md) for detailed document
 
 ```
 myclaw/
-├── myclaw/
-│   ├── __init__.py          # ✅ Created
-│   ├── config.py            # Config loading with SwarmConfig
+│   ├── __init__.py              # ✅ Created
+│   ├── config.py                # Config loading with Pydantic validation
 │   ├── memory.py            # SQLite persistence
 │   ├── provider.py          # API Client abstraction with swarm schemas
 │   ├── tools.py             # Shell, files, network, tasks, rules, SWARM TOOLS
 │   ├── agent.py             # Main agent routing with swarm context
-│   ├── gateway.py           # Channel endpoints
+│   ├── gateway.py               # Channel endpoints
+│   ├── skills.md                # Agent skills and toolbox definitions
+│   ├── profiles/               # Agent profile prompts
+│   │   ├── __init__.py
+│   │   ├── agent.md
+│   │   ├── bootstrap.md
+│   │   ├── default.md
+│   │   ├── heartbeat.md
+│   │   ├── identity.md
+│   │   ├── memory.md
+│   │   ├── soul.md
+│   │   └── user.md
 │   ├── swarm/               # 🐝 Agent Swarm System
 │   │   ├── __init__.py      # Package exports
 │   │   ├── models.py        # SwarmConfig, SwarmTask, SwarmResult
@@ -178,12 +188,18 @@ myclaw/
 │   └── channels/
 │       ├── __init__.py      # ✅ Created
 │       └── telegram.py      # Telegram bot
+```
+
+## Root Level Files
+
+```
+├── cli.py                   # Command-line interface
+├── onboard.py               # Setup wizard
+├── requirements.txt         # Dependencies
 ├── docs/
 │   └── agent_swarm_guide.md # 📚 Swarm documentation
-├── plans/
-│   └── agent_swarm_implementation_plan.md # Implementation details
-├── onboard.py               # Setup wizard
-├── cli.py                   # Command-line interface
-├── requirements.txt         # Dependencies
-└── config.json.example      # Config template
+└── plans/
+    └── agent_swarm_implementation_plan.md # Implementation details
 ```
+
+ > **Note**: Configuration is stored in `~/.myclaw/config.json` (not included in repo)
