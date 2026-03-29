@@ -11,9 +11,12 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 NEWTECH_DIR = Path.home() / ".myclaw" / "newtech"
+NEWTECH_DIR.mkdir(parents=True, exist_ok=True)
 ROADMAP_FILE = NEWTECH_DIR / "roadmap.json"
 PROPOSALS_FILE = NEWTECH_DIR / "proposals.json"
 NEWS_CACHE = NEWTECH_DIR / "news_cache.json"
+
+GITHUB_API_URL = "https://api.github.com"
 
 config = None
 
@@ -27,15 +30,35 @@ def set_config(cfg):
 class NewTechAgent:
     """Agent for monitoring AI news and generating technology proposals."""
 
-    def __init__(self, enabled: bool = False, interval_hours: int = 24, share_consent: bool = False):
-        self.enabled = enabled
-        self.interval_hours = interval_hours
-        self.share_consent = share_consent
+    def __init__(self, enabled: bool = False, interval_hours: int = 24, share_consent: bool = False, github_token: str = ""):
+        if config and hasattr(config, 'newtech'):
+            self.enabled = config.newtech.enabled if hasattr(config.newtech, 'enabled') else enabled
+            self.interval_hours = config.newtech.interval_hours if hasattr(config.newtech, 'interval_hours') else interval_hours
+            self.share_consent = config.newtech.share_consent if hasattr(config.newtech, 'share_consent') else share_consent
+            self.github_token = str(config.newtech.github_token) if hasattr(config.newtech, 'github_token') and config.newtech.github_token else github_token
+            self.max_news_items = config.newtech.max_news_items if hasattr(config.newtech, 'max_news_items') else 10
+        else:
+            self.enabled = enabled
+            self.interval_hours = interval_hours
+            self.share_consent = share_consent
+            self.github_token = github_token
+            self.max_news_items = 10
+        
         self.newtech_dir = NEWTECH_DIR
         self.newtech_dir.mkdir(parents=True, exist_ok=True)
         self.roadmap_file = ROADMAP_FILE
         self.proposals_file = PROPOSALS_FILE
         self.news_cache = NEWS_CACHE
+
+    def _get_github_headers(self) -> Dict[str, str]:
+        """Get GitHub API headers with authentication."""
+        headers = {
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28"
+        }
+        if self.github_token:
+            headers["Authorization"] = f"Bearer {self.github_token}"
+        return headers
 
     def check_consent(self) -> bool:
         """Check if user has given consent for New Tech features."""
@@ -239,21 +262,90 @@ class NewTechAgent:
 
     async def _create_gist(self, title: str, content: str) -> Dict[str, Any]:
         """Create a GitHub Gist with the content."""
-        return {
-            "success": True,
-            "type": "gist",
-            "title": title,
-            "note": "Gist creation requires GitHub token configuration"
-        }
+        if not self.github_token:
+            return {
+                "success": False,
+                "type": "gist",
+                "title": title,
+                "message": "GitHub token not configured. Set github_token in config."
+            }
+        
+        try:
+            import requests
+            gist_data = {
+                "description": title,
+                "public": False,
+                "files": {
+                    f"{title.replace(' ', '_')}.md": {
+                        "content": content
+                    }
+                }
+            }
+            response = requests.post(
+                f"{GITHUB_API_URL}/gists",
+                headers=self._get_github_headers(),
+                json=gist_data,
+                timeout=30
+            )
+            if response.status_code == 201:
+                data = response.json()
+                return {
+                    "success": True,
+                    "type": "gist",
+                    "title": title,
+                    "url": data.get("html_url"),
+                    "gist_id": data.get("id")
+                }
+            else:
+                return {
+                    "success": False,
+                    "type": "gist",
+                    "message": f"Failed to create gist: {response.status_code}"
+                }
+        except Exception as e:
+            logger.error(f"Error creating gist: {e}")
+            return {"success": False, "message": str(e)}
 
     async def _create_issue(self, title: str, content: str) -> Dict[str, Any]:
         """Create a GitHub Issue with the content."""
-        return {
-            "success": True,
-            "type": "issue",
-            "title": title,
-            "note": "Issue creation requires GitHub token configuration"
-        }
+        if not self.github_token:
+            return {
+                "success": False,
+                "type": "issue",
+                "title": title,
+                "message": "GitHub token not configured. Set github_token in config."
+            }
+        
+        try:
+            import requests
+            issue_data = {
+                "title": title,
+                "body": content
+            }
+            response = requests.post(
+                f"{GITHUB_API_URL}/repos/OWNER/REPO/issues",
+                headers=self._get_github_headers(),
+                json=issue_data,
+                timeout=30
+            )
+            if response.status_code == 201:
+                data = response.json()
+                return {
+                    "success": True,
+                    "type": "issue",
+                    "title": title,
+                    "url": data.get("html_url"),
+                    "issue_number": data.get("number")
+                }
+            else:
+                return {
+                    "success": False,
+                    "type": "issue",
+                    "message": f"Failed to create issue: {response.status_code}"
+                }
+        except Exception as e:
+            logger.error(f"Error creating issue: {e}")
+            return {"success": False, "message": str(e)}
 
     def run_ondemand(self) -> Dict[str, Any]:
         """Run New Tech agent on-demand (bypasses interval check)."""
@@ -447,11 +539,16 @@ def share_proposal(title: str, content: str, format: str = "gist") -> str:
         Share result
     """
     import asyncio
-    agent = NewTechAgent()
+    
+    github_token = ""
+    if config and hasattr(config, 'newtech'):
+        github_token = getattr(config.newtech, 'github_token', "")
+    
+    agent = NewTechAgent(github_token=github_token)
     result = asyncio.run(agent.share_to_github(content, title, format))
     
     if result.get("success"):
-        return f"✅ Shared as {result.get('type')}: {title}\nNote: {result.get('note')}"
+        return f"✅ Shared as {result.get('type')}: {title}\nURL: {result.get('url', 'N/A')}"
     return f"❌ Share failed: {result.get('message')}"
 
 

@@ -8,6 +8,8 @@ The Medic Agent is ZenSynora's system health monitoring and recovery system. It 
 - Recovery from GitHub or local backups
 - Task execution analytics
 - Infinite loop prevention
+- VirusTotal malware scanning
+- Local backup management
 
 ## Installation & Configuration
 
@@ -331,8 +333,35 @@ class MedicAgent:
 3. **Review analytics** - Check task analytics weekly
 4. **Backup configuration** - Keep backup repo URL configured
 5. **Monitor loop prevention** - Watch for repeated patterns
+6. **Create local backups** - Use `create_backup()` for important files
+7. **VirusTotal scans** - Scan suspicious files before execution
+
+## Additional Features
+
+### Local Backup
+
+```python
+from myclaw.agents.medic_agent import create_backup, list_backups
+
+# Create backup
+result = create_backup("myclaw/agent.py")
+
+# List all backups
+result = list_backups()
+```
+
+### VirusTotal Check
+
+```python
+from myclaw.agents.medic_agent import check_file_virustotal
+
+# Check file (requires API key in config)
+result = check_file_virustotal("myclaw/agent.py")
+# Or with API key parameter
+result = check_file_virustotal("myclaw/agent.py", api_key="YOUR_VT_API_KEY")
+```
 
 ---
 
 *Generated: 2026-03-29*
-*Part of: ZenSynora Phase 2 Implementation*
+*Part of: ZenSynora Phase 2 + Future Implementations*

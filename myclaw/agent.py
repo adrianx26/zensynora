@@ -232,6 +232,21 @@ class Agent:
 
         _depth tracks sub-agent delegation depth — prevents infinite loops.
         """
+        # Agent Pipeline Integration: Loop prevention
+        if _depth > 10:
+            logger.warning(f"Max delegation depth reached ({_depth}). Preventing potential infinite loop.")
+            return "I've reached the maximum delegation depth. Let me handle this request directly."
+        
+        # Medic Agent: Check loop prevention before processing
+        try:
+            from myclaw.agents.medic_agent import prevent_infinite_loop
+            loop_status = prevent_infinite_loop()
+            if "limit reached" in loop_status.lower():
+                logger.warning("Execution limit reached by loop prevention")
+                return "I'm detecting repeated patterns in the request. Let me break out of the loop and handle this directly."
+        except Exception:
+            pass
+        
         mem = self._get_memory(user_id)
         mem.add("user", user_message)
 

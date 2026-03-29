@@ -35,7 +35,10 @@ from .agents.medic_agent import (
     enable_hash_check,
     scan_files,
     detect_errors_in_file,
-    prevent_infinite_loop
+    prevent_infinite_loop,
+    create_backup,
+    list_backups,
+    check_file_virustotal
 )
 from .agents.newtech_agent import (
     fetch_ai_news,
@@ -2829,6 +2832,9 @@ TOOLS: Dict[str, dict] = {
     "scan_files":             {"func": scan_files,              "desc": "Scan files and record their hashes for integrity checking"},
     "detect_errors_in_file":  {"func": detect_errors_in_file,   "desc": "Detect syntax errors in a Python file"},
     "prevent_infinite_loop": {"func": prevent_infinite_loop,  "desc": "Get status of infinite loop prevention"},
+    "create_backup":         {"func": create_backup,          "desc": "Create a local backup of a file"},
+    "list_backups":          {"func": list_backups,           "desc": "List all local backups"},
+    "check_file_virustotal": {"func": check_file_virustotal,   "desc": "Check a file against VirusTotal for malware detection"},
     # New Tech Agent - AI News & Technology
     "fetch_ai_news":         {"func": fetch_ai_news,          "desc": "Fetch AI news from various sources"},
     "get_technology_proposals": {"func": get_technology_proposals, "desc": "Get all technology proposals"},

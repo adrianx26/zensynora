@@ -305,8 +305,51 @@ save     share_to_github()
 2. **Prioritize roadmap** - Add high-priority items to roadmap
 3. **Review proposals** - Regularly review generated proposals
 4. **Consent for sharing** - Only enable share_consent if you want public sharing
+5. **Configure GitHub token** - Set token in config for real sharing
+
+## GitHub Integration
+
+### Configuration
+
+Add to your `config.json`:
+
+```json
+{
+  "newtech": {
+    "enabled": true,
+    "share_consent": true,
+    "github_token": "ghp_xxxxxxxxxxxx",
+    "github_repo_for_share": "yourusername/zensynora"
+  }
+}
+```
+
+Or via environment variable:
+```bash
+export MYCLAW_GITHUB_TOKEN="ghp_xxxxxxxxxxxx"
+```
+
+### Sharing to GitHub
+
+```python
+from myclaw.agents.newtech_agent import share_proposal
+
+# Share as Gist
+result = share_proposal(
+    title="My Proposal",
+    content="# Technology Proposal...",
+    format="gist"
+)
+
+# Share as Issue
+result = share_proposal(
+    title="Feature Request",
+    content="## Description...",
+    format="issue"
+)
+```
 
 ---
 
 *Generated: 2026-03-29*
-*Part of: ZenSynora Phase 3 Implementation*
+*Part of: ZenSynora Phase 3 + Future Implementations*

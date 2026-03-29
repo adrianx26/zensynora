@@ -102,6 +102,8 @@ ENV_OVERRIDES = {
     "agents.summarization_threshold": "MYCLAW_AGENTS_SUMMARIZATION_THRESHOLD",
     # Knowledge
     "knowledge.auto_extract": "MYCLAW_KNOWLEDGE_AUTO_EXTRACT",
+    # New Tech
+    "newtech.github_token": "MYCLAW_GITHUB_TOKEN",
 }
 
 
@@ -311,6 +313,8 @@ class MedicConfig(BaseModel):
     max_loop_iterations: int = 100
     secondary_llm_provider: str = ""
     secondary_llm_model: str = ""
+    backup_dir: str = ""  # Local backup directory
+    virustotal_api_key: SecretStr = SecretStr("")  # VirusTotal API key
 
 
 class NewTechConfig(BaseModel):
@@ -320,6 +324,7 @@ class NewTechConfig(BaseModel):
     share_consent: bool = False
     github_repo_for_share: str = ""
     max_news_items: int = 10
+    github_token: SecretStr = SecretStr("")  # GitHub token for API auth
 
 
 class SkillAdapterConfig(BaseModel):

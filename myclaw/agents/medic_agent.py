@@ -13,9 +13,11 @@ from datetime import datetime, timedelta
 logger = logging.getLogger(__name__)
 
 MEDIC_DIR = Path.home() / ".myclaw" / "medic"
+MEDIC_DIR.mkdir(parents=True, exist_ok=True)
 INTEGRITY_FILE = MEDIC_DIR / "integrity_registry.json"
 HEALTH_FILE = MEDIC_DIR / "health_state.json"
 TASK_LOG_FILE = MEDIC_DIR / "task_log.json"
+LOCAL_BACKUP_DIR = MEDIC_DIR / "backup"
 
 DEFAULT_REPO_URL = "https://raw.githubusercontent.com/zensynora/zensynora/main"
 CORE_FILES = [
@@ -42,7 +44,19 @@ class MedicAgent:
     """System health agent with hash integrity checking and error recovery."""
 
     def __init__(self, repo_url: str = DEFAULT_REPO_URL):
-        self.repo_url = repo_url
+        if config and hasattr(config, 'medic'):
+            self.repo_url = config.medic.repo_url if config.medic.repo_url else repo_url
+            self.enabled = config.medic.enabled
+            self.enable_hash_check = config.medic.enable_hash_check
+            self.scan_on_startup = config.medic.scan_on_startup
+            self.max_loop_iterations = config.medic.max_loop_iterations
+        else:
+            self.repo_url = repo_url
+            self.enabled = True
+            self.enable_hash_check = True
+            self.scan_on_startup = False
+            self.max_loop_iterations = 100
+        
         self.medic_dir = MEDIC_DIR
         self.medic_dir.mkdir(parents=True, exist_ok=True)
         self.integrity_file = INTEGRITY_FILE
@@ -300,6 +314,70 @@ class MedicAgent:
             logger.error(f"Error recovering file: {e}")
             return {"success": False, "message": str(e)}
 
+    def recover_from_local(self, file_path: str) -> Dict[str, Any]:
+        """Recover a corrupted or missing file from local backup.
+        
+        Args:
+            file_path: Path to recover
+            
+        Returns:
+            Dict with recovery results
+        """
+        try:
+            backup_path = LOCAL_BACKUP_DIR / file_path
+            if not backup_path.exists():
+                return {"success": False, "message": f"No local backup found for {file_path}"}
+            
+            content = backup_path.read_text(encoding="utf-8")
+            
+            target_path = Path(file_path)
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            target_path.write_text(content, encoding="utf-8")
+            
+            new_hash = self.calculate_hash(file_path)
+            return {
+                "success": True,
+                "file": file_path,
+                "hash": new_hash,
+                "source": "local_backup"
+            }
+        
+        except Exception as e:
+            logger.error(f"Error recovering from local: {e}")
+            return {"success": False, "message": str(e)}
+
+    def create_local_backup(self, file_path: str) -> Dict[str, Any]:
+        """Create a local backup of a file.
+        
+        Args:
+            file_path: Path to backup
+            
+        Returns:
+            Dict with backup results
+        """
+        try:
+            source = Path(file_path)
+            if not source.exists():
+                return {"success": False, "message": f"Source file not found: {file_path}"}
+            
+            LOCAL_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+            
+            backup_path = LOCAL_BACKUP_DIR / file_path
+            backup_path.parent.mkdir(parents=True, exist_ok=True)
+            
+            content = source.read_text(encoding="utf-8")
+            backup_path.write_text(content, encoding="utf-8")
+            
+            return {
+                "success": True,
+                "file": file_path,
+                "backup_path": str(backup_path)
+            }
+        
+        except Exception as e:
+            logger.error(f"Error creating local backup: {e}")
+            return {"success": False, "message": str(e)}
+
     def record_task(self, task_name: str, duration: float, success: bool = True) -> None:
         """Record task execution for analytics.
         
@@ -535,7 +613,55 @@ async def recover_file(file_path: str, source: str = "github") -> str:
             return f"✅ File recovered from GitHub: {file_path}\nNew hash: {result.get('hash', 'unknown')}"
         return f"❌ Recovery failed: {result.get('message', 'Unknown error')}"
     
-    return f"⚠️ Unknown source '{source}'. Use 'github' for GitHub recovery."
+    if source == "local":
+        result = medic.recover_from_local(file_path)
+        if result.get("success"):
+            return f"✅ File recovered from local backup: {file_path}\nNew hash: {result.get('hash', 'unknown')}"
+        return f"❌ Recovery failed: {result.get('message', 'Unknown error')}"
+    
+    return f"⚠️ Unknown source '{source}'. Use 'github' or 'local' for recovery."
+
+
+def create_backup(file_path: str) -> str:
+    """Create a local backup of a file.
+    
+    Args:
+        file_path: Path to backup
+    
+    Returns:
+        Backup result
+    """
+    medic = MedicAgent()
+    result = medic.create_local_backup(file_path)
+    
+    if result.get("success"):
+        return f"✅ Backup created: {file_path}\nBackup location: {result.get('backup_path')}"
+    return f"❌ Backup failed: {result.get('message', 'Unknown error')}"
+
+
+def list_backups() -> str:
+    """List all local backups.
+    
+    Returns:
+        Formatted list of backups
+    """
+    medic = MedicAgent()
+    
+    if not LOCAL_BACKUP_DIR.exists():
+        return "📁 No backups found. No backup directory exists."
+    
+    backups = list(LOCAL_BACKUP_DIR.rglob("*"))
+    files = [b for b in backups if b.is_file()]
+    
+    if not files:
+        return "📁 No backups found. Backup directory is empty."
+    
+    lines = ["📁 Local Backups:", ""]
+    for f in files:
+        rel_path = f.relative_to(LOCAL_BACKUP_DIR)
+        lines.append(f"  • {rel_path}")
+    
+    return "\n".join(lines)
 
 
 def get_health_report() -> str:
@@ -682,3 +808,91 @@ def prevent_infinite_loop() -> str:
     if state["should_stop"]:
         return "⚠️ Execution limit reached. Stopping to prevent infinite loop."
     return f"✅ Loop prevention active. Calls: {state['count']}/{state['max_allowed']}"
+
+
+VIRUSTOTAL_API_URL = "https://www.virustotal.com/api/v3"
+
+
+def check_file_virustotal(file_path: str, api_key: str = "") -> str:
+    """Check a file against VirusTotal for malware detection.
+    
+    Args:
+        file_path: Path to the file to check
+        api_key: VirusTotal API key (optional, can be set in config)
+    
+    Returns:
+        Detection report
+    """
+    if not api_key:
+        if config and hasattr(config, 'medic'):
+            api_key = getattr(config.medic, 'virustotal_api_key', "")
+    
+    if not api_key:
+        return "⚠️ VirusTotal API key not configured. Set virustotal_api_key in config or pass as parameter."
+    
+    try:
+        import requests
+        
+        path = Path(file_path)
+        if not path.exists():
+            return f"❌ File not found: {file_path}"
+        
+        # Calculate file hash
+        hash_value = hashlib.sha256()
+        with open(path, 'rb') as f:
+            for chunk in iter(lambda: f.read(8192), b''):
+                hash_value.update(chunk)
+        file_hash = hash_value.hexdigest()
+        
+        # Query VirusTotal
+        headers = {"x-apikey": api_key}
+        response = requests.get(
+            f"{VIRUSTOTAL_API_URL}/files/{file_hash}",
+            headers=headers,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            stats = data.get("data", {}).get("attributes", {}).get("last_analysis_stats", {})
+            
+            malicious = stats.get("malicious", 0)
+            suspicious = stats.get("suspicious", 0)
+            harmless = stats.get("harmless", 0)
+            undetected = stats.get("undetected", 0)
+            total = malicious + suspicious + harmless + undetected
+            
+            if total == 0:
+                return f"🔍 No scan results for {file_path}. File may be new to VirusTotal."
+            
+            detection_ratio = (malicious + suspicious) / total * 100
+            
+            lines = [
+                f"🔍 VirusTotal Report for {path.name}",
+                f"SHA256: {file_hash[:16]}...",
+                "",
+                f"Malicious: {malicious}",
+                f"Suspicious: {suspicious}",
+                f"Harmless: {harmless}",
+                f"Undetected: {undetected}",
+                "",
+            ]
+            
+            if detection_ratio > 50:
+                lines.append(f"⚠️ HIGH RISK: {detection_ratio:.1f}% of engines detected threats!")
+                return "\n".join(lines)
+            elif detection_ratio > 0:
+                lines.append(f"⚡ LOW RISK: {detection_ratio:.1f}% of engines detected threats")
+                return "\n".join(lines)
+            else:
+                lines.append(f"✅ CLEAN: No threats detected")
+                return "\n".join(lines)
+        
+        elif response.status_code == 404:
+            return f"🔍 File not found in VirusTotal database. It may be a new file or not yet scanned."
+        else:
+            return f"❌ VirusTotal API error: {response.status_code}"
+    
+    except Exception as e:
+        logger.error(f"Error checking VirusTotal: {e}")
+        return f"❌ Error checking VirusTotal: {e}"
