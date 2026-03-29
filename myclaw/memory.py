@@ -459,16 +459,71 @@ class Memory:
             logger.error(f"Error saving extracted knowledge: {e}")
             return None
 
-    def search(self, query: str, limit: int = 20) -> list:
-        """Search messages using full-text search."""
+    def search(self, query: str, limit: int = 20, boost_recent: bool = True) -> list:
+        """Search messages using full-text search with intelligent query processing.
+        
+        Args:
+            query: Search query string. Supports FTS5 syntax (AND, OR, NOT, *).
+                   Phrases in quotes are matched exactly.
+            limit: Maximum number of results (default: 20)
+            boost_recent: Whether to boost recent messages in ranking (default: True)
+            
+        Returns:
+            List of message dicts with role, content, and timestamp.
+        """
         try:
-            cur = self.conn.execute(
-                "SELECT m.role, m.content, m.timestamp FROM messages m "
-                "JOIN messages_fts fts ON m.id = fts.rowid "
-                "WHERE messages_fts MATCH ? ORDER BY rank LIMIT ?",
-                (query, limit)
-            )
-            return [{"role": r, "content": c, "timestamp": t} for r, c, t in cur.fetchall()]
+            import re
+            
+            # Preprocess query for better FTS5 matching
+            processed_query = query
+            
+            # Detect if user used quotes (exact phrase)
+            exact_phrases = re.findall(r'"([^"]+)"', processed_query)
+            if exact_phrases:
+                # Replace quoted phrases with FTS5 phrase syntax
+                for phrase in exact_phrases:
+                    processed_query = processed_query.replace(f'"{phrase}"', f'"{phrase}"')
+            
+            # If query has no operators, try prefix matching on each word
+            if not any(op in processed_query.upper() for op in ['AND', 'OR', 'NOT', '*']):
+                words = processed_query.split()
+                if len(words) == 1:
+                    processed_query = f"{processed_query}*"
+                elif len(words) <= 3:
+                    processed_query = " ".join(f"{w}*" for w in words)
+            
+            # Build the SQL query with optional recency boosting
+            if boost_recent:
+                sql = """
+                    SELECT m.role, m.content, m.timestamp,
+                           bm25(messages_fts) as score,
+                           CAST(m.id as real) / 1000000 as recency_score
+                    FROM messages m
+                    JOIN messages_fts fts ON m.id = fts.rowid
+                    WHERE messages_fts MATCH ?
+                    ORDER BY bm25(messages_fts) + (recency_score * 0.1) DESC
+                    LIMIT ?
+                """
+            else:
+                sql = """
+                    SELECT m.role, m.content, m.timestamp
+                    FROM messages m
+                    JOIN messages_fts fts ON m.id = fts.rowid
+                    WHERE messages_fts MATCH ?
+                    ORDER BY rank
+                    LIMIT ?
+                """
+            
+            cur = self.conn.execute(sql, (processed_query, limit))
+            
+            if boost_recent:
+                return [
+                    {"role": r, "content": c, "timestamp": t, "score": s}
+                    for r, c, t, s, _ in cur.fetchall()
+                ]
+            else:
+                return [{"role": r, "content": c, "timestamp": t} for r, c, t in cur.fetchall()]
+                
         except Exception as e:
             logger.error(f"Error searching: {e}")
             return []

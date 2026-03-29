@@ -1,6 +1,6 @@
 from .memory import Memory
 from .provider import get_provider, SUPPORTED_PROVIDERS
-from .tools import TOOLS
+from .tools import TOOLS, trigger_hook, _HOOKS
 from .knowledge import search_notes, build_context
 from rich.console import Console
 import json
@@ -118,6 +118,14 @@ class Agent:
             else:
                 self.system_prompt = system_prompt or SYSTEM_PROMPT
         
+        # Load user dialectic profile if it exists (for personalization)
+        dialectic_path = local_profiles_dir / "user_dialectic.md"
+        if dialectic_path.exists():
+            dialectic_content = dialectic_path.read_text(encoding="utf-8").strip()
+            if dialectic_content and dialectic_content != self.system_prompt:
+                # Append dialectic profile to system prompt
+                self.system_prompt = f"{self.system_prompt}\n\n## User Profile\n{dialectic_content}"
+        
         # Store config for later use
         self.config = config
 
@@ -227,19 +235,34 @@ class Agent:
         mem = self._get_memory(user_id)
         mem.add("user", user_message)
 
+        # Trigger on_session_start hook
+        trigger_hook("on_session_start", user_id, self.name)
+
+        # Track message count for on_session_end
+        message_count_start = len(mem.get_history()) if hasattr(mem, 'get_history') else 0
+
         history = mem.get_history()
 
-        # Feature: Context Summarization
+        # Feature: Context Summarization with trajectory compression
         threshold = getattr(self.config.agents, 'summarization_threshold', 10)
         if len(history) > threshold:
             to_summarize = history[:-5]
             recent = history[-5:]
-            summary_prompt = "Summarize the following conversation context briefly in one paragraph:\n"
+            summary_prompt = (
+                "Summarize the following conversation context. Focus on key decisions, "
+                "important facts, and user preferences. Preserve information that would be "
+                "important for future context:\n"
+            )
             for m in to_summarize:
-                summary_prompt += f"{m['role']}: {m['content']}\n"
-            summary_msgs = [{"role": "system", "content": "You summarize conversations."}, {"role": "user", "content": summary_prompt}]
+                summary_prompt += f"{m['role']}: {m['content'][:200]}\n"
+            summary_msgs = [{"role": "system", "content": "You summarize conversations concisely."}, 
+                          {"role": "user", "content": summary_prompt}]
             try:
                 summary_text, _ = await self.provider.chat(summary_msgs, self.model)
+                original_len = sum(len(m['content']) for m in to_summarize)
+                compressed_len = len(summary_text)
+                compression_ratio = (1 - compressed_len / original_len) * 100 if original_len > 0 else 0
+                logger.debug(f"Trajectory compressed: {original_len} -> {compressed_len} chars ({compression_ratio:.1f}% reduction)")
                 history = [{"role": "system", "content": f"Previous conversation summary: {summary_text}"}] + recent
             except Exception as e:
                 logger.error(f"Error summarizing history: {e}")
@@ -255,11 +278,24 @@ class Agent:
         
         messages = [{"role": "system", "content": system_content}] + history
 
+        # Trigger pre_llm_call hooks - allow hooks to modify messages
+        hook_results = trigger_hook("pre_llm_call", messages, self.model)
+        for result in hook_results:
+            if result and isinstance(result, list):
+                messages = result  # Use modified messages from hook
+                logger.debug(f"pre_llm_call hook modified messages")
+
         try:
             response, tool_calls = await self.provider.chat(messages, self.model)
         except Exception as e:
             logger.error(f"LLM provider error: {e}")
             return f"Sorry, I encountered an error: {e}"
+
+        # Trigger post_llm_call hooks
+        hook_results = trigger_hook("post_llm_call", response, tool_calls)
+        for result in hook_results:
+            if result and isinstance(result, tuple) and len(result) == 2:
+                response, tool_calls = result  # Allow hooks to modify response/tool_calls
 
         if tool_calls:
             results = []
@@ -300,15 +336,36 @@ class Agent:
 
             tool_result_msg = "\n".join(results)
             followup = messages + [{"role": "tool", "content": tool_result_msg}]
+            
+            # Trigger pre_llm_call hooks for followup
+            hook_results = trigger_hook("pre_llm_call", followup, self.model)
+            for result in hook_results:
+                if result and isinstance(result, list):
+                    followup = result
+            
             try:
                 final_response, _ = await self.provider.chat(followup, self.model)
+                
+                # Trigger post_llm_call hooks for followup
+                trigger_hook("post_llm_call", final_response, None)
+                
                 mem.add("assistant", final_response)
+                
+                # Trigger on_session_end hook
+                message_count = len(mem.get_history()) if hasattr(mem, 'get_history') else 0
+                trigger_hook("on_session_end", user_id, self.name, message_count)
+                
                 return final_response
             except Exception as e:
                 logger.error(f"LLM second call error: {e}")
                 return f"Tool executed but error getting response: {e}"
 
         mem.add("assistant", response)
+        
+        # Trigger on_session_end hook
+        message_count = len(mem.get_history()) if hasattr(mem, 'get_history') else 0
+        trigger_hook("on_session_end", user_id, self.name, message_count)
+        
         return response
 
     async def stream_think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> AsyncIterator[str]:
@@ -325,17 +382,24 @@ class Agent:
         mem = self._get_memory(user_id)
         mem.add("user", user_message)
 
+        # Trigger on_session_start hook
+        trigger_hook("on_session_start", user_id, self.name)
+
         history = mem.get_history()
 
-        # Feature: Context Summarization
+        # Feature: Context Summarization with trajectory compression
         threshold = getattr(self.config.agents, 'summarization_threshold', 10)
         if len(history) > threshold:
             to_summarize = history[:-5]
             recent = history[-5:]
-            summary_prompt = "Summarize the following conversation context briefly in one paragraph:\n"
+            summary_prompt = (
+                "Summarize the following conversation context. Focus on key decisions, "
+                "important facts, and user preferences:\n"
+            )
             for m in to_summarize:
-                summary_prompt += f"{m['role']}: {m['content']}\n"
-            summary_msgs = [{"role": "system", "content": "You summarize conversations."}, {"role": "user", "content": summary_prompt}]
+                summary_prompt += f"{m['role']}: {m['content'][:200]}\n"
+            summary_msgs = [{"role": "system", "content": "You summarize conversations concisely."}, 
+                          {"role": "user", "content": summary_prompt}]
             try:
                 summary_text, _ = await self.provider.chat(summary_msgs, self.model)
                 history = [{"role": "system", "content": f"Previous conversation summary: {summary_text}"}] + recent
@@ -353,11 +417,18 @@ class Agent:
         
         messages = [{"role": "system", "content": system_content}] + history
 
+        # Trigger pre_llm_call hooks
+        hook_results = trigger_hook("pre_llm_call", messages, self.model)
+        for result in hook_results:
+            if result and isinstance(result, list):
+                messages = result
+
         try:
             # Use stream_chat for streaming response
             stream_iterator = await self.provider.chat(messages, self.model, stream=True)
         except Exception as e:
             logger.error(f"LLM provider error: {e}")
+            trigger_hook("on_session_end", user_id, self.name, len(mem.get_history()))
             yield f"Sorry, I encountered an error: {e}"
             return
 
@@ -374,7 +445,14 @@ class Agent:
             yield f"Error streaming response: {e}"
             return
 
+        # Trigger post_llm_call hooks
+        trigger_hook("post_llm_call", full_response, tool_calls)
+
         # Note: Tool calls are not supported in streaming mode yet
         # The full response is returned as chunks
         mem.add("assistant", full_response)
+        
+        # Trigger on_session_end hook
+        trigger_hook("on_session_end", user_id, self.name, len(mem.get_history()))
+        
         yield "[TOOL_CALLS_NONE]"  # Signal that streaming is complete

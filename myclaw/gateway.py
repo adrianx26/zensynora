@@ -2,7 +2,7 @@ from .agent import Agent
 from .channels.telegram import TelegramChannel
 from .channels.whatsapp import WhatsAppChannel
 from . import tools as tool_module
-
+from .backends import discover_backends, get_default_backend
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
@@ -10,10 +10,6 @@ from concurrent.futures import ThreadPoolExecutor
 def start(config):
     """Build agent registry, initialize tools, and start the active channel."""
 
-    # ── Setup Global Bounded ThreadPool & Graceful Shutdown ──────────────────
-    # Create an executor and set it as default for the asyncio event loop.
-    # This bounds the global threads spawned by `asyncio.to_thread` across all modules.
-    # 7.1: Use configurable max_workers from config.channels.telegram.max_workers
     max_workers = config.channels.telegram.max_workers if hasattr(config.channels, 'telegram') else 20
     executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="MyClawWorker")
 
@@ -26,7 +22,10 @@ def start(config):
     loop.set_default_executor(executor)
 
     try:
-        # ── Feature 2: Multi-Agent Registry ──────────────────────────────────────
+        discover_backends()
+        backend_config = config.backends.__dict__ if hasattr(config, 'backends') else None
+        default_backend = get_default_backend(backend_config)
+        
         registry = {"default": Agent(config, name="default")}
 
         for nc in config.agents.named:

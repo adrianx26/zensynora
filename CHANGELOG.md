@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 1: Quick Wins
+
+- **Plugin Lifecycle Hooks** (`myclaw/tools.py`, `myclaw/agent.py`)
+  - New hooks system: `pre_llm_call`, `post_llm_call`, `on_session_start`, `on_session_end`
+  - Added `register_hook()`, `trigger_hook()`, `list_hooks()`, `clear_hooks()` functions
+  - Integrated hooks into `agent.think()` and `agent.stream_think()` methods
+
+- **Trajectory Compression Enhancement** (`myclaw/agent.py`)
+  - Improved context summarization with compression ratio logging
+  - Focus on key decisions, facts, and user preferences
+  - Truncated content (200 chars) in summaries to reduce token usage
+
+- **Natural Language Scheduling** (`myclaw/tools.py`)
+  - New `_parse_natural_schedule()` function supporting:
+    - "in 5 minutes" → one-shot
+    - "every 2 hours" → recurring
+    - "at 8 AM daily" → daily recurring
+    - "every Monday at 9pm" → weekly recurring
+  - Added `nlp_schedule(task, natural_time)` tool
+
+- **Enhanced Cross-Session Recall** (`myclaw/memory.py`)
+  - Improved `search()` with BM25 ranking + recency boosting
+  - Automatic prefix matching for single-term queries
+  - Exact phrase support for quoted terms
+
+### Phase 2: Skill System Evolution
+
+- **Full Skill Metadata** (`myclaw/tools.py`)
+  - Extended TOOLBOX_REG schema with: name, version, description, tags, author, created, last_modified, eval_score, eval_count, enabled
+  - Updated `list_toolbox()` to display full metadata
+
+- **Skill Evaluation Harness** (`myclaw/tools.py`)
+  - Added: `get_skill_info()`, `enable_skill()`, `disable_skill()`, `update_skill_metadata()`
+  - Added: `benchmark_skill()`, `evaluate_skill()`
+  - Auto-disable for skills scoring < 30%
+
+- **Skill Self-Improvement** (`myclaw/tools.py`)
+  - Added: `improve_skill()` with safety checks (AST validation, syntax check, docstring/logger requirements)
+  - Added: `rollback_skill()` for version rollback
+  - Automatic backup before improvements
+  - Version increment on update
+
+### Phase 3: Memory & Learning
+
+- **Periodic Session Reflection** (`myclaw/tools.py`)
+  - Added: `schedule_daily_reflection()`, `generate_session_insights()`, `extract_user_preferences()`
+  - Daily reflection at configurable time (default: 8 PM)
+  - Saves summaries to knowledge base with tag `daily_reflection`
+
+- **User Dialectic Profile** (`myclaw/profiles/user_dialectic.md`, `myclaw/agent.py`, `myclaw/tools.py`)
+  - New template: `user_dialectic.md` with communication style, preferences, interests
+  - Agent loads profile on startup and appends to system prompt
+  - Added: `update_user_profile()`, `get_user_profile()`
+
+### Phase 4: ZenHub Ecosystem
+
+- **ZenHub Local Registry** (`myclaw/hub/__init__.py`)
+  - Created new module with skill registry
+  - Added: `hub_search()`, `hub_list()`, `hub_publish()`, `hub_install()`, `hub_remove()`
+  - Registry stored at `~/.myclaw/hub/`
+
+- **External Skill Directory Support** (`myclaw/hub/__init__.py`)
+  - Added: `discover_external_skills()`, `hub_install_from_external()`
+  - Auto-discovers skills from `~/.myclaw/skills/`
+
 ### Added
 
 - **WhatsApp Business Cloud API Channel** (`myclaw/channels/whatsapp.py`)

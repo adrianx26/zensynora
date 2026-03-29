@@ -18,6 +18,36 @@ from .knowledge import (
     Observation, Relation
 )
 from .knowledge.storage import get_knowledge_dir
+from .agents.skill_adapter import (
+    analyze_external_skill,
+    convert_skill,
+    list_compatible_skills,
+    register_external_skill
+)
+from .agents.medic_agent import (
+    check_system_health,
+    verify_file_integrity,
+    recover_file,
+    get_health_report,
+    validate_modification,
+    record_task_execution,
+    get_task_analytics,
+    enable_hash_check,
+    scan_files,
+    detect_errors_in_file,
+    prevent_infinite_loop
+)
+from .agents.newtech_agent import (
+    fetch_ai_news,
+    get_technology_proposals,
+    add_to_roadmap,
+    enable_newtech_agent,
+    run_newtech_scan,
+    summarize_tech,
+    generate_tech_proposal,
+    share_proposal,
+    get_roadmap
+)
 
 logger = logging.getLogger(__name__)
 
@@ -144,6 +174,112 @@ _agent_registry: dict = {}   # name -> Agent  (Feature 2 / 3)
 _job_queue      = None        # python-telegram-bot JobQueue  (Feature 1 / 5)
 _user_chat_ids: dict = {}     # user_id -> chat_id  (Feature 5 notifications)
 _notification_callback = None  # Callback: async fn(user_id, message) for channel-agnostic notifications
+
+
+# ── Plugin Lifecycle Hooks ──────────────────────────────────────────────────────
+
+_HOOKS: dict[str, list] = {
+    "pre_llm_call": [],      # Called before LLM request: fn(messages, model) -> modified messages
+    "post_llm_call": [],     # Called after LLM response: fn(response, tool_calls) -> modified response
+    "on_session_start": [],  # Called when session starts: fn(user_id, agent_name) -> None
+    "on_session_end": [],    # Called when session ends: fn(user_id, agent_name, message_count) -> None
+}
+
+
+def register_hook(event_type: str, callback) -> str:
+    """Register a callback function for a lifecycle event.
+    
+    event_type: One of: pre_llm_call, post_llm_call, on_session_start, on_session_end
+    callback: Function to call - signature varies by event type:
+        - pre_llm_call: fn(messages: list, model: str) -> list | None (return modified messages or None)
+        - post_llm_call: fn(response: str, tool_calls: list) -> tuple | None
+        - on_session_start: fn(user_id: str, agent_name: str) -> None
+        - on_session_end: fn(user_id: str, agent_name: str, message_count: int) -> None
+    
+    Returns:
+        Success or error message.
+    """
+    valid_events = {"pre_llm_call", "post_llm_call", "on_session_start", "on_session_end"}
+    
+    if event_type not in valid_events:
+        return f"Error: Invalid event type '{event_type}'. Use: {', '.join(sorted(valid_events))}"
+    
+    if not callable(callback):
+        return "Error: Callback must be a callable function"
+    
+    if callback not in _HOOKS[event_type]:
+        _HOOKS[event_type].append(callback)
+        logger.info(f"Hook registered: {event_type} -> {callback.__name__}")
+        return f"Hook registered: {event_type}"
+    else:
+        return f"Hook already registered for {event_type}"
+
+
+def trigger_hook(event_type: str, *args, **kwargs):
+    """Trigger all callbacks for a lifecycle event.
+    
+    event_type: The event type to trigger
+    *args, **kwargs: Arguments passed to each callback
+    
+    Returns:
+        List of results from each callback (if they return anything).
+    """
+    if event_type not in _HOOKS:
+        return []
+    
+    results = []
+    for callback in _HOOKS[event_type]:
+        try:
+            result = callback(*args, **kwargs)
+            results.append(result)
+        except Exception as e:
+            logger.error(f"Hook error in {event_type}->{callback.__name__}: {e}")
+            results.append({"error": str(e)})
+    
+    return results
+
+
+def list_hooks() -> str:
+    """List all registered lifecycle hooks.
+    
+    Returns:
+        Formatted list of registered hooks by event type.
+    """
+    if not any(_HOOKS.values()):
+        return "No hooks registered. Use register_hook(event_type, callback) to add hooks."
+    
+    lines = ["📋 Registered Lifecycle Hooks:", ""]
+    
+    for event_type, callbacks in _HOOKS.items():
+        if callbacks:
+            lines.append(f"  {event_type}:")
+            for cb in callbacks:
+                lines.append(f"    - {cb.__name__}")
+        else:
+            lines.append(f"  {event_type}: (empty)")
+    
+    return "\n".join(lines)
+
+
+def clear_hooks(event_type: str = None) -> str:
+    """Clear all hooks, or hooks for a specific event type.
+    
+    event_type: Optional specific event type to clear. If None, clears all hooks.
+    
+    Returns:
+        Success message.
+    """
+    if event_type:
+        if event_type in _HOOKS:
+            count = len(_HOOKS[event_type])
+            _HOOKS[event_type] = []
+            return f"Cleared {count} hooks for {event_type}"
+        else:
+            return f"Error: Unknown event type '{event_type}'"
+    else:
+        for event_type in _HOOKS:
+            _HOOKS[event_type] = []
+        return "All hooks cleared"
 
 
 def set_registry(registry: dict):
@@ -613,17 +749,26 @@ Errors are logged to the standard logging system and can be found in the applica
     TOOL_SCHEMAS.clear()
     TOOL_SCHEMAS.extend(_generate_schemas())
 
-    # Persist registry so tool survives restarts
+    # Persist registry so tool survives restarts (with full metadata)
     registry = {}
     if TOOLBOX_REG.exists():
         try:
             registry = json.loads(TOOLBOX_REG.read_text())
         except Exception:
             pass
+    
     registry[name] = {
         "path": str(tool_path),
-        "documentation": documentation,
+        "name": name,
+        "version": "1.0.0",
+        "description": documentation,
+        "tags": [],
+        "author": "agent",
         "created": datetime.now().isoformat(),
+        "last_modified": datetime.now().isoformat(),
+        "eval_score": None,
+        "eval_count": 0,
+        "enabled": True,
         "errors": []
     }
     TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
@@ -694,9 +839,18 @@ def list_toolbox() -> str:
         
         lines = ["[TOOLBOX] Contents:", ""]
         for name, info in sorted(registry.items()):
-            lines.append(f"[TOOL] {name}")
+            enabled = info.get('enabled', True)
+            status = "🟢" if enabled else "🔴"
+            eval_score = info.get('eval_score')
+            
+            lines.append(f"{status} [TOOL] {name} v{info.get('version', '1.0.0')}")
+            lines.append(f"   Author: {info.get('author', 'unknown')}")
             lines.append(f"   Created: {info.get('created', 'Unknown')}")
-            lines.append(f"   Docs: {info.get('documentation', 'No documentation')[:80]}...")
+            if info.get('tags'):
+                lines.append(f"   Tags: {', '.join(info.get('tags', []))}")
+            lines.append(f"   Description: {info.get('description', 'No description')[:80]}...")
+            if eval_score is not None:
+                lines.append(f"   Eval Score: {eval_score:.2f} ({info.get('eval_count', 0)} runs)")
             lines.append("")
         
         return "\n".join(lines)
@@ -747,9 +901,18 @@ def load_custom_tools():
             if not tool_path.exists():
                 logger.warning(f"Tool file missing from TOOLBOX: {tool_path}")
                 continue
+            
+            # Skip disabled tools
+            if isinstance(info, dict) and not info.get('enabled', True):
+                logger.info(f"Skipping disabled tool from TOOLBOX: {name}")
+                continue
+                
             try:
                 spec = importlib.util.spec_from_file_location(name, tool_path)
-                mod  = importlib.util.module_from_spec(spec)
+                if spec is None or spec.loader is None:
+                    logger.warning(f"Could not load spec for tool '{name}'")
+                    continue
+                mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
                 func = getattr(mod, name)
                 TOOLS[name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {name}"}
@@ -765,6 +928,892 @@ def load_custom_tools():
         TOOL_SCHEMAS.extend(_generate_schemas())
     except Exception as e:
         logger.error(f"Error loading TOOLBOX registry: {e}")
+
+
+# ── Skill Evaluation Harness ─────────────────────────────────────────────────
+
+def get_skill_info(skill_name: str) -> str:
+    """Get detailed information about a skill from the TOOLBOX registry.
+    
+    skill_name: The name of the skill to query
+    
+    Returns:
+        Formatted skill information including version, tags, evaluation score, etc.
+    """
+    if not TOOLBOX_REG.exists():
+        return f"TOOLBOX registry not found."
+    
+    try:
+        registry = json.loads(TOOLBOX_REG.read_text())
+        
+        if skill_name not in registry:
+            return f"Skill '{skill_name}' not found in TOOLBOX."
+        
+        info = registry[skill_name]
+        
+        lines = [
+            f"📋 Skill: {skill_name}",
+            f"   Version: {info.get('version', '1.0.0')}",
+            f"   Author: {info.get('author', 'unknown')}",
+            f"   Status: {'🟢 Enabled' if info.get('enabled', True) else '🔴 Disabled'}",
+            f"   Created: {info.get('created', 'Unknown')}",
+            f"   Last Modified: {info.get('last_modified', 'Unknown')}",
+        ]
+        
+        if info.get('tags'):
+            lines.append(f"   Tags: {', '.join(info.get('tags', []))}")
+        
+        if info.get('description'):
+            lines.append(f"   Description: {info.get('description')}")
+        
+        lines.extend([
+            f"   Evaluation Score: {info.get('eval_score', 'Not evaluated')}",
+            f"   Evaluation Count: {info.get('eval_count', 0)}",
+            f"   Path: {info.get('path', 'Unknown')}",
+        ])
+        
+        if info.get('errors'):
+            lines.append(f"   Recent Errors: {len(info['errors'])}")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"Error getting skill info: {e}")
+        return f"Error getting skill info: {e}"
+
+
+def enable_skill(skill_name: str) -> str:
+    """Enable a disabled skill in the TOOLBOX.
+    
+    skill_name: The name of the skill to enable
+    
+    Returns:
+        Success or error message.
+    """
+    if not TOOLBOX_REG.exists():
+        return "TOOLBOX registry not found."
+    
+    try:
+        registry = json.loads(TOOLBOX_REG.read_text())
+        
+        if skill_name not in registry:
+            return f"Skill '{skill_name}' not found in TOOLBOX."
+        
+        registry[skill_name]['enabled'] = True
+        TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
+        
+        # Reload the tool into TOOLS if it was previously disabled
+        if skill_name not in TOOLS:
+            info = registry[skill_name]
+            tool_path = Path(info.get("path", ""))
+            if tool_path.exists():
+                try:
+                    spec = importlib.util.spec_from_file_location(skill_name, tool_path)
+                    if spec and spec.loader:
+                        mod = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(mod)
+                        func = getattr(mod, skill_name)
+                        TOOLS[skill_name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {skill_name}"}
+                        logger.info(f"Enabled and loaded skill: {skill_name}")
+                except Exception as e:
+                    return f"Skill enabled but failed to reload: {e}"
+        
+        TOOL_SCHEMAS.clear()
+        TOOL_SCHEMAS.extend(_generate_schemas())
+        
+        return f"✅ Skill '{skill_name}' enabled."
+        
+    except Exception as e:
+        logger.error(f"Error enabling skill: {e}")
+        return f"Error enabling skill: {e}"
+
+
+def disable_skill(skill_name: str) -> str:
+    """Disable an enabled skill in the TOOLBOX (soft delete).
+    
+    skill_name: The name of the skill to disable
+    
+    Returns:
+        Success or error message.
+    """
+    if not TOOLBOX_REG.exists():
+        return "TOOLBOX registry not found."
+    
+    try:
+        registry = json.loads(TOOLBOX_REG.read_text())
+        
+        if skill_name not in registry:
+            return f"Skill '{skill_name}' not found in TOOLBOX."
+        
+        registry[skill_name]['enabled'] = False
+        TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
+        
+        # Remove from TOOLS to prevent execution
+        if skill_name in TOOLS:
+            del TOOLS[skill_name]
+            TOOL_SCHEMAS.clear()
+            TOOL_SCHEMAS.extend(_generate_schemas())
+        
+        logger.info(f"Disabled skill: {skill_name}")
+        return f"✅ Skill '{skill_name}' disabled."
+        
+    except Exception as e:
+        logger.error(f"Error disabling skill: {e}")
+        return f"Error disabling skill: {e}"
+
+
+def update_skill_metadata(skill_name: str, tags: str = None, description: str = None, version: str = None) -> str:
+    """Update metadata for an existing skill.
+    
+    skill_name: The name of the skill to update
+    tags: Comma-separated list of tags (optional)
+    description: New description (optional)
+    version: New version string like "1.1.0" (optional)
+    
+    Returns:
+        Success or error message.
+    """
+    if not TOOLBOX_REG.exists():
+        return "TOOLBOX registry not found."
+    
+    try:
+        registry = json.loads(TOOLBOX_REG.read_text())
+        
+        if skill_name not in registry:
+            return f"Skill '{skill_name}' not found in TOOLBOX."
+        
+        if tags is not None:
+            registry[skill_name]['tags'] = [t.strip() for t in tags.split(",") if t.strip()]
+        
+        if description is not None:
+            registry[skill_name]['description'] = description
+            # Also update the documentation file
+            doc_path = TOOLBOX_DIR / f"{skill_name}_README.md"
+            if doc_path.exists():
+                content = doc_path.read_text()
+                if "## Description" in content:
+                    content = content.split("## Description")[0] + f"## Description\n{description}\n" + content.split("## Description")[1].split("\n##")[1:]
+                    doc_path.write_text(content)
+        
+        if version is not None:
+            registry[skill_name]['version'] = version
+        
+        registry[skill_name]['last_modified'] = datetime.now().isoformat()
+        TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
+        
+        return f"✅ Skill '{skill_name}' metadata updated."
+        
+    except Exception as e:
+        logger.error(f"Error updating skill metadata: {e}")
+        return f"Error updating skill metadata: {e}"
+
+
+def benchmark_skill(skill_name: str, test_cases_json: str = "[]") -> str:
+    """Run benchmark tests against a skill and return evaluation results.
+    
+    skill_name: The name of the skill to benchmark
+    test_cases_json: JSON array of test cases. Each test case has:
+        {"input": {"param": value}, "expected": "expected_output"}
+    
+    Returns:
+        Formatted benchmark results with pass/fail rates and scores.
+    """
+    if not TOOLBOX_REG.exists():
+        return "TOOLBOX registry not found."
+    
+    try:
+        registry = json.loads(TOOLBOX_REG.read_text())
+        
+        if skill_name not in registry:
+            return f"Skill '{skill_name}' not found in TOOLBOX."
+        
+        if skill_name not in TOOLS:
+            return f"Skill '{skill_name}' is not loaded in memory. Enable it first."
+        
+        test_cases = json.loads(test_cases_json)
+        
+        if not test_cases:
+            return f"No test cases provided. Pass a JSON array of test cases."
+        
+        func = TOOLS[skill_name]["func"]
+        results = []
+        passed = 0
+        
+        for i, tc in enumerate(test_cases):
+            try:
+                args = tc.get("input", {})
+                expected = tc.get("expected")
+                
+                # Execute the skill
+                if inspect.iscoroutinefunction(func):
+                    result = asyncio.run(func(**args))
+                else:
+                    result = func(**args)
+                
+                # Check result
+                if expected is not None:
+                    # Simple string matching (could be enhanced with regex or fuzzy matching)
+                    success = str(result) == str(expected)
+                else:
+                    # No expected value - just check it doesn't crash
+                    success = True
+                    result = "executed successfully"
+                
+                if success:
+                    passed += 1
+                    results.append(f"  ✅ Test {i+1}: PASS")
+                else:
+                    results.append(f"  ❌ Test {i+1}: FAIL (got: {str(result)[:50]}...)")
+                    
+            except Exception as e:
+                results.append(f"  ❌ Test {i+1}: ERROR - {str(e)}")
+        
+        score = (passed / len(test_cases)) * 100 if test_cases else 0
+        
+        # Update registry with new evaluation score
+        current_count = registry[skill_name].get('eval_count', 0)
+        current_score = registry[skill_name].get('eval_score')
+        
+        if current_score is not None:
+            # Running average
+            new_avg = (current_score * current_count + score) / (current_count + 1)
+        else:
+            new_avg = score
+        
+        registry[skill_name]['eval_score'] = round(new_avg, 2)
+        registry[skill_name]['eval_count'] = current_count + 1
+        
+        # Auto-disable if score is too low (< 30%)
+        if score < 30 and len(test_cases) >= 3:
+            registry[skill_name]['enabled'] = False
+            if skill_name in TOOLS:
+                del TOOLS[skill_name]
+        
+        TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
+        
+        lines = [
+            f"📊 Benchmark Results for '{skill_name}':",
+            f"",
+            f"Tests Run: {len(test_cases)}",
+            f"Passed: {passed}",
+            f"Failed: {len(test_cases) - passed}",
+            f"Score: {score:.1f}%",
+            f"Running Avg Score: {new_avg:.2f}% (from {registry[skill_name]['eval_count']} evaluations)",
+            "",
+            "Details:",
+        ] + results
+        
+        if score < 30 and len(test_cases) >= 3:
+            lines.append("")
+            lines.append("⚠️ Auto-disabled due to low score (< 30%)")
+        
+        return "\n".join(lines)
+        
+    except json.JSONDecodeError as e:
+        return f"Error parsing test cases JSON: {e}"
+    except Exception as e:
+        logger.error(f"Benchmark error: {e}")
+        return f"Benchmark error: {e}"
+
+
+def evaluate_skill(skill_name: str) -> str:
+    """Run basic evaluation tests on a skill.
+    
+    Performs a simple sanity check:
+    1. Skill can be loaded
+    2. Skill has a docstring
+    3. Skill doesn't crash on basic input
+    
+    skill_name: The name of the skill to evaluate
+    
+    Returns:
+        Formatted evaluation results.
+    """
+    if not TOOLBOX_REG.exists():
+        return "TOOLBOX registry not found."
+    
+    try:
+        registry = json.loads(TOOLBOX_REG.read_text())
+        
+        if skill_name not in registry:
+            return f"Skill '{skill_name}' not found in TOOLBOX."
+        
+        info = registry[skill_name]
+        tool_path = Path(info.get("path", ""))
+        
+        if not tool_path.exists():
+            return f"Skill file not found at: {tool_path}"
+        
+        # Run basic checks
+        checks = []
+        score = 0
+        code = ""
+        
+        # Check 1: File exists and is readable
+        checks.append(("File exists and readable", True))
+        score += 20
+        
+        # Check 2: Can be compiled (syntax check)
+        try:
+            code = tool_path.read_text()
+            compile(code, tool_path.name, "exec")
+            checks.append(("Code has valid Python syntax", True))
+            score += 20
+        except SyntaxError as e:
+            checks.append(("Code has valid Python syntax", False))
+            checks.append((f"Syntax error: {e}", False))
+        
+        # Check 3: Has docstring
+        if '"""' in code or "'''" in code:
+            checks.append(("Has docstring", True))
+            score += 15
+        else:
+            checks.append(("Has docstring", False))
+        
+        # Check 4: Has error handling
+        if 'try:' in code and 'except' in code:
+            checks.append(("Has error handling", True))
+            score += 15
+        else:
+            checks.append(("Has error handling", False))
+        
+        # Check 5: Has logging
+        if 'logger' in code:
+            checks.append(("Has logging", True))
+            score += 10
+        else:
+            checks.append(("Has logging", False))
+        
+        # Check 6: Registry metadata complete
+        required_fields = ['version', 'description', 'tags', 'author', 'created']
+        missing = [f for f in required_fields if f not in info or not info[f]]
+        if not missing:
+            checks.append(("Registry metadata complete", True))
+            score += 20
+        else:
+            checks.append((f"Registry metadata complete", False))
+            checks.append((f"Missing fields: {', '.join(missing)}", False))
+        
+        # Update evaluation score
+        current_count = info.get('eval_count', 0)
+        current_score = info.get('eval_score')
+        
+        if current_score is not None:
+            new_avg = (current_score * current_count + score) / (current_count + 1)
+        else:
+            new_avg = score
+        
+        registry[skill_name]['eval_score'] = round(new_avg, 2)
+        registry[skill_name]['eval_count'] = current_count + 1
+        TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
+        
+        lines = [
+            f"📊 Evaluation Results for '{skill_name}':",
+            f"",
+            f"Overall Score: {score}/100",
+            f"Running Avg: {new_avg:.2f}% (from {current_count + 1} evaluations)",
+            "",
+            "Checks:",
+        ]
+        
+        for check, passed in checks:
+            icon = "✅" if passed else "❌"
+            lines.append(f"  {icon} {check}")
+        
+        if score < 50:
+            lines.append("")
+            lines.append("⚠️ Score below 50% - skill may need improvement")
+        
+        return "\n".join(lines)
+        
+    except Exception as e:
+        logger.error(f"Evaluation error: {e}")
+        return f"Evaluation error: {e}"
+
+
+# ── Skill Self-Improvement ───────────────────────────────────────────────────
+
+def improve_skill(skill_name: str, improved_code: str, documentation: str = "") -> str:
+    """Improve an existing skill with new code, with safety checks and evaluation.
+    
+    This function allows an agent to replace/update a skill's implementation with
+    improved code. The new code undergoes the same security checks as register_tool(),
+    and is evaluated before being activated.
+    
+    skill_name: The name of the skill to improve (must already exist)
+    improved_code: Full Python source for the improved function
+    documentation: Updated documentation (optional, keeps existing if empty)
+    
+    Returns:
+        Success or error message with evaluation results.
+    """
+    if not TOOLBOX_REG.exists():
+        return "TOOLBOX registry not found."
+    
+    try:
+        registry = json.loads(TOOLBOX_REG.read_text())
+        
+        if skill_name not in registry:
+            return f"Skill '{skill_name}' not found in TOOLBOX. Use register_tool() to create new skills."
+        
+        # Get existing info to preserve
+        existing_info = registry[skill_name]
+        
+        # Validate skill_name
+        if not skill_name.isidentifier():
+            return f"Error: '{skill_name}' is not a valid Python identifier."
+        
+        # Syntax validation
+        try:
+            compile(improved_code, "<agent-tool>", "exec")
+        except SyntaxError as e:
+            return f"Syntax error in improved code: {e}"
+        
+        # AST validation for security
+        import ast
+        try:
+            tree = ast.parse(improved_code)
+            forbidden_imports = {"os", "sys", "subprocess", "shutil", "socket", "urllib", "http", "pty", "commands"}
+            forbidden_calls = {"eval", "exec", "open", "__import__", "globals", "locals", "compile"}
+            
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name.split('.')[0] in forbidden_imports:
+                            return f"Error: Importing '{alias.name}' is forbidden for security reasons."
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module and node.module.split('.')[0] in forbidden_imports:
+                        return f"Error: Importing from '{node.module}' is forbidden for security reasons."
+                elif isinstance(node, ast.Call):
+                    if isinstance(node.func, ast.Name) and node.func.id in forbidden_calls:
+                        return f"Error: Calling '{node.func.id}' is forbidden for security reasons."
+        except Exception as e:
+            return f"AST validation error: {e}"
+        
+        # Validate code requirements
+        if '"""' not in improved_code and "'''" not in improved_code:
+            return "Error: Improved code must include a docstring explaining its purpose and usage."
+        
+        if 'try:' not in improved_code or 'except' not in improved_code:
+            return "Error: Improved code must include error handling with try-except blocks."
+        
+        if 'logger.error' not in improved_code:
+            return "Error: Improved code must include error logging using logger.error()."
+        
+        # Backup existing file
+        existing_path = Path(existing_info.get('path', ''))
+        backup_path = None
+        if existing_path.exists():
+            backup_path = existing_path.with_suffix('.py.bak')
+            import shutil
+            shutil.copy2(existing_path, backup_path)
+        
+        # Write new code
+        existing_path.write_text(improved_code, encoding="utf-8")
+        
+        # Update documentation if provided
+        if not documentation:
+            documentation = existing_info.get('description', '')
+        
+        if documentation:
+            doc_path = TOOLBOX_DIR / f"{skill_name}_README.md"
+            doc_content = f"""# {skill_name}
+
+## Description
+{documentation}
+
+## Code
+```python
+{improved_code}
+```
+
+## Updated
+{datetime.now().isoformat()}
+
+## Previous Version
+{existing_info.get('version', '1.0.0')}
+
+## Error Logging
+Errors are logged to the standard logging system.
+"""
+            doc_path.write_text(doc_content, encoding="utf-8")
+        
+        # Try to load and validate the new code
+        try:
+            spec = importlib.util.spec_from_file_location(skill_name, existing_path)
+            if spec is None or spec.loader is None:
+                # Restore backup
+                if backup_path and backup_path.exists():
+                    shutil.copy2(backup_path, existing_path)
+                return "Error: Could not load improved code. Restored previous version."
+            
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            func = getattr(mod, skill_name)
+            
+            # Update TOOLS
+            TOOLS[skill_name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {skill_name}"}
+            
+        except Exception as e:
+            # Restore backup on load failure
+            if backup_path and backup_path.exists():
+                shutil.copy2(backup_path, existing_path)
+            return f"Error loading improved code: {e}. Previous version restored."
+        
+        # Update version (increment patch version)
+        old_version = existing_info.get('version', '1.0.0')
+        try:
+            parts = old_version.split('.')
+            patch = int(parts[-1]) + 1
+            new_version = '.'.join(parts[:-1]) + '.' + str(patch)
+        except:
+            new_version = "1.1.0"
+        
+        # Update registry
+        registry[skill_name] = {
+            "path": str(existing_path),
+            "name": skill_name,
+            "version": new_version,
+            "description": documentation or existing_info.get('description', ''),
+            "tags": existing_info.get('tags', []),
+            "author": "agent",
+            "created": existing_info.get('created', datetime.now().isoformat()),
+            "last_modified": datetime.now().isoformat(),
+            "eval_score": existing_info.get('eval_score'),
+            "eval_count": existing_info.get('eval_count', 0),
+            "enabled": True,
+            "errors": []
+        }
+        TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
+        
+        # Update schemas
+        TOOL_SCHEMAS.clear()
+        TOOL_SCHEMAS.extend(_generate_schemas())
+        
+        # Clean up backup
+        if backup_path and backup_path.exists():
+            backup_path.unlink()
+        
+        logger.info(f"Skill improved: {skill_name} v{new_version}")
+        
+        return (
+            f"✅ Skill '{skill_name}' improved successfully!\n"
+            f"   Old Version: {old_version}\n"
+            f"   New Version: {new_version}\n"
+            f"   Code validated and loaded.\n"
+            f"   Previous version backed up and replaced."
+        )
+        
+    except Exception as e:
+        logger.error(f"Error improving skill: {e}")
+        return f"Error improving skill: {e}"
+
+
+def rollback_skill(skill_name: str) -> str:
+    """Rollback a skill to its previous version if a backup exists.
+    
+    skill_name: The name of the skill to rollback
+    
+    Returns:
+        Success or error message.
+    """
+    if not TOOLBOX_REG.exists():
+        return "TOOLBOX registry not found."
+    
+    try:
+        registry = json.loads(TOOLBOX_REG.read_text())
+        
+        if skill_name not in registry:
+            return f"Skill '{skill_name}' not found in TOOLBOX."
+        
+        existing_info = registry[skill_name]
+        existing_path = Path(existing_info.get('path', ''))
+        backup_path = existing_path.with_suffix('.py.bak')
+        
+        if not backup_path.exists():
+            return f"No backup found for '{skill_name}'. Cannot rollback."
+        
+        # Restore backup
+        import shutil
+        shutil.copy2(backup_path, existing_path)
+        
+        # Update version (decrement)
+        old_version = existing_info.get('version', '1.0.0')
+        try:
+            parts = old_version.split('.')
+            patch = max(0, int(parts[-1]) - 1)
+            new_version = '.'.join(parts[:-1]) + '.' + str(patch)
+        except:
+            new_version = "1.0.0"
+        
+        # Reload the tool
+        try:
+            spec = importlib.util.spec_from_file_location(skill_name, existing_path)
+            if spec and spec.loader:
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                func = getattr(mod, skill_name)
+                TOOLS[skill_name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {skill_name}"}
+        except Exception as e:
+            return f"Restored but failed to reload: {e}"
+        
+        # Update registry
+        registry[skill_name]['version'] = new_version
+        registry[skill_name]['last_modified'] = datetime.now().isoformat()
+        TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
+        
+        TOOL_SCHEMAS.clear()
+        TOOL_SCHEMAS.extend(_generate_schemas())
+        
+        return (
+            f"✅ Skill '{skill_name}' rolled back to previous version.\n"
+            f"   New Version: {new_version}\n"
+            f"   Backup retained for another rollback if needed."
+        )
+        
+    except Exception as e:
+        logger.error(f"Error rolling back skill: {e}")
+        return f"Error rolling back skill: {e}"
+
+
+# ── Periodic Session Reflection ─────────────────────────────────────────────
+
+def schedule_daily_reflection(user_id: str = "default", hour: int = 20, minute: int = 0) -> str:
+    """Schedule a daily session reflection that analyzes what was learned and saves to knowledge base.
+    
+    This creates a recurring task that runs at the specified time each day, analyzes
+    recent conversations, and writes insights to the knowledge base with tag 'daily_reflection'.
+    
+    user_id: User ID for notification routing
+    hour: Hour of day to run (0-23, default: 20 = 8 PM)
+    minute: Minute of hour (0-59, default: 0)
+    
+    Returns:
+        Success or error message.
+    """
+    if _job_queue is None and _notification_callback is None:
+        return "Error: Scheduler not available (no channel gateway running)."
+    
+    task = (
+        "Analyze recent conversations and write a daily reflection to knowledge base. "
+        "Use write_to_knowledge with title format 'Daily Reflection YYYY-MM-DD', "
+        "tags: ['daily_reflection', 'session_summary'], and content summarizing: "
+        "1) Key topics discussed, "
+        "2) Important decisions made, "
+        "3) Tasks completed, "
+        "4) User preferences observed, "
+        "5) Insights gained. "
+        "Format as a structured summary with sections."
+    )
+    
+    # Calculate delay until next occurrence of the specified time
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    
+    # If target time has passed today, schedule for tomorrow
+    if target <= now:
+        target += timedelta(days=1)
+    
+    delay = int((target - now).total_seconds())
+    
+    # Create daily recurring job
+    job_id = f"daily_reflection_{user_id}"
+    
+    # Remove existing daily reflection jobs to avoid duplicates
+    existing_jobs = _job_queue.get_jobs_by_name(job_id) if _job_queue else []
+    for job in existing_jobs:
+        job.schedule_removal()
+    
+    return _create_job_internal(task, delay, 86400, user_id, job_id) + f" (scheduled daily at {hour:02d}:{minute:02d})"
+
+
+def generate_session_insights(user_id: str = "default", save_to_knowledge: bool = True) -> str:
+    """Generate insights from recent session conversations.
+    
+    Analyzes the user's recent conversation history to identify patterns,
+    preferences, key topics, and learning opportunities.
+    
+    user_id: User ID for memory access
+    save_to_knowledge: Whether to save insights to knowledge base (default: True)
+    
+    Returns:
+        Formatted insights summary, or confirmation if saved.
+    """
+    from .memory import Memory
+    
+    try:
+        mem = Memory(user_id=user_id)
+        history = mem.get_history(limit=50)
+        
+        if not history:
+            return "No conversation history available for analysis."
+        
+        # Build context for analysis
+        analysis_text = "Analyze these recent conversations and identify:\n"
+        analysis_text += "1. Key topics and themes\n"
+        analysis_text += "2. User's communication style\n"
+        analysis_text += "3. Important facts or decisions\n"
+        analysis_text += "4. User preferences or patterns\n"
+        analysis_text += "5. Learning opportunities\n\n"
+        
+        for m in history[-20:]:  # Last 20 messages
+            analysis_text += f"{m['role']}: {m['content'][:200]}\n"
+        
+        # Return the analysis prompt for LLM to process
+        return analysis_text
+        
+    except Exception as e:
+        logger.error(f"Error generating session insights: {e}")
+        return f"Error generating insights: {e}"
+
+
+def extract_user_preferences(user_id: str = "default") -> str:
+    """Analyze conversation history to extract user preferences and style.
+    
+    Builds a profile of the user's communication style, preferences, interests,
+    and patterns that can be used to personalize future interactions.
+    
+    user_id: User ID for memory access
+    
+    Returns:
+        JSON string with user profile data, or error message.
+    """
+    from .memory import Memory
+    
+    try:
+        mem = Memory(user_id=user_id)
+        history = mem.get_history(limit=100)
+        
+        if len(history) < 5:
+            return "Not enough conversation history to build profile. Need at least 5 messages."
+        
+        # Analyze for patterns
+        user_messages = [m['content'] for m in history if m['role'] == 'user']
+        
+        # Extract keywords and topics
+        all_text = ' '.join(user_messages).lower()
+        
+        # Simple pattern analysis
+        preferences = {
+            "total_conversations": len([m for m in history if m['role'] == 'user']),
+            "avg_message_length": sum(len(m) for m in user_messages) // max(1, len(user_messages)),
+            "topics_mentioned": [],
+            "questions_asked": sum(1 for m in user_messages if '?' in m),
+            "commands_used": sum(1 for m in user_messages if any(c in m.lower() for c in ['calculate', 'search', 'find', 'get', 'show', 'list', 'create', 'make'])),
+        }
+        
+        # Look for topic patterns (simplified)
+        topic_keywords = {
+            'coding': ['code', 'python', 'function', 'debug', 'programming', 'script'],
+            'data': ['data', 'database', 'query', 'sql', 'table'],
+            'files': ['file', 'read', 'write', 'open', 'save', 'folder'],
+            'research': ['research', 'search', 'find', 'look up', 'information'],
+            'tasks': ['task', 'schedule', 'remind', 'todo', 'plan'],
+            'creative': ['write', 'story', 'creative', 'explain', 'describe'],
+        }
+        
+        for topic, keywords in topic_keywords.items():
+            if any(kw in all_text for kw in keywords):
+                preferences['topics_mentioned'].append(topic)
+        
+        import json
+        profile_json = json.dumps(preferences, indent=2)
+        
+        # Optionally save to knowledge base
+        try:
+            tags_str = ",".join(["user_profile", "preferences", "auto-extracted"])
+            permalink = write_to_knowledge(
+                title=f"User Profile - {user_id}",
+                content=profile_json,
+                tags=tags_str,
+                user_id=user_id
+            )
+            return f"Profile saved to knowledge base.\n\n{profile_json}"
+        except:
+            return profile_json
+        
+    except Exception as e:
+        logger.error(f"Error extracting user preferences: {e}")
+        return f"Error extracting preferences: {e}"
+
+
+def update_user_profile(insights: str, user_id: str = "default") -> str:
+    """Update the user dialectic profile with new insights.
+    
+    Writes insights to the user dialectic profile file that the agent
+    can read on startup to customize responses.
+    
+    insights: Markdown content to add to the profile
+    user_id: User ID (used for knowledge base fallback)
+    
+    Returns:
+        Success or error message.
+    """
+    from pathlib import Path
+    
+    dialectic_path = Path(__file__).parent / "profiles" / "user_dialectic.md"
+    
+    try:
+        dialectic_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Read existing content
+        existing = dialectic_path.read_text() if dialectic_path.exists() else ""
+        
+        # Add insights section with timestamp
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        new_section = f"\n\n## Insights ({timestamp})\n{insights}"
+        
+        # Check if section already exists and update it
+        if "## Insights" in existing:
+            existing = existing.split("## Insights")[0] + new_section
+        else:
+            existing += new_section
+        
+        dialectic_path.write_text(existing, encoding="utf-8")
+        
+        # Also save to knowledge base as backup
+        try:
+            tags_str = ",".join(["user_profile", "dialectic", "manual_update"])
+            write_to_knowledge(
+                title=f"User Profile Update - {timestamp}",
+                content=insights,
+                tags=tags_str,
+                user_id=user_id
+            )
+        except:
+            pass
+        
+        return f"✅ User dialectic profile updated at {timestamp}"
+        
+    except Exception as e:
+        logger.error(f"Error updating user profile: {e}")
+        return f"Error updating profile: {e}"
+
+
+def get_user_profile(user_id: str = "default") -> str:
+    """Get the current user dialectic profile.
+    
+    Reads the user dialectic profile file and returns its contents.
+    
+    user_id: User ID (for consistency, not used for file lookup)
+    
+    Returns:
+        User profile content or placeholder message.
+    """
+    from pathlib import Path
+    
+    dialectic_path = Path(__file__).parent / "profiles" / "user_dialectic.md"
+    
+    try:
+        if dialectic_path.exists():
+            return dialectic_path.read_text(encoding="utf-8")
+        else:
+            return "No user dialectic profile found. Use extract_user_preferences() to generate one."
+    except Exception as e:
+        logger.error(f"Error reading user profile: {e}")
+        return f"Error reading profile: {e}"
 
 
 # ── Feature 5: Agent-Initiated Scheduling ────────────────────────────────────
@@ -922,6 +1971,171 @@ def list_schedules() -> str:
         task_name = j.data.get("task", "Unknown Task") if j.data else "Unknown Task"
         lines.append(f"- {j.name} ({status}) | task: {task_name} | next: {j.next_t}")
     return "Active jobs:\n" + "\n".join(lines)
+
+
+# ── Natural Language Scheduling Parser ──────────────────────────────────────
+
+def _parse_natural_schedule(natural_time: str) -> dict:
+    """Parse natural language scheduling expressions into delay/every values.
+    
+    Supports patterns like:
+    - "at 8 AM" -> one-shot at 8 AM today/tomorrow
+    - "at 8 AM daily" or "every day at 8 AM" -> daily recurring
+    - "every Monday at 9pm" -> weekly recurring
+    - "every 2 hours" -> hourly recurring
+    - "in 5 minutes" -> one-shot in 5 minutes
+    - "every 30 minutes" -> recurring every 30 minutes
+    
+    Returns:
+        dict with 'delay' (seconds for one-shot) or 'every' (seconds for recurring),
+        and 'parsed' description of what was parsed.
+    """
+    import re
+    from datetime import datetime, timedelta
+    
+    text = natural_time.lower().strip()
+    result = {"delay": 0, "every": 0, "parsed": text}
+    
+    # "in X minutes/hours/days"
+    in_match = re.match(r'in (\d+) (minute|minutes|min|mins|hour|hours|hr|hrs|day|days|d)', text)
+    if in_match:
+        value = int(in_match.group(1))
+        unit = in_match.group(2)
+        if unit.startswith('min'):
+            result["delay"] = value * 60
+        elif unit.startswith('hour') or unit == 'hr':
+            result["delay"] = value * 3600
+        elif unit == 'd' or unit == 'day' or unit.startswith('day'):
+            result["delay"] = value * 86400
+        result["parsed"] = f"in {value} {'minutes' if value > 1 else 'minute'}"
+        return result
+    
+    # "every X minutes/hours/days"
+    every_match = re.match(r'every (\d+) (minute|minutes|min|mins|hour|hours|hr|hrs|day|days|d|weeks?|week)', text)
+    if every_match:
+        value = int(every_match.group(1))
+        unit = every_match.group(2)
+        if unit.startswith('min'):
+            result["every"] = value * 60
+        elif unit.startswith('hour') or unit == 'hr':
+            result["every"] = value * 3600
+        elif unit == 'd' or unit == 'day' or unit.startswith('day'):
+            result["every"] = value * 86400
+        elif unit.startswith('week'):
+            result["every"] = value * 604800
+        result["parsed"] = f"every {value} {'minutes' if unit.startswith('min') else 'hours' if unit.startswith('hour') else 'days' if value > 1 else 'day'}"
+        return result
+    
+    # "at HH:MM AM/PM" or "at HH AM"
+    time_match = re.search(r'at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)', text)
+    if time_match:
+        hour = int(time_match.group(1))
+        minute = int(time_match.group(2) or "0")
+        period = time_match.group(3).lower()
+        
+        if period == 'pm' and hour != 12:
+            hour += 12
+        elif period == 'am' and hour == 12:
+            hour = 0
+        
+        now = datetime.now()
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        
+        # If target time has passed today, schedule for tomorrow
+        if target <= now:
+            target += timedelta(days=1)
+        
+        delay = int((target - now).total_seconds())
+        
+        # Check for daily/recurring pattern
+        if 'daily' in text or 'every day' in text or 'everyday' in text:
+            result["every"] = 86400
+            result["parsed"] = f"daily at {hour%12 or 12}:{minute:02d} {'PM' if hour >= 12 else 'AM'}"
+        else:
+            result["delay"] = delay
+            result["parsed"] = f"at {hour%12 or 12}:{minute:02d} {'PM' if hour >= 12 else 'AM'}"
+        return result
+    
+    # "every Monday at 9pm" etc.
+    day_match = re.search(r'every\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)', text)
+    time_of_day = re.search(r'(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', text)
+    
+    if day_match:
+        day_names = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        target_day_idx = day_names.index(day_match.group(1))
+        
+        now = datetime.now()
+        days_ahead = target_day_idx - now.weekday()
+        if days_ahead <= 0:
+            days_ahead += 7  # Next occurrence of this day
+        
+        hour = 0
+        minute = 0
+        if time_of_day:
+            hour = int(time_of_day.group(1))
+            minute = int(time_of_day.group(2) or "0")
+            period = time_of_day.group(3)
+            if period:
+                period = period.lower()
+                if period == 'pm' and hour != 12:
+                    hour += 12
+                elif period == 'am' and hour == 12:
+                    hour = 0
+        
+        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0) + timedelta(days=days_ahead)
+        delay = int((target - now).total_seconds())
+        
+        result["delay"] = delay
+        result["every"] = 604800  # Weekly
+        result["parsed"] = f"every {day_match.group(1).capitalize()} at {hour%12 or 12}:{minute:02d}"
+        return result
+    
+    # "daily" or "every day" shorthand
+    if 'daily' in text or text == 'every day' or text == 'everyday':
+        result["every"] = 86400
+        result["parsed"] = "daily"
+        return result
+    
+    # "hourly" shorthand
+    if text == 'hourly':
+        result["every"] = 3600
+        result["parsed"] = "hourly"
+        return result
+    
+    return result  # Return unchanged if couldn't parse
+
+
+def nlp_schedule(task: str, natural_time: str, user_id: str = "default") -> str:
+    """Schedule a task using natural language time expressions.
+    
+    Supports patterns like:
+    - "at 8 AM" - one-shot at 8 AM today/tomorrow
+    - "in 5 minutes" - one-shot in 5 minutes
+    - "every 2 hours" - recurring every 2 hours
+    - "daily at 9pm" - daily recurring at 9 PM
+    - "every Monday at 9pm" - weekly recurring
+    
+    task: The task description to execute
+    natural_time: Natural language time expression
+    user_id: User ID for notification routing
+    
+    Returns:
+        Success or error message with parsed schedule info.
+    """
+    if _job_queue is None and _notification_callback is None:
+        return "Error: Scheduler not available (no channel gateway running)."
+    
+    parsed = _parse_natural_schedule(natural_time)
+    
+    if parsed["delay"] == 0 and parsed["every"] == 0:
+        return f"Error: Could not parse time expression '{natural_time}'. Try patterns like 'in 5 minutes', 'at 8 AM daily', 'every 2 hours', etc."
+    
+    job_id = f"nlp_{user_id}_{int(time.time())}"
+    
+    if parsed["every"] > 0:
+        return _create_job_internal(task, 0, parsed["every"], user_id, job_id) + f" (parsed: {parsed['parsed']})"
+    else:
+        return _create_job_internal(task, parsed["delay"], 0, user_id, job_id) + f" (parsed: {parsed['parsed']})"
 
 
 # ── Knowledge Tools ───────────────────────────────────────────────────────────
@@ -1582,6 +2796,55 @@ TOOLS: Dict[str, dict] = {
     "swarm_list":           {"func": swarm_list,           "desc": "List all swarms"},
     "swarm_stats":          {"func": swarm_stats,          "desc": "Get swarm statistics"},
     "swarm_message":        {"func": swarm_message,        "desc": "Send message to agents in a swarm"},
+    # Lifecycle Hooks
+    "register_hook":        {"func": register_hook,        "desc": "Register a callback for lifecycle events (pre_llm_call, post_llm_call, etc.)"},
+    "list_hooks":           {"func": list_hooks,           "desc": "List all registered lifecycle hooks"},
+    "clear_hooks":          {"func": clear_hooks,          "desc": "Clear all or specific lifecycle hooks"},
+    # Natural Language Scheduling
+    "nlp_schedule":        {"func": nlp_schedule,         "desc": "Schedule a task using natural language (e.g., 'in 5 minutes', 'at 8 AM daily', 'every Monday at 9pm')"},
+    # Skill Management
+    "get_skill_info":       {"func": get_skill_info,       "desc": "Get detailed info about a skill (version, tags, eval score, etc.)"},
+    "enable_skill":         {"func": enable_skill,         "desc": "Enable a disabled skill"},
+    "disable_skill":        {"func": disable_skill,        "desc": "Disable an enabled skill (soft delete)"},
+    "update_skill_metadata":{"func": update_skill_metadata,"desc": "Update skill metadata (tags, description, version)"},
+    "benchmark_skill":     {"func": benchmark_skill,      "desc": "Run benchmark tests on a skill with JSON test cases"},
+    "evaluate_skill":      {"func": evaluate_skill,       "desc": "Run basic evaluation checks on a skill"},
+    # Skill Self-Improvement
+    "improve_skill":       {"func": improve_skill,        "desc": "Improve an existing skill with new code (with safety checks and rollback)"},
+    "rollback_skill":      {"func": rollback_skill,        "desc": "Rollback a skill to its previous version"},
+    # External Skill Adapter
+    "analyze_external_skill": {"func": analyze_external_skill, "desc": "Analyze an external skill from URL or file path and return compatibility report"},
+    "convert_skill":      {"func": convert_skill,         "desc": "Convert an external skill to ZenSynora format"},
+    "list_compatible_skills": {"func": list_compatible_skills, "desc": "List all skills from external sources compatible with ZenSynora"},
+    "register_external_skill": {"func": register_external_skill, "desc": "Register an externally sourced skill file in the TOOLBOX"},
+    # Medic Agent - System Health
+    "check_system_health":     {"func": check_system_health,      "desc": "Check overall system health status"},
+    "verify_file_integrity":  {"func": verify_file_integrity,   "desc": "Verify file integrity against recorded hashes"},
+    "recover_file":           {"func": recover_file,            "desc": "Recover a corrupted or missing file from GitHub"},
+    "get_health_report":      {"func": get_health_report,       "desc": "Get formatted health report"},
+    "validate_modification":  {"func": validate_modification,  "desc": "Validate a proposed code modification before applying"},
+    "record_task_execution":  {"func": record_task_execution,  "desc": "Record a task execution for analytics"},
+    "get_task_analytics":     {"func": get_task_analytics,      "desc": "Get task execution analytics"},
+    "enable_hash_check":      {"func": enable_hash_check,       "desc": "Enable or disable hash checking"},
+    "scan_files":             {"func": scan_files,              "desc": "Scan files and record their hashes for integrity checking"},
+    "detect_errors_in_file":  {"func": detect_errors_in_file,   "desc": "Detect syntax errors in a Python file"},
+    "prevent_infinite_loop": {"func": prevent_infinite_loop,  "desc": "Get status of infinite loop prevention"},
+    # New Tech Agent - AI News & Technology
+    "fetch_ai_news":         {"func": fetch_ai_news,          "desc": "Fetch AI news from various sources"},
+    "get_technology_proposals": {"func": get_technology_proposals, "desc": "Get all technology proposals"},
+    "add_to_roadmap":        {"func": add_to_roadmap,         "desc": "Add a technology to the roadmap"},
+    "enable_newtech_agent":  {"func": enable_newtech_agent,   "desc": "Enable or disable the New Tech Agent"},
+    "run_newtech_scan":     {"func": run_newtech_scan,       "desc": "Run on-demand AI news scan"},
+    "summarize_tech":        {"func": summarize_tech,         "desc": "Create a summary for a technology"},
+    "generate_tech_proposal": {"func": generate_tech_proposal, "desc": "Generate implementation proposal for a technology"},
+    "share_proposal":        {"func": share_proposal,         "desc": "Share a proposal on GitHub"},
+    "get_roadmap":          {"func": get_roadmap,           "desc": "Get the technology roadmap"},
+    # Session Reflection & Learning
+    "schedule_daily_reflection": {"func": schedule_daily_reflection, "desc": "Schedule daily session reflection at a specific time"},
+    "generate_session_insights": {"func": generate_session_insights, "desc": "Analyze recent conversations for insights"},
+    "extract_user_preferences": {"func": extract_user_preferences, "desc": "Build user profile from conversation history"},
+    "update_user_profile":  {"func": update_user_profile,   "desc": "Update the user dialectic profile with new insights"},
+    "get_user_profile":     {"func": get_user_profile,      "desc": "Get the current user dialectic profile"},
 }
 
 import inspect

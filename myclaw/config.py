@@ -302,6 +302,41 @@ class SecurityConfig(BaseModel):
     ]
 
 
+class MedicConfig(BaseModel):
+    """Configuration for Medic Agent system health monitoring."""
+    enabled: bool = False
+    enable_hash_check: bool = True
+    repo_url: str = "https://github.com/zensynora/zensynora"
+    scan_on_startup: bool = False
+    max_loop_iterations: int = 100
+    secondary_llm_provider: str = ""
+    secondary_llm_model: str = ""
+
+
+class NewTechConfig(BaseModel):
+    """Configuration for New Tech Agent AI news monitoring."""
+    enabled: bool = False
+    interval_hours: int = 24
+    share_consent: bool = False
+    github_repo_for_share: str = ""
+    max_news_items: int = 10
+
+
+class SkillAdapterConfig(BaseModel):
+    """Configuration for Skill Adapter external skill integration."""
+    enabled: bool = True
+    external_skill_sources: list[str] = ["agentskills.io"]
+    allow_external_registration: bool = True
+
+
+class BackendConfig(BaseModel):
+    """Configuration for terminal backends."""
+    default_backend: str = "local"
+    docker: dict = {"container": "zensynora", "image": "zensynora:latest"}
+    ssh: dict = {"host": "", "user": "", "port": 22, "key_path": ""}
+    wsl2: dict = {"distro": "Ubuntu"}
+
+
 class AppConfig(BaseModel):
     providers: ProvidersConfig = ProvidersConfig()
     agents:    AgentsConfig    = AgentsConfig()
@@ -311,6 +346,10 @@ class AppConfig(BaseModel):
     timeouts:  TimeoutConfig   = TimeoutConfig()
     memory:    MemoryCleanupConfig = MemoryCleanupConfig()
     security:  SecurityConfig  = SecurityConfig()
+    medic:     MedicConfig     = MedicConfig()
+    newtech:   NewTechConfig   = NewTechConfig()
+    skill_adapter: SkillAdapterConfig = SkillAdapterConfig()
+    backends:  BackendConfig   = BackendConfig()
 
     def get(self, key: str, default=None):
         """Dict-style .get() for backward compatibility."""

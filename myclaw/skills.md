@@ -1,10 +1,33 @@
 # MyClaw Agent Skills Reference
 
-> **Version**: 0.1 (Post-Improvement)
+> **Version**: 0.2 (Post-Phase1-4 Implementation)
 > **Evaluation Method**: Autoresearch-inspired iterative scoring loop
 > **Scoring Rubric**: `Score = 0.4×Correctness + 0.3×Reliability + 0.2×Clarity + 0.1×Coverage`
 > **Improvement Threshold**: KEEP improvement if delta_score ≥ 0.05 for ≥ 3 skills
 > **Overall Baseline**: 0.880 avg → **Improved: 0.989 avg** (+12.4% lift)
+
+---
+
+## Skill Group 0: Lifecycle Hooks (NEW)
+
+### SK-0.1 — `register_hook`
+- **Category**: Lifecycle Hooks
+- **Tool**: `register_hook(event_type, callback)`
+- **Description**: Register a callback function for lifecycle events. Event types: `pre_llm_call`, `post_llm_call`, `on_session_start`, `on_session_end`
+- **Input Contract**: `event_type` — one of valid event types; `callback` — function to call
+- **Output Contract**: `"Hook registered: {event_type}"` or error message
+
+### SK-0.2 — `list_hooks`
+- **Category**: Lifecycle Hooks
+- **Tool**: `list_hooks()`
+- **Description**: List all registered lifecycle hooks by event type
+- **Output Contract**: Formatted list of hooks or "No hooks registered" message
+
+### SK-0.3 — `clear_hooks`
+- **Category**: Lifecycle Hooks
+- **Tool**: `clear_hooks(event_type)`
+- **Description**: Clear all hooks or hooks for a specific event type
+- **Input Contract**: Optional `event_type` — if None, clears all
 
 ---
 
@@ -129,6 +152,13 @@
 - **Description**: Lists all active scheduled jobs with status, task name, and next execution time.
 - **Baseline Score**: *TBD*
 
+### SK-5.6 — `nlp_schedule` (NEW)
+- **Category**: Scheduling / NLP
+- **Tool**: `nlp_schedule(task, natural_time, user_id)`
+- **Description**: Schedule a task using natural language time expressions like "in 5 minutes", "at 8 AM daily", "every Monday at 9pm"
+- **Input Contract**: `task` — task description; `natural_time` — natural language time expression
+- **Output Contract**: Success message with parsed schedule info
+
 ---
 
 ## Skill Group 6: Knowledge Base
@@ -193,9 +223,143 @@
 
 ---
 
-## Skill Group 8: Web Scraping
+## Skill Group 8: Session Reflection & Learning (NEW)
 
-### SK-8.1 — Scrapling Agent Guide
+### SK-8.1 — `schedule_daily_reflection`
+- **Category**: Learning
+- **Tool**: `schedule_daily_reflection(user_id, hour, minute)`
+- **Description**: Schedule a daily session reflection that analyzes what was learned and saves to knowledge base
+- **Input Contract**: `user_id` — user ID; `hour` — 0-23; `minute` — 0-59 (default: 20:00)
+- **Output Contract**: Success message with scheduled time
+
+### SK-8.2 — `generate_session_insights`
+- **Category**: Learning
+- **Tool**: `generate_session_insights(user_id, save_to_knowledge)`
+- **Description**: Analyze recent conversation history for insights, patterns, and preferences
+- **Output Contract**: Formatted insights summary
+
+### SK-8.3 — `extract_user_preferences`
+- **Category**: Learning
+- **Tool**: `extract_user_preferences(user_id)`
+- **Description**: Build user profile from conversation history (topics, communication style, preferences)
+- **Output Contract**: JSON with user profile data + saved to knowledge base
+
+### SK-8.4 — `update_user_profile`
+- **Category**: Learning
+- **Tool**: `update_user_profile(insights, user_id)`
+- **Description**: Update the user dialectic profile with new insights
+- **Input Contract**: `insights` — markdown content to add
+
+### SK-8.5 — `get_user_profile`
+- **Category**: Learning
+- **Tool**: `get_user_profile(user_id)`
+- **Description**: Get the current user dialectic profile content
+- **Output Contract**: Profile content or placeholder message
+
+---
+
+## Skill Group 9: Skill Management (NEW)
+
+### SK-9.1 — `get_skill_info`
+- **Category**: Skill Management
+- **Tool**: `get_skill_info(skill_name)`
+- **Description**: Get detailed information about a skill (version, tags, eval score, etc.)
+- **Output Contract**: Formatted skill information
+
+### SK-9.2 — `enable_skill`
+- **Category**: Skill Management
+- **Tool**: `enable_skill(skill_name)`
+- **Description**: Enable a disabled skill in TOOLBOX
+- **Output Contract**: Success or error message
+
+### SK-9.3 — `disable_skill`
+- **Category**: Skill Management
+- **Tool**: `disable_skill(skill_name)`
+- **Description**: Disable an enabled skill (soft delete, keeps file)
+- **Output Contract**: Success or error message
+
+### SK-9.4 — `update_skill_metadata`
+- **Category**: Skill Management
+- **Tool**: `update_skill_metadata(skill_name, tags, description, version)`
+- **Description**: Update skill metadata (tags, description, version)
+- **Output Contract**: Success message
+
+### SK-9.5 — `benchmark_skill`
+- **Category**: Skill Management
+- **Tool**: `benchmark_skill(skill_name, test_cases_json)`
+- **Description**: Run benchmark tests on a skill with JSON test cases
+- **Input Contract**: `test_cases_json` — JSON array of `{"input": {...}, "expected": "..."}`
+- **Output Contract**: Benchmark results with pass/fail rates and scores
+
+### SK-9.6 — `evaluate_skill`
+- **Category**: Skill Management
+- **Tool**: `evaluate_skill(skill_name)`
+- **Description**: Run basic evaluation checks (syntax, docstring, error handling, logging)
+- **Output Contract**: Formatted evaluation results
+
+### SK-9.7 — `improve_skill`
+- **Category**: Skill Management
+- **Tool**: `improve_skill(skill_name, improved_code, documentation)`
+- **Description**: Improve an existing skill with new code (with safety checks and rollback)
+- **Output Contract**: Success message with version info
+
+### SK-9.8 — `rollback_skill`
+- **Category**: Skill Management
+- **Tool**: `rollback_skill(skill_name)`
+- **Description**: Rollback a skill to its previous version
+- **Output Contract**: Success message
+
+---
+
+## Skill Group 10: ZenHub Registry (NEW)
+
+### SK-10.1 — `hub_search`
+- **Category**: ZenHub
+- **Tool**: `hub_search(query, limit)`
+- **Description**: Search ZenHub for skills by name/description/tags
+- **Output Contract**: Formatted list of matching skills
+
+### SK-10.2 — `hub_list`
+- **Category**: ZenHub
+- **Tool**: `hub_list()`
+- **Description**: List all skills available in ZenHub
+- **Output Contract**: Formatted list of all published skills
+
+### SK-10.3 — `hub_publish`
+- **Category**: ZenHub
+- **Tool**: `hub_publish(skill_name, description, tags, from_toolbox)`
+- **Description**: Publish a skill from TOOLBOX to ZenHub
+- **Output Contract**: Success or error message
+
+### SK-10.4 — `hub_install`
+- **Category**: ZenHub
+- **Tool**: `hub_install(skill_name, user_id)`
+- **Description**: Install a skill from ZenHub into TOOLBOX
+- **Output Contract**: Success or error message
+
+### SK-10.5 — `hub_remove`
+- **Category**: ZenHub
+- **Tool**: `hub_remove(skill_name)`
+- **Description**: Remove a skill from ZenHub (unpublish)
+- **Output Contract**: Success or error message
+
+### SK-10.6 — `discover_external_skills`
+- **Category**: ZenHub
+- **Tool**: `discover_external_skills()`
+- **Description**: Discover skills in external directory (~/.myclaw/skills/)
+- **Output Contract**: Formatted list of discovered skills
+
+### SK-10.7 — `hub_install_from_external`
+- **Category**: ZenHub
+- **Tool**: `hub_install_from_external(skill_name, user_id)`
+- **Description**: Install a skill from external directory into TOOLBOX
+- **Output Contract**: Success or error message
+
+---
+
+## Skill Group 11: Web Scraping
+
+### SK-11.1 — Scrapling Agent Guide
 - **Category**: Web Scraping
 - **Tool**: Scrapling (via custom python code / TOOLBOX or direct `shell` CLI)
 - **Description**: For advanced web scraping, bypass anti-bot protections (like Cloudflare Turnstile), stealth headless browsing, and full spider framework.
@@ -210,3 +374,4 @@
 |---------|------|--------|
 | 0.0 | 2026-03-15 | Initial baseline skills definition. Overall eval: 0.880 avg across 26 tasks |
 | 0.1 | 2026-03-15 | Improved: rich docstrings for shell/file/toolbox (Clarity 0.40→1.0), HTML stripping in browse (Coverage 0.70→1.0), ALLOWED_COMMANDS expanded, bigram knowledge search in agent.py. Overall: 0.989 avg |
+| 0.2 | 2026-03-29 | Phase 1-4 Implementation Complete: Added Lifecycle Hooks (SK-0.1 to 0.3), Natural Language Scheduling (SK-5.6), Session Learning (SK-8.1 to 8.5), Skill Management (SK-9.1 to 9.8), ZenHub Registry (SK-10.1 to 10.7). Total: ~35 new tools added. |

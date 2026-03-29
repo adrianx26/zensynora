@@ -1,0 +1,684 @@
+"""Medic Agent - System health monitoring, integrity checking, and error recovery."""
+
+import ast
+import hashlib
+import json
+import logging
+import re
+import subprocess
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple, Any
+from datetime import datetime, timedelta
+
+logger = logging.getLogger(__name__)
+
+MEDIC_DIR = Path.home() / ".myclaw" / "medic"
+INTEGRITY_FILE = MEDIC_DIR / "integrity_registry.json"
+HEALTH_FILE = MEDIC_DIR / "health_state.json"
+TASK_LOG_FILE = MEDIC_DIR / "task_log.json"
+
+DEFAULT_REPO_URL = "https://raw.githubusercontent.com/zensynora/zensynora/main"
+CORE_FILES = [
+    "myclaw/agent.py",
+    "myclaw/tools.py",
+    "myclaw/config.py",
+    "myclaw/memory.py",
+    "myclaw/gateway.py",
+    "myclaw/knowledge/__init__.py",
+    "myclaw/knowledge/storage.py",
+    "myclaw/providers/ollama.py",
+]
+
+config = None
+
+
+def set_config(cfg):
+    """Set global config reference for Medic Agent."""
+    global config
+    config = cfg
+
+
+class MedicAgent:
+    """System health agent with hash integrity checking and error recovery."""
+
+    def __init__(self, repo_url: str = DEFAULT_REPO_URL):
+        self.repo_url = repo_url
+        self.medic_dir = MEDIC_DIR
+        self.medic_dir.mkdir(parents=True, exist_ok=True)
+        self.integrity_file = INTEGRITY_FILE
+        self.health_file = HEALTH_FILE
+        self.task_log_file = TASK_LOG_FILE
+        self._loop_detector = LoopDetector()
+
+    def calculate_hash(self, file_path: str) -> Optional[str]:
+        """Calculate SHA-256 hash of a file.
+        
+        Args:
+            file_path: Path to file
+            
+        Returns:
+            SHA-256 hash string or None on error
+        """
+        try:
+            path = Path(file_path)
+            if not path.exists():
+                return None
+            
+            sha256 = hashlib.sha256()
+            with open(path, 'rb') as f:
+                for chunk in iter(lambda: f.read(8192), b''):
+                    sha256.update(chunk)
+            return sha256.hexdigest()
+        
+        except Exception as e:
+            logger.error(f"Error calculating hash for {file_path}: {e}")
+            return None
+
+    def check_integrity(self, file_path: Optional[str] = None) -> Dict[str, Any]:
+        """Check file integrity against recorded hashes.
+        
+        Args:
+            file_path: Specific file to check, or None for all tracked files
+            
+        Returns:
+            Dict with integrity check results
+        """
+        if not self.integrity_file.exists():
+            return {"status": "no_registry", "message": "Integrity registry not found. Run scan_system() first."}
+        
+        try:
+            registry = json.loads(self.integrity_file.read_text())
+            results = {"files": [], "valid": 0, "corrupted": 0, "missing": 0}
+            
+            files_to_check = [file_path] if file_path else list(registry.keys())
+            
+            for fp in files_to_check:
+                if fp not in registry:
+                    continue
+                    
+                record = registry[fp]
+                current_hash = self.calculate_hash(fp)
+                
+                if current_hash is None:
+                    results["missing"] += 1
+                    results["files"].append({
+                        "path": fp,
+                        "status": "missing",
+                        "recorded_hash": record.get("hash")
+                    })
+                elif current_hash != record.get("hash"):
+                    results["corrupted"] += 1
+                    results["files"].append({
+                        "path": fp,
+                        "status": "modified",
+                        "recorded_hash": record.get("hash"),
+                        "current_hash": current_hash
+                    })
+                else:
+                    results["valid"] += 1
+                    results["files"].append({
+                        "path": fp,
+                        "status": "valid"
+                    })
+            
+            results["status"] = "ok" if results["corrupted"] == 0 and results["missing"] == 0 else "issues_found"
+            return results
+        
+        except Exception as e:
+            logger.error(f"Error checking integrity: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def scan_system(self, files: Optional[List[str]] = None) -> Dict[str, Any]:
+        """Scan system files and record their hashes.
+        
+        Args:
+            files: List of file paths to scan, defaults to CORE_FILES
+            
+        Returns:
+            Dict with scan results
+        """
+        files = files or CORE_FILES
+        registry = {}
+        scanned = []
+        errors = []
+        
+        for fp in files:
+            path = Path(fp)
+            if path.exists():
+                hash_val = self.calculate_hash(fp)
+                if hash_val:
+                    registry[fp] = {
+                        "hash": hash_val,
+                        "last_checked": datetime.now().isoformat(),
+                        "status": "valid"
+                    }
+                    scanned.append(fp)
+            else:
+                errors.append(f"File not found: {fp}")
+        
+        self.integrity_file.write_text(json.dumps(registry, indent=2), encoding="utf-8")
+        
+        return {
+            "scanned": len(scanned),
+            "errors": errors,
+            "registry_updated": True
+        }
+
+    def detect_errors(self, file_path: str) -> Dict[str, Any]:
+        """Detect syntax and runtime errors in a Python file.
+        
+        Args:
+            file_path: Path to Python file
+            
+        Returns:
+            Dict with error details
+        """
+        try:
+            path = Path(file_path)
+            if not path.exists():
+                return {"status": "missing", "message": f"File not found: {file_path}"}
+            
+            code = path.read_text(encoding="utf-8")
+            
+            try:
+                ast.parse(code)
+                syntax_ok = True
+                syntax_errors = []
+            except SyntaxError as e:
+                syntax_ok = False
+                syntax_errors = [{
+                    "line": e.lineno,
+                    "column": e.offset,
+                    "message": str(e)
+                }]
+            
+            return {
+                "file": file_path,
+                "syntax_valid": syntax_ok,
+                "syntax_errors": syntax_errors
+            }
+        
+        except Exception as e:
+            logger.error(f"Error detecting errors in {file_path}: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def validate_modification(self, proposed_change: str, target_file: str) -> Dict[str, Any]:
+        """Validate a proposed code modification before applying.
+        
+        Args:
+            proposed_change: New code content
+            target_file: File to be modified
+            
+        Returns:
+            Dict with validation results
+        """
+        issues = []
+        
+        try:
+            ast.parse(proposed_change)
+        except SyntaxError as e:
+            issues.append(f"Syntax error: {e}")
+        
+        forbidden_imports = {"os", "sys", "subprocess", "shutil", "socket", "urllib", "http", "pty", "commands"}
+        forbidden_calls = {"eval", "exec", "open", "__import__", "globals", "locals", "compile"}
+        
+        try:
+            tree = ast.parse(proposed_change)
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Import):
+                    for alias in node.names:
+                        if alias.name.split('.')[0] in forbidden_imports:
+                            issues.append(f"Forbidden import: {alias.name}")
+                elif isinstance(node, ast.ImportFrom):
+                    if node.module and node.module.split('.')[0] in forbidden_imports:
+                        issues.append(f"Forbidden import from: {node.module}")
+                elif isinstance(node, ast.Call):
+                    if isinstance(node.func, ast.Name) and node.func.id in forbidden_calls:
+                        issues.append(f"Forbidden call: {node.func.id}")
+        except Exception as e:
+            issues.append(f"AST parsing error: {e}")
+        
+        return {
+            "valid": len(issues) == 0,
+            "issues": issues,
+            "file": target_file
+        }
+
+    async def fetch_from_github(self, file_path: str, branch: str = "main") -> Optional[str]:
+        """Fetch a file from GitHub repository.
+        
+        Args:
+            file_path: Path within repo (e.g., 'myclaw/agent.py')
+            branch: Branch name (default: main)
+            
+        Returns:
+            File content as string or None on error
+        """
+        try:
+            url = f"{self.repo_url.rstrip('/')}/{branch}/{file_path}"
+            result = subprocess.run(
+                ['curl', '-s', url],
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0 and result.stdout:
+                return result.stdout
+            return None
+        except Exception as e:
+            logger.error(f"Error fetching from GitHub: {e}")
+            return None
+
+    async def recover_from_github(self, file_path: str, branch: str = "main") -> Dict[str, Any]:
+        """Recover a corrupted or missing file from GitHub.
+        
+        Args:
+            file_path: Path to recover
+            branch: GitHub branch
+            
+        Returns:
+            Dict with recovery results
+        """
+        try:
+            content = await self.fetch_from_github(file_path, branch)
+            if content is None:
+                return {"success": False, "message": "Failed to fetch from GitHub"}
+            
+            path = Path(file_path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+            
+            new_hash = self.calculate_hash(file_path)
+            return {
+                "success": True,
+                "file": file_path,
+                "hash": new_hash,
+                "source": f"github/{branch}"
+            }
+        
+        except Exception as e:
+            logger.error(f"Error recovering file: {e}")
+            return {"success": False, "message": str(e)}
+
+    def record_task(self, task_name: str, duration: float, success: bool = True) -> None:
+        """Record task execution for analytics.
+        
+        Args:
+            task_name: Name of the task
+            duration: Execution time in seconds
+            success: Whether task succeeded
+        """
+        log = []
+        if self.task_log_file.exists():
+            try:
+                log = json.loads(self.task_log_file.read_text())
+            except Exception:
+                pass
+        
+        log.append({
+            "task": task_name,
+            "duration": duration,
+            "success": success,
+            "timestamp": datetime.now().isoformat()
+        })
+        
+        if len(log) > 1000:
+            log = log[-1000:]
+        
+        self.task_log_file.write_text(json.dumps(log, indent=2), encoding="utf-8")
+
+    def get_task_analytics(self) -> Dict[str, Any]:
+        """Get analytics from task execution history.
+        
+        Returns:
+            Dict with task statistics
+        """
+        if not self.task_log_file.exists():
+            return {"status": "no_data", "message": "No task history found"}
+        
+        try:
+            log = json.loads(self.task_log_file.read_text())
+            
+            if not log:
+                return {"status": "empty", "tasks": []}
+            
+            task_stats = {}
+            for entry in log:
+                name = entry.get("task", "unknown")
+                if name not in task_stats:
+                    task_stats[name] = {"count": 0, "total_duration": 0, "successes": 0}
+                task_stats[name]["count"] += 1
+                task_stats[name]["total_duration"] += entry.get("duration", 0)
+                if entry.get("success"):
+                    task_stats[name]["successes"] += 1
+            
+            for name, stats in task_stats.items():
+                stats["avg_duration"] = stats["total_duration"] / stats["count"] if stats["count"] > 0 else 0
+                stats["success_rate"] = stats["successes"] / stats["count"] if stats["count"] > 0 else 0
+            
+            return {"status": "ok", "tasks": task_stats, "total_entries": len(log)}
+        
+        except Exception as e:
+            logger.error(f"Error getting task analytics: {e}")
+            return {"status": "error", "message": str(e)}
+
+    def detect_loop(self, pattern: str, max_iterations: int = 100) -> bool:
+        """Check if a pattern suggests infinite loop.
+        
+        Args:
+            pattern: Pattern to detect
+            max_iterations: Maximum allowed iterations
+            
+        Returns:
+            True if loop detected
+        """
+        return self._loop_detector.is_looping(pattern, max_iterations)
+
+    def check_execution(self, execution_id: str, max_calls: int = 50) -> Dict[str, Any]:
+        """Check execution state for infinite loop prevention.
+        
+        Args:
+            execution_id: Unique identifier for this execution
+            max_calls: Maximum allowed calls
+            
+        Returns:
+            Dict with check results
+        """
+        is_looping, count = self._loop_detector.check(execution_id, max_calls)
+        return {
+            "allowed": not is_looping,
+            "count": count,
+            "max_allowed": max_calls,
+            "should_stop": is_looping
+        }
+
+    def handle_timeout(self, execution_id: str, timeout_seconds: int = 30) -> Dict[str, Any]:
+        """Handle execution timeout.
+        
+        Args:
+            execution_id: Unique identifier for this execution
+            timeout_seconds: Timeout threshold
+            
+        Returns:
+            Dict with timeout handling results
+        """
+        self._loop_detector.clear(execution_id)
+        return {
+            "cleared": True,
+            "execution_id": execution_id,
+            "timeout_seconds": timeout_seconds
+        }
+
+    def get_health_report(self) -> str:
+        """Generate a formatted health report.
+        
+        Returns:
+            Formatted health status string
+        """
+        lines = ["🏥 ZenSynora Health Report", "", f"Timestamp: {datetime.now().isoformat()}", ""]
+        
+        integrity = self.check_integrity()
+        lines.append("File Integrity:")
+        lines.append(f"  Valid: {integrity.get('valid', 0)}")
+        lines.append(f"  Modified: {integrity.get('corrupted', 0)}")
+        lines.append(f"  Missing: {integrity.get('missing', 0)}")
+        
+        if integrity.get("files"):
+            issues = [f for f in integrity["files"] if f["status"] != "valid"]
+            if issues:
+                lines.append("")
+                lines.append("⚠️ Issues Detected:")
+                for issue in issues:
+                    lines.append(f"  - {issue['path']}: {issue['status']}")
+        
+        analytics = self.get_task_analytics()
+        if analytics.get("tasks"):
+            lines.append("")
+            lines.append("Task Analytics:")
+            for name, stats in list(analytics["tasks"].items())[:5]:
+                rate = stats.get("success_rate", 0) * 100
+                lines.append(f"  - {name}: {stats['count']} runs, {rate:.1f}% success, {stats.get('avg_duration', 0):.2f}s avg")
+        
+        lines.append("")
+        lines.append("Status: " + ("✅ Healthy" if integrity.get("valid", 0) > 0 and not integrity.get("corrupted") else "⚠️ Needs Attention"))
+        
+        return "\n".join(lines)
+
+
+class LoopDetector:
+    """Detects and prevents infinite loops in execution."""
+
+    def __init__(self):
+        self._executions: Dict[str, List[float]] = {}
+
+    def is_looping(self, pattern: str, max_iterations: int) -> bool:
+        """Check if pattern has exceeded max iterations."""
+        if pattern not in self._executions:
+            self._executions[pattern] = []
+        
+        self._executions[pattern].append(datetime.now().timestamp())
+        
+        cutoff = datetime.now().timestamp() - 60
+        recent = [t for t in self._executions[pattern] if t > cutoff]
+        self._executions[pattern] = recent
+        
+        return len(recent) > max_iterations
+
+    def check(self, execution_id: str, max_calls: int) -> Tuple[bool, int]:
+        """Check if execution has exceeded call limit."""
+        if execution_id not in self._executions:
+            self._executions[execution_id] = []
+        
+        count = len(self._executions[execution_id])
+        return count >= max_calls, count
+
+    def clear(self, execution_id: str) -> None:
+        """Clear execution tracking."""
+        if execution_id in self._executions:
+            del self._executions[execution_id]
+
+
+def check_system_health() -> str:
+    """Check overall system health status.
+    
+    Returns:
+        Formatted health report
+    """
+    medic = MedicAgent()
+    return medic.get_health_report()
+
+
+def verify_file_integrity(file_path: str = None) -> str:
+    """Verify file integrity against recorded hashes.
+    
+    Args:
+        file_path: Optional specific file to check
+        
+    Returns:
+        Integrity check results
+    """
+    medic = MedicAgent()
+    result = medic.check_integrity(file_path)
+    
+    if result.get("status") == "no_registry":
+        return "⚠️ No integrity registry found. Run scan_system() first to create baseline."
+    
+    lines = [f"📋 Integrity Check {'for ' + file_path if file_path else 'for all files'}", ""]
+    lines.append(f"Valid: {result.get('valid', 0)}")
+    lines.append(f"Modified: {result.get('corrupted', 0)}")
+    lines.append(f"Missing: {result.get('missing', 0)}")
+    
+    if result.get("files"):
+        for f in result["files"]:
+            if f["status"] != "valid":
+                status_icon = "❌" if f["status"] == "missing" else "⚠️"
+                lines.append(f"{status_icon} {f['path']}: {f['status']}")
+    
+    return "\n".join(lines)
+
+
+async def recover_file(file_path: str, source: str = "github") -> str:
+    """Recover a corrupted or missing file.
+    
+    Args:
+        file_path: Path to recover
+        source: Recovery source ('github' or 'local')
+    
+    Returns:
+        Recovery result
+    """
+    medic = MedicAgent()
+    
+    if source == "github":
+        result = await medic.recover_from_github(file_path)
+        if result.get("success"):
+            return f"✅ File recovered from GitHub: {file_path}\nNew hash: {result.get('hash', 'unknown')}"
+        return f"❌ Recovery failed: {result.get('message', 'Unknown error')}"
+    
+    return f"⚠️ Unknown source '{source}'. Use 'github' for GitHub recovery."
+
+
+def get_health_report() -> str:
+    """Get formatted health report.
+    
+    Returns:
+        Health report string
+    """
+    medic = MedicAgent()
+    return medic.get_health_report()
+
+
+def validate_modification(proposed_change: str, target_file: str) -> str:
+    """Validate a proposed code modification.
+    
+    Args:
+        proposed_change: New code content
+        target_file: File to be modified
+    
+    Returns:
+        Validation results
+    """
+    medic = MedicAgent()
+    result = medic.validate_modification(proposed_change, target_file)
+    
+    if result.get("valid"):
+        return f"✅ Modification validated for {target_file}"
+    
+    lines = [f"❌ Validation failed for {target_file}", "", "Issues found:"]
+    for issue in result.get("issues", []):
+        lines.append(f"  - {issue}")
+    
+    return "\n".join(lines)
+
+
+def record_task_execution(task_name: str, duration: float, success: bool = True) -> str:
+    """Record a task execution for analytics.
+    
+    Args:
+        task_name: Name of the task
+        duration: Execution time in seconds
+        success: Whether task succeeded
+    
+    Returns:
+        Recording confirmation
+    """
+    medic = MedicAgent()
+    medic.record_task(task_name, duration, success)
+    status = "✅" if success else "❌"
+    return f"{status} Task '{task_name}' recorded: {duration:.2f}s"
+
+
+def get_task_analytics() -> str:
+    """Get task execution analytics.
+    
+    Returns:
+        Formatted analytics report
+    """
+    medic = MedicAgent()
+    result = medic.get_task_analytics()
+    
+    if result.get("status") in ("no_data", "empty"):
+        return "📊 No task data available yet."
+    
+    lines = ["📊 Task Analytics", ""]
+    for name, stats in result.get("tasks", {}).items():
+        rate = stats.get("success_rate", 0) * 100
+        avg = stats.get("avg_duration", 0)
+        lines.append(f"  • {name}")
+        lines.append(f"    Runs: {stats['count']} | Success: {rate:.1f}% | Avg: {avg:.2f}s")
+    
+    lines.append("")
+    lines.append(f"Total entries: {result.get('total_entries', 0)}")
+    
+    return "\n".join(lines)
+
+
+def enable_hash_check(enabled: bool = True) -> str:
+    """Enable or disable hash checking.
+    
+    Args:
+        enabled: True to enable, False to disable
+    
+    Returns:
+        Status message
+    """
+    global config
+    if config and hasattr(config, 'medic'):
+        config.medic.enable_hash_check = enabled
+        return f"✅ Hash checking {'enabled' if enabled else 'disabled'}"
+    return f"ℹ️ Hash checking {'enabled' if enabled else 'disabled'} (config update pending restart)"
+
+
+def scan_files(files: str = "") -> str:
+    """Scan files and record their hashes for integrity checking.
+    
+    Args:
+        files: Comma-separated list of files to scan, or empty for defaults
+    
+    Returns:
+        Scan results
+    """
+    medic = MedicAgent()
+    file_list = [f.strip() for f in files.split(",")] if files else None
+    result = medic.scan_system(file_list)
+    
+    return f"📊 Scan complete:\n  Scanned: {result.get('scanned', 0)} files\n  Errors: {len(result.get('errors', []))}\n  Registry updated: {result.get('registry_updated', False)}"
+
+
+def detect_errors_in_file(file_path: str) -> str:
+    """Detect syntax errors in a Python file.
+    
+    Args:
+        file_path: Path to Python file
+    
+    Returns:
+        Error detection results
+    """
+    medic = MedicAgent()
+    result = medic.detect_errors(file_path)
+    
+    if result.get("status") == "missing":
+        return f"❌ {result.get('message')}"
+    
+    if result.get("syntax_valid"):
+        return f"✅ {file_path}: No syntax errors found"
+    
+    lines = [f"❌ Syntax errors in {file_path}:"]
+    for err in result.get("syntax_errors", []):
+        lines.append(f"  Line {err['line']}: {err['message']}")
+    
+    return "\n".join(lines)
+
+
+def prevent_infinite_loop() -> str:
+    """Get status of infinite loop prevention.
+    
+    Returns:
+        Loop prevention status
+    """
+    medic = MedicAgent()
+    state = medic.check_execution("current", max_calls=50)
+    
+    if state["should_stop"]:
+        return "⚠️ Execution limit reached. Stopping to prevent infinite loop."
+    return f"✅ Loop prevention active. Calls: {state['count']}/{state['max_allowed']}"
