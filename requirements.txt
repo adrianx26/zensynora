@@ -8,6 +8,8 @@ pydantic>=2.0
 apscheduler>=3.10
 scrapling[all]>=0.4.2
 watchdog>=3.0.0  # For config file watching (6.1)
+aiosqlite>=0.20.0  # Async SQLite for optimization #1
+sentence-transformers>=2.2.2  # Semantic embedding for optimization #2
 
 # ── LLM provider SDKs (install the ones you need) ─────────────────────────────
 # OpenAI / LM Studio / llama.cpp / Groq / OpenRouter  →  pip install openai

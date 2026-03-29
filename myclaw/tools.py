@@ -171,6 +171,182 @@ class ToolAuditLogger:
 _tool_audit_logger = ToolAuditLogger()
 
 
+# ── Parallel Tool Executor (Optimization #3) ───────────────────────────────────
+
+class ParallelToolExecutor:
+    """Execute multiple independent tools concurrently for better throughput.
+    
+    Uses asyncio.gather to run independent tools in parallel, significantly
+    reducing total execution time when multiple tools are called at once.
+    """
+    
+    def __init__(self, max_concurrent: int = 5, timeout: float = 30.0):
+        self.max_concurrent = max_concurrent
+        self.timeout = timeout
+        self._semaphore = asyncio.Semaphore(max_concurrent)
+    
+    async def execute_tools(
+        self,
+        tool_calls: List[Dict],
+        user_id: str = "default"
+    ) -> List[Dict[str, str]]:
+        """Execute multiple tools in parallel.
+        
+        Args:
+            tool_calls: List of tool call dicts with 'function' containing 'name' and 'arguments'
+            user_id: User ID for context
+            
+        Returns:
+            List of result dicts with 'tool_name', 'result', 'error', 'duration'
+        """
+        if not tool_calls:
+            return []
+        
+        # Create tasks for all tool executions
+        tasks = []
+        for tc in tool_calls:
+            task = self._execute_single_tool(tc, user_id)
+            tasks.append(task)
+        
+        # Execute all in parallel with semaphore limiting
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=self.timeout
+            )
+            
+            # Process results
+            processed_results = []
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    tc = tool_calls[i]
+                    tool_name = tc.get("function", {}).get("name", "unknown")
+                    processed_results.append({
+                        "tool_name": tool_name,
+                        "result": "",
+                        "error": str(result),
+                        "duration": 0.0,
+                        "success": False
+                    })
+                else:
+                    processed_results.append(result)
+            
+            return processed_results
+            
+        except asyncio.TimeoutError:
+            logger.error(f"Parallel tool execution timed out after {self.timeout}s")
+            return [{
+                "tool_name": "parallel_executor",
+                "result": "",
+                "error": f"Execution timed out after {self.timeout}s",
+                "duration": self.timeout,
+                "success": False
+            }]
+    
+    async def _execute_single_tool(
+        self,
+        tool_call: Dict,
+        user_id: str
+    ) -> Dict[str, str]:
+        """Execute a single tool with semaphore control."""
+        async with self._semaphore:
+            tool_name = tool_call.get("function", {}).get("name", "")
+            args = tool_call.get("function", {}).get("arguments", {})
+            start_time = time.time()
+            
+            try:
+                if tool_name not in TOOLS:
+                    return {
+                        "tool_name": tool_name,
+                        "result": "",
+                        "error": f"Unknown tool: {tool_name}",
+                        "duration": time.time() - start_time,
+                        "success": False
+                    }
+                
+                # Check rate limit
+                if not _rate_limiter.check(tool_name):
+                    return {
+                        "tool_name": tool_name,
+                        "result": "",
+                        "error": f"Rate limit exceeded for {tool_name}",
+                        "duration": time.time() - start_time,
+                        "success": False
+                    }
+                
+                func = TOOLS[tool_name]["func"]
+                
+                # Execute the tool
+                if inspect.iscoroutinefunction(func):
+                    result = await func(**args)
+                else:
+                    result = await asyncio.to_thread(func, **args)
+                
+                duration = time.time() - start_time
+                
+                # Log the execution
+                _tool_audit_logger.log(
+                    tool_name, user_id, duration * 1000, True
+                )
+                
+                return {
+                    "tool_name": tool_name,
+                    "result": str(result),
+                    "error": "",
+                    "duration": duration,
+                    "success": True
+                }
+                
+            except Exception as e:
+                duration = time.time() - start_time
+                logger.error(f"Tool execution error ({tool_name}): {e}")
+                
+                _tool_audit_logger.log(
+                    tool_name, user_id, duration * 1000, False, str(e)
+                )
+                
+                return {
+                    "tool_name": tool_name,
+                    "result": "",
+                    "error": str(e),
+                    "duration": duration,
+                    "success": False
+                }
+
+
+# Global parallel executor instance
+_parallel_executor: Optional[ParallelToolExecutor] = None
+
+
+def get_parallel_executor(max_concurrent: int = 5, timeout: float = 30.0) -> ParallelToolExecutor:
+    """Get or create the global parallel executor instance."""
+    global _parallel_executor
+    
+    if _parallel_executor is None:
+        _parallel_executor = ParallelToolExecutor(
+            max_concurrent=max_concurrent,
+            timeout=timeout
+        )
+    
+    return _parallel_executor
+
+
+def is_tool_independent(tool_name: str) -> bool:
+    """Check if a tool can be executed in parallel (has no dependencies).
+    
+    Tools that modify shared state or have side effects should not be
+    executed in parallel with other tools.
+    """
+    # Tools that are NOT safe for parallel execution
+    dependent_tools = {
+        "shell", "run_command", "delegate",
+        "write_file", "create_file", "edit_file",
+        "schedule", "cancel_schedule", "edit_schedule"
+    }
+    
+    return tool_name not in dependent_tools
+
+
 # ── Module-level references injected by gateway / telegram / whatsapp ──────────
 
 _agent_registry: dict = {}   # name -> Agent  (Feature 2 / 3)
@@ -1644,10 +1820,12 @@ def generate_session_insights(user_id: str = "default", save_to_knowledge: bool 
         Formatted insights summary, or confirmation if saved.
     """
     from .memory import Memory
+    import asyncio
     
     try:
         mem = Memory(user_id=user_id)
-        history = mem.get_history(limit=50)
+        asyncio.get_event_loop().run_until_complete(mem.initialize())
+        history = asyncio.get_event_loop().run_until_complete(mem.get_history(limit=50))
         
         if not history:
             return "No conversation history available for analysis."
@@ -1683,10 +1861,12 @@ def extract_user_preferences(user_id: str = "default") -> str:
         JSON string with user profile data, or error message.
     """
     from .memory import Memory
+    import asyncio
     
     try:
         mem = Memory(user_id=user_id)
-        history = mem.get_history(limit=100)
+        asyncio.get_event_loop().run_until_complete(mem.initialize())
+        history = asyncio.get_event_loop().run_until_complete(mem.get_history(limit=100))
         
         if len(history) < 5:
             return "Not enough conversation history to build profile. Need at least 5 messages."

@@ -39,6 +39,14 @@ from .strategies import (
     VotingStrategy,
     get_strategy,
 )
+from .collaboration import (
+    TeamCollaboration,
+    TeamChat,
+    SharedTeamContext,
+    TeamMember,
+    CollaborationEvent,
+    CollaborationEventType,
+)
 
 __all__ = [
     # Models
@@ -59,4 +67,11 @@ __all__ = [
     "HierarchicalStrategy",
     "VotingStrategy",
     "get_strategy",
+    # Collaboration
+    "TeamCollaboration",
+    "TeamChat",
+    "SharedTeamContext",
+    "TeamMember",
+    "CollaborationEvent",
+    "CollaborationEventType",
 ]

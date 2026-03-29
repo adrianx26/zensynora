@@ -35,6 +35,7 @@ import httpx
 import requests
 
 from .tools import TOOL_SCHEMAS
+from .semantic_cache import get_semantic_cache, SemanticCache
 
 
 # ── LRU Cache with TTL Decorator ─────────────────────────────────────────────────
@@ -279,8 +280,15 @@ class OllamaProvider(BaseLLMProvider):
         self.timeout = timeout
 
     @retry_with_backoff(max_retries=3, base_delay=1.0)
-    @lru_cache_with_ttl(maxsize=128, ttl=300)
     async def chat(self, messages, model="llama3.2", stream: bool = False):
+        # Check semantic cache first (skip for streaming)
+        if not stream:
+            cache = get_semantic_cache()
+            cached = cache.get(messages, model)
+            if cached:
+                logger.debug(f"Semantic cache hit for {model}")
+                return cached
+        
         payload = {
             "model": model,
             "messages": messages,
@@ -316,6 +324,11 @@ class OllamaProvider(BaseLLMProvider):
             msg = r.json()["message"]
             tool_calls = msg.get("tool_calls") or None
             result = (msg.get("content", ""), tool_calls)
+            
+            # Cache the response
+            cache = get_semantic_cache()
+            cache.set(messages, model, result[0], result[1])
+            
             return result
         except httpx.TimeoutException:
             raise TimeoutError(f"Ollama request timed out after {self.timeout}s")
@@ -360,8 +373,15 @@ class OpenAICompatProvider(BaseLLMProvider):
         )
 
     @retry_with_backoff(max_retries=3, base_delay=1.0)
-    @lru_cache_with_ttl(maxsize=128, ttl=300)
     async def chat(self, messages, model="gpt-4o-mini", stream: bool = False):
+        # Check semantic cache first (skip for streaming)
+        if not stream:
+            cache = get_semantic_cache()
+            cached = cache.get(messages, model)
+            if cached:
+                logger.debug(f"Semantic cache hit for {model}")
+                return cached
+        
         if stream:
             # Streaming response
             async def generate():
@@ -386,6 +406,11 @@ class OpenAICompatProvider(BaseLLMProvider):
         msg = response.choices[0].message
         tool_calls = _openai_tool_calls_to_dict(msg.tool_calls)
         result = (msg.content or "", tool_calls)
+        
+        # Cache the response
+        cache = get_semantic_cache()
+        cache.set(messages, model, result[0], result[1])
+        
         return result
 
     async def stream_chat(self, messages: List[Dict], model: str = "gpt-4o-mini") -> AsyncIterator[str]:
@@ -501,8 +526,16 @@ class AnthropicProvider(BaseLLMProvider):
         self.client  = AsyncAnthropic(api_key=api_key)
         self.timeout = timeout
 
-    @lru_cache_with_ttl(maxsize=128, ttl=300)
+    @retry_with_backoff(max_retries=3, base_delay=1.0)
     async def chat(self, messages, model="claude-3-5-sonnet-20241022", stream: bool = False):
+        # Check semantic cache first (skip for streaming)
+        if not stream:
+            cache = get_semantic_cache()
+            cached = cache.get(messages, model)
+            if cached:
+                logger.debug(f"Semantic cache hit for {model}")
+                return cached
+        
         # Anthropic separates the system prompt from the conversation
         system_content = ""
         conv_messages  = []
@@ -562,6 +595,11 @@ class AnthropicProvider(BaseLLMProvider):
                 })
 
         result = ("\n".join(text_parts), (tool_calls or None))
+        
+        # Cache the response
+        cache = get_semantic_cache()
+        cache.set(messages, model, result[0], result[1])
+        
         return result
 
     async def stream_chat(self, messages: List[Dict], model: str = "claude-3-5-sonnet-20241022") -> AsyncIterator[str]:
@@ -616,8 +654,15 @@ class GeminiProvider(BaseLLMProvider):
             )
         return [self._genai.protos.Tool(function_declarations=declarations)]
 
-    @lru_cache_with_ttl(maxsize=128, ttl=300)
     async def chat(self, messages, model="gemini-1.5-flash", stream: bool = False):
+        # Check semantic cache first (skip for streaming)
+        if not stream:
+            cache = get_semantic_cache()
+            cached = cache.get(messages, model)
+            if cached:
+                logger.debug(f"Semantic cache hit for {model}")
+                return cached
+        
         system_parts = []
         history      = []
         last_user    = None
@@ -671,6 +716,11 @@ class GeminiProvider(BaseLLMProvider):
                 })
 
         result = ("\n".join(text_parts), (tool_calls or None))
+        
+        # Cache the response
+        cache = get_semantic_cache()
+        cache.set(messages, model, result[0], result[1])
+        
         return result
 
     async def stream_chat(self, messages: List[Dict], model: str = "gemini-1.5-flash") -> AsyncIterator[str]:
