@@ -2,6 +2,9 @@
 
 A powerful personal AI agent that runs locally or in the cloud using various LLM providers, featuring Telegram and WhatsApp integration, persistent SQLite memory, multi-agent support, dynamic tool building, and task scheduling.
 
+> ZenSynora doesn't just "execute" tasks; it treats every interaction as data to refine its internal models of you, the project, and its own code.
+
+
 ## ✨ Features
 
 ### Core Capabilities
