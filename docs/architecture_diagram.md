@@ -108,13 +108,27 @@ Phase 5 (Skill Adapter)      Phase 6 (Medic Agent)
 ─────────────────────        ─────────────────────
 • analyze_external_skill()   • check_system_health()
 • convert_skill()             • verify_file_integrity()
-• list_compatible_skills()    • recover_file()
+• list_compatible_skills()    • recover_file(source="github"|"local")
 • register_external_skill()   • get_health_report()
-                               • validate_modification()
-                               • record_task_execution()
-                               • enable_hash_check()
-                               • prevent_infinite_loop()
-```
+                                • validate_modification()
+                                • record_task_execution()
+                                • enable_hash_check()
+                                • prevent_infinite_loop()
+                                • create_backup()
+                                • list_backups()
+                                • check_file_virustotal()
+
+Phase 7 (New Tech Agent)     Phase 8 (Backends)
+───────────────────────      ────────────────
+• fetch_ai_news()            • discover_backends()
+• get_technology_proposals() • get_default_backend()
+• add_to_roadmap()           • LocalBackend.execute()
+• enable_newtech_agent()     • DockerBackend.execute()
+• run_newtech_scan()         • SSHBackend.execute()
+• summarize_tech()         • WSL2Backend.execute()
+• generate_tech_proposal()
+• share_proposal()
+• get_roadmap()```
 
 ## New Agents (Phase 5 Implementation)
 
@@ -146,13 +160,18 @@ Phase 5 (Skill Adapter)      Phase 6 (Medic Agent)
 │  │                   │  │  ├─ enable_hash   │  │  ├─ share_proposal       │  │
 │  │                   │  │  ├─ scan_files    │  │  └─ get_roadmap          │  │
 │  │                   │  │  ├─ detect_errors │  │                          │  │
-│  │                   │  │  └─ prevent_loop  │  │  Features:               │  │
-│  │                   │  │                   │  │  ├─ Opt-in consent       │  │
-│  │                   │  │  Features:        │  │  ├─ GitHub sharing       │  │
-│  │                   │  │  ├─ Hash integrity│  │  ├─ Tech proposals      │  │
-│  │                   │  │  ├─ Error recovery│  │  └─ Roadmap tracking    │  │
+│  │                   │  │  ├─ prevent_loop  │  │                          │  │
+│  │                   │  │  ├─ create_backup │  │  Features:               │  │
+│  │                   │  │  ├─ list_backups  │  │  ├─ Opt-in consent       │  │
+│  │                   │  │  └─ virustotal   │  │  ├─ GitHub API sharing  │  │
+│  │                   │  │                   │  │  ├─ Tech proposals      │  │
+│  │                   │  │  Features:        │  │  └─ Roadmap tracking    │  │
+│  │                   │  │  ├─ Hash integrity│  │                          │  │
+│  │                   │  │  ├─ Local backup  │  │                          │  │
+│  │                   │  │  ├─ Error recovery│  │                          │  │
 │  │                   │  │  ├─ Loop prevent  │  │                          │  │
-│  │                   │  │  └─ GitHub fetch  │  │                          │  │
+│  │                   │  │  ├─ GitHub fetch  │  │                          │  │
+│  │                   │  │  └─ VirusTotal   │  │                          │  │
 │  └──────────────────┘  └──────────────────┘  └──────────────────────────┘  │
 │                                                                            │
 └────────────────────────────────────────────────────────────────────────────┘
@@ -510,5 +529,5 @@ myclaw/
 ```
 
 *Generated: 2026-03-29*
-*Last Updated: 2026-03-29 (Phases 1-4 Complete: Agents + Backends)*
+*Last Updated: 2026-03-29 (All Phases Complete + Future Implementations)*
 *Part of: ZenSynora Full Implementation*
