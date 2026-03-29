@@ -1,110 +1,113 @@
-Implementation Plan: Integrating MemoPad Storage into ZenSynora
-Overview
+# Implementation Plan: Integrating MemoPad Storage into ZenSynora
 
-github.com/adrianx26/memopad is the repo for memopad
+## Overview
 
+> **Repo**: [github.com/adrianx26/memopad](https://github.com/adrianx26/memopad)  
+> **Status**: ✅ **Fully Implemented** — see `myclaw/knowledge/`
 
+This document outlined the plan to integrate the memory/storage solution from MemoPad (Markdown files indexed with SQLite) into ZenSynora (MyClaw). The integration focuses exclusively on SQLite for indexing and search, eliminating any Postgres references or support.
 
-This document outlines the plan to integrate the memory/storage solution from MemoPad (Markdown files indexed with SQLite) into ZenSynora (MyClaw). The integration focuses exclusively on SQLite for indexing and search, eliminating any Postgres references or support, as it is optional in MemoPad and not used in ZenSynora. This enhances ZenSynora's current SQLite-based conversation memory with structured knowledge storage, enabling persistent, editable notes and a knowledge graph while maintaining local-first principles.
-Compatibility Assessment:
+This enhances ZenSynora's current SQLite-based conversation memory with structured knowledge storage, enabling persistent, editable notes and a knowledge graph while maintaining local-first principles.
 
-MemoPad's storage (Markdown + SQLite) is highly compatible with ZenSynora, as both are Python-based, use SQLite, and focus on local AI agents. ZenSynora's Ollama integration can be adapted to use MemoPad-like tools for reading/writing knowledge.
-Benefits: Adds semantic structure, manual editing (e.g., via Obsidian), and graph traversal to ZenSynora's simple conversation history.
-Challenges: Adapt MemoPad's MCP (Model Context Protocol) to ZenSynora's direct Ollama calls; extend for multi-user support.
-Focus: SQLite-only for all database operations (no Postgres migration or testing).
+---
 
-Assumptions:
+## Compatibility Assessment
 
-Development in Python 3.10+.
-Reuse MemoPad code modules where possible (e.g., Markdown parsing, SQLite indexing).
-Total estimated time: 7-10 days for a single developer.
+- **MemoPad's storage** (Markdown + SQLite) is highly compatible with ZenSynora, as both are Python-based, use SQLite, and focus on local AI agents.
+- **Benefits**: Adds semantic structure, manual editing (e.g., via Obsidian), and graph traversal to ZenSynora's simple conversation history.
+- **Challenges**: Adapt MemoPad's MCP (Model Context Protocol) to ZenSynora's direct Ollama calls; extended for multi-user support.
+- **Focus**: SQLite-only for all database operations (no Postgres).
 
-Phase 1: Preparation and Dependency Integration (1-2 days)
-Objectives
-Set up the foundation by integrating MemoPad's core storage components into ZenSynora, focusing on SQLite.
-Steps
+## Assumptions
 
-Clone and Integrate MemoPad Code:
-Copy relevant modules from MemoPad's src/memopad/ (e.g., Markdown parsing for frontmatter/observations/relations, SQLite indexing) into a new subdirectory myclaw/knowledge/ in ZenSynora. Avoid any Postgres-related code (e.g., testcontainers or Docker configs).
-Update Dependencies:
-Modify ZenSynora's requirements.txt to include MemoPad dependencies like loguru for logging. Ensure compatibility with existing libs (e.g., pydantic, python-telegram-bot). No new DB drivers needed since SQLite is built-in.
-Configure Storage Directory:
-Extend ~/.myclaw/config.json with "knowledge_dir": "~/.myclaw/knowledge". For multi-user support, create subdirs like ~/.myclaw/knowledge/user_id/. Use SQLite DB at ~/.myclaw/knowledge.db (per-user tables if needed).
-Initialize SQLite Schema:
-In myclaw/memory.py, add new tables from MemoPad (e.g., entities, observations, relations, FTS5 for full-text search). Use MemoPad's schema but ensure it's SQLite-only. Run initialization on startup if DB doesn't exist.
+- Development in Python 3.10+.
+- Reuse MemoPad code modules where possible (e.g., Markdown parsing, SQLite indexing).
+- Total estimated time: 7-10 days for a single developer.
 
-Testing
+---
 
-Create a sample Markdown note and verify SQLite indexing via a test script (inspired by MemoPad's test_fts5.py).
+## Phase 1: Preparation and Dependency Integration ✅ Done
 
-Phase 2: Implement Storage and Synchronization (2-3 days)
-Objectives
-Enable writing/reading structured Markdown notes with SQLite indexing and sync.
-Steps
+**Objectives**: Set up the foundation by integrating MemoPad's core storage components.
 
-Storage Functions:
-Create myclaw/knowledge/storage.py:
-write_note(entity, observations, relations): Generate Markdown files with frontmatter (title, permalink, tags) and semantic content. Save to knowledge_dir.
-read_note(permalink): Parse Markdown file and return structured data.
-Use MemoPad's parsing logic for observations (- [category] content #tag) and relations (- relation_type [[WikiLink]]).
+### Steps Completed
 
-SQLite Indexing and Sync:
-Implement sync_knowledge(watch=False) in myclaw/tools.py: Scan Markdown files, update SQLite indexes (entities, relations). For real-time, add --watch using file watchers (reuse MemoPad's sync logic).
-Ensure bidirectional sync: Changes in SQLite reflect in files, and vice versa.
-Knowledge Extraction from Conversations:
-Modify myclaw/memory.py: After saving a conversation message to SQLite, use Ollama to extract entities/observations (prompt: "Extract structured knowledge from this message"). Store as new Markdown notes if relevant.
-Graph Support:
-Add myclaw/knowledge/graph.py: Functions like get_related_entities(permalink) for traversing relations, using SQLite queries (no graph libs needed initially).
+- **Cloned and Integrated MemoPad Code** — Relevant modules copied into `myclaw/knowledge/` (parser, SQLite indexing, no Postgres).
+- **Updated Dependencies** — `requirements.txt` includes `pydantic`, `pyyaml`, `watchdog`, etc.
+- **Configured Storage Directory** — `~/.myclaw/config.json` includes `knowledge_dir`. Per-user subdirs: `~/.myclaw/knowledge/{user_id}/`.
+- **Initialized SQLite Schema** — `entities`, `observations`, `relations`, `FTS5` tables initialized on startup via `myclaw/knowledge/db.py`.
 
-Testing
+---
 
-Write a note via code, modify the file manually, run sync, and verify SQLite updates. Test search with sample queries.
+## Phase 2: Storage and Synchronization ✅ Done
 
-Phase 3: LLM and Tool Integration (2-3 days)
-Objectives
-Make the knowledge base accessible via ZenSynora's agent and channels.
-Steps
+**Objectives**: Enable writing/reading structured Markdown notes with SQLite indexing and sync.
 
-New Tools:
-In myclaw/tools.py, add:
-write_to_knowledge(note_content): Allow Ollama/LLM to create structured notes.
-search_knowledge(query): Use SQLite FTS5 for full-text/metadata search; return results with memory:// permalinks.
-build_context(permalink, depth=2): Traverse graph to build context for prompts (reuse MemoPad logic).
+### Steps Completed
 
-Agent Enhancements:
-Update myclaw/agent.py: Before generating responses, auto-search knowledge base and inject relevant context into Ollama prompts.
-Multi-User Isolation:
-Prefix SQLite tables with user_{id}_ and use subdirs for Markdown files. Pass user_id from Telegram/CLI to tools.
-Channel Integration:
-Add Telegram commands like /knowledge search <query> or /knowledge write <content> in myclaw/channels/telegram.py. Extend CLI similarly.
+- **Storage Functions** (`myclaw/knowledge/storage.py`):
+  - `write_note(entity, observations, relations)` — generates Markdown with frontmatter.
+  - `read_note(permalink)` — parses Markdown and returns structured data.
+- **SQLite Indexing and Sync** — `sync_knowledge()` scans Markdown files, updates SQLite indexes.
+- **Background extraction** — configurable background sync via `config.knowledge.auto_extract`.
+- **Graph Support** (`myclaw/knowledge/graph.py`) — `get_related_entities(permalink)` traverses relations via SQLite queries.
 
-Testing
+---
 
-Run a conversation via Telegram/CLI; verify that knowledge from notes influences responses (e.g., recall stored facts).
+## Phase 3: LLM and Tool Integration ✅ Done
 
-Phase 4: Optimizations, Security, and Documentation (1-2 days)
-Objectives
-Polish the integration for production use.
-Steps
+**Objectives**: Make the knowledge base accessible via the agent and channels.
 
-Optimizations:
-Add caching for frequent searches (inspired by MemoPad's cache optimizations). Implement duplicate cleanup in SQLite.
-Security:
-Validate paths in tools to prevent directory traversal. Restrict knowledge access to authenticated users.
-Optional Cloud Sync:
-If desired, add basic file sync (e.g., via rsync), but keep it local-first and optional. No DB sync needed since SQLite is file-based.
-Documentation:
-Update ZenSynora's README.md with a new section: "Enhanced Knowledge Storage". Include Markdown examples, setup instructions, and tool usage.
-Modify onboard.py to include knowledge_dir setup in the wizard.
-Visualization:
-Add a simple tool for generating knowledge canvases (text-based graphs) from SQLite relations.
+### Tools Added (`myclaw/tools.py`)
 
-Testing
+- `write_to_knowledge(title, content, tags, observations, relations)` — creates structured notes.
+- `search_knowledge(query)` — SQLite FTS5 full-text search with BM25 ranking.
+- `read_knowledge(permalink)` — reads a note by permalink.
+- `get_knowledge_context(permalink, depth)` — graph-traversal context building.
+- `list_knowledge()`, `list_knowledge_tags()`, `sync_knowledge_base()`.
 
-End-to-end: Long conversations with knowledge persistence. Multi-user scenarios. Performance checks on large note sets.
+### Agent Integration (`myclaw/agent.py`)
 
-Resources and Risks
+- Auto-searches knowledge base before generating responses.
+- Injects relevant knowledge into system prompt context.
 
-Resources: Git for version control; existing dependencies.
-Risks: Schema conflicts in SQLite – resolve with migrations. Ollama prompt adaptations may need tuning.
-Next Steps: Start with Phase 1; iterate based on tests. This integration will make ZenSynora a more powerful knowledge agent.
+### Multi-User Isolation
+
+- Per-user SQLite databases: `~/.myclaw/knowledge_{user_id}.db`.
+- Per-user Markdown directories: `~/.myclaw/knowledge/{user_id}/`.
+
+### Channel Commands
+
+**Telegram & WhatsApp** — all `/knowledge_*` commands:
+`/knowledge_search`, `/knowledge_list`, `/knowledge_read`, `/knowledge_write`, `/knowledge_sync`, `/knowledge_tags`
+
+**CLI**:
+```bash
+python cli.py knowledge search "query"
+python cli.py knowledge write
+python cli.py knowledge read <permalink>
+python cli.py knowledge list
+python cli.py knowledge sync
+python cli.py knowledge tags
+```
+
+---
+
+## Phase 4: Optimizations, Security, and Documentation ✅ Done
+
+- **Caching** — Note parse cache with mtime invalidation (`myclaw/knowledge/sync.py`).
+- **FTS5 BM25 ranking** — more relevant search results (`myclaw/knowledge/db.py`).
+- **Composite indexes** — faster graph queries.
+- **Security** — path validation in all tools, parameterized SQL queries, per-user isolation.
+- **Documentation** — `README.md` updated with full Knowledge Base section and CLI commands.
+
+---
+
+## Resources and Risks
+
+- **Resources**: Git for version control; existing dependencies.
+- **Risks**: Schema conflicts resolved with migrations; Ollama prompt adaptations tuned.
+
+---
+
+*Original plan created: ~2026-03-10 | Fully implemented: 2026-03-18*

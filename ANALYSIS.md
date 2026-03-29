@@ -107,7 +107,7 @@ swarm_assign("swarm_xxx", "Research AI developments")
 
 | Issue | Current Status | Description |
 |-------|---------|----------|
-| LLM calls | 🚧 PENDING | Streaming responses not yet enabled |
+| LLM calls | ✅ FIXED | Streaming responses implemented (all providers) |
 | Memory | ✅ FIXED | Sliding window summaries implemented |
 | DB | ✅ FIXED | Added `idx_timestamp` on chat entries |
 | Config | ✅ FIXED | Pydantic validation schema implemented |
@@ -117,8 +117,9 @@ swarm_assign("swarm_xxx", "Research AI developments")
 ## 🎯 Remaining Priority
 
 1. **Feature**: ✅ Agent Swarms - Multi-agent coordination system implemented.
-2. **Feature**: Expand integration support via Discord / Webhooks.
-3. **Enhancement**: Apply streaming logic to large generated prompts.
+2. **Feature**: ✅ WhatsApp Business Cloud API channel implemented.
+3. **Feature**: Expand integration support via Discord / Slack / Webhooks.
+4. **Enhancement**: ✅ Streaming logic fully implemented for all LLM providers.
 
 ## 🐝 Agent Swarm Features
 
@@ -185,9 +186,10 @@ myclaw/
 │   │   ├── strategies.py    # Execution strategies
 │   │   └── orchestrator.py  # Main coordination logic
 │   ├── knowledge/           # MemoPad knowledge engine integration
-│   └── channels/
+│   ├── channels/
 │       ├── __init__.py      # ✅ Created
-│       └── telegram.py      # Telegram bot
+│       ├── telegram.py      # Telegram bot
+│       └── whatsapp.py      # ✅ WhatsApp Business Cloud API bot
 ```
 
 ## Root Level Files

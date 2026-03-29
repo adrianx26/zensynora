@@ -86,8 +86,8 @@ The following optimizations have been **successfully implemented**:
 |---|-------|--------------|----------------|--------|
 | 1.1 | Connection pooling not implemented | Add connection pool for SQLite databases | Reduced connection overhead, better concurrent performance | ✅ Implemented |
 | 1.2 | Memory DB created per user without connection reuse | Implement singleton pattern or connection pool per user | Faster queries, reduced resource usage | ✅ Implemented |
-| 1.3 | VACUUM runs on every cleanup | Run VACUUM only periodically (e.g., weekly or after N deletions) | Reduced I/O during cleanup operations | Pending |
-| 1.4 | History retrieval loads all columns | Add column selection in queries | Reduced memory usage for large datasets | Pending |
+| 1.3 | VACUUM runs on every cleanup | Run VACUUM only periodically (e.g., weekly or after N deletions) | Reduced I/O during cleanup operations | ✅ Implemented |
+| 1.4 | History retrieval loads all columns | Add column selection in queries | Reduced memory usage for large datasets | ✅ Implemented |
 
 **Implementation Note**: SQLite connection pool implemented in `myclaw/memory.py` with reference counting and WAL mode.
 
@@ -97,12 +97,12 @@ The following optimizations have been **successfully implemented**:
 
 | # | Issue | Optimization | Expected Effect | Status |
 |---|-------|--------------|----------------|--------|
-| 2.1 | Context summarization triggers on every 10+ messages | Add configurable threshold and caching | Faster responses, reduced API calls | Pending |
-| 2.2 | No request caching for repeated queries | Implement semantic or exact match caching | Reduced latency for repeated queries | Pending |
+| 2.1 | Context summarization triggers on every 10+ messages | Add configurable threshold and caching | Faster responses, reduced API calls | ✅ Implemented |
+| 2.2 | No request caching for repeated queries | Implement semantic or exact match caching | Reduced latency for repeated queries | ✅ Implemented |
 | 2.3 | No retry logic for transient LLM failures | Add exponential backoff retry mechanism | Improved reliability | ✅ Implemented |
-| 2.4 | Provider initialization happens at agent creation | Lazy-load providers on first use | Faster startup time | Pending |
-| 2.5 | No streaming support visible | Add streaming response support for compatible providers | Better UX, faster perceived response | Pending |
-| 2.6 | Tool schemas duplicated in provider.py and tools.py | Consolidate tool definitions in one place | DRY principle, easier maintenance | Pending |
+| 2.4 | Provider initialization happens at agent creation | Lazy-load providers on first use | Faster startup time | ✅ Implemented |
+| 2.5 | No streaming support visible | Add streaming response support for compatible providers | Better UX, faster perceived response | ✅ Implemented |
+| 2.6 | Tool schemas duplicated in provider.py and tools.py | Consolidate tool definitions in one place | DRY principle, easier maintenance | ✅ Implemented |
 
 ---
 
@@ -112,9 +112,9 @@ The following optimizations have been **successfully implemented**:
 |---|-------|--------------|----------------|--------|
 | 3.1 | Knowledge sync scans all files every time | Implement incremental sync with file modification timestamps | Much faster sync for large knowledge bases | ✅ Implemented |
 | 3.2 | No caching of parsed Markdown files | Add in-memory LRU cache for parsed notes | Faster repeated reads | ✅ Implemented |
-| 3.3 | FTS5 search not optimized with ranking | Add BM25 ranking configuration | More relevant search results | Pending |
-| 3.4 | Entity/relation queries not indexed properly | Add composite indexes on frequently queried columns | Faster graph queries | Pending |
-| 3.5 | Knowledge auto-extraction disabled by default | Add option for background extraction | Automatic knowledge capture | Pending |
+| 3.3 | FTS5 search not optimized with ranking | Add BM25 ranking configuration | More relevant search results | ✅ Implemented |
+| 3.4 | Entity/relation queries not indexed properly | Add composite indexes on frequently queried columns | Faster graph queries | ✅ Implemented |
+| 3.5 | Knowledge auto-extraction disabled by default | Add option for background extraction | Automatic knowledge capture | ✅ Implemented |
 
 ---
 
@@ -122,11 +122,11 @@ The following optimizations have been **successfully implemented**:
 
 | # | Issue | Optimization | Expected Effect | Status |
 |---|-------|--------------|----------------|--------|
-| 4.1 | No swarm execution timeout enforcement | Implement proper timeout with cancellation | Prevent hung swarm executions | Pending |
-| 4.2 | Swarm storage uses separate DB file | Consider sharing a connection pool with main memory | Reduced file handles | Pending |
-| 4.3 | No swarm result caching | Cache completed swarm results | Faster result retrieval | Pending |
-| 4.4 | Active executions tracked in-memory only | Add persistence for crash recovery | Better reliability | Pending |
-| 4.5 | Max concurrent swarms not enforced properly | Add semaphore-based concurrency control | Proper resource limiting | Pending |
+| 4.1 | No swarm execution timeout enforcement | Implement proper timeout with cancellation | Prevent hung swarm executions | ✅ Implemented |
+| 4.2 | Swarm storage uses separate DB file | Consider sharing a connection pool with main memory | Reduced file handles | ✅ Implemented |
+| 4.3 | No swarm result caching | Cache completed swarm results | Faster result retrieval | ✅ Implemented |
+| 4.4 | Active executions tracked in-memory only | Add persistence for crash recovery | Better reliability | ✅ Implemented |
+| 4.5 | Max concurrent swarms not enforced properly | Add semaphore-based concurrency control | Proper resource limiting | ✅ Implemented |
 
 ---
 
@@ -135,10 +135,10 @@ The following optimizations have been **successfully implemented**:
 | # | Issue | Optimization | Expected Effect | Status |
 |---|-------|--------------|----------------|--------|
 | 5.1 | Shell timeout hardcoded to 30s | Make configurable per command type | More flexibility for long-running tasks | ✅ Implemented |
-| 5.2 | No rate limiting on tool execution | Add rate limiter for expensive tools | Prevent abuse, resource exhaustion | Pending |
-| 5.3 | Dynamic tool registration has no validation | Add sandboxed code validation before execution | Security improvement | Pending |
-| 5.4 | Command allowlist is static | Allow runtime updates to allowlist | More flexible operation | Pending |
-| 5.5 | No tool execution logging/audit trail | Add detailed execution logging | Better debugging and security | Pending |
+| 5.2 | No rate limiting on tool execution | Add rate limiter for expensive tools | Prevent abuse, resource exhaustion | ✅ Implemented |
+| 5.3 | Dynamic tool registration has no validation | Add sandboxed code validation before execution | Security improvement | ✅ Implemented |
+| 5.4 | Command allowlist is static | Allow runtime updates to allowlist | More flexible operation | ✅ Implemented |
+| 5.5 | No tool execution logging/audit trail | Add detailed execution logging | Better debugging and security | ✅ Implemented |
 
 ---
 
@@ -146,11 +146,11 @@ The following optimizations have been **successfully implemented**:
 
 | # | Issue | Optimization | Expected Effect | Status |
 |---|-------|--------------|----------------|--------|
-| 6.1 | Config loaded synchronously on every import | Add config caching with file watcher | Faster subsequent imports | Pending |
+| 6.1 | Config loaded synchronously on every import | Add config caching with file watcher | Faster subsequent imports | ✅ Implemented |
 | 6.2 | No environment variable override support | Add ENV prefix override capability | Easier deployment | ✅ Implemented |
-| 6.3 | Default cleanup runs on every Memory init | Make cleanup optional/configurable | Faster startup | Pending |
+| 6.3 | Default cleanup runs on every Memory init | Make cleanup optional/configurable | Faster startup | ✅ Implemented |
 | 6.4 | Profile loading has no caching | Cache parsed profiles | Faster agent creation | ✅ Implemented |
-| 6.5 | No graceful shutdown handling | Add signal handlers for cleanup | Prevent data loss | Pending |
+| 6.5 | No graceful shutdown handling | Add signal handlers for cleanup | Prevent data loss | ✅ Implemented |
 
 ---
 
@@ -158,10 +158,10 @@ The following optimizations have been **successfully implemented**:
 
 | # | Issue | Optimization | Expected Effect | Status |
 |---|-------|--------------|----------------|--------|
-| 7.1 | ThreadPoolExecutor size hardcoded (20) | Make configurable based on load | Resource optimization | Pending |
-| 7.2 | No message queue for high volume | Add message queue with backpressure | Better handling of message bursts | Pending |
-| 7.3 | Typing indicator sent on every message | Optimize typing indicator timing | Subtle improvement | Pending |
-| 7.4 | No webhook mode support for production | Add webhook configuration option | Production-ready deployment | Pending |
+| 7.1 | ThreadPoolExecutor size hardcoded (20) | Make configurable based on load | Resource optimization | ✅ Implemented |
+| 7.2 | No message queue for high volume | Add message queue with backpressure | Better handling of message bursts | ✅ Implemented |
+| 7.3 | Typing indicator sent on every message | Optimize typing indicator timing | Subtle improvement | ✅ Implemented |
+| 7.4 | No webhook mode support for production | Add webhook configuration option | Production-ready deployment | ✅ Implemented |
 
 ---
 
@@ -169,10 +169,10 @@ The following optimizations have been **successfully implemented**:
 
 | # | Issue | Optimization | Expected Effect | Status |
 |---|-------|--------------|----------------|--------|
-| 8.1 | Mixed sync/async code in agent.py | Standardize on async patterns throughout | Better concurrency | Pending |
+| 8.1 | Mixed sync/async code in agent.py | Standardize on async patterns throughout | Better concurrency | ✅ Implemented |
 | 8.2 | No connection pool for HTTP clients | Add httpx.AsyncClient with connection pooling | Faster HTTP requests | ✅ Implemented |
-| 8.3 | Knowledge searches are synchronous | Make knowledge operations async | Non-blocking operations | Pending |
-| 8.4 | Subprocess calls block event loop | Use asyncio.create_subprocess_exec throughout | Better async performance | Pending |
+| 8.3 | Knowledge searches are synchronous | Make knowledge operations async | Non-blocking operations | ✅ Implemented |
+| 8.4 | Subprocess calls block event loop | Use asyncio.create_subprocess_exec throughout | Better async performance | ✅ Implemented |
 
 ---
 
@@ -180,10 +180,10 @@ The following optimizations have been **successfully implemented**:
 
 | # | Issue | Optimization | Expected Effect | Status |
 |---|-------|--------------|----------------|--------|
-| 9.1 | Extensive use of broad exception handling | Add specific exception handling | Better error messages | Pending |
-| 9.2 | No type hints in many functions | Add comprehensive type annotations | Better maintainability | Pending |
-| 9.3 | Logging not consistent across modules | Standardize logging format | Easier debugging | Pending |
-| 9.4 | No comprehensive test suite | Add unit and integration tests | Code reliability | Pending |
+| 9.1 | Extensive use of broad exception handling | Add specific exception handling | Better error messages | ✅ Implemented |
+| 9.2 | No type hints in many functions | Add comprehensive type annotations | Better maintainability | 🚧 Partial |
+| 9.3 | Logging not consistent across modules | Standardize logging format | Easier debugging | ✅ Implemented |
+| 9.4 | No comprehensive test suite | Add unit and integration tests | Code reliability | 🚧 Partial |
 
 ---
 
@@ -210,9 +210,9 @@ The following optimizations have been **successfully implemented**:
 | 3 | ~~Add SQLite connection pooling~~ | ~~Completed~~ | ✅ Done |
 | 4 | ~~Add retry logic for LLM calls~~ | ~~Completed~~ | ✅ Done |
 | 5 | ~~Add environment variable override~~ | ~~Completed~~ | ✅ Done |
-| 6 | Add proper timeout enforcement for swarms | Reliability | Pending |
-| 7 | Standardize async patterns | Better concurrency | Pending |
-| 8 | Add tool execution rate limiting | Security | Pending |
+| 6 | ~~Add timeout enforcement for swarms~~ | ~~Completed~~ | ✅ Done |
+| 7 | ~~Standardize async patterns~~ | ~~Completed~~ | ✅ Done |
+| 8 | ~~Add tool execution rate limiting~~ | ~~Completed~~ | ✅ Done |
 
 ### Medium Priority (Remaining)
 
@@ -220,10 +220,10 @@ The following optimizations have been **successfully implemented**:
 |---|-------------|-----------------|--------|
 | 1 | ~~Cache parsed profiles and Markdown~~ | ~~Completed~~ | ✅ Done |
 | 2 | ~~Make shell timeout configurable~~ | ~~Completed~~ | ✅ Done |
-| 3 | Streaming response support | UX improvement | Pending |
-| 4 | Add webhook mode for Telegram | Production deployment | Pending |
-| 5 | Comprehensive type hints | Maintainability | Pending |
-| 6 | Test suite | Code reliability | Pending |
+| 3 | ~~Streaming response support~~ | ~~Completed~~ | ✅ Done |
+| 4 | ~~Add webhook mode for Telegram~~ | ~~Completed~~ | ✅ Done |
+| 5 | Comprehensive type hints | Maintainability | 🚧 Partial |
+| 6 | Test suite | Code reliability | 🚧 Partial |
 
 ---
 
@@ -262,19 +262,19 @@ flowchart TD
 
 ## Summary Statistics
 
-| Category | Current Issues | Implemented | High Priority | Medium Priority |
-|----------|----------------|-------------|---------------|----------------|
-| Memory | 4 | 2 | 2 | 1 |
-| Provider | 6 | 1 | 2 | 2 |
-| Knowledge | 5 | 2 | 1 | 2 |
-| Swarms | 5 | 0 | 1 | 2 |
-| Tools | 5 | 1 | 1 | 1 |
-| Config | 5 | 2 | 1 | 2 |
-| Telegram | 4 | 0 | 0 | 1 |
-| Async | 4 | 1 | 1 | 1 |
-| Code Quality | 4 | 0 | 0 | 0 |
-| **Total** | **42** | **9** | **9** | **12** |
+| Category | Total | Implemented | Partial | Remaining |
+|----------|-------|-------------|---------|----------|
+| Memory | 4 | 4 | 0 | 0 |
+| Provider | 6 | 6 | 0 | 0 |
+| Knowledge | 5 | 5 | 0 | 0 |
+| Swarms | 5 | 5 | 0 | 0 |
+| Tools | 5 | 5 | 0 | 0 |
+| Config | 5 | 5 | 0 | 0 |
+| Telegram | 4 | 4 | 0 | 0 |
+| Async | 4 | 4 | 0 | 0 |
+| Code Quality | 4 | 2 | 2 | 0 |
+| **Total** | **42** | **40** | **2** | **0** |
 
 ---
 
-*Implementation completed: 2026-03-16*
+*Document last updated: 2026-03-29 — 40/42 optimizations complete; type hints and test suite partially implemented.*

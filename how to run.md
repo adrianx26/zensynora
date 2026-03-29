@@ -1,24 +1,63 @@
-mkdir myclaw && cd myclaw
-# copy all files from above
+# How to Run MyClaw
 
+## Setup
+
+```bash
+git clone https://github.com/adrianx26/zensynora.git
+cd zensynora
+
+# Create & activate virtual environment
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate        # Linux / macOS
+# venv\Scripts\activate         # Windows
+
 pip install -r requirements.txt
 
+# Run the onboarding wizard
 python onboard.py
-# edit ~/.myclaw/config.json with your Telegram token + user ID
-# or WhatsApp Business credentials (phone_number_id, access_token, verify_token)
+```
 
-# Start local Ollama
+Edit `~/.myclaw/config.json` to configure:
+- **Telegram** — bot token + your user ID
+- **WhatsApp** — `phone_number_id`, `access_token`, `verify_token` (see `plans/whatsapp_implementation_plan.md`)
+- **Provider** — Ollama, OpenAI, Anthropic, Gemini, or other supported LLM provider
+
+## Running
+
+### Console Mode
+
+```bash
+python cli.py agent
+```
+
+### Telegram Gateway
+
+```bash
+# Ensure your chosen provider is running (e.g. Ollama)
 ollama run llama3.2
 
-# Test in console
-python cli.py agent
-
-# Or Telegram gateway
+# Start the Telegram bot
 python cli.py gateway
+```
 
-# Or WhatsApp gateway (requires WhatsApp enabled in config)
-# Make sure to set up a public webhook URL (use ngrok for development)
-# ngrok http 8000
+### WhatsApp Gateway
+
+```bash
+# Ensure WhatsApp is enabled in config and provider is running
+ollama run llama3.2
+
+# Expose a public webhook URL (for development use ngrok)
+ngrok http 8000
+
+# Start the gateway (starts both Telegram and WhatsApp if enabled)
 python cli.py gateway
+```
+
+## Linux Auto-Start (systemd)
+
+Use `install.sh` to optionally set up a systemd service that auto-starts the Telegram gateway on boot:
+
+```bash
+chmod +x install.sh
+./install.sh
+```

@@ -399,8 +399,15 @@ Provider schemas updated to include swarm tools:
 
 | Phase | Components | Status |
 |-------|------------|--------|
-| 1 | Core models and storage | Not Started |
-| 2 | Strategy implementations | Not Started |
-| 3 | Orchestrator and tools | Not Started |
-| 4 | Config and provider updates | Not Started |
-| 5 | Testing and documentation | Not Started |
+| 1 | Core models and storage | ✅ Complete |
+| 2 | Strategy implementations | ✅ Complete |
+| 3 | Orchestrator and tools | ✅ Complete |
+| 4 | Config and provider updates | ✅ Complete |
+| 5 | Testing and documentation | ✅ Complete |
+
+> **Note:** All phases complete as of 2026-03-29. Key additions beyond the original plan:
+> - Result caching with TTL (1 hour) — `myclaw/swarm/storage.py`
+> - Shared SQLite connection pool for swarm storage — `myclaw/swarm/storage.py`
+> - Persistent active execution tracking for crash recovery — `myclaw/swarm/models.py`, `storage.py`, `orchestrator.py`
+> - Semaphore-based concurrency control — `myclaw/swarm/orchestrator.py`
+> - Execution timeout via `asyncio.wait_for()` — `myclaw/swarm/orchestrator.py`
