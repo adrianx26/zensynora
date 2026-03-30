@@ -34,20 +34,76 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              Channels (CLI, Telegram, WhatsApp)              │
-└──────────────────────────┬──────────────────────────────────┘
-                           │
-                           ▼
-┌─────────────────────────────────────────────────────────────┐
-│                         Agent                                │
-│   ┌──────────────┐  ┌─────────────┐  ┌──────────────────┐  │
-│   │    Memory    │  │  Provider  │  │      Tools       │  │
-│   │   (SQLite)   │  │ (Ollama,   │  │ shell, file, etc │  │
-│   │              │  │  OpenAI,..)│  │                  │  │
-│   └──────────────┘  └─────────────┘  └──────────────────┘  │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    %% Styling
+    classDef core fill:#2a507a,stroke:#4477aa,stroke-width:2px,color:#fff
+    classDef channel fill:#1a4d2e,stroke:#2d7a4a,stroke-width:2px,color:#fff
+    classDef data fill:#6a3a14,stroke:#9c5822,stroke-width:2px,color:#fff
+    classDef llm fill:#4a1e50,stroke:#863990,stroke-width:2px,color:#fff
+
+    %% Channels
+    subgraph Interfaces [External Interfaces]
+        direction LR
+        CLI([🖥️ CLI]) ::: channel
+        TG([📱 Telegram Bot]) ::: channel
+        WA([💬 WhatsApp API]) ::: channel
+    end
+
+    %% Core Application
+    subgraph MyClaw [MyClaw Platform]
+        GW{Gateway Router} ::: core
+        
+        Agent(🧠 Core Agent) ::: core
+        
+        subgraph Capabilities [Agent Capabilities]
+            direction LR
+            Tools(🛠️ Dynamic Tools) ::: core
+            Profiles(📝 Profiles System) ::: core
+        end
+
+        subgraph AdvancedSystems [Multi-Agent System]
+            direction TB
+            Swarm(🐝 Swarm Orchestrator) ::: core
+            Spec(🤖 Specialized Agents) ::: core
+        end
+    end
+
+    %% Data Layer
+    subgraph Storage [Persistent SQLite Storage]
+        direction LR
+        Mem[(💾 Memory)] ::: data
+        KB[(📚 Knowledge Base)] ::: data
+        SwarmState[(📊 Swarm State)] ::: data
+        Toolbox[(🔧 ToolBox)] ::: data
+    end
+
+    %% LLM Providers
+    subgraph Providers [AI Providers]
+        direction LR
+        Local(💻 Local<br/>Ollama/LMStudio) ::: llm
+        Cloud(☁️ Cloud<br/>OpenAI/Anthropic/Gemini) ::: llm
+    end
+
+    %% Connections
+    CLI --> GW
+    TG --> GW
+    WA --> GW
+    
+    GW ==> Agent
+    
+    Agent <--> Tools
+    Agent <--> Profiles
+    Agent <--> AdvancedSystems
+    
+    Agent <--> Mem
+    Agent <--> KB
+    Agent <--> Toolbox
+    Swarm <--> SwarmState
+    
+    Agent ==> Providers
+    Swarm ==> Providers
+    Spec ==> Providers
 ```
 
 ---
