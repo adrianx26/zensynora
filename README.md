@@ -60,6 +60,7 @@ flowchart TB
             direction LR
             Tools("🛠️ Dynamic Tools")
             Profiles("📝 Profiles System")
+            Sched("⏱️ Task Scheduler")
         end
 
         subgraph AdvancedSystems [Multi-Agent System]
@@ -76,6 +77,7 @@ flowchart TB
         KB[("📚 Knowledge Base")]
         SwarmState[("📊 Swarm State")]
         Toolbox[("🔧 ToolBox")]
+        Jobs[("📋 Scheduled Jobs")]
     end
 
     %% LLM Providers
@@ -95,10 +97,12 @@ flowchart TB
     Agent <--> Tools
     Agent <--> Profiles
     Agent <--> AdvancedSystems
+    Agent <--> Sched
     
     Agent <--> Mem
     Agent <--> KB
     Agent <--> Toolbox
+    Sched <--> Jobs
     Swarm <--> SwarmState
     
     Agent ==> Providers
@@ -107,8 +111,8 @@ flowchart TB
 
     %% Apply Classes
     class CLI,TG,WA channel
-    class GW,Agent,Tools,Profiles,Swarm,Spec core
-    class Mem,KB,SwarmState,Toolbox data
+    class GW,Agent,Tools,Profiles,Sched,Swarm,Spec core
+    class Mem,KB,SwarmState,Toolbox,Jobs data
     class Local,Cloud llm
 ```
 
