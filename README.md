@@ -45,44 +45,44 @@ flowchart TB
     %% Channels
     subgraph Interfaces [External Interfaces]
         direction LR
-        CLI([🖥️ CLI]) ::: channel
-        TG([📱 Telegram Bot]) ::: channel
-        WA([💬 WhatsApp API]) ::: channel
+        CLI(["🖥️ CLI"])
+        TG(["📱 Telegram Bot"])
+        WA(["💬 WhatsApp API"])
     end
 
     %% Core Application
     subgraph MyClaw [MyClaw Platform]
-        GW{Gateway Router} ::: core
+        GW{"Gateway Router"}
         
-        Agent(🧠 Core Agent) ::: core
+        Agent("🧠 Core Agent")
         
         subgraph Capabilities [Agent Capabilities]
             direction LR
-            Tools(🛠️ Dynamic Tools) ::: core
-            Profiles(📝 Profiles System) ::: core
+            Tools("🛠️ Dynamic Tools")
+            Profiles("📝 Profiles System")
         end
 
         subgraph AdvancedSystems [Multi-Agent System]
             direction TB
-            Swarm(🐝 Swarm Orchestrator) ::: core
-            Spec(🤖 Specialized Agents) ::: core
+            Swarm("🐝 Swarm Orchestrator")
+            Spec("🤖 Specialized Agents")
         end
     end
 
     %% Data Layer
     subgraph Storage [Persistent SQLite Storage]
         direction LR
-        Mem[(💾 Memory)] ::: data
-        KB[(📚 Knowledge Base)] ::: data
-        SwarmState[(📊 Swarm State)] ::: data
-        Toolbox[(🔧 ToolBox)] ::: data
+        Mem[("💾 Memory")]
+        KB[("📚 Knowledge Base")]
+        SwarmState[("📊 Swarm State")]
+        Toolbox[("🔧 ToolBox")]
     end
 
     %% LLM Providers
     subgraph Providers [AI Providers]
         direction LR
-        Local(💻 Local<br/>Ollama/LMStudio) ::: llm
-        Cloud(☁️ Cloud<br/>OpenAI/Anthropic/Gemini) ::: llm
+        Local("💻 Local<br/>Ollama/LMStudio")
+        Cloud("☁️ Cloud<br/>OpenAI/Anthropic/Gemini")
     end
 
     %% Connections
@@ -104,6 +104,12 @@ flowchart TB
     Agent ==> Providers
     Swarm ==> Providers
     Spec ==> Providers
+
+    %% Apply Classes
+    class CLI,TG,WA channel
+    class GW,Agent,Tools,Profiles,Swarm,Spec core
+    class Mem,KB,SwarmState,Toolbox data
+    class Local,Cloud llm
 ```
 
 ---
