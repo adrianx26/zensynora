@@ -1,3 +1,28 @@
+"""
+Gateway - Application entry point and initialization.
+
+The gateway module is responsible for bootstrapping the entire MyClaw system:
+backend discovery, agent registry creation, tool initialization, and channel startup.
+
+Key Responsibilities:
+    - Backend Discovery: Detect and initialize compute backends (local, WSL2, SSH, Docker)
+    - Agent Registry: Create default and named agent instances
+    - Tool Initialization: Load custom tools from TOOLBOX and set registries
+    - Channel Startup: Launch Telegram or WhatsApp bot channels
+    - ThreadPool Management: Configure executor for concurrent operations
+
+Usage:
+    from myclaw.config import load_config
+    from myclaw.gateway import start
+
+    config = load_config()
+    start(config)  # Blocks and runs the active channel
+
+Exit:
+    The function runs indefinitely until interrupted (Ctrl+C), then gracefully
+    shuts down the ThreadPoolExecutor.
+"""
+
 from .agent import Agent
 from .channels.telegram import TelegramChannel
 from .channels.whatsapp import WhatsAppChannel
@@ -25,7 +50,7 @@ def start(config):
         discover_backends()
         backend_config = config.backends.__dict__ if hasattr(config, 'backends') else None
         default_backend = get_default_backend(backend_config)
-        
+
         registry = {"default": Agent(config, name="default")}
 
         for nc in config.agents.named:
@@ -44,7 +69,7 @@ def start(config):
 
         # Inject registry into tools module (enables delegation, scheduling)
         tool_module.set_registry(registry)
-        
+
         # Inject config into tools module (enables timeout configuration)
         tool_module.set_config(config)
 
@@ -57,4 +82,10 @@ def start(config):
             print("No channel is active. Run `python cli.py agent` for console chat.")
     finally:
         print("\nShutting down global ThreadPoolExecutor gracefully...")
-        executor.shutdown(wait=True)
+        # Use shutdown(wait=False) to avoid blocking the event loop
+        # The executor will finish pending tasks in background
+        executor.shutdown(wait=False)
+        # Give tasks a moment to complete cleanup
+        import time
+        time.sleep(0.5)
+        print("ThreadPoolExecutor shutdown complete.")

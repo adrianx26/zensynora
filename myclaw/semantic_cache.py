@@ -122,14 +122,26 @@ class SemanticCache:
             logger.warning(f"Failed to save semantic cache: {e}")
     
     def _load_embedding_model(self):
-        """Lazy load the embedding model."""
+        """Lazy load the embedding model with memory optimization."""
         if self._model_loaded:
             return
-        
+
         try:
             from sentence_transformers import SentenceTransformer
             logger.info(f"Loading embedding model: {self.embedding_model}")
-            self._embedding_model = SentenceTransformer(self.embedding_model)
+
+            # Use CPU only and limit threads to reduce memory usage
+            try:
+                import torch
+                torch.set_num_threads(4)
+                device = 'cpu'
+            except ImportError:
+                device = 'cpu'
+
+            self._embedding_model = SentenceTransformer(
+                self.embedding_model,
+                device=device
+            )
             self._model_loaded = True
             logger.info("Embedding model loaded successfully")
         except ImportError:
@@ -139,6 +151,37 @@ class SemanticCache:
                 "Install with: pip install sentence-transformers"
             )
             self._model_loaded = True  # Mark as loaded to prevent re-attempts
+
+    def _cleanup_embedding_model(self):
+        """Clean up embedding model to free memory."""
+        if self._embedding_model is not None:
+            try:
+                import gc
+                del self._embedding_model
+                gc.collect()
+
+                # Try to clear torch cache if available
+                try:
+                    import torch
+                    if hasattr(torch, 'cuda'):
+                        torch.cuda.empty_cache()
+                except ImportError:
+                    pass
+
+                self._embedding_model = None
+                self._model_loaded = False
+                logger.debug("Embedding model cleaned up")
+            except Exception as e:
+                logger.warning(f"Failed to cleanup embedding model: {e}")
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit with cleanup."""
+        self._cleanup_embedding_model()
+        return False
     
     def _get_embedding(self, text: str) -> Optional[np.ndarray]:
         """Get embedding for text using the model."""

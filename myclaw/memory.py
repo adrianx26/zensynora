@@ -1,3 +1,38 @@
+"""
+Memory - SQLite-backed conversation memory system.
+
+Provides persistent storage for conversation history with per-user isolation,
+full-text search via FTS5, and automatic knowledge extraction.
+
+Key Components:
+    - Memory: Async conversation memory with batching and cleanup
+    - AsyncSQLitePool: Connection pool for async SQLite operations
+    - SQLitePool: Synchronous connection pool with idle timeout
+    - Knowledge Extraction: Automatic entity/relation extraction from messages
+
+Features:
+    - Per-user database isolation (memory_{user_id}.db)
+    - FTS5 full-text search with BM25 ranking
+    - Automatic message cleanup (configurable retention)
+    - Knowledge extraction to knowledge base
+    - WAL mode for better concurrency
+
+Usage:
+    from myclaw.memory import Memory
+
+    mem = Memory(user_id="default")
+    await mem.initialize()
+
+    # Store message
+    await mem.add(role="user", content="Hello!")
+
+    # Retrieve history
+    history = await mem.get_history(limit=10)
+
+    # Search messages
+    results = await mem.search("machine learning")
+"""
+
 import sqlite3
 import aiosqlite
 import json
@@ -5,6 +40,7 @@ import logging
 import re
 import threading
 import asyncio
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from contextlib import contextmanager
@@ -29,6 +65,15 @@ RELATION_KEYWORDS = [
     'leads to', 'results in', 'causes', 'enables', 'blocks'
 ]
 
+# ── Configuration Constants ────────────────────────────────────────────────────
+DEFAULT_BATCH_SIZE = 10
+DEFAULT_CACHE_SIZE = 5
+MAX_DELEGATION_DEPTH = 10
+VACUUM_INTERVAL = 100
+DEFAULT_CLEANUP_DAYS = 30
+DEFAULT_HISTORY_LIMIT = 20
+CLEANUP_CHUNK_SIZE = 100
+CACHE_TTL_SECONDS = 1.0
 
 # ── Async SQLite Connection Pool (Optimization #1) ─────────────────────────────
 
@@ -89,12 +134,14 @@ class AsyncSQLitePool:
 # ── Sync SQLite Connection Pool (legacy, for backwards compatibility) ─────────
 
 class SQLitePool:
-    """Simple connection pool for SQLite databases."""
+    """Simple connection pool for SQLite databases with idle timeout."""
     
     _pools: dict[str, sqlite3.Connection] = {}
     _locks: dict[str, threading.Lock] = {}
     _refcounts: dict[str, int] = {}
+    _last_used: dict[str, float] = {}
     _pool_lock = threading.Lock()
+    IDLE_TIMEOUT = 300  # 5 minutes
     
     @classmethod
     def get_connection(cls, db_path: Path) -> sqlite3.Connection:
@@ -117,6 +164,7 @@ class SQLitePool:
         
         with cls._pool_lock:
             cls._refcounts[key] += 1
+            cls._last_used[key] = time.time()
             
         return cls._pools[key]
     
@@ -126,6 +174,8 @@ class SQLitePool:
         key = str(db_path)
         with cls._pool_lock:
             cls._refcounts[key] -= 1
+            if cls._refcounts[key] <= 0:
+                cls._last_used[key] = time.time()
         
         if key in cls._locks:
             cls._locks[key].release()
@@ -141,6 +191,26 @@ class SQLitePool:
                     pass
             cls._pools.clear()
             cls._refcounts.clear()
+            cls._last_used.clear()
+    
+    @classmethod
+    def cleanup_idle(cls):
+        """Close connections idle for longer than IDLE_TIMEOUT."""
+        now = time.time()
+        with cls._pool_lock:
+            idle_keys = [
+                key for key, last in cls._last_used.items()
+                if cls._refcounts.get(key, 0) <= 0 and (now - last) > cls.IDLE_TIMEOUT
+            ]
+            for key in idle_keys:
+                try:
+                    cls._pools[key].close()
+                except Exception:
+                    pass
+                cls._pools.pop(key, None)
+                cls._refcounts.pop(key, None)
+                cls._last_used.pop(key, None)
+                cls._locks.pop(key, None)
 
 
 async def cleanup_on_shutdown():
@@ -154,22 +224,23 @@ class Memory:
 
     _cleanup_count: int = 0
     
-    def __init__(self, user_id: str = "default", auto_cleanup_days: int = 30, auto_cleanup_enabled: bool = True):
+    def __init__(self, user_id: str = "default", auto_cleanup_days: int = DEFAULT_CLEANUP_DAYS, auto_cleanup_enabled: bool = True):
         db_path = Path.home() / ".myclaw" / f"memory_{user_id}.db"
         self.db = db_path
         self.db.parent.mkdir(parents=True, exist_ok=True)
         self.auto_cleanup_days = auto_cleanup_days
         self.auto_cleanup_enabled = auto_cleanup_enabled
         self.cleanup_count = 0
-        self.vacuum_interval = 100
+        self.vacuum_interval = VACUUM_INTERVAL
         self._history_cache = {}
-        self._cache_max_size = 5
+        self._cache_max_size = DEFAULT_CACHE_SIZE
         self._pending_messages = []
-        self._batch_size = 10
-        self._batch_timeout = 1.0
+        self._batch_size = DEFAULT_BATCH_SIZE
+        self._batch_timeout = CACHE_TTL_SECONDS
         self._last_flush = datetime.now()
-        self._cleanup_chunk_size = 100
+        self._cleanup_chunk_size = CLEANUP_CHUNK_SIZE
         self.conn: Optional[aiosqlite.Connection] = None
+        self._initialized = False
 
     async def initialize(self):
         """Initialize async connection and schema. Call before using other methods."""
@@ -261,7 +332,7 @@ class Memory:
         if should_flush:
             await self.flush()
 
-    async def get_history(self, limit: int = 20, columns: Optional[List[str]] = None) -> list:
+    async def get_history(self, limit: int = DEFAULT_HISTORY_LIMIT, columns: Optional[List[str]] = None) -> list:
         """Get the last N messages in chronological order, efficiently with caching."""
         if not self._initialized:
             await self.initialize()
@@ -469,7 +540,10 @@ class Memory:
             await self.initialize()
         
         try:
-            processed_query = query
+            # Security: Sanitize query - only allow alphanumeric and basic FTS operators
+            # Remove potentially dangerous characters that could manipulate FTS queries
+            sanitized_query = re.sub(r'[^\w\s"\*\-\(\)ANDORNOT]', '', query)
+            processed_query = sanitized_query
             
             exact_phrases = re.findall(r'"([^"]+)"', processed_query)
             if exact_phrases:

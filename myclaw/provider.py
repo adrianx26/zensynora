@@ -26,6 +26,7 @@ import logging
 import asyncio
 import time
 import hashlib
+import threading
 from abc import ABC, abstractmethod
 from functools import wraps, lru_cache
 from typing import List, Dict, Tuple, Optional, AsyncIterator
@@ -34,65 +35,168 @@ from collections import OrderedDict
 import httpx
 import requests
 
-from .tools import TOOL_SCHEMAS
 from .semantic_cache import get_semantic_cache, SemanticCache
+
+# Lazy import of TOOL_SCHEMAS to avoid circular import risk
+# tools.py imports from many modules, so we import at runtime
+_TOOL_SCHEMAS_CACHE = None
+
+def _get_tool_schemas() -> List[Dict]:
+    """Lazy import TOOL_SCHEMAS to prevent circular imports."""
+    global _TOOL_SCHEMAS_CACHE
+    if _TOOL_SCHEMAS_CACHE is None:
+        from .tools import TOOL_SCHEMAS
+        _TOOL_SCHEMAS_CACHE = TOOL_SCHEMAS
+    return _TOOL_SCHEMAS_CACHE
+
+
+# ── Configuration Constants ──────────────────────────────────────────────────────
+DEFAULT_MAX_RETRIES = 3
+DEFAULT_BACKOFF_BASE = 1.0
+DEFAULT_BACKOFF_MAX = 30.0
+DEFAULT_BACKOFF_EXPONENTIAL = 2.0
 
 
 # ── LRU Cache with TTL Decorator ─────────────────────────────────────────────────
 
+from dataclasses import dataclass, field
+from typing import Any, Callable
+import functools
+
+
+@dataclass
+class _CacheInfo:
+    """Cache statistics similar to functools.lru_cache."""
+    hits: int = 0
+    misses: int = 0
+    maxsize: int = 128
+    currsize: int = 0
+    ttl: int = 300
+
+
+class _CacheEntry:
+    """A single cache entry with value and expiration time."""
+    __slots__ = ['value', 'expires_at']
+    
+    def __init__(self, value: Any, expires_at: float):
+        self.value = value
+        self.expires_at = expires_at
+
+
 class LRUCacheWithTTL:
-    """Thread-safe LRU cache with TTL support."""
+    """Thread-safe LRU cache with TTL support.
+    
+    Improvements over basic implementation:
+    - Actual thread-safety using RLock
+    - Faster key generation (no MD5 overhead)
+    - Cache statistics via cache_info()
+    - Efficient entry storage using __slots__
+    - Automatic cleanup of expired entries during access
+    """
     
     def __init__(self, maxsize: int = 128, ttl: int = 300):
         self.maxsize = maxsize
         self.ttl = ttl
-        self._cache = OrderedDict()
-        self._timestamps = {}
+        self._cache: OrderedDict = OrderedDict()
+        self._lock = threading.RLock()
+        self._info = _CacheInfo(maxsize=maxsize, ttl=ttl)
     
-    def _make_key(self, *args, **kwargs):
-        """Create a hashable cache key from arguments."""
-        # For chat methods, first arg is self, second is messages
-        # We want to hash the messages and model
+    def _make_key(self, *args, **kwargs) -> int:
+        """Create a fast hashable cache key from arguments.
+        
+        Uses hash() for speed instead of MD5. Handles unhashable types
+        by converting to a hashable representation.
+        """
+        # Fast path for common cases
+        if not kwargs:
+            try:
+                return hash(args)
+            except TypeError:
+                pass
+        
+        # Build a hashable key
         key_parts = []
         for i, arg in enumerate(args):
             if i >= 1:  # Skip self (index 0)
-                key_parts.append(str(arg))
-        for k, v in sorted(kwargs.items()):
-            key_parts.append(f"{k}={v}")
-        content = ":".join(key_parts)
-        return hashlib.md5(content.encode()).hexdigest()
+                try:
+                    key_parts.append(hash(arg))
+                except TypeError:
+                    # For unhashable types, use the string representation hash
+                    key_parts.append(hash(str(arg)))
+        
+        if kwargs:
+            for k in sorted(kwargs.keys()):
+                v = kwargs[k]
+                try:
+                    key_parts.append((k, hash(v)))
+                except TypeError:
+                    key_parts.append((k, hash(str(v))))
+        
+        return hash(tuple(key_parts))
     
-    def _is_expired(self, key: str) -> bool:
-        """Check if cache entry has expired."""
-        if key not in self._timestamps:
-            return True
-        return time.time() - self._timestamps[key] > self.ttl
+    def _cleanup_expired(self):
+        """Remove expired entries efficiently."""
+        now = time.time()
+        expired_keys = [
+            k for k, entry in self._cache.items()
+            if now > entry.expires_at
+        ]
+        for k in expired_keys:
+            del self._cache[k]
     
-    def get(self, key: str):
+    def get(self, key: int) -> Any:
         """Get value from cache if exists and not expired."""
-        if key in self._cache and not self._is_expired(key):
+        with self._lock:
+            if key not in self._cache:
+                return None
+            
+            entry = self._cache[key]
+            if time.time() > entry.expires_at:
+                # Expired - remove it
+                del self._cache[key]
+                self._info.currsize = len(self._cache)
+                return None
+            
             # Move to end (most recently used)
             self._cache.move_to_end(key)
-            return self._cache[key]
-        return None
+            self._info.hits += 1
+            return entry.value
     
-    def set(self, key: str, value):
-        """Set value in cache with current timestamp."""
-        if key in self._cache:
-            self._cache.move_to_end(key)
-        else:
-            if len(self._cache) >= self.maxsize:
-                # Remove oldest (first) item
-                oldest_key = next(iter(self._cache))
-                del self._cache[oldest_key]
-                self._timestamps.pop(oldest_key, None)
-        self._cache[key] = value
-        self._timestamps[key] = time.time()
+    def set(self, key: int, value: Any):
+        """Set value in cache with TTL."""
+        with self._lock:
+            now = time.time()
+            
+            if key in self._cache:
+                # Update existing entry
+                self._cache[key] = _CacheEntry(value, now + self.ttl)
+                self._cache.move_to_end(key)
+            else:
+                # Check if we need to evict
+                if len(self._cache) >= self.maxsize:
+                    # First, try to clean up expired entries
+                    self._cleanup_expired()
+                    
+                    # If still at capacity, evict oldest
+                    if len(self._cache) >= self.maxsize:
+                        oldest_key = next(iter(self._cache))
+                        del self._cache[oldest_key]
+                
+                self._cache[key] = _CacheEntry(value, now + self.ttl)
+            
+            self._info.currsize = len(self._cache)
     
     def clear(self):
         """Clear all cache entries."""
-        self._cache.clear()
-        self._timestamps.clear()
+        with self._lock:
+            self._cache.clear()
+            self._info.currsize = 0
+    
+    def cache_info(self) -> _CacheInfo:
+        """Return cache statistics."""
+        with self._lock:
+            self._info.currsize = len(self._cache)
+            return self._info
 
 
 def lru_cache_with_ttl(maxsize: int = 128, ttl: int = 300):
@@ -122,8 +226,17 @@ def lru_cache_with_ttl(maxsize: int = 128, ttl: int = 300):
             cache.set(cache_key, result)
             return result
         
-        # Add cache clear method to wrapper
-        wrapper.clear_cache = cache.clear
+        # Expose cache management methods on the wrapper
+        def clear_cache():
+            """Clear all cache entries."""
+            cache.clear()
+        
+        def cache_info() -> _CacheInfo:
+            """Return cache statistics (hits, misses, maxsize, currsize, ttl)."""
+            return cache.cache_info()
+        
+        wrapper.clear_cache = clear_cache
+        wrapper.cache_info = cache_info
         return wrapper
     return decorator
 
@@ -173,10 +286,10 @@ class HTTPClientPool:
 # ── Retry Logic with Exponential Backoff ─────────────────────────────────────────
 
 def retry_with_backoff(
-    max_retries: int = 3,
-    base_delay: float = 1.0,
-    max_delay: float = 30.0,
-    exponential_base: float = 2.0,
+    max_retries: int = DEFAULT_MAX_RETRIES,
+    base_delay: float = DEFAULT_BACKOFF_BASE,
+    max_delay: float = DEFAULT_BACKOFF_MAX,
+    exponential_base: float = DEFAULT_BACKOFF_EXPONENTIAL,
     retriable_exceptions: tuple = (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError)
 ):
     """Decorator for retrying async functions with exponential backoff."""
@@ -293,7 +406,7 @@ class OllamaProvider(BaseLLMProvider):
             "model": model,
             "messages": messages,
             "stream": stream,
-            "tools": TOOL_SCHEMAS,
+            "tools": _get_tool_schemas(),
         }
         try:
             # Use pooled client instead of creating new one
@@ -388,7 +501,7 @@ class OpenAICompatProvider(BaseLLMProvider):
                 response = self.client.chat.completions.create(
                     model=model,
                     messages=messages,
-                    tools=TOOL_SCHEMAS,
+                    tools=_get_tool_schemas(),
                     stream=True,
                 )
                 for chunk in response:
@@ -401,7 +514,7 @@ class OpenAICompatProvider(BaseLLMProvider):
         response = self.client.chat.completions.create(
             model=model,
             messages=messages,
-            tools=TOOL_SCHEMAS,
+            tools=_get_tool_schemas(),
         )
         msg = response.choices[0].message
         tool_calls = _openai_tool_calls_to_dict(msg.tool_calls)
@@ -537,22 +650,23 @@ class AnthropicProvider(BaseLLMProvider):
                 return cached
         
         # Anthropic separates the system prompt from the conversation
-        system_content = ""
+        system_parts = []
         conv_messages  = []
         for m in messages:
             role = m["role"]
             content = m.get("content", "")
             if role == "system":
-                system_content += content + "\n"
+                system_parts.append(content)
             elif role in ("user", "assistant"):
                 conv_messages.append({"role": role, "content": content})
             elif role == "tool":
                 # Append tool result as a user turn
                 conv_messages.append({"role": "user", "content": f"[tool result] {content}"})
+        system_content = "\n".join(system_parts)
 
         # Build Anthropic tool definitions
         ant_tools = []
-        for ts in TOOL_SCHEMAS:
+        for ts in _get_tool_schemas():
             f = ts["function"]
             ant_tools.append({
                 "name":        f["name"],
@@ -630,10 +744,10 @@ class GeminiProvider(BaseLLMProvider):
         self.timeout   = timeout
 
     def _build_tools(self):
-        """Convert TOOL_SCHEMAS to Gemini FunctionDeclaration list."""
+        """Convert _get_tool_schemas() to Gemini FunctionDeclaration list."""
         from google.generativeai.types import content_types
         declarations = []
-        for ts in TOOL_SCHEMAS:
+        for ts in _get_tool_schemas():
             f = ts["function"]
             declarations.append(
                 self._genai.protos.FunctionDeclaration(
@@ -746,6 +860,7 @@ SUPPORTED_PROVIDERS = list(_PROVIDER_MAP.keys())
 
 # Lazy provider caching - only create provider instance when needed
 _provider_cache: dict = {}
+_provider_lock = threading.Lock()
 
 
 def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
@@ -758,20 +873,22 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
     """
     name = (provider_name or "ollama").lower().strip()
     
-    # Return cached provider if already created
-    if name in _provider_cache:
-        return _provider_cache[name]
-    
-    cls  = _PROVIDER_MAP.get(name)
-    if cls is None:
-        raise ValueError(
-            f"Unknown provider '{name}'. "
-            f"Supported: {', '.join(SUPPORTED_PROVIDERS)}"
-        )
-    logger.debug(f"Initialising provider: {name}")
-    provider = cls(config)
-    _provider_cache[name] = provider
-    return provider
+    # Thread-safe provider cache access
+    with _provider_lock:
+        # Return cached provider if already created
+        if name in _provider_cache:
+            return _provider_cache[name]
+        
+        cls  = _PROVIDER_MAP.get(name)
+        if cls is None:
+            raise ValueError(
+                f"Unknown provider '{name}'. "
+                f"Supported: {', '.join(SUPPORTED_PROVIDERS)}"
+            )
+        logger.debug(f"Initialising provider: {name}")
+        provider = cls(config)
+        _provider_cache[name] = provider
+        return provider
 
 
 def clear_provider_cache():

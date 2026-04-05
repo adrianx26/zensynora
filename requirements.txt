@@ -1,3 +1,4 @@
+# ── Core Dependencies (Required) ──────────────────────────────────────────────
 python-telegram-bot[job-queue]==21.4
 fastapi>=0.100.0
 uvicorn>=0.23.0
@@ -7,18 +8,31 @@ rich>=13.0
 pydantic>=2.0
 apscheduler>=3.10
 scrapling[all]>=0.4.2
-watchdog>=3.0.0  # For config file watching (6.1)
-aiosqlite>=0.20.0  # Async SQLite for optimization #1
-sentence-transformers>=2.2.2  # Semantic embedding for optimization #2
+aiosqlite>=0.20.0  # Async SQLite support
+httpx>=0.24.0
+numpy>=1.24.0
 
-# ── LLM provider SDKs (install the ones you need) ─────────────────────────────
-# OpenAI / LM Studio / llama.cpp / Groq / OpenRouter  →  pip install openai
-# Anthropic Claude                                      →  pip install anthropic
-# Google Gemini                                         →  pip install google-generativeai
+# ── Optional Dependencies ─────────────────────────────────────────────────────
+# File watching for auto-reload (config file changes)
+# Install: pip install watchdog
+watchdog>=3.0.0
+
+# Semantic embedding for semantic cache
+# Install: pip install sentence-transformers
+sentence-transformers>=2.2.2
+
+# ── LLM Provider SDKs (Install only the ones you need) ────────────────────────
+# OpenAI / LM Studio / llama.cpp / Groq / OpenRouter
 openai>=1.0
-# anthropic>=0.25
-# google-generativeai>=0.5
-pytest
 
-httpx
-pytest-asyncio
+# Anthropic Claude
+# Install: pip install anthropic
+anthropic>=0.25
+
+# Google Gemini
+# Install: pip install google-generativeai
+google-generativeai>=0.5
+
+# ── Development Dependencies ──────────────────────────────────────────────────
+pytest>=7.0
+pytest-asyncio>=0.21.0

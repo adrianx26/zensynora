@@ -51,11 +51,15 @@ def get_related_entities(
             # Get outgoing relations
             relations = db.get_relations_from(current_id)
             
+            # Batch fetch target entities to avoid N+1 queries
+            target_permalinks = [r[1] for r in relations]
+            target_entities = db.get_entities_by_permalinks(target_permalinks)
+            
             for rel_type, target_permalink, target_name in relations:
                 if relation_type and rel_type != relation_type:
                     continue
                 
-                target_entity = db.get_entity_by_permalink(target_permalink)
+                target_entity = target_entities.get(target_permalink)
                 if not target_entity:
                     continue
                 
@@ -119,8 +123,12 @@ def get_entity_network(
             # Get outgoing relations
             relations = db.get_relations_from(current_id)
             
+            # Batch fetch target entities to avoid N+1 queries
+            target_permalinks = [r[1] for r in relations]
+            target_entities = db.get_entities_by_permalinks(target_permalinks)
+            
             for rel_type, target_permalink, target_name in relations:
-                target_entity = db.get_entity_by_permalink(target_permalink)
+                target_entity = target_entities.get(target_permalink)
                 if not target_entity:
                     continue
                 
@@ -140,29 +148,34 @@ def get_entity_network(
                         "depth": current_depth + 1
                     }
                     queue.append((target_entity.id, current_depth + 1))
+            
+            # Get incoming relations (bidirectional exploration)
+            incoming = db.get_relations_to(current_id)
+            
+            # Batch fetch source entities to avoid N+1 queries
+            source_permalinks = [r[1] for r in incoming]
+            source_entities = db.get_entities_by_permalinks(source_permalinks)
+            
+            for in_rel_type, source_permalink, source_name in incoming:
+                source_entity = source_entities.get(source_permalink)
+                if not source_entity:
+                    continue
                 
-                # Get incoming relations (bidirectional exploration)
-                incoming = db.get_relations_to(current_id)
-                for in_rel_type, source_permalink, source_name in incoming:
-                    source_entity = db.get_entity_by_permalink(source_permalink)
-                    if not source_entity:
-                        continue
-                    
-                    edges.append({
-                        "from": source_entity.id,
-                        "to": current_id,
-                        "relation": in_rel_type
-                    })
-                    
-                    if source_entity.id not in visited:
-                        visited.add(source_entity.id)
-                        nodes[source_entity.id] = {
-                            "id": source_entity.id,
-                            "permalink": source_permalink,
-                            "name": source_name,
-                            "depth": current_depth + 1
-                        }
-                        queue.append((source_entity.id, current_depth + 1))
+                edges.append({
+                    "from": source_entity.id,
+                    "to": current_id,
+                    "relation": in_rel_type
+                })
+                
+                if source_entity.id not in visited:
+                    visited.add(source_entity.id)
+                    nodes[source_entity.id] = {
+                        "id": source_entity.id,
+                        "permalink": source_permalink,
+                        "name": source_name,
+                        "depth": current_depth + 1
+                    }
+                    queue.append((source_entity.id, current_depth + 1))
         
         return {
             "nodes": list(nodes.values()),
@@ -210,8 +223,13 @@ def find_path(
             
             # Explore neighbors
             relations = db.get_relations_from(current_id)
+            
+            # Batch fetch neighbor entities to avoid N+1 queries  
+            neighbor_permalinks = [r[1] for r in relations]
+            neighbors = db.get_entities_by_permalinks(neighbor_permalinks)
+            
             for rel_type, target_permalink, _ in relations:
-                neighbor = db.get_entity_by_permalink(target_permalink)
+                neighbor = neighbors.get(target_permalink)
                 if neighbor and neighbor.id not in visited:
                     visited.add(neighbor.id)
                     new_path = path + [(rel_type, target_permalink)]

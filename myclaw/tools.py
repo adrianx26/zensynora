@@ -1,3 +1,41 @@
+"""
+Tools - Core tool system for MyClaw agents.
+
+Provides the tool registry, execution engine, hook system, and built-in tools
+that agents can use to interact with the system, filesystem, network, and more.
+
+Key Components:
+    - TOOLS: Global registry of available tools
+    - Tool Functions: Shell execution, file I/O, web browsing, delegation
+    - ParallelToolExecutor: Concurrent tool execution with rate limiting
+    - Hook System: Event hooks for pre/post tool execution
+    - RateLimiter: Token bucket rate limiting per tool
+    - TOOLBOX: Dynamic tool creation and persistence system
+
+Built-in Tools:
+    - shell(cmd): Execute shell commands (allowlisted)
+    - read_file(path): Read file contents
+    - write_file(path, content): Write file contents
+    - browse(url, max_length): Browse web pages
+    - download_file(url, path): Download files
+    - delegate(agent, task): Delegate to another agent
+    - Memory & Knowledge: write_to_knowledge, search_knowledge, etc.
+    - Scheduling: schedule, cancel_schedule, list_schedules
+    - Agent Swarms: swarm_create, swarm_assign, swarm_status
+
+Usage:
+    from myclaw.tools import TOOLS, register_tool, trigger_hook
+
+    # Execute a tool
+    result = await TOOLS["shell"]["func"]("ls -la")
+
+    # Register custom tool
+    register_tool("my_tool", my_function, "Description...")
+
+    # Trigger hook
+    trigger_hook("pre_tool_call", tool_name, args)
+"""
+
 import asyncio
 import subprocess
 import shlex
@@ -495,10 +533,14 @@ def validate_path(path: str) -> Path:
     workspace = WORKSPACE.resolve()
     try:
         target = (workspace / path).resolve()
-        if not str(target).startswith(str(workspace)):
+        # Use is_relative_to for proper path traversal validation
+        # This handles case variations and different path separators correctly
+        if not target.is_relative_to(workspace):
             raise ValueError(f"Path traversal detected: {path}")
         return target
-    except Exception as e:
+    except (ValueError, RuntimeError) as e:
+        if "Path traversal detected" in str(e):
+            raise
         raise ValueError(f"Invalid path: {path}") from e
 
 
@@ -526,7 +568,14 @@ async def shell_async(cmd: str, timeout: int = 30) -> str:
         if not _rate_limiter.check("shell", max_calls=10, window=60):
             _tool_audit_logger.log("shell_async", "", 0, False, "Rate limit exceeded")
             return "Error: Rate limit exceeded for shell tool (10 calls/minute)"
-        
+
+        # Security: Validate command doesn't contain dangerous characters
+        dangerous = re.compile(r'[;&|`$(){}\[\]\\]')
+        if dangerous.search(cmd):
+            logger.warning(f"Blocked command with dangerous characters: {cmd}")
+            _tool_audit_logger.log("shell_async", "", 0, False, "Dangerous characters detected")
+            return "Error: Command contains dangerous characters"
+
         parts = shlex.split(cmd)
         if not parts:
             return "Error: Empty command"
@@ -537,7 +586,7 @@ async def shell_async(cmd: str, timeout: int = 30) -> str:
             return f"Error: Command '{first_cmd}' is blocked for security"
         if first_cmd not in ALLOWED_COMMANDS:
             return f"Error: '{first_cmd}' not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
-        
+
         # Use the full command string for shell execution
         process = await asyncio.create_subprocess_shell(
             cmd,
@@ -592,7 +641,14 @@ def shell(cmd: str) -> str:
         if not _rate_limiter.check("shell", max_calls=10, window=60):
             _tool_audit_logger.log("shell", "", 0, False, "Rate limit exceeded")
             return "Error: Rate limit exceeded for shell tool (10 calls/minute)"
-        
+
+        # Security: Validate command doesn't contain dangerous characters
+        dangerous = re.compile(r'[;&|`$(){}\[\]\\]')
+        if dangerous.search(cmd):
+            logger.warning(f"Blocked command with dangerous characters: {cmd}")
+            _tool_audit_logger.log("shell", "", 0, False, "Dangerous characters detected")
+            return "Error: Command contains dangerous characters"
+
         parts = shlex.split(cmd)
         if not parts:
             return "Error: Empty command"

@@ -1,3 +1,33 @@
+"""
+Agent - Core AI agent implementation for MyClaw/Zensynora.
+
+This module provides the main Agent class that orchestrates conversations,
+tool execution, memory management, and knowledge retrieval. It serves as
+the primary interface between users and the LLM provider.
+
+Key Components:
+    - Agent: Main agent class with think() and think_stream() methods
+    - Profile Caching: LRU cache for agent profile loading
+    - Memory Integration: Per-user conversation history via Memory class
+    - Tool Execution: Parallel and sequential tool calling
+    - Knowledge Context: RAG-style knowledge base integration
+    - Skill Preloading: Predictive skill loading for faster responses
+
+Usage:
+    from myclaw.agent import Agent
+    from myclaw.config import load_config
+
+    config = load_config()
+    agent = Agent(config, name="default")
+
+    # Non-streaming response
+    response = await agent.think("Hello!")
+
+    # Streaming response
+    async for chunk in agent.think_stream("Hello!"):
+        print(chunk, end="")
+"""
+
 from .memory import Memory
 from .provider import get_provider, SUPPORTED_PROVIDERS
 from .tools import TOOLS, trigger_hook, _HOOKS, get_parallel_executor, is_tool_independent
@@ -7,18 +37,26 @@ from rich.console import Console
 import json
 import logging
 import asyncio
-import inspect
+import logging
+from pathlib import Path
+from typing import List, Dict, Tuple, Optional, AsyncIterator
+from collections import OrderedDict
+import json
 import re
 import threading
-from pathlib import Path
-from typing import AsyncIterator, List, Dict, Tuple, Optional
 
-console = Console()
+from .memory import Memory
+from .provider import get_provider, SUPPORTED_PROVIDERS
+from .tools import TOOLS, trigger_hook, _HOOKS, get_parallel_executor, is_tool_independent
+from .semantic_cache import get_semantic_cache
+from .skill_preloader import get_skill_preloader
+
 logger = logging.getLogger(__name__)
 
-# Profile cache for faster loading
-_profile_cache: dict[str, str] = {}
+# Profile cache for faster loading - uses OrderedDict for true LRU eviction
+_profile_cache: OrderedDict[str, str] = OrderedDict()
 _profile_cache_lock = threading.Lock()
+_profile_cache_maxsize = 100
 
 
 def _get_profile_cache_key(name: str, profile_path: Path) -> str:
@@ -31,27 +69,37 @@ def _get_profile_cache_key(name: str, profile_path: Path) -> str:
 
 
 def _load_profile_cached(name: str, profile_path: Path) -> str:
-    """Load profile with caching based on file modification time."""
+    """Load profile with caching based on file modification time.
+
+    Uses LRU (Least Recently Used) eviction policy via OrderedDict.
+    """
     cache_key = _get_profile_cache_key(name, profile_path)
-    
+
     with _profile_cache_lock:
         if cache_key in _profile_cache:
+            # Move to end (most recently used)
+            _profile_cache.move_to_end(cache_key)
             return _profile_cache[cache_key]
-    
+
     # Load and cache
     content = profile_path.read_text(encoding="utf-8").strip()
-    
+
     with _profile_cache_lock:
         _profile_cache[cache_key] = content
-        
-        # Limit cache size
-        if len(_profile_cache) > 100:
-            # Remove oldest entries (simple FIFO)
-            keys_to_remove = list(_profile_cache.keys())[:50]
-            for key in keys_to_remove:
-                del _profile_cache[key]
-    
+
+        # LRU eviction: remove oldest items when over capacity
+        while len(_profile_cache) > _profile_cache_maxsize:
+            _profile_cache.popitem(last=False)
+
     return content
+
+
+async def _load_profile_cached_async(name: str, profile_path: Path) -> str:
+    """Async wrapper for _load_profile_cached using thread pool.
+    
+    Avoids blocking the event loop during file I/O.
+    """
+    return await asyncio.to_thread(_load_profile_cached, name, profile_path)
 
 
 SYSTEM_PROMPT = (
@@ -102,35 +150,60 @@ class Agent:
             cfg_model = "llama3.2"
         self.model = model or cfg_model
 
-        # Check for local workspace profiles first, then fall back to user home
-        local_profiles_dir = Path(__file__).parent / "profiles"
-        user_profiles_dir = Path(getattr(config.agents, "profiles_dir", "~/.myclaw/profiles")).expanduser()
-        
-        # Try local workspace profiles first
-        profile_path = local_profiles_dir / f"{self.name}.md"
-        if profile_path.exists():
-            self.system_prompt = _load_profile_cached(self.name, profile_path)
-        else:
-            # Fall back to user home profiles
-            user_profiles_dir.mkdir(parents=True, exist_ok=True)
-            profile_path = user_profiles_dir / f"{self.name}.md"
-            if profile_path.exists():
-                self.system_prompt = _load_profile_cached(self.name, profile_path)
-            else:
-                self.system_prompt = system_prompt or SYSTEM_PROMPT
-        
-        # Load user dialectic profile if it exists (for personalization)
-        dialectic_path = local_profiles_dir / "user_dialectic.md"
-        if dialectic_path.exists():
-            dialectic_content = dialectic_path.read_text(encoding="utf-8").strip()
-            if dialectic_content and dialectic_content != self.system_prompt:
-                self.system_prompt = f"{self.system_prompt}\n\n## User Profile\n{dialectic_content}"
+        # Store paths for lazy profile loading (to avoid blocking in __init__)
+        self._local_profiles_dir = Path(__file__).parent / "profiles"
+        self._user_profiles_dir = Path(getattr(config.agents, "profiles_dir", "~/.myclaw/profiles")).expanduser()
+        self._custom_system_prompt = system_prompt
+        self._system_prompt_loaded = False
+        self._system_prompt = ""
         
         # Initialize skill preloader for this agent
         self._skill_preloader = get_skill_preloader()
-        
+
+        # Store pending preload tasks to prevent garbage collection
+        self._pending_preloads: set[asyncio.Task] = set()
+
         # Store config for later use
         self.config = config
+
+    async def _load_system_prompt(self) -> str:
+        """Lazy load system prompt with async file I/O."""
+        if self._system_prompt_loaded:
+            return self._system_prompt
+
+        # Try local workspace profiles first
+        profile_path = self._local_profiles_dir / f"{self.name}.md"
+        if profile_path.exists():
+            prompt = await _load_profile_cached_async(self.name, profile_path)
+        else:
+            # Fall back to user home profiles
+            self._user_profiles_dir.mkdir(parents=True, exist_ok=True)
+            profile_path = self._user_profiles_dir / f"{self.name}.md"
+            if profile_path.exists():
+                prompt = await _load_profile_cached_async(self.name, profile_path)
+            else:
+                prompt = self._custom_system_prompt or SYSTEM_PROMPT
+
+        # Load user dialectic profile if it exists (for personalization)
+        dialectic_path = self._local_profiles_dir / "user_dialectic.md"
+        if dialectic_path.exists():
+            dialectic_content = await asyncio.to_thread(
+                dialectic_path.read_text, encoding="utf-8"
+            )
+            dialectic_content = dialectic_content.strip()
+            if dialectic_content and dialectic_content != prompt:
+                prompt = f"{prompt}\n\n## User Profile\n{dialectic_content}"
+
+        self._system_prompt = prompt
+        self._system_prompt_loaded = True
+        return prompt
+
+    @property
+    def system_prompt(self) -> str:
+        """Get system prompt (may be empty string if not loaded yet)."""
+        if self._system_prompt_loaded:
+            return self._system_prompt
+        return self._custom_system_prompt or SYSTEM_PROMPT
 
     async def _get_memory(self, user_id: str) -> Memory:
         if user_id not in self._memories:
@@ -257,25 +330,29 @@ class Agent:
 
         trigger_hook("on_session_start", user_id, self.name)
 
-        message_count_start = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
-
         history = await mem.get_history()
+        message_count_start = len(history)
         
         # Optimization #4: Proactive skill pre-loading
-        asyncio.create_task(self._skill_preloader.predict_and_preload(history, user_message))
+        task = asyncio.create_task(
+            self._skill_preloader.predict_and_preload(history, user_message)
+        )
+        self._pending_preloads.add(task)
+        task.add_done_callback(self._pending_preloads.discard)
 
         # Feature: Context Summarization with trajectory compression
         threshold = getattr(self.config.agents, 'summarization_threshold', 10)
         if len(history) > threshold:
             to_summarize = history[:-5]
             recent = history[-5:]
-            summary_prompt = (
+            summary_parts = [
                 "Summarize the following conversation context. Focus on key decisions, "
                 "important facts, and user preferences. Preserve information that would be "
                 "important for future context:\n"
-            )
+            ]
             for m in to_summarize:
-                summary_prompt += f"{m['role']}: {m['content'][:200]}\n"
+                summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
+            summary_prompt = "".join(summary_parts)
             summary_msgs = [{"role": "system", "content": "You summarize conversations concisely."}, 
                           {"role": "user", "content": summary_prompt}]
             try:
@@ -291,12 +368,13 @@ class Agent:
 
         # Search knowledge base for relevant context
         knowledge_context = self._search_knowledge_context(user_message, user_id)
-        
-        # Build system prompt with knowledge context
-        system_content = self.system_prompt
+
+        # Build system prompt with knowledge context (async load to avoid blocking)
+        system_prompt = await self._load_system_prompt()
+        system_content = system_prompt
         if knowledge_context:
-            system_content = f"{self.system_prompt}\n\n{knowledge_context}"
-        
+            system_content = f"{system_prompt}\n\n{knowledge_context}"
+
         messages = [{"role": "system", "content": system_content}] + history
 
         # Trigger pre_llm_call hooks - allow hooks to modify messages
@@ -308,9 +386,18 @@ class Agent:
 
         try:
             response, tool_calls = await self.provider.chat(messages, self.model)
+        except httpx.TimeoutException as e:
+            logger.error(f"LLM provider timeout: {e}")
+            return "Sorry, the LLM service timed out. Please try again."
+        except (httpx.ConnectError, ConnectionError) as e:
+            logger.error(f"LLM provider connection error: {e}")
+            return "Sorry, I cannot connect to the LLM service. Please check your connection."
+        except httpx.HTTPStatusError as e:
+            logger.error(f"LLM provider HTTP error: {e}")
+            return f"Sorry, the LLM service returned an error: {e.response.status_code}"
         except Exception as e:
-            logger.error(f"LLM provider error: {e}")
-            return f"Sorry, I encountered an error: {e}"
+            logger.exception(f"Unexpected LLM provider error: {e}")
+            return f"Sorry, an unexpected error occurred: {e}"
 
         # Trigger post_llm_call hooks
         hook_results = trigger_hook("post_llm_call", response, tool_calls)
@@ -429,12 +516,13 @@ class Agent:
         if len(history) > threshold:
             to_summarize = history[:-5]
             recent = history[-5:]
-            summary_prompt = (
+            summary_parts = [
                 "Summarize the following conversation context. Focus on key decisions, "
                 "important facts, and user preferences:\n"
-            )
+            ]
             for m in to_summarize:
-                summary_prompt += f"{m['role']}: {m['content'][:200]}\n"
+                summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
+            summary_prompt = "".join(summary_parts)
             summary_msgs = [{"role": "system", "content": "You summarize conversations concisely."}, 
                           {"role": "user", "content": summary_prompt}]
             try:
@@ -446,12 +534,13 @@ class Agent:
 
         # Search knowledge base for relevant context
         knowledge_context = self._search_knowledge_context(user_message, user_id)
-        
-        # Build system prompt with knowledge context
-        system_content = self.system_prompt
+
+        # Build system prompt with knowledge context (async load to avoid blocking)
+        system_prompt = await self._load_system_prompt()
+        system_content = system_prompt
         if knowledge_context:
-            system_content = f"{self.system_prompt}\n\n{knowledge_context}"
-        
+            system_content = f"{system_prompt}\n\n{knowledge_context}"
+
         messages = [{"role": "system", "content": system_content}] + history
 
         # Trigger pre_llm_call hooks
@@ -469,18 +558,20 @@ class Agent:
             yield f"Sorry, I encountered an error: {e}"
             return
 
-        full_response = ""
+        response_parts = []
         tool_calls = None
-        
+
         # Iterate over the stream
         try:
             async for chunk in stream_iterator:
-                full_response += chunk
+                response_parts.append(chunk)
                 yield chunk
         except Exception as e:
             logger.error(f"Error in streaming: {e}")
             yield f"Error streaming response: {e}"
             return
+
+        full_response = "".join(response_parts)
 
         # Trigger post_llm_call hooks
         trigger_hook("post_llm_call", full_response, tool_calls)

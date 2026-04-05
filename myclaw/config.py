@@ -1,12 +1,46 @@
+"""
+Config - Configuration management for MyClaw.
+
+Provides configuration schemas, loading, validation, and persistence using
+Pydantic models. Supports environment variable overrides and file watching
+for auto-reload.
+
+Key Components:
+    - AppConfig: Root configuration model
+    - AgentsConfig: Agent-specific settings (defaults, named agents)
+    - ProvidersConfig: LLM provider settings (Ollama, OpenAI, Anthropic, etc.)
+    - ChannelsConfig: Messaging channel settings (Telegram, WhatsApp)
+    - SwarmConfig: Agent swarm configuration
+    - SecurityConfig: API keys, secrets, security settings
+
+Features:
+    - JSON-based configuration with Pydantic validation
+    - Environment variable overrides (ENV_OVERRIDES mapping)
+    - Automatic config file watching for hot-reload
+    - Thread-safe config loading with locks
+    - Default values for all settings
+
+Usage:
+    from myclaw.config import load_config
+
+    config = load_config()
+    model = config.agents.defaults.model
+    api_key = config.providers.openai.api_key.get_secret_value()
+"""
+
 import json
 import logging
 import os
 import time
+import threading
 from pathlib import Path
 from pydantic import BaseModel, SecretStr, ValidationError
 from typing import Optional, Dict, Any, List
 
 from .exceptions import ConfigurationError
+
+# Thread-safe config loading lock
+_config_lock = threading.Lock()
 
 # 6.1: Optional watchdog for file watching
 try:
@@ -370,38 +404,42 @@ class AppConfig(BaseModel):
 # ── Loaders ───────────────────────────────────────────────────────────────────
 
 def load_config(force_reload: bool = False) -> AppConfig:
-    """Load and validate config. Exits with clear message on schema errors."""
+    """Load and validate config. Exits with clear message on schema errors.
+    
+    Thread-safe: Uses a lock to prevent race conditions during config reload.
+    """
     global _cached_config, _config_mtime
     
-    # 6.1: Start file watcher on first load
-    _start_config_watcher()
-    
-    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-    WORKSPACE.mkdir(parents=True, exist_ok=True)
-
-    if not CONFIG_FILE.exists():
-        return AppConfig()
-
-    try:
-        # Check if config file has been modified
-        current_mtime = CONFIG_FILE.stat().st_mtime
+    with _config_lock:
+        # 6.1: Start file watcher on first load
+        _start_config_watcher()
         
-        # Return cached config if not modified and not force reload
-        if not force_reload and _cached_config is not None and current_mtime == _config_mtime:
+        CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        WORKSPACE.mkdir(parents=True, exist_ok=True)
+
+        if not CONFIG_FILE.exists():
+            return AppConfig()
+
+        try:
+            # Check if config file has been modified
+            current_mtime = CONFIG_FILE.stat().st_mtime
+            
+            # Return cached config if not modified and not force reload
+            if not force_reload and _cached_config is not None and current_mtime == _config_mtime:
+                return _cached_config
+            
+            raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            # Apply environment variable overrides
+            raw = _apply_env_overrides(raw)
+            
+            _cached_config = AppConfig(**raw)
+            _config_mtime = current_mtime
+            
             return _cached_config
-        
-        raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
-        # Apply environment variable overrides
-        raw = _apply_env_overrides(raw)
-        
-        _cached_config = AppConfig(**raw)
-        _config_mtime = current_mtime
-        
-        return _cached_config
-    except json.JSONDecodeError as e:
-        raise SystemExit(f"❌ Config error: {CONFIG_FILE} is not valid JSON — {e}")
-    except ValidationError as e:
-        raise SystemExit(f"❌ Config validation error:\n{e}")
+        except json.JSONDecodeError as e:
+            raise SystemExit(f"❌ Config error: {CONFIG_FILE} is not valid JSON — {e}")
+        except ValidationError as e:
+            raise SystemExit(f"❌ Config validation error:\n{e}")
 
 
 def _reveal_secrets(raw: dict) -> dict:

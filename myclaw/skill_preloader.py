@@ -50,12 +50,13 @@ class SkillPredictor:
             List of predicted skill names to pre-load
         """
         predicted_skills = set()
-        combined_text = current_message.lower()
+        text_parts = [current_message.lower()]
         
         for msg in messages[-5:]:
             if isinstance(msg, dict):
                 content = msg.get('content', '')
-                combined_text += ' ' + content.lower()
+                text_parts.append(content.lower())
+        combined_text = ' '.join(text_parts)
         
         for skill_name, patterns in SKILL_PATTERNS.items():
             for pattern in patterns:

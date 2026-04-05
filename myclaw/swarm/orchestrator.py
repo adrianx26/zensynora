@@ -96,7 +96,7 @@ class SwarmOrchestrator:
         # Load swarm configuration
         self._load_config()
     
-    def _load_config(self):
+    def _load_config(self) -> None:
         """Load swarm configuration from app config."""
         self.enabled = True
         self.max_concurrent_swarms = 3

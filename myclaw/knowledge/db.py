@@ -66,7 +66,25 @@ class KnowledgeDB:
             # Enable WAL mode for better concurrent access
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
+            # Configure auto-checkpoint to happen less frequently (every 1000 pages)
+            # We will manually checkpoint periodically for better control
+            self._conn.execute("PRAGMA wal_autocheckpoint=1000")
         return self._conn
+
+    def checkpoint_wal(self, mode: str = "PASSIVE") -> tuple:
+        """
+        Perform WAL checkpoint to prevent unbounded WAL file growth.
+
+        Args:
+            mode: Checkpoint mode - PASSIVE (default), FULL, RESTART, or TRUNCATE
+
+        Returns:
+            Tuple of (return_code, pages_checkpointed, pages_in_wal)
+            return_code: 0=checkpointed, 1=busy, 2=locked, 3=read-only
+        """
+        conn = self._get_connection()
+        result = conn.execute(f"PRAGMA wal_checkpoint({mode})").fetchone()
+        return (result[0], result[1], result[2])
     
     def _init_db(self):
         """Initialize database schema."""
@@ -120,7 +138,7 @@ class KnowledgeDB:
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)")
         
         # Optimization 3.2: Composite indexes for graph queries
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type_name ON entities(name)")
+        # Note: idx_entities_name already created on entities(name) above
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from_type ON relations(from_entity_id, relation_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to_type ON relations(to_entity_id, relation_type)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity_category ON observations(entity_id, category)")
@@ -193,19 +211,7 @@ class KnowledgeDB:
                 VALUES (new.id, new.content, new.category);
             END
         """)
-        
-        # Indexes (optimization 3.2: composite indexes for graph queries)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_permalink ON entities(permalink)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity ON observations(entity_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from ON relations(from_entity_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to ON relations(to_entity_id)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_type ON relations(relation_type)")
-        
-        # Optimization 3.2: Composite indexes for graph queries
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_type_name ON entities(name)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_from_type ON relations(from_entity_id, relation_type)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_relations_to_type ON relations(to_entity_id, relation_type)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_entity_category ON observations(entity_id, category)")
+
         
         conn.commit()
         logger.info(f"Knowledge DB initialized: {self.db_path}")
@@ -288,6 +294,41 @@ class KnowledgeDB:
                 updated_at=datetime.fromisoformat(row['updated_at'])
             )
         return None
+    
+    def get_entities_by_permalinks(self, permalinks: List[str]) -> Dict[str, Entity]:
+        """
+        Batch fetch multiple entities by their permalinks.
+        
+        Args:
+            permalinks: List of entity permalinks to fetch
+            
+        Returns:
+            Dict mapping permalink to Entity (only found entities)
+            
+        Performance: O(1) query instead of O(N) for N permalinks.
+        """
+        if not permalinks:
+            return {}
+        
+        conn = self._get_connection()
+        # Create placeholders for IN clause
+        placeholders = ','.join('?' * len(permalinks))
+        rows = conn.execute(
+            f"SELECT * FROM entities WHERE permalink IN ({placeholders})",
+            tuple(permalinks)
+        ).fetchall()
+        
+        return {
+            row['permalink']: Entity(
+                id=row['id'],
+                name=row['name'],
+                permalink=row['permalink'],
+                file_path=row['file_path'],
+                created_at=datetime.fromisoformat(row['created_at']),
+                updated_at=datetime.fromisoformat(row['updated_at'])
+            )
+            for row in rows
+        }
     
     def get_entity_by_id(self, entity_id: int) -> Optional[Entity]:
         """Get entity by ID."""
@@ -453,17 +494,19 @@ class KnowledgeDB:
         # Try enhanced search with observations (optimization 3.1)
         # Fall back to entities-only search for backward compatibility
         try:
+            # Optimization: Use rank column (faster than bm25() function)
+            # rank is a built-in FTS5 column with default BM25 ranking
             rows = conn.execute(
                 """
-                SELECT e.*, 
-                       bm25(entities_fts) as entity_rank,
-                       bm25(observations_fts) as observation_rank
+                SELECT e.*,
+                       fts_e.rank as entity_rank,
+                       fts_o.rank as observation_rank
                 FROM entities e
                 LEFT JOIN entities_fts fts_e ON e.id = fts_e.rowid
                 LEFT JOIN observations o ON e.id = o.entity_id
                 LEFT JOIN observations_fts fts_o ON o.id = fts_o.rowid
                 WHERE entities_fts MATCH ? OR observations_fts MATCH ?
-                ORDER BY (bm25(entities_fts) + bm25(observations_fts))
+                ORDER BY (COALESCE(fts_e.rank, 0) + COALESCE(fts_o.rank, 0))
                 LIMIT ?
                 """,
                 (query, query, limit)
@@ -471,12 +514,13 @@ class KnowledgeDB:
         except sqlite3.OperationalError:
             # Fall back to entities-only search for existing databases
             # without observations FTS table
+            # Optimization: Use rank column instead of bm25() function
             rows = conn.execute(
                 """
                 SELECT e.* FROM entities e
                 JOIN entities_fts fts ON e.id = fts.rowid
                 WHERE entities_fts MATCH ?
-                ORDER BY bm25(entities_fts)
+                ORDER BY fts.rank
                 LIMIT ?
                 """,
                 (query, limit)
