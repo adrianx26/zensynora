@@ -750,8 +750,14 @@ def _strip_html(html: str) -> str:
 def browse(url: str, max_length: int = 5000) -> str:
     """Browse a URL and return its plain-text content (HTML is stripped).
 
-    Fetches a web page, strips HTML tags, script/style blocks, and HTML entities,
-    then returns clean readable text. Truncates to max_length characters.
+    Implements specific, user-friendly error handling for common failure modes:
+    - Timeout: Suggests trying web.archive.org for cached version
+    - ConnectionError: Advises checking internet connection
+    - HTTP 404: Indicates page was moved/deleted, suggests web search
+    - HTTP 403: Indicates access denied, suggests using search_knowledge() instead
+
+    All errors return a structured payload with human-readable guidance
+    rather than raising exceptions.
 
     Args:
         url: Full URL to fetch (e.g. 'https://example.com')
@@ -759,9 +765,7 @@ def browse(url: str, max_length: int = 5000) -> str:
                     Pages longer than this are truncated with a notice.
 
     Returns:
-        'URL: {url}\nStatus: {code}\n\nContent:\n{plain_text}' on success.
-        'Error browsing {url}: ...' on HTTP or network errors.
-        'Error: ...' on unexpected failures.
+        Formatted page content on success, or structured error payload with guidance.
     """
     try:
         headers = {
@@ -778,12 +782,96 @@ def browse(url: str, max_length: int = 5000) -> str:
             text = text[:max_length] + "\n\n[Content truncated - reached max_length limit]"
 
         return f"URL: {url}\nStatus: {response.status_code}\n\nContent:\n{text}"
+
+    except requests.exceptions.Timeout as e:
+        logger.warning(f"Browse timeout for {url}: {e}")
+        archive_url = f"https://web.archive.org/web/{url}"
+        return (
+            f"⏱️ Timeout Error accessing {url}\n\n"
+            f"The page took too long to respond.\n\n"
+            f"💡 Suggestions:\n"
+            f"  • Try the cached version from Wayback Machine:\n"
+            f"    {archive_url}\n"
+            f"  • Check if the site is temporarily down\n"
+            f"  • Try again later or with a different URL\n\n"
+            f"📚 Alternative: Use search_knowledge() to find saved information about this topic"
+        )
+
+    except requests.exceptions.ConnectionError as e:
+        logger.warning(f"Browse connection error for {url}: {e}")
+        return (
+            f"🔌 Connection Error accessing {url}\n\n"
+            f"Unable to establish a connection to the server.\n\n"
+            f"💡 Suggestions:\n"
+            f"  • Check your internet connection\n"
+            f"  • Verify the URL is correct\n"
+            f"  • The site may be temporarily unavailable\n"
+            f"  • Try an alternate URL or mirror\n\n"
+            f"📚 Alternative: Use search_knowledge() to find saved information about this topic"
+        )
+
+    except requests.exceptions.HTTPError as e:
+        # Handle specific HTTP status codes
+        status_code = None
+        if e.response is not None:
+            status_code = e.response.status_code
+
+        if status_code == 404:
+            logger.warning(f"Browse 404 for {url}")
+            return (
+                f"❌ Page Not Found (404) for {url}\n\n"
+                f"The page may have been moved, deleted, or the URL might be incorrect.\n\n"
+                f"💡 Suggestions:\n"
+                f"  • Check the URL for typos\n"
+                f"  • Try visiting the main site and navigating from there\n"
+                f"  • Search for the content using a web search\n"
+                f"  • Try the Wayback Machine: https://web.archive.org/web/{url}\n\n"
+                f"📚 Alternative: Use search_knowledge() to find saved information about this topic"
+            )
+
+        elif status_code == 403:
+            logger.warning(f"Browse 403 for {url}")
+            return (
+                f"🚫 Access Denied (403) for {url}\n\n"
+                f"The server is blocking access to this resource.\n\n"
+                f"💡 Suggestions:\n"
+                f"  • This site may require authentication or special access\n"
+                f"  • Try accessing the site's main page first\n"
+                f"  • The content may be restricted by region or policy\n\n"
+                f"📚 Alternative: Use search_knowledge() to find publicly available information about this topic"
+            )
+
+        else:
+            logger.error(f"Browse HTTP error {status_code} for {url}: {e}")
+            return (
+                f"⚠️ HTTP Error {status_code} accessing {url}\n\n"
+                f"An HTTP error occurred while fetching the page.\n\n"
+                f"💡 Suggestions:\n"
+                f"  • The server may be experiencing issues\n"
+                f"  • Try again later\n"
+                f"  • Check if the URL is correct\n\n"
+                f"📚 Alternative: Use search_knowledge() to find saved information"
+            )
+
     except requests.exceptions.RequestException as e:
-        logger.error(f"Browse error for {url}: {e}")
-        return f"Error browsing {url}: {e}"
+        logger.error(f"Browse request error for {url}: {e}")
+        return (
+            f"⚠️ Error accessing {url}\n\n"
+            f"Details: {str(e)}\n\n"
+            f"💡 Suggestions:\n"
+            f"  • Verify the URL format (should include https:// or http://)\n"
+            f"  • Check your network connection\n"
+            f"  • The site may be temporarily unavailable\n\n"
+            f"📚 Alternative: Use search_knowledge() to find saved information"
+        )
+
     except Exception as e:
-        logger.error(f"Unexpected browse error: {e}")
-        return f"Error: {e}"
+        logger.error(f"Unexpected browse error for {url}: {e}")
+        return (
+            f"⚠️ Unexpected error accessing {url}\n\n"
+            f"Details: {str(e)}\n\n"
+            f"💡 Please try again or use search_knowledge() to find saved information"
+        )
 
 
 def download_file(url: str, path: str) -> str:
@@ -2441,22 +2529,82 @@ def write_to_knowledge(
         return f"Error writing knowledge: {e}"
 
 
+def _extract_search_terms(query: str) -> List[str]:
+    """Extract potential search terms from a query for suggestions.
+
+    Args:
+        query: The original search query
+
+    Returns:
+        List of extracted terms (words > 3 chars, bigrams)
+    """
+    cleaned = re.sub(r'[^\w\s]', ' ', query.lower())
+    words = [w for w in cleaned.split() if len(w) > 3]
+
+    terms = words[:5]  # Single words
+
+    # Add bigrams
+    if len(words) >= 2:
+        bigrams = [f"{words[i]} {words[i+1]}" for i in range(min(len(words) - 1, 3))]
+        terms.extend(bigrams)
+
+    return list(dict.fromkeys(terms))  # Remove duplicates, preserve order
+
+
 def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> str:
     """
     Search the knowledge base using full-text search.
-    
-    query: Search query (supports FTS5 syntax: AND, OR, NOT, *)
-    limit: Maximum number of results (default: 5)
-    user_id: User ID for multi-user isolation
+
+    When no results are found, returns an actionable guidance payload that includes:
+    - Confirmation that no results were found
+    - Suggestion to try broader search terms
+    - Explicit recommendation to call write_to_knowledge() to create a new entry
+    - Pointer to list_knowledge() to inspect existing entries
+    - Tips for improving search (different keywords, checking for typos)
+
+    Args:
+        query: Search query (supports FTS5 syntax: AND, OR, NOT, *)
+        limit: Maximum number of results (default: 5)
+        user_id: User ID for multi-user isolation
+
+    Returns:
+        Formatted search results, or standardized "no results" payload with guidance.
     """
     try:
         notes = search_notes(query, user_id, limit)
-        
+
         if not notes:
-            return f"No results found for: '{query}'"
-        
+            # Generate actionable guidance for empty results
+            suggested_terms = _extract_search_terms(query)
+
+            # Build broader query suggestion
+            broader_query = " OR ".join(suggested_terms[:3]) if len(suggested_terms) > 1 else query
+
+            lines = [
+                f"🔍 No results found for: '{query}'",
+                "",
+                "💡 Suggestions:",
+            ]
+
+            if suggested_terms:
+                lines.append(f"  • Try broader search terms: '{broader_query}'")
+
+            lines.extend([
+                "  • Check for typos in your query",
+                "  • Use different keywords or synonyms",
+                "",
+                "📝 Actions you can take:",
+                f"  • Create a new knowledge entry: write_to_knowledge(title='Your Topic', content='Details...')",
+                f"  • Browse existing entries: list_knowledge()",
+                f"  • Search with different terms: search_knowledge(query='alternate keywords')",
+                "",
+                "📚 The knowledge base grows as you add information. Consider saving useful findings!"
+            ])
+
+            return "\n".join(lines)
+
         lines = [f"🔍 Search results for '{query}':", ""]
-        
+
         for i, note in enumerate(notes, 1):
             lines.append(f"{i}. **{note.title}** ([{note.permalink}](memory://{note.permalink}))")
             if note.observations:
@@ -2465,7 +2613,7 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> st
             if note.tags:
                 lines.append(f"   Tags: {', '.join(f'#{tag}' for tag in note.tags)}")
             lines.append("")
-        
+
         return "\n".join(lines)
     except Exception as e:
         logger.error(f"Failed to search knowledge: {e}")

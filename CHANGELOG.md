@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Knowledge Gap & Error Handling Enhancement (2026-04-10)
+
+A comprehensive enhancement to knowledge base empty-result handling, structured gap logging, and user-friendly error handling for browse operations.
+
+#### Knowledge Base Enhancements
+
+- **Structured Knowledge Search Results** (`myclaw/agent.py`)
+  - Added `KnowledgeSearchResult` dataclass with `context`, `has_results`, `suggested_topics`, `gap_logged`, and `metadata`
+  - Enhanced `_search_knowledge_context()` with `return_structured` parameter for backward compatibility
+  - When no results found, returns actionable guidance including suggested topics and KB creation hints
+
+- **Knowledge Gap Cache** (`myclaw/agent.py`)
+  - Added `KnowledgeGapCache` class for per-session deduplication of gap logging
+  - Configurable timeout (default: 300 seconds) with automatic expiration
+  - Case-insensitive matching and per-user isolation
+  - Test hooks: `Agent._knowledge_gap_cache_enabled` and `Agent.set_gap_cache_enabled()`
+
+- **Gap Logging** (`myclaw/agent.py`)
+  - New dedicated logger: `myclaw.knowledge.gaps` for structured gap detection logging
+  - Logs include: query, description, session context, timestamp, and recommendations
+  - Per-session deduplication prevents log noise from repeated empty searches
+
+- **Suggested Topics Extraction** (`myclaw/agent.py`, `myclaw/tools.py`)
+  - Added `_extract_suggested_topics()` for keyword and bigram extraction from queries
+  - Helps users discover alternative search terms when no results found
+
+#### Error Handling Enhancements
+
+- **Browse Tool Error Handling** (`myclaw/tools.py`)
+  - Specific error handling for common failure modes:
+    - `Timeout` → Suggests Wayback Machine cached version (web.archive.org)
+    - `ConnectionError` → Advises checking internet connection
+    - `404` → Suggests web search alternatives and Wayback Machine
+    - `403` → Recommends using `search_knowledge()` instead
+  - All errors return structured guidance payloads instead of raw exception traces
+  - Maintains "Error" prefix for backward compatibility
+
+- **Enhanced Search Knowledge** (`myclaw/tools.py`)
+  - Added `_extract_search_terms()` helper for search term suggestions
+  - Empty results now include actionable guidance:
+    - Broader search term suggestions
+    - Explicit pointer to `write_to_knowledge()`
+    - Pointer to `list_knowledge()` for browsing existing entries
+    - Tips for improving search (typos, keywords, synonyms)
+  - Maintains "No results found" phrase for backward compatibility
+
+#### Documentation & Testing
+
+- **Unit Tests** (`tests/test_agent.py`, `tests/test_tools.py`)
+  - Added 25+ new test methods covering knowledge gap handling
+  - Tests for `KnowledgeGapCache` deduplication (8 tests)
+  - Tests for `KnowledgeSearchResult` dataclass (2 tests)
+  - Tests for `_search_knowledge_context()` with structured returns (6 tests)
+  - Tests for browse error handling (9 tests)
+  - Tests for search term extraction (5 tests)
+  - Tests for backward compatibility (2 tests)
+
+- **Documentation Updates**
+  - Updated `README.md` with Behavioral Changes (v2.1) section
+  - Added migration notes for API changes
+  - Documented test hooks and cache control methods
+
 ### Performance & Optimization Overhaul (2026-04-06)
 
 A comprehensive code optimization initiative implementing 21 performance, reliability, and maintainability improvements across the codebase.

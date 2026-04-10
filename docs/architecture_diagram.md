@@ -267,8 +267,8 @@ Phase 3 (Memory & Learning)   Phase 4 (ZenHub Ecosystem)
 
 ```
 User Message
-     │
-     ▼
+      │
+      ▼
 ┌────────────────┐
 │ Gateway        │  Telegram/WhatsApp/CLI
 └───────┬────────┘
@@ -284,6 +284,8 @@ User Message
 │         └─► Compress + log ratio                        │
 │                                                         │
 │  3. Knowledge Base Search (FTS5 + BM25 + recency)      │
+│     ├─► Results found ──► Add to context                │
+│     └─► No results ─────► Log gap + suggest topics     │
 │                                                         │
 │  4. pre_llm_call hooks ────────────────────────────────► │
 │                                                         │
@@ -293,6 +295,7 @@ User Message
 │                                                         │
 │  7. Tool Execution (if tool_calls)                      │
 │     └─► Each tool: audit log + rate limit check        │
+│         └─► browse() errors: structured guidance       │
 │                                                         │
 │  8. on_session_end hooks ─────────────────────────────► │
 └────────────────────────────────────────────────────────┘
@@ -333,6 +336,99 @@ Tool Call Request
 │ Audit Logger      │  ToolAuditLogger
 │                   │  (success/failure, duration)
 └───────────────────┘
+```
+
+## Error Handling Architecture (v2.1)
+
+### Browse Tool Error Handling
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   BROWSE ERROR HANDLING                         │
+└─────────────────────────────────────────────────────────────────┘
+
+    requests.get(url, timeout=30)
+              │
+              ▼
+    ┌─────────────────┐
+    │  Error Type     │
+    └────────┬────────┘
+             │
+    ┌────────┴────────┬──────────────┬──────────────┬──────────────┐
+    │                 │              │              │              │
+    ▼                 ▼              ▼              ▼              ▼
+┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
+│ Timeout  │   │ Connection│   │  HTTP 404 │   │  HTTP 403 │   │  Other   │
+│          │   │  Error    │   │          │   │          │   │          │
+├──────────┤   ├──────────┤   ├──────────┤   ├──────────┤   ├──────────┤
+│ • Wayback│   │ • Check  │   │ • Check  │   │ • Auth   │   │ • Retry  │
+│   suggest│   │   internet│   │   typos  │   │   needed │   │ • Log    │
+│ • Check  │   │ • Verify │   │ • Wayback│   │ • Try    │   │ • Report │
+│   status │   │   URL    │   │   link   │   │   search │   │          │
+│ • search_│   │ • search_│   │ • Web    │   │ • search_│   │          │
+│   knowledge│  │   knowledge│  │   search │   │   knowledge│  │          │
+└────┬─────┘   └────┬─────┘   └────┬─────┘   └────┬─────┘   └────┬─────┘
+     │              │              │              │              │
+     └──────────────┴──────────────┴──────────────┴──────────────┘
+                                   │
+                                   ▼
+                    ┌──────────────────────────┐
+                    │  Structured Response     │
+                    │  (emoji + suggestions)   │
+                    └──────────────────────────┘
+```
+
+### Knowledge Gap Handling
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                   KNOWLEDGE GAP HANDLING                        │
+└─────────────────────────────────────────────────────────────────┘
+
+    search_knowledge(query)
+              │
+              ▼
+    ┌─────────────────┐
+    │  Results?       │
+    └────────┬────────┘
+             │
+      ┌──────┴──────┐
+      │             │
+      ▼             ▼
+┌──────────┐   ┌──────────┐
+│  Yes     │   │   No     │
+│          │   │          │
+│ Return   │   │ 1. Check │
+│ formatted│   │    gap   │
+│ results  │   │    cache │
+│          │   │          │
+│          │   │ 2. If new│
+│          │   │    gap:  │
+│          │   │    - Log │
+│          │   │      to  │
+│          │   │      gap │
+│          │   │      log │
+│          │   │    - Add │
+│          │   │      to  │
+│          │   │      cache│
+│          │   │          │
+│          │   │ 3. Return│
+│          │   │    guidance│
+│          │   │    +     │
+│          │   │    suggested│
+│          │   │    topics│
+└──────────┘   └──────────┘
+
+    Gap Cache (300s timeout):
+    ┌─────────────────────────────────┐
+    │  Key: "user_id:query"           │
+    │  Value: timestamp               │
+    │                                 │
+    │  is_duplicate() checks:        │
+    │  1. Clean expired entries      │
+    │  2. Check if key exists        │
+    │  3. Store if new               │
+    └─────────────────────────────────┘
 ```
 
 ## Skill System Architecture
@@ -529,5 +625,5 @@ myclaw/
 ```
 
 *Generated: 2026-03-29*
-*Last Updated: 2026-03-29 (All Phases Complete + Future Implementations)*
+*Last Updated: 2026-04-10 (Added Knowledge Gap Handling & Enhanced Error Handling v2.1)*
 *Part of: ZenSynora Full Implementation*

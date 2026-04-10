@@ -860,6 +860,35 @@ Results are saved to `eval/results/` as TSV files.
 
 ---
 
+## 📝 Behavioral Changes (v2.1)
+
+### Knowledge Base Empty Results
+When `search_knowledge()` finds no matching entries, it now returns an actionable guidance payload instead of a simple "No results" message. The payload includes:
+- Confirmation that no results were found
+- Suggested broader search terms derived from the query
+- Explicit pointers to `write_to_knowledge()` and `list_knowledge()` tools
+- Tips for improving search results
+
+**Backward Compatibility**: Existing code that checks for "No results found" in the return string will continue to work. The new guidance text includes this phrase.
+
+### Browse Tool Error Handling
+The `browse()` tool now returns structured error payloads with actionable guidance instead of raw exception messages for common failure modes:
+- **Timeout**: Suggests Wayback Machine cached version from web.archive.org
+- **ConnectionError**: Advises checking internet connection
+- **404**: Suggests web search alternatives and Wayback Machine
+- **403**: Recommends using `search_knowledge()` instead
+
+**Backward Compatibility**: All error cases still return a string; the format is more user-friendly. Code checking for "Error" prefix will continue to work.
+
+### Knowledge Gap Logging
+The agent now logs knowledge gaps (queries with no results) to a dedicated logger (`myclaw.knowledge.gaps`). Duplicate gaps within the same session are deduplicated to prevent log noise. The `_search_knowledge_context()` method now supports returning structured results via the `return_structured=True` parameter.
+
+**For Developers**: 
+- Test hooks available: `Agent._knowledge_gap_cache_enabled` (class-level) and `Agent.set_gap_cache_enabled()` (instance-level)
+- Use `Agent.clear_gap_cache()` in tests to reset deduplication state
+
+---
+
 ## ⚠️ Security Notes
 
 - The agent executes shell commands—review the allowlist in [`myclaw/tools.py`](myclaw/tools.py:19)

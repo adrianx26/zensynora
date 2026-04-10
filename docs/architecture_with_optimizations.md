@@ -75,6 +75,7 @@ flowchart TB
         LRUCache("📦 LRU Cache with TTL<br/>hash() keys + Stats")
         ProviderCache("⚡ Provider Cache<br/>Thread-safe init")
         ConfigCache("🔧 Config Cache<br/>Thread-safe reload")
+        GapCache("🕳️ Gap Cache<br/>Per-session dedup")
     end
 
     %% LLM Providers
@@ -112,6 +113,7 @@ flowchart TB
     AgentCore -.-> SemanticCache
     AgentCore -.-> LRUCache
     AgentCore -.-> ProviderCache
+    AgentCore -.-> GapCache
     GW -.-> ConfigCache
 
     AgentCore <--> Providers
@@ -138,6 +140,7 @@ flowchart TB
 | **Profile Cache** | LRU eviction | FIFO dict | `OrderedDict` with `move_to_end()` | 2x hit rate |
 | **Provider Cache** | Thread-safe init | No locking | `threading.Lock()` | No race conditions |
 | **Config Cache** | Thread-safe reload | No locking | `_config_lock` | Safe hot-reload |
+| **Gap Cache** | Per-session deduplication | No dedup, noisy logs | 300s timeout, case-insensitive | Reduced log noise |
 
 ### 2. Database Layer
 
@@ -164,6 +167,16 @@ flowchart TB
 | **ThreadPool** | Non-blocking shutdown | `shutdown(wait=True)` | `shutdown(wait=False)` | No event loop blocking |
 | **Provider Init** | Race condition fix | No locking | `threading.Lock()` | Thread-safe |
 | **Config Reload** | Race condition fix | No locking | `_config_lock` | Thread-safe |
+
+### 5. Error Handling & User Experience (v2.1)
+
+| Component | Enhancement | Before | After | Impact |
+|-----------|-------------|--------|-------|--------|
+| **Browse Timeout** | Structured error guidance | Raw exception trace | Wayback Machine suggestion + alternatives | User-friendly recovery |
+| **Browse 404** | Actionable error payload | Generic error message | Search suggestions + Wayback link | Better UX |
+| **Browse 403** | Alternative path guidance | Access denied error | Suggests `search_knowledge()` | Guides to solution |
+| **KB Empty Results** | Actionable guidance | "No results found" | Broader terms + KB creation hints | Self-service help |
+| **Gap Logging** | Structured logging + dedup | No gap tracking | Dedicated logger with per-session cache | Reduced noise |
 
 ## Data Flow with Optimizations
 
@@ -255,6 +268,70 @@ sequenceDiagram
     Note over Pool: Periodic cleanup_idle()
     Pool->>Pool: Find idle > 300s<br/>and refcount <= 0
     Pool->>Conn: Close idle connections
+```
+
+### 4. Knowledge Gap Handling Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Agent
+    participant KBSearch as Knowledge Search
+    participant GapCache as Gap Cache<br/>(300s timeout)
+    participant GapLogger as Gap Logger
+    participant KB as Knowledge Base
+
+    User->>Agent: Send query
+    Agent->>KBSearch: _search_knowledge_context()
+
+    KBSearch->>KB: search_notes(query)
+    KB-->>KBSearch: No results
+
+    KBSearch->>GapCache: is_duplicate(query, user_id)
+
+    alt Not duplicate
+        GapCache-->>KBSearch: False (new gap)
+        KBSearch->>GapCache: Store key with timestamp
+        KBSearch->>GapLogger: Log structured gap event
+        GapLogger-->>KBSearch: Gap logged
+        KBSearch-->>Agent: KnowledgeSearchResult<br/>(has_results=false, suggested_topics)
+    else Duplicate (within 300s)
+        GapCache-->>KBSearch: True (duplicate)
+        KBSearch-->>Agent: KnowledgeSearchResult<br/>(gap_logged=false)
+    end
+
+    Agent-->>User: Response with guidance<br/>("No results found... try write_to_knowledge()")
+```
+
+### 5. Browse Error Handling Flow
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant Tools as Tools Module
+    participant Requests as requests.get()
+    participant Wayback as Wayback Machine
+
+    User->>Tools: browse(url)
+    Tools->>Requests: GET request
+
+    alt Timeout
+        Requests-->>Tools: TimeoutException
+        Tools-->>User: ⏱️ Timeout Error<br/>• Try Wayback: web.archive.org/web/{url}<br/>• Check connection<br/>• search_knowledge() alternative
+    else Connection Error
+        Requests-->>Tools: ConnectionError
+        Tools-->>User: 🔌 Connection Error<br/>• Check internet<br/>• Verify URL<br/>• search_knowledge() alternative
+    else 404 Not Found
+        Requests-->>Tools: HTTPError(404)
+        Tools-->>User: ❌ Page Not Found<br/>• Check for typos<br/>• Try Wayback Machine<br/>• Web search alternative
+    else 403 Forbidden
+        Requests-->>Tools: HTTPError(403)
+        Tools-->>User: 🚫 Access Denied<br/>• May need authentication<br/>• Try search_knowledge()<br/>• Public source alternative
+    else Success
+        Requests-->>Tools: Response(200)
+        Tools->>Tools: Strip HTML
+        Tools-->>User: Plain text content
+    end
 ```
 
 ## Performance Benchmarks
@@ -353,7 +430,9 @@ flowchart TD
 | `test_swarm_aggregation.py` | Aggregation methods | 2 | 10+ |
 | `test_memory_batching.py` | Batching, pool, search | 3 | 10+ |
 | `test_tool_rate_limiting.py` | Token bucket limiting | 2 | 12+ |
-| **Total** | **Critical paths** | **9** | **47+** |
+| `test_agent.py` (enhanced) | Knowledge gap handling | 6 | 25+ |
+| `test_tools.py` (enhanced) | Browse error handling | 4 | 16+ |
+| **Total** | **Critical paths** | **19** | **88+** |
 
 ## Configuration
 
@@ -384,5 +463,6 @@ _profile_cache_maxsize = 100  # Profile cache size
 
 ---
 
-*Last Updated: 2026-04-06*
-*Optimization Version: 2.0*
+*Last Updated: 2026-04-10*
+*Optimization Version: 2.1*
+*Includes: Knowledge Gap Handling & Enhanced Error Handling*

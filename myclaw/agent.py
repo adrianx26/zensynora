@@ -28,30 +28,97 @@ Usage:
         print(chunk, end="")
 """
 
+import json
+import logging
+import asyncio
+import re
+import threading
+from pathlib import Path
+from typing import List, Dict, Tuple, Optional, AsyncIterator, Set, Union, Any
+from collections import OrderedDict
+from dataclasses import dataclass, field
+from datetime import datetime
+import time
+
 from .memory import Memory
 from .provider import get_provider, SUPPORTED_PROVIDERS
 from .tools import TOOLS, trigger_hook, _HOOKS, get_parallel_executor, is_tool_independent
 from .knowledge import search_notes, build_context
+from .semantic_cache import get_semantic_cache
 from .skill_preloader import get_skill_preloader, start_preloader, stop_preloader
 from rich.console import Console
-import json
-import logging
-import asyncio
-import logging
-from pathlib import Path
-from typing import List, Dict, Tuple, Optional, AsyncIterator
-from collections import OrderedDict
-import json
-import re
-import threading
-
-from .memory import Memory
-from .provider import get_provider, SUPPORTED_PROVIDERS
-from .tools import TOOLS, trigger_hook, _HOOKS, get_parallel_executor, is_tool_independent
-from .semantic_cache import get_semantic_cache
-from .skill_preloader import get_skill_preloader
 
 logger = logging.getLogger(__name__)
+kb_gap_logger = logging.getLogger("myclaw.knowledge.gaps")
+
+
+@dataclass
+class KnowledgeSearchResult:
+    """Structured result from knowledge base search.
+
+    Attributes:
+        context: Formatted knowledge context string for LLM consumption
+        has_results: Whether any knowledge entries were found
+        suggested_topics: List of suggested topic keywords from the query
+        gap_logged: Whether this search was recorded as a knowledge gap
+        metadata: Additional search metadata (query, timestamp, etc.)
+    """
+    context: str
+    has_results: bool
+    suggested_topics: List[str] = field(default_factory=list)
+    gap_logged: bool = False
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+class KnowledgeGapCache:
+    """Per-session cache to prevent duplicate gap logging.
+
+    Implements a short-lived in-process cache keyed by query and session id,
+    with a configurable timeout to reduce noise from repeated empty searches.
+    """
+
+    def __init__(self, timeout_seconds: float = 300.0):
+        self._cache: Dict[str, float] = {}
+        self._timeout = timeout_seconds
+        self._enabled = True
+
+    def is_duplicate(self, query: str, session_id: str) -> bool:
+        """Check if this query has been logged recently in this session.
+
+        Args:
+            query: The search query to check
+            session_id: Session identifier for isolation
+
+        Returns:
+            True if this is a duplicate (already logged recently), False otherwise
+        """
+        if not self._enabled:
+            return False
+
+        key = f"{session_id}:{query.lower().strip()}"
+        now = time.time()
+
+        # Clean expired entries
+        self._cache = {k: v for k, v in self._cache.items() if now - v < self._timeout}
+
+        if key in self._cache:
+            return True
+
+        self._cache[key] = now
+        return False
+
+    def clear(self) -> None:
+        """Clear all cached entries."""
+        self._cache.clear()
+
+    def set_enabled(self, enabled: bool) -> None:
+        """Enable or disable the cache (useful for testing).
+
+        Args:
+            enabled: Whether to enable deduplication caching
+        """
+        self._enabled = enabled
+
 
 # Profile cache for faster loading - uses OrderedDict for true LRU eviction
 _profile_cache: OrderedDict[str, str] = OrderedDict()
@@ -166,6 +233,57 @@ class Agent:
         # Store config for later use
         self.config = config
 
+        # Initialize knowledge gap cache for deduplication
+        self._gap_cache = KnowledgeGapCache(timeout_seconds=300.0)
+
+    # ── Context-gap tracking ─────────────────────────────────────────────────
+    # Tracks topics per user for which the KB returned no results, so they can
+    # be flagged for manual review or KB creation later.
+    _kb_gaps: Dict[str, Set[str]] = {}
+    _knowledge_gap_cache_enabled: bool = True  # Test hook to disable caching
+
+    def _record_kb_gap(self, user_id: str, topic: str, skip_cache: bool = False) -> bool:
+        """Record a knowledge-base gap topic for a user.
+
+        Args:
+            user_id: User identifier
+            topic: The topic/query that yielded no results
+            skip_cache: If True, bypass deduplication cache
+
+        Returns:
+            True if gap was recorded, False if duplicate (not recorded)
+        """
+        # Check deduplication cache unless skipped
+        if not skip_cache and hasattr(self, '_gap_cache'):
+            if self._gap_cache.is_duplicate(topic, user_id):
+                logger.debug(f"KB gap duplicate suppressed for user '{user_id}': {topic[:60]}")
+                return False
+
+        if user_id not in self._kb_gaps:
+            self._kb_gaps[user_id] = set()
+        self._kb_gaps[user_id].add(topic[:120])  # cap length
+        logger.debug(f"KB gap recorded for user '{user_id}': {topic[:60]}")
+        return True
+
+    def get_kb_gaps(self, user_id: str) -> List[str]:
+        """Return accumulated KB-gap topics for a user (useful for diagnostics)."""
+        return list(self._kb_gaps.get(user_id, set()))
+
+    def clear_gap_cache(self) -> None:
+        """Clear the gap deduplication cache (useful for testing)."""
+        if hasattr(self, '_gap_cache'):
+            self._gap_cache.clear()
+
+    def set_gap_cache_enabled(self, enabled: bool) -> None:
+        """Enable or disable gap cache (test hook).
+
+        Args:
+            enabled: Whether to enable deduplication caching
+        """
+        self._knowledge_gap_cache_enabled = enabled
+        if hasattr(self, '_gap_cache'):
+            self._gap_cache.set_enabled(enabled)
+
     async def _load_system_prompt(self) -> str:
         """Lazy load system prompt with async file I/O."""
         if self._system_prompt_loaded:
@@ -231,7 +349,34 @@ class Agent:
                 self._provider_name = "ollama"
         return self._provider
 
-    def _search_knowledge_context(self, message: str, user_id: str, max_results: int = 3) -> str:
+    def _extract_suggested_topics(self, message: str) -> List[str]:
+        """Extract suggested topics from a message for knowledge gap guidance.
+
+        Args:
+            message: The user's message to analyze
+
+        Returns:
+            List of suggested topic keywords (words > 3 chars, bigrams)
+        """
+        cleaned = re.sub(r'[^\w\s]', ' ', message.lower())
+        words = [w for w in cleaned.split() if len(w) > 3]
+
+        topics = words[:5]  # Top single words
+
+        # Add bigrams for more context
+        if len(words) >= 2:
+            bigrams = [f"{words[i]} {words[i+1]}" for i in range(min(len(words) - 1, 3))]
+            topics.extend(bigrams)
+
+        return list(dict.fromkeys(topics))  # Remove duplicates, preserve order
+
+    def _search_knowledge_context(
+        self,
+        message: str,
+        user_id: str,
+        max_results: int = 3,
+        return_structured: bool = False
+    ) -> Union[str, KnowledgeSearchResult]:
         """Auto-search the knowledge base for context relevant to message.
 
         Uses a multi-strategy search:
@@ -239,20 +384,31 @@ class Agent:
         2. Searches using the full message (FTS5 ranked)
         3. Falls back to bigram + keyword OR-query for fuzzy matching
 
+        When both strategies return nothing the topic is recorded as a KB gap
+        so it can be flagged for manual review or KB-entry creation.
+
         Args:
             message: The user's message to extract search terms from
             user_id: User ID for per-user knowledge isolation
             max_results: Maximum notes to retrieve (default: 3)
+            return_structured: If True, return KnowledgeSearchResult dataclass.
+                             If False (default), return context string for backward compatibility.
 
         Returns:
-            Formatted '## Relevant Knowledge' context block, or '' if nothing found.
+            Formatted context string (default) or KnowledgeSearchResult (if structured=True).
+            For empty results with structured=True, returns contextual guidance including
+            suggested topics and a pointer to write_to_knowledge().
         """
-        try:
-            search_terms = []
+        metadata = {
+            "query": message[:200],
+            "user_id": user_id,
+            "timestamp": datetime.utcnow().isoformat(),
+            "max_results": max_results
+        }
 
+        try:
             # Resolve explicit memory:// references
             memory_refs = re.findall(r'memory://([\w\-]+)', message)
-            search_terms.extend(memory_refs)
 
             # Clean the message for keyword extraction
             cleaned = re.sub(r'[^\w\s]', ' ', message.lower())
@@ -271,8 +427,40 @@ class Agent:
                     notes = search_notes(query, user_id, limit=max_results)
 
             if not notes and not memory_refs:
-                return ""
+                # Record gap so the agent can suggest KB creation
+                gap_logged = self._record_kb_gap(user_id, message[:120])
+                suggested_topics = self._extract_suggested_topics(message)
 
+                # Build contextual guidance for empty results
+                guidance_lines = [
+                    "## Knowledge Base Status",
+                    f"\nNo existing knowledge entries found for your query.",
+                    f"\n**Suggested topics to explore:**",
+                ]
+                for topic in suggested_topics[:5]:
+                    guidance_lines.append(f"- {topic}")
+
+                guidance_lines.extend([
+                    "\n**You can:**",
+                    f"1. Create a new knowledge entry: `write_to_knowledge(title='Your Topic', content='Details...')`",
+                    f"2. Browse existing entries: `list_knowledge()`",
+                    f"3. Try different keywords in your search",
+                    "\n---\n"
+                ])
+
+                context = "\n".join(guidance_lines)
+
+                result = KnowledgeSearchResult(
+                    context=context,
+                    has_results=False,
+                    suggested_topics=suggested_topics,
+                    gap_logged=gap_logged,
+                    metadata=metadata
+                )
+
+                return result if return_structured else ""
+
+            # Build context from found notes
             context_lines = ["## Relevant Knowledge"]
 
             for note in notes:
@@ -288,11 +476,29 @@ class Agent:
                     context_lines.append(full_context[:500] + "..." if len(full_context) > 500 else full_context)
 
             context_lines.append("\n---\n")
-            return "\n".join(context_lines)
+            context = "\n".join(context_lines)
+
+            result = KnowledgeSearchResult(
+                context=context,
+                has_results=True,
+                suggested_topics=[],
+                gap_logged=False,
+                metadata={**metadata, "results_count": len(notes)}
+            )
+
+            return result if return_structured else context
 
         except Exception as e:
             logger.error(f"Error searching knowledge: {e}")
-            return ""
+            metadata["error"] = str(e)
+            result = KnowledgeSearchResult(
+                context="",
+                has_results=False,
+                suggested_topics=[],
+                gap_logged=False,
+                metadata=metadata
+            )
+            return result if return_structured else ""
 
     async def close(self):
         for mem in self._memories.values():
@@ -305,16 +511,114 @@ class Agent:
     async def __aexit__(self, *args):
         await self.close()
 
+    # ── Browse-failure alternative-source suggestions ─────────────────────────
+    # Simple heuristics for proposing backup sources when browse() returns an error.
+    _BROWSE_ALTERNATIVES: Dict[str, str] = {
+        "wikipedia": "Try: https://en.wikipedia.org/wiki/{topic}",
+        "github": "Try the GitHub API: https://api.github.com/search/repositories?q={topic}",
+        "docs": "Try searching documentation via Google: https://www.google.com/search?q=site:docs+{topic}",
+        "default": "You can try: DuckDuckGo (https://duckduckgo.com/?q={topic}), Archive (https://web.archive.org/), or a different mirror.",
+    }
+
+    @staticmethod
+    def _detect_browse_failure(tool_result: str) -> bool:
+        """Return True when a tool result string signals a web-browse failure."""
+        failure_markers = (
+            "Error browsing",
+            "Error: Connection",
+            "Error: timed out",
+            "ConnectionError",
+            "HTTPError",
+            "SSLError",
+            "[Errno",
+            "Failed to fetch",
+            "status code 4",
+            "status code 5",
+        )
+        return any(m.lower() in tool_result.lower() for m in failure_markers)
+
+    @staticmethod
+    def _browse_alternative_hint(url: str, user_message: str) -> str:
+        """Generate an alternative-source suggestion for a failed browse."""
+        # Extract a simple topic from the URL or user message
+        topic = re.sub(r'https?://[^/]*', '', url).strip('/').replace('-', '+').replace('_', '+')[:60]
+        if not topic:
+            # Fall back to first 4 meaningful words from the user message
+            topic = '+'.join(
+                w for w in re.sub(r'[^\w\s]', '', user_message).split() if len(w) > 2
+            )[:60]
+        hint = Agent._BROWSE_ALTERNATIVES["default"].format(topic=topic)
+        return f"\n\n[Web-browsing failed. Alternative sources you could try: {hint}]"
+
+    # ── Empty-response recovery ───────────────────────────────────────────────
+
+    @staticmethod
+    def _is_empty_response(text: str) -> bool:
+        """Return True when the LLM returned a blank or whitespace-only response."""
+        return not text or not text.strip()
+
+    async def _recover_empty_response(
+        self,
+        messages: list,
+        user_message: str,
+        user_id: str,
+        had_kb_results: bool,
+    ) -> str:
+        """Attempt to recover from an empty LLM response.
+
+        Strategy:
+        1. Re-prompt the model with an explicit non-empty instruction.
+        2. If the KB had no results, append a suggestion to create a KB entry.
+        3. Return a graceful fallback string if the second attempt also fails.
+        """
+        logger.warning("Empty LLM response detected — attempting recovery.")
+
+        recovery_prompt = (
+            "Your previous response was empty. "
+            "Please provide a helpful, non-empty answer to the user's request."
+        )
+        recovery_messages = messages + [
+            {"role": "assistant", "content": ""},
+            {"role": "user", "content": recovery_prompt},
+        ]
+
+        try:
+            recovered, _ = await self.provider.chat(recovery_messages, self.model)
+            if not self._is_empty_response(recovered):
+                logger.info("Empty-response recovery succeeded.")
+                return recovered
+        except Exception as e:
+            logger.error(f"Recovery LLM call failed: {e}")
+
+        # Build a meaningful fallback
+        fallback_parts = [
+            "I'm sorry — I wasn't able to generate a useful response right now."
+        ]
+        if not had_kb_results:
+            fallback_parts.append(
+                f"\n\nI also noticed my knowledge base has no entries related to your query. "
+                f"You can add information with:\n"
+                f"  `write_to_knowledge(title=\"<topic>\", content=\"<details>\")`"
+            )
+        return " ".join(fallback_parts)
+
+    # ── Main think() ─────────────────────────────────────────────────────────
+
     async def think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> str:
         """Process a user message and return the agent's response.
 
         _depth tracks sub-agent delegation depth — prevents infinite loops.
+
+        Robustness enhancements (v2):
+        - Empty/blank responses trigger a self-repair call or KB-creation nudge.
+        - Browse-failure tool results get an alternative-source hint appended.
+        - KB gaps are tracked so repeated searches don't re-surface the same error.
         """
         # Agent Pipeline Integration: Loop prevention
         if _depth > 10:
             logger.warning(f"Max delegation depth reached ({_depth}). Preventing potential infinite loop.")
             return "I've reached the maximum delegation depth. Let me handle this request directly."
-        
+
         # Medic Agent: Check loop prevention before processing
         try:
             from myclaw.agents.medic_agent import prevent_infinite_loop
@@ -324,15 +628,14 @@ class Agent:
                 return "I'm detecting repeated patterns in the request. Let me break out of the loop and handle this directly."
         except Exception:
             pass
-        
+
         mem = await self._get_memory(user_id)
         await mem.add("user", user_message)
 
         trigger_hook("on_session_start", user_id, self.name)
 
         history = await mem.get_history()
-        message_count_start = len(history)
-        
+
         # Optimization #4: Proactive skill pre-loading
         task = asyncio.create_task(
             self._skill_preloader.predict_and_preload(history, user_message)
@@ -353,8 +656,10 @@ class Agent:
             for m in to_summarize:
                 summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
             summary_prompt = "".join(summary_parts)
-            summary_msgs = [{"role": "system", "content": "You summarize conversations concisely."}, 
-                          {"role": "user", "content": summary_prompt}]
+            summary_msgs = [
+                {"role": "system", "content": "You summarize conversations concisely."},
+                {"role": "user", "content": summary_prompt},
+            ]
             try:
                 summary_text, _ = await self.provider.chat(summary_msgs, self.model)
                 original_len = sum(len(m['content']) for m in to_summarize)
@@ -368,12 +673,36 @@ class Agent:
 
         # Search knowledge base for relevant context
         knowledge_context = self._search_knowledge_context(user_message, user_id)
+        had_kb_results = bool(knowledge_context)
+
+        # If KB gap exists and no context, hint the agent about KB creation and log the gap
+        kb_gap_hint = ""
+        if not had_kb_results and self._kb_gaps.get(user_id):
+            last_gap = next(iter(self._kb_gaps[user_id]))
+            kb_gap_hint = (
+                f"\n\n[Note: The knowledge base has no entries related to '{last_gap[:60]}'. "
+                "Consider using write_to_knowledge() to store useful information for future queries.]"
+            )
+
+            # Emit structured log entry for knowledge gap (with deduplication)
+            if not self._gap_cache.is_duplicate(last_gap, user_id):
+                kb_gap_logger.info({
+                    "event": "knowledge_gap_detected",
+                    "query": last_gap,
+                    "description": "No knowledge base entries found for query",
+                    "user_id": user_id,
+                    "session_context": "System will preserve context to avoid redundant empty searches in this session",
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "recommendation": "Use write_to_knowledge() to create a new entry for future queries"
+                })
 
         # Build system prompt with knowledge context (async load to avoid blocking)
         system_prompt = await self._load_system_prompt()
         system_content = system_prompt
         if knowledge_context:
             system_content = f"{system_prompt}\n\n{knowledge_context}"
+        if kb_gap_hint:
+            system_content = f"{system_content}{kb_gap_hint}"
 
         messages = [{"role": "system", "content": system_content}] + history
 
@@ -382,9 +711,10 @@ class Agent:
         for result in hook_results:
             if result and isinstance(result, list):
                 messages = result  # Use modified messages from hook
-                logger.debug(f"pre_llm_call hook modified messages")
+                logger.debug("pre_llm_call hook modified messages")
 
         try:
+            import httpx
             response, tool_calls = await self.provider.chat(messages, self.model)
         except httpx.TimeoutException as e:
             logger.error(f"LLM provider timeout: {e}")
@@ -408,24 +738,31 @@ class Agent:
         if tool_calls:
             # Determine if we can use parallel execution
             independent_tools = [tc for tc in tool_calls if is_tool_independent(tc.get("function", {}).get("name", ""))]
-            
+
             if len(independent_tools) > 1:
                 # Use parallel execution for independent tools
                 logger.info(f"Executing {len(independent_tools)} tools in parallel")
                 executor = get_parallel_executor()
                 exec_results = await executor.execute_tools(independent_tools, user_id)
-                
-                # Format results for the LLM
+
+                # Format results for the LLM; annotate browse failures
                 result_parts = []
                 for r in exec_results:
                     if r["success"]:
-                        result_parts.append(f"Tool {r['tool_name']} returned: {r['result']}")
+                        tool_output = r['result']
+                        if r['tool_name'] == 'browse' and self._detect_browse_failure(tool_output):
+                            url_match = re.search(r'https?://\S+', tool_output)
+                            url = url_match.group(0) if url_match else ""
+                            tool_output += self._browse_alternative_hint(url, user_message)
+                        result_parts.append(f"Tool {r['tool_name']} returned: {tool_output}")
                     else:
                         result_parts.append(f"Tool {r['tool_name']} error: {r['error']}")
-                
+
                 results = result_parts
             else:
                 # Fall back to sequential execution for single tool or dependent tools
+                import time
+                import inspect
                 results = []
                 for tc in tool_calls:
                     tool_name = tc.get("function", {}).get("name", "")
@@ -439,7 +776,6 @@ class Agent:
                     if tool_name == "delegate":
                         args["_depth"] = _depth + 1
 
-                    import time
                     start_time = time.time()
                     logger.info(f"[AUDIT] Tool execution started: {tool_name} with args: {args}")
 
@@ -449,8 +785,27 @@ class Agent:
                             result = await func(**args)
                         else:
                             result = await asyncio.to_thread(func, **args)
-                        await mem.add("tool", f"Tool {tool_name} returned: {result}")
-                        results.append(str(result))
+
+                        tool_output = str(result)
+
+                        # Error Handling Enhancement 1: browse failure → suggest alternatives
+                        if tool_name == "browse" and self._detect_browse_failure(tool_output):
+                            url = args.get("url", "")
+                            tool_output += self._browse_alternative_hint(url, user_message)
+                            logger.info(f"Browse failure detected for {url}; alternative hint appended.")
+
+                        # Error Handling Enhancement 2: empty KB search → nudge KB creation
+                        if tool_name == "search_knowledge":
+                            if "No results found" in tool_output or "Error" in tool_output:
+                                query = args.get("query", user_message[:60])
+                                self._record_kb_gap(user_id, query)
+                                tool_output += (
+                                    f"\n\n[Tip: No knowledge base entries matched '{query}'. "
+                                    "Use write_to_knowledge() to persist useful information for future use.]"
+                                )
+
+                        await mem.add("tool", f"Tool {tool_name} returned: {tool_output}")
+                        results.append(tool_output)
                         duration = time.time() - start_time
                         logger.info(f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)")
                     except Exception as e:
@@ -460,36 +815,49 @@ class Agent:
 
             tool_result_msg = "\n".join(results)
             followup = messages + [{"role": "tool", "content": tool_result_msg}]
-            
+
             # Trigger pre_llm_call hooks for followup
             hook_results = trigger_hook("pre_llm_call", followup, self.model)
             for result in hook_results:
                 if result and isinstance(result, list):
                     followup = result
-            
+
             try:
+                import httpx as _httpx  # local alias to avoid shadowing outer scope
                 final_response, _ = await self.provider.chat(followup, self.model)
-                
+
                 # Trigger post_llm_call hooks for followup
                 trigger_hook("post_llm_call", final_response, None)
-                
+
+                # Empty-response recovery after tool-use followup
+                if self._is_empty_response(final_response):
+                    final_response = await self._recover_empty_response(
+                        followup, user_message, user_id, had_kb_results
+                    )
+
                 await mem.add("assistant", final_response)
-                
+
                 # Trigger on_session_end hook
                 message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
                 trigger_hook("on_session_end", user_id, self.name, message_count)
-                
+
                 return final_response
             except Exception as e:
                 logger.error(f"LLM second call error: {e}")
                 return f"Tool executed but error getting response: {e}"
 
+        # ── No tool calls: validate response is non-empty ────────────────────
+        if self._is_empty_response(response):
+            response = await self._recover_empty_response(
+                messages, user_message, user_id, had_kb_results
+            )
+
         await mem.add("assistant", response)
-        
+
         # Trigger on_session_end hook
         message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
         trigger_hook("on_session_end", user_id, self.name, message_count)
-        
+
         return response
 
     async def stream_think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> AsyncIterator[str]:
@@ -499,6 +867,10 @@ class Agent:
         as they arrive from the provider, enabling real-time display.
 
         _depth tracks sub-agent delegation depth — prevents infinite loops.
+
+        Robustness enhancements (v2):
+        - KB gaps are tracked and a hint is injected into the system prompt.
+        - If the stream produces no output, a fallback message is yielded.
 
         Yields:
             Content chunks as they arrive from the LLM provider.
@@ -523,8 +895,10 @@ class Agent:
             for m in to_summarize:
                 summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
             summary_prompt = "".join(summary_parts)
-            summary_msgs = [{"role": "system", "content": "You summarize conversations concisely."}, 
-                          {"role": "user", "content": summary_prompt}]
+            summary_msgs = [
+                {"role": "system", "content": "You summarize conversations concisely."},
+                {"role": "user", "content": summary_prompt},
+            ]
             try:
                 summary_text, _ = await self.provider.chat(summary_msgs, self.model)
                 history = [{"role": "system", "content": f"Previous conversation summary: {summary_text}"}] + recent
@@ -534,12 +908,24 @@ class Agent:
 
         # Search knowledge base for relevant context
         knowledge_context = self._search_knowledge_context(user_message, user_id)
+        had_kb_results = bool(knowledge_context)
+
+        # KB gap hint for streaming mode
+        kb_gap_hint = ""
+        if not had_kb_results and self._kb_gaps.get(user_id):
+            last_gap = next(iter(self._kb_gaps[user_id]))
+            kb_gap_hint = (
+                f"\n\n[Note: The knowledge base has no entries related to '{last_gap[:60]}'. "
+                "Consider using write_to_knowledge() to store useful information for future queries.]"
+            )
 
         # Build system prompt with knowledge context (async load to avoid blocking)
         system_prompt = await self._load_system_prompt()
         system_content = system_prompt
         if knowledge_context:
             system_content = f"{system_prompt}\n\n{knowledge_context}"
+        if kb_gap_hint:
+            system_content = f"{system_content}{kb_gap_hint}"
 
         messages = [{"role": "system", "content": system_content}] + history
 
@@ -573,14 +959,26 @@ class Agent:
 
         full_response = "".join(response_parts)
 
+        # Empty-response recovery for streaming: emit fallback if nothing arrived
+        if self._is_empty_response(full_response):
+            logger.warning("Streaming produced empty response — emitting fallback.")
+            fallback = "I'm sorry — I wasn't able to generate a response."
+            if not had_kb_results:
+                fallback += (
+                    " My knowledge base has no entries on this topic. "
+                    "You can add information with: write_to_knowledge(title=\"<topic>\", content=\"<details>\")"
+                )
+            yield fallback
+            full_response = fallback
+
         # Trigger post_llm_call hooks
         trigger_hook("post_llm_call", full_response, tool_calls)
 
         # Note: Tool calls are not supported in streaming mode yet
         # The full response is returned as chunks
         await mem.add("assistant", full_response)
-        
+
         # Trigger on_session_end hook
         trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
-        
+
         yield "[TOOL_CALLS_NONE]"  # Signal that streaming is complete
