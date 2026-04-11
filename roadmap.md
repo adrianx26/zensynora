@@ -1,7 +1,7 @@
 # 🗺️ ZenSynora (MyClaw) – ROADMAP 2026-2027
 
-**Version:** 1.1 (April 2026)  
-**Author:** Adrian (lead developer)  
+**Version:** 0.4 (April 2026)  
+**Author:** Adrian Petrescu (lead developer)  
 **Status:** Active – in progress
 
 This document describes the strategic direction of the **ZenSynora** (MyClaw) project for the next 6-12 months.  
@@ -28,27 +28,42 @@ To become the **most complete, easy-to-use, and secure open-source personal AI a
 | **8**    | **Improved CLI + VS Code Ext.**      | Advanced commands + VS Code extension                                            | Developers want the agent right inside their editor         | Low              | ★★★                 | ✅ **Completed**| Q1 2027      |
 | **9**    | **One-click Self-hosting**           | Complete Docker Compose + VPS script                                             | Users want a 24/7 solution that is easy to run              | Low              | ★★★★                | Planned         | Q1 2027      |
 | **10**   | **Evaluation Framework**             | Automated task benchmarking + comparisons with other frameworks                  | Transparency and credibility                                | Medium           | ★★★                 | Planned         | Q2 2027      |
+| **11**   | **Secure Secret Manager**            | Encrypted local vault for API keys and sensitive tokens                          | Hardening our "Privacy-First" promise (no plain-text keys)  | Low-Medium       | ★★★★                | **Planned**     | May 2026     |
+| **12**   | **Self-Directed Learning**           | Auto-filling Knowledge Gaps during idle time                                     | The agent proactively improves its own database             | Medium           | ★★★★                | **Planned**     | June 2026    |
+| **13**   | **Hardware Awareness**               | System hardware detection (CPU/GPU/RAM) for performance optimization             | Suggesting best models based on local hardware resources    | Low              | ★★★★                | **Planned**     | July 2026    |
+| **14**   | **LLM Capability Library**           | Database of LLM benchmarks and technical limits (context window, tool support)   | Intelligent routing based on task requirements vs LLM power| Medium           | ★★★★                | **Planned**     | July 2026    |
+| **15**   | **SSH Remote Access**                | Secure execution of tools/commands on remote servers via SSH                     | Managing remote infra directly from the agent               | Medium           | ★★★★★               | **Planned**     | Aug 2026     |
 
 ---
 
 ## 🧩 Development Phases (Milestones)
 
 ### **Phase 1 – Core Upgrade (May – June 2026)**
-- Full MCP
-- Simple Web UI (MVP)
-- **Release:** v1.5.0 "MCP Ready"
+- ✅ **Full MCP**
+- ✅ **Simple Web UI (MVP)**
+- **Release:** v0.4 "MCP Ready"
+
+### **Phase 1.5 – Intelligence & Hardening (June 2026)**
+- Secure Secret Manager (Encrypted Key Vault)
+- Automatic Knowledge Gap Filling (Idle-time Research)
+- LLM Capability & Benchmark Library (Intelligent Routing)
+- **Release:** v0.5 "Hardened"
 
 ### **Phase 2 – Security & Observability (July – Sept 2026)**
 - Docker Sandbox
-- Observability + Tracing
+- Hardware Awareness (Auto-optimization for CPU/GPU)
+- SSH Remote Connection Implementation
+- Observability + Tracing (Langfuse Integration)
 - AGPL-3.0 License + Dual Licensing preparation
 - **Release:** v2.0.0 "Production Ready"
 
 ### **Phase 3 – Ecosystem & Experience (Oct 2026 – March 2027)**
 - Voice / Multi-modal
 - Agent Hub + Marketplace
-- CLI - Advanced commands 
+- ✅ **CLI - Advanced commands**
 - VS Code Extension
+- Visual Swarm Debugger (Web UI Graph)
+- Desktop App Wrapper (Tauri/Electron)
 - One-click self-hosting
 - Hybrid Memory
 - **Release:** v2.5.0 "Community Edition"
