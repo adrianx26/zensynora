@@ -138,6 +138,12 @@ ENV_OVERRIDES = {
     "knowledge.auto_extract": "MYCLAW_KNOWLEDGE_AUTO_EXTRACT",
     # New Tech
     "newtech.github_token": "MYCLAW_GITHUB_TOKEN",
+    # Intelligence
+    "intelligence.research_enabled": "MYCLAW_RESEARCH_ENABLED",
+    "intelligence.research_interval_hours": "MYCLAW_RESEARCH_INTERVAL",
+    "intelligence.research_idle_minutes": "MYCLAW_RESEARCH_IDLE",
+    "intelligence.intelligent_routing": "MYCLAW_INTELLIGENT_ROUTING",
+    "intelligence.benchmarking_enabled": "MYCLAW_BENCHMARKING_ENABLED",
 }
 
 
@@ -388,6 +394,16 @@ class MCPConfig(BaseModel):
     servers: dict[str, MCPServerConfig] = {}
 
 
+class IntelligenceConfig(BaseModel):
+    """Configuration for AI intelligence features (Research, Routing, Benchmarking)."""
+    research_enabled: bool = True
+    research_interval_hours: int = 6
+    research_idle_minutes: int = 15
+    intelligent_routing: bool = False
+    benchmarking_enabled: bool = False
+    benchmark_interval_days: int = 7
+
+
 class AppConfig(BaseModel):
     providers: ProvidersConfig = ProvidersConfig()
     agents:    AgentsConfig    = AgentsConfig()
@@ -402,6 +418,7 @@ class AppConfig(BaseModel):
     skill_adapter: SkillAdapterConfig = SkillAdapterConfig()
     backends:  BackendConfig   = BackendConfig()
     mcp:       MCPConfig       = MCPConfig()
+    intelligence: IntelligenceConfig = IntelligenceConfig()
 
     def get(self, key: str, default=None):
         """Dict-style .get() for backward compatibility."""

@@ -96,6 +96,16 @@ def agent():
             mcp_manager = MCPClientManager(config.model_dump())
             await mcp_manager.start_all()
 
+        # ── Start Background Research Scheduler ───────────────────────────────────
+        if hasattr(config.intelligence, 'research_enabled') and config.intelligence.research_enabled:
+            from myclaw.gateway import _run_research_if_idle
+            from apscheduler.schedulers.background import BackgroundScheduler
+            scheduler = BackgroundScheduler()
+            interval = config.intelligence.research_interval_hours
+            scheduler.add_job(_run_research_if_idle, 'interval', hours=interval)
+            scheduler.start()
+            logger.info(f"Background Researcher active (every {interval}h)")
+
         async with registry["default"]:
             print(f"💬 MyClaw console — agents: {agent_names}")
             print("   Use @agentname to address a specific agent. Type 'exit' to quit.")
@@ -290,6 +300,27 @@ def webui(port):
     import uvicorn
     click.echo(f"Starting ZenSynora Web UI Backend on port {port}...")
     uvicorn.run("myclaw.web.api:app", host="0.0.0.0", port=port, reload=True)
+
+
+@cli.command()
+@click.option('--model', help='Specific model to benchmark')
+@click.option('--provider', help='Specific provider to benchmark')
+def benchmark(model, provider):
+    """Run performance benchmarks on configured LLMs"""
+    from myclaw.benchmark_runner import run_all_benchmarks, BenchmarkRunner
+    from myclaw.config import load_config
+    import asyncio
+
+    if model:
+        config = load_config()
+        runner = BenchmarkRunner(config)
+        click.echo(f"🚀 Benchmarking {model}...")
+        asyncio.run(runner.run_model_benchmark(model, provider))
+        click.echo("\n📊 Results:")
+        click.echo(runner.get_comparison_table())
+    else:
+        click.echo("🚀 Running full benchmark suite...")
+        asyncio.run(run_all_benchmarks())
 
 if __name__ == "__main__":
     cli()

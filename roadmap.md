@@ -44,7 +44,7 @@ To become the **most complete, easy-to-use, and secure open-source personal AI a
 - **Release:** v0.4 "MCP Ready"
 
 ### **Phase 1.5 – Intelligence & Hardening (June 2026)**
-- Secure Secret Manager (Encrypted Key Vault)
+
 - Automatic Knowledge Gap Filling (Idle-time Research)
 - LLM Capability & Benchmark Library (Intelligent Routing)
 - **Release:** v0.5 "Hardened"
@@ -55,9 +55,9 @@ To become the **most complete, easy-to-use, and secure open-source personal AI a
 - SSH Remote Connection Implementation
 - Observability + Tracing (Langfuse Integration)
 - AGPL-3.0 License + Dual Licensing preparation
-- **Release:** v2.0.0 "Production Ready"
+- **Release:** v2v1.0.0 "Production Ready"
 
-### **Phase 3 – Ecosystem & Experience (Oct 2026 – March 2027)**
+### **Phase 2.1 – Ecosystem & Experience (Oct 2026 – March 2027)**
 - Voice / Multi-modal
 - Agent Hub + Marketplace
 - ✅ **CLI - Advanced commands**
@@ -66,9 +66,10 @@ To become the **most complete, easy-to-use, and secure open-source personal AI a
 - Desktop App Wrapper (Tauri/Electron)
 - One-click self-hosting
 - Hybrid Memory
+- Secure Secret Manager (Encrypted Key Vault)
 - **Release:** v2.5.0 "Community Edition"
 
-### **Phase 4 – Monetization & Enterprise (2027)**
+### **Phase 2.2 – Monetization & Enterprise (2027)**
 - Paid commercial license
 - Enterprise support (SLA, on-prem, etc.)
 - Public evaluation suite

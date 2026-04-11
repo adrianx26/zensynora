@@ -30,7 +30,32 @@ from . import tools as tool_module
 from .backends import discover_backends, get_default_backend
 
 import asyncio
+import time
+import logging
 from concurrent.futures import ThreadPoolExecutor
+from apscheduler.schedulers.background import BackgroundScheduler
+from .knowledge.researcher import start_researcher_job
+from .agent import get_last_active_time
+from .config import load_config
+
+logger = logging.getLogger(__name__)
+
+def _run_research_if_idle():
+    """Background task wrapper: only runs research if system is idle."""
+    config = load_config()
+    if not getattr(config.intelligence, 'research_enabled', True):
+        return
+
+    idle_threshold = getattr(config.intelligence, 'research_idle_minutes', 15) * 60
+    last_active = get_last_active_time()
+    idle_duration = time.time() - last_active
+
+    if idle_duration >= idle_threshold:
+        logger.info(f"System idle for {idle_duration/60:.1f} mins. Starting research batch.")
+        # Use a new event loop for this background thread
+        asyncio.run(start_researcher_job())
+    else:
+        logger.debug(f"System busy (last active {idle_duration/60:.1f} mins ago). Skipping research.")
 
 def start(config):
     """Build agent registry, initialize tools, and start the active channel."""
@@ -78,6 +103,14 @@ def start(config):
             from .mcp import MCPClientManager
             mcp_manager = MCPClientManager(config.model_dump())
             loop.create_task(mcp_manager.start_all())
+
+        # ── Start Background Research Scheduler ───────────────────────────────────
+        if config.intelligence.research_enabled:
+            scheduler = BackgroundScheduler()
+            interval = config.intelligence.research_interval_hours
+            scheduler.add_job(_run_research_if_idle, 'interval', hours=interval)
+            scheduler.start()
+            logger.info(f"Knowledge Researcher scheduled every {interval} hours")
 
         # ── Start channel ─────────────────────────────────────────────────────────
         if config.channels.telegram.enabled:

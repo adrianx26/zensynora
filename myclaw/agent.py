@@ -52,6 +52,14 @@ from rich.console import Console
 logger = logging.getLogger(__name__)
 kb_gap_logger = logging.getLogger("myclaw.knowledge.gaps")
 
+GAP_FILE = Path.home() / ".myclaw" / "knowledge_gaps.jsonl"
+_LAST_ACTIVE_TIME = time.time()
+
+
+def get_last_active_time() -> float:
+    """Returns the globally tracked last activity timestamp."""
+    return _LAST_ACTIVE_TIME
+
 
 @dataclass
 class KnowledgeSearchResult:
@@ -350,6 +358,20 @@ class Agent:
             return self._system_prompt
         return self._custom_system_prompt or SYSTEM_PROMPT
 
+    def _analyze_complexity(self, message: str) -> str:
+        """Simple heuristic to determine task complexity."""
+        high_complexity_keywords = [
+            'implement', 'debug', 'fix', 'refactor', 'architect',
+            'analyze', 'compare', 'optimize', 'write a program',
+            'complex', 'threading', 'asyncio', 'database schema'
+        ]
+        message_lower = message.lower()
+        
+        # Check for length and keywords
+        if len(message) > 500 or any(kw in message_lower for kw in high_complexity_keywords):
+            return "high"
+        return "standard"
+
     async def _get_memory(self, user_id: str) -> Memory:
         if user_id not in self._memories:
             mem = Memory(user_id=user_id)
@@ -633,19 +655,22 @@ class Agent:
 
     async def think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> str:
         """Process a user message and return the agent's response.
-
-        _depth tracks sub-agent delegation depth — prevents infinite loops.
-
-        Robustness enhancements (v2):
-        - Empty/blank responses trigger a self-repair call or KB-creation nudge.
-        - Browse-failure tool results get an alternative-source hint appended.
-        - KB gaps are tracked so repeated searches don't re-surface the same error.
         
-        Task Timer Integration (v3):
-        - Starts a 300-second timer when user question is received
-        - Emits status updates at 60s, 120s, 180s, 240s thresholds
-        - Automatically marks task as failed at 300s with logging
+        Intelligent Routing: choosing model based on task complexity.
         """
+        global _LAST_ACTIVE_TIME
+        _LAST_ACTIVE_TIME = time.time()
+
+        # Intelligent Routing: Choose model based on complexity if enabled
+        if getattr(self.config.intelligence, 'intelligent_routing', False):
+            complexity = self._analyze_complexity(user_message)
+            if complexity == "high":
+                from .llm_library import get_optimal_model
+                optimal = get_optimal_model(tier="premium")
+                if optimal != self.model:
+                    logger.info(f"Intelligent Routing: Upgrading to {optimal} for high complexity task")
+                    self.model = optimal
+
         import uuid
         
         # Generate unique task ID for this request
@@ -743,7 +768,7 @@ class Agent:
 
             # Emit structured log entry for knowledge gap (with deduplication)
             if not self._gap_cache.is_duplicate(last_gap, user_id):
-                kb_gap_logger.info({
+                gap_data = {
                     "event": "knowledge_gap_detected",
                     "query": last_gap,
                     "description": "No knowledge base entries found for query",
@@ -751,7 +776,16 @@ class Agent:
                     "session_context": "System will preserve context to avoid redundant empty searches in this session",
                     "timestamp": datetime.utcnow().isoformat(),
                     "recommendation": "Use write_to_knowledge() to create a new entry for future queries"
-                })
+                }
+                kb_gap_logger.info(gap_data)
+                
+                # Write to researchers JSONL file
+                try:
+                    GAP_FILE.parent.mkdir(parents=True, exist_ok=True)
+                    with open(GAP_FILE, "a", encoding="utf-8") as f:
+                        f.write(json.dumps(gap_data) + "\n")
+                except Exception as e:
+                    logger.error(f"Failed to record gap to file: {e}")
 
         # Check if task has been cancelled due to timeout
         if self._current_task_id and not self._task_timer.is_task_active(self._current_task_id):
@@ -966,20 +1000,10 @@ class Agent:
         return response
 
     async def stream_think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> AsyncIterator[str]:
-        """Process a user message and yield response chunks in real-time.
-
-        This is a streaming version of think() that yields content chunks
-        as they arrive from the provider, enabling real-time display.
-
-        _depth tracks sub-agent delegation depth — prevents infinite loops.
-
-        Robustness enhancements (v2):
-        - KB gaps are tracked and a hint is injected into the system prompt.
-        - If the stream produces no output, a fallback message is yielded.
-
-        Yields:
-            Content chunks as they arrive from the LLM provider.
-        """
+        """Process a user message and yield response chunks in real-time."""
+        global _LAST_ACTIVE_TIME
+        _LAST_ACTIVE_TIME = time.time()
+        
         mem = await self._get_memory(user_id)
         await mem.add("user", user_message)
 

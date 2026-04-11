@@ -31,6 +31,9 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - **WhatsApp Gateway** — Full-featured WhatsApp Business Cloud API integration with webhook server, all commands, and agent routing
 - **Advanced Web Scraping** — Built-in integration with [Scrapling](https://github.com/D4Vinci/Scrapling) for anti-bot bypass and adaptive web scraping.
 - **SSH Deployment & Control** — Seamlessly deploy, configure, and communicate with the agent remotely over secure SSH connections.
+- **Intelligent LLM Routing** — Automatically upgrades to premium models for complex reasoning or coding tasks, optimizing for both performance and cost.
+- **Automated Knowledge Gap Filling** — Proactively identifies missing info in the KB and performs background web research using Scrapling during idle time.
+- **LLM Benchmarking Suite** — Built-in tools to benchmark latency, accuracy, and token usage of your local and cloud providers with `python cli.py benchmark`.
 
 ### Security
 - Command allowlist/blocklist for shell execution

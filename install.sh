@@ -326,6 +326,8 @@ make_dir "$HOME/.myclaw/tools"
 make_dir "$HOME/.myclaw/skills"
 make_dir "$HOME/.myclaw/backups"
 make_dir "$HOME/.myclaw/task_logs"
+make_dir "$HOME/.myclaw/benchmarks"
+make_dir "$HOME/.myclaw/newtech"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 8. OPTIONAL: systemd service
