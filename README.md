@@ -1,4 +1,9 @@
-# 🦞 MyClaw — Personal AI Agent
+# ZenSynora (MyClaw)
+
+**License:** AGPL-3.0 (open-source)  
+**Dual Licensing available** for commercial / enterprise use.
+
+Copyright © 2026 Adrian Petrescu. All rights reserved.
 
 A powerful personal AI agent that runs locally or in the cloud using various LLM providers, featuring Telegram and WhatsApp integration, persistent SQLite memory, multi-agent support, dynamic tool building, and task scheduling.
 
@@ -906,7 +911,7 @@ Contributions welcome! Please feel free to submit issues and pull requests.
 
 ## 📜 License
 
-MIT License — see LICENSE file for details.
+AGPL-3.0 License / Dual License — see LICENSE file for details.
 
 ---
 
