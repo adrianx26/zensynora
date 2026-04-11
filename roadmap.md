@@ -27,11 +27,11 @@ To become the **most complete, easy-to-use, and secure open-source personal AI a
 | **7**    | **Agent Hub + Marketplace**          | System for installing agents/community tools via CLI                             | Viral growth + community ecosystem                          | Low              | ★★★★ (viral)        | Planned         | Q4 2026      |
 | **8**    | **Improved CLI + VS Code Ext.**      | Advanced commands + VS Code extension                                            | Developers want the agent right inside their editor         | Low              | ★★★                 | ✅ **Completed**| Q1 2027      |
 | **9**    | **One-click Self-hosting**           | Complete Docker Compose + VPS script                                             | Users want a 24/7 solution that is easy to run              | Low              | ★★★★                | Planned         | Q1 2027      |
-| **10**   | **Evaluation Framework**             | Automated task benchmarking + comparisons with other frameworks                  | Transparency and credibility                                | Medium           | ★★★                 | Planned         | Q2 2027      |
+| **10**   | **Evaluation Framework**             | Automated task benchmarking + comparisons with other frameworks                  | Transparency and credibility                                | Medium           | ★★★                 | ✅ **Completed**| April 2026   |
 | **11**   | **Secure Secret Manager**            | Encrypted local vault for API keys and sensitive tokens                          | Hardening our "Privacy-First" promise (no plain-text keys)  | Low-Medium       | ★★★★                | **Planned**     | May 2026     |
-| **12**   | **Self-Directed Learning**           | Auto-filling Knowledge Gaps during idle time                                     | The agent proactively improves its own database             | Medium           | ★★★★                | **Planned**     | June 2026    |
+| **12**   | **Self-Directed Learning**           | Auto-filling Knowledge Gaps during idle time                                     | The agent proactively improves its own database             | Medium           | ★★★★                | ✅ **Completed**| April 2026   |
 | **13**   | **Hardware Awareness**               | System hardware detection (CPU/GPU/RAM) for performance optimization             | Suggesting best models based on local hardware resources    | Low              | ★★★★                | **Planned**     | July 2026    |
-| **14**   | **LLM Capability Library**           | Database of LLM benchmarks and technical limits (context window, tool support)   | Intelligent routing based on task requirements vs LLM power| Medium           | ★★★★                | **Planned**     | July 2026    |
+| **14**   | **LLM Capability Library**           | Database of LLM benchmarks and technical limits (context window, tool support)   | Intelligent routing based on task requirements vs LLM power| Medium           | ★★★★                | ✅ **Completed**| April 2026   |
 | **15**   | **SSH Remote Access**                | Secure execution of tools/commands on remote servers via SSH                     | Managing remote infra directly from the agent               | Medium           | ★★★★★               | **Planned**     | Aug 2026     |
 
 ---
@@ -44,9 +44,9 @@ To become the **most complete, easy-to-use, and secure open-source personal AI a
 - **Release:** v0.4 "MCP Ready"
 
 ### **Phase 1.5 – Intelligence & Hardening (June 2026)**
-
-- Automatic Knowledge Gap Filling (Idle-time Research)
-- LLM Capability & Benchmark Library (Intelligent Routing)
+- ✅ **Automatic Knowledge Gap Filling (Idle-time Research)**
+- ✅ **LLM Capability & Benchmark Library (Intelligent Routing)**
+- **Intelligent Routing Note:** This will only work if multiple models/providers are configured. If only one is available, it will default to that model regardless of task complexity.
 - **Release:** v0.5 "Hardened"
 
 ### **Phase 2 – Security & Observability (July – Sept 2026)**
