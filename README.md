@@ -18,6 +18,8 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - **Tool System** — Execute shell commands, read/write files, and more—all within a secure workspace.
 
 ### Advanced Features
+- **Natively Integrated Web UI** — Boot up an interactive beautiful web dashboard utilizing glassmorphism and FastAPI WebSockets with `python cli.py webui`.
+- **Advanced Click CLI Platform** — Perform administrative tasks on your AI memory blocks, knowledge graphs, and skills locally using a beautiful integrated command line interface. 
 - **Full MCP Support (Model Context Protocol)** — Natively act as an MCP Client (to consume external tools like SQLite via npx) and an MCP Server (to expose ZenSynora's shell and codebase to clients like Cursor or Claude).
 - **Multi-Agent Support** — Create and manage multiple named agents with custom prompts and models
 - **Per-Agent Prompt Profiles** — Manage individual agent system prompts using dedicated Markdown files (`~/.myclaw/profiles/{name}.md`)

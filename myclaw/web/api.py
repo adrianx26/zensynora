@@ -1,0 +1,59 @@
+from fastapi import FastAPI, WebSocket
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import asyncio
+import logging
+
+from myclaw.config import load_config
+from myclaw.tools import TOOLS
+
+logger = logging.getLogger(__name__)
+
+app = FastAPI(title="ZenSynora Web UI Backend", version="1.0.0")
+
+# Enable CORS for the Vite React server
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+class ChatMessage(BaseModel):
+    message: str
+    agent_name: str = "default"
+
+@app.get("/api/status")
+async def get_status():
+    return {"status": "online", "system": "ZenSynora Web UI"}
+
+@app.get("/api/agents")
+async def get_agents():
+    config = load_config()
+    agents = [{"name": "default", "model": config.model, "system_prompt": config.system_prompt}]
+    for na in config.agents.named:
+        agents.append({"name": na.name, "model": na.model, "system_prompt": na.system_prompt})
+    return {"agents": agents}
+
+@app.get("/api/skills")
+async def get_skills():
+    return {"skills": list(TOOLS.keys())}
+
+@app.websocket("/ws/chat/{agent_name}")
+async def chat_websocket(websocket: WebSocket, agent_name: str):
+    await websocket.accept()
+    # In a full production implementation, we would instantiate the requested agent here
+    # and hook into its think_stream() generator. For MVP, we will send a basic response mechanism.
+    try:
+        while True:
+            data = await websocket.receive_text()
+            logger.info(f"Received WS message for {agent_name}: {data}")
+            
+            # Simulated Agent Delay & Stream
+            await asyncio.sleep(0.5)
+            response = f"**{agent_name.capitalize()}**: I have received your message regarding '{data}'. This is currently a simulated response from the Web UI backend. Full integration with `Agent.think()` will be mapped here."
+            await websocket.send_text(response)
+    except Exception as e:
+        logger.error(f"WebSocket Error: {e}")
+        await websocket.close()
