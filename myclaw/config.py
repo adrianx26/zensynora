@@ -376,6 +376,18 @@ class BackendConfig(BaseModel):
     wsl2: dict = {"distro": "Ubuntu"}
 
 
+class MCPServerConfig(BaseModel):
+    command: str = ""
+    args: list[str] = []
+    env: dict = {}
+
+
+class MCPConfig(BaseModel):
+    enabled: bool = True
+    expose_server: bool = False
+    servers: dict[str, MCPServerConfig] = {}
+
+
 class AppConfig(BaseModel):
     providers: ProvidersConfig = ProvidersConfig()
     agents:    AgentsConfig    = AgentsConfig()
@@ -389,6 +401,7 @@ class AppConfig(BaseModel):
     newtech:   NewTechConfig   = NewTechConfig()
     skill_adapter: SkillAdapterConfig = SkillAdapterConfig()
     backends:  BackendConfig   = BackendConfig()
+    mcp:       MCPConfig       = MCPConfig()
 
     def get(self, key: str, default=None):
         """Dict-style .get() for backward compatibility."""

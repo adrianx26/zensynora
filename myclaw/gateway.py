@@ -73,6 +73,12 @@ def start(config):
         # Inject config into tools module (enables timeout configuration)
         tool_module.set_config(config)
 
+        # ── Start MCP Client ──────────────────────────────────────────────────────
+        if hasattr(config, 'mcp') and config.mcp.enabled:
+            from .mcp import MCPClientManager
+            mcp_manager = MCPClientManager(config.model_dump())
+            loop.create_task(mcp_manager.start_all())
+
         # ── Start channel ─────────────────────────────────────────────────────────
         if config.channels.telegram.enabled:
             TelegramChannel(config, registry).run()

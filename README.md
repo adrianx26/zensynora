@@ -18,6 +18,7 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - **Tool System** — Execute shell commands, read/write files, and more—all within a secure workspace.
 
 ### Advanced Features
+- **Full MCP Support (Model Context Protocol)** — Natively act as an MCP Client (to consume external tools like SQLite via npx) and an MCP Server (to expose ZenSynora's shell and codebase to clients like Cursor or Claude).
 - **Multi-Agent Support** — Create and manage multiple named agents with custom prompts and models
 - **Per-Agent Prompt Profiles** — Manage individual agent system prompts using dedicated Markdown files (`~/.myclaw/profiles/{name}.md`)
 - **Agent Delegation** — Delegate tasks to specialized agents (e.g., `@coder write a function`)
@@ -27,6 +28,7 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - **Telegram Gateway** — Full-featured Telegram bot with commands: `/remind`, `/jobs`, `/cancel`, `/agents`
 - **WhatsApp Gateway** — Full-featured WhatsApp Business Cloud API integration with webhook server, all commands, and agent routing
 - **Advanced Web Scraping** — Built-in integration with [Scrapling](https://github.com/D4Vinci/Scrapling) for anti-bot bypass and adaptive web scraping.
+- **SSH Deployment & Control** — Seamlessly deploy, configure, and communicate with the agent remotely over secure SSH connections.
 
 ### Security
 - Command allowlist/blocklist for shell execution

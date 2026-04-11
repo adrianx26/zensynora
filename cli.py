@@ -78,7 +78,7 @@ def main():
 
     config = load_config()
     if len(sys.argv) < 2:
-        print("Commands: onboard | agent | gateway | knowledge")
+        print("Commands: onboard | agent | gateway | knowledge | mcp-server")
         return
 
     cmd = sys.argv[1]
@@ -92,6 +92,11 @@ def main():
 
         # Use the default agent as the context manager for clean shutdown
         async def run_agent_chat(registry, agent_names):
+            if hasattr(config, 'mcp') and config.mcp.enabled:
+                from myclaw.mcp import MCPClientManager
+                mcp_manager = MCPClientManager(config.model_dump())
+                await mcp_manager.start_all()
+
             async with registry["default"]:
                 print(f"💬 MyClaw console — agents: {agent_names}")
                 print("   Use @agentname to address a specific agent. Type 'exit' to quit.")
@@ -230,9 +235,18 @@ def main():
             print(f"Unknown knowledge command: {kb_cmd}")
             print("Commands: search | write | read | list | sync | tags")
 
+    elif cmd == "mcp-server":
+        # Start MyClaw exposed as an MCP Server
+        _build_registry(config) # Ensure all tools are loaded
+        from myclaw.mcp import start_mcp_server
+        try:
+            asyncio.run(start_mcp_server())
+        except KeyboardInterrupt:
+            print("\nMCP Server shutting down...")
+
     else:
         print(f"Unknown command: {cmd}")
-        print("Commands: onboard | agent | gateway | knowledge")
+        print("Commands: onboard | agent | gateway | knowledge | mcp-server")
 
 
 if __name__ == "__main__":

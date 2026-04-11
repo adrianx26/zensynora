@@ -945,6 +945,16 @@ def list_tools() -> str:
     return "Available tools: " + ", ".join(sorted(TOOLS.keys()))
 
 
+def register_mcp_tool(name: str, server_name: str, func, documentation: str = "") -> str:
+    """Register a remote tool retrieved via MCP."""
+    global TOOLS
+    local_name = f"mcp_{server_name}_{name}"
+    TOOLS[local_name] = {
+        "func": func,
+        "desc": f"[{server_name} MCP] {documentation}"
+    }
+    return f"MCP tool '{local_name}' registered successfully."
+
 def register_tool(name: str, code: str, documentation: str = "") -> str:
     """Dynamically create a new tool from Python source code and store it in TOOLBOX.
 

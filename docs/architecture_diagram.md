@@ -594,23 +594,36 @@ myclaw/
 │   └── whatsapp.py
 ├── hub/               # ZenHub Registry
 │   └── __init__.py
-├── agents/             # Specialized Agents
+├── mcp/               # Model Context Protocol
 │   ├── __init__.py
-│   ├── skill_adapter.py   # Skill compatibility (Phase 1)
-│   ├── medic_agent.py     # System health (Phase 2)
-│   └── newtech_agent.py   # AI news (Phase 3)
-├── backends/           # Terminal Backends
-│   ├── __init__.py
-│   ├── base.py           # AbstractBackend
-│   ├── local.py          # Local execution
-│   ├── docker.py         # Docker execution
-│   ├── ssh.py            # SSH execution
-│   ├── wsl2.py           # WSL2 execution
-│   └── discover.py       # Backend discovery
-└── profiles/         # Agent Profiles
-    ├── default.md
-    ├── user.md
-    └── user_dialectic.md
+│   ├── client.py        # MCP Client connections
+│   └── server.py        # MCP Server exposure
+├── profiles/         # Agent Profiles
+│   ├── default.md
+│   ├── user.md
+│   └── user_dialectic.md
+```
+
+## Model Context Protocol (MCP)
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    MCP CLIENT & SERVER                          │
+└─────────────────────────────────────────────────────────────────┘
+
+     External Clients                   External Servers
+     (Cursor, Claude)                  (SQLite, WebSearch)
+            │                                  │
+            ▼                                  ▼
+    ┌───────────────┐                  ┌───────────────┐
+    │  MCP Server   │                  │  MCP Client   │
+    │  (server.py)  │                  │  (client.py)  │
+    └───────┬───────┘                  └───────┬───────┘
+            │                                  │
+            ▼                                  ▼
+    ┌──────────────────────────────────────────────────┐
+    │                   myclaw.tools                   │
+    └──────────────────────────────────────────────────┘
 ```
 
 ## Legend
