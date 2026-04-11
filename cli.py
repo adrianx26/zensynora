@@ -92,7 +92,7 @@ def main():
 
         # Use the default agent as the context manager for clean shutdown
         async def run_agent_chat(registry, agent_names):
-            with registry["default"]:
+            async with registry["default"]:
                 print(f"💬 MyClaw console — agents: {agent_names}")
                 print("   Use @agentname to address a specific agent. Type 'exit' to quit.")
                 while True:

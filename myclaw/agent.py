@@ -46,6 +46,7 @@ from .tools import TOOLS, trigger_hook, _HOOKS, get_parallel_executor, is_tool_i
 from .knowledge import search_notes, build_context
 from .semantic_cache import get_semantic_cache
 from .skill_preloader import get_skill_preloader, start_preloader, stop_preloader
+from .task_timer import get_task_timer_orchestrator, TaskStatus, Colors as TimerColors
 from rich.console import Console
 
 logger = logging.getLogger(__name__)
@@ -235,6 +236,32 @@ class Agent:
 
         # Initialize knowledge gap cache for deduplication
         self._gap_cache = KnowledgeGapCache(timeout_seconds=300.0)
+        
+        # Initialize task timer orchestrator for tracking user question timeouts
+        self._task_timer = get_task_timer_orchestrator()
+        self._current_task_id: Optional[str] = None
+    
+    def _handle_task_status_update(self, update) -> None:
+        """Handle status updates from the task timer."""
+        # Format and print the status update to console
+        timestamp = datetime.fromtimestamp(update.timestamp).strftime("%H:%M:%S")
+        elapsed = f"[{update.elapsed_seconds:.1f}s]"
+        
+        print(f"\n{TimerColors.TIMESTAMP}[{timestamp}]{TimerColors.RESET} "
+              f"{TimerColors.METRIC}{elapsed}{TimerColors.RESET}", end="")
+        
+        if update.threshold:
+            print(f" {TimerColors.WARNING}[THRESHOLD: {update.threshold}s]{TimerColors.RESET}", end="")
+        print()
+        
+        if update.step_name:
+            print(f"  Step: {TimerColors.STEP_NAME}{update.step_name}{TimerColors.RESET}")
+        
+        print(f"  {update.color}{update.message}{TimerColors.RESET}")
+        
+        # If it's the max timeout failure, the task is already being terminated
+        if update.threshold == 300 and update.message_type == "fatal":
+            logger.critical(f"Task {update.task_id} reached maximum timeout")
 
     # ── Context-gap tracking ─────────────────────────────────────────────────
     # Tracks topics per user for which the KB returned no results, so they can
@@ -613,10 +640,30 @@ class Agent:
         - Empty/blank responses trigger a self-repair call or KB-creation nudge.
         - Browse-failure tool results get an alternative-source hint appended.
         - KB gaps are tracked so repeated searches don't re-surface the same error.
+        
+        Task Timer Integration (v3):
+        - Starts a 300-second timer when user question is received
+        - Emits status updates at 60s, 120s, 180s, 240s thresholds
+        - Automatically marks task as failed at 300s with logging
         """
+        import uuid
+        
+        # Generate unique task ID for this request
+        self._current_task_id = f"task_{user_id}_{uuid.uuid4().hex[:8]}_{int(time.time())}"
+        
+        # Start task timer for tracking timeouts
+        await self._task_timer.start_task_timer(
+            task_id=self._current_task_id,
+            user_question=user_message,
+            on_status_update=self._handle_task_status_update,
+            steps_total=5  # Approximate: memory, knowledge, LLM, tools, response
+        )
+        
         # Agent Pipeline Integration: Loop prevention
         if _depth > 10:
             logger.warning(f"Max delegation depth reached ({_depth}). Preventing potential infinite loop.")
+            await self._task_timer.complete_task(self._current_task_id, success=False, 
+                                                 error_message="Max delegation depth reached")
             return "I've reached the maximum delegation depth. Let me handle this request directly."
 
         # Medic Agent: Check loop prevention before processing
@@ -625,12 +672,22 @@ class Agent:
             loop_status = prevent_infinite_loop()
             if "limit reached" in loop_status.lower():
                 logger.warning("Execution limit reached by loop prevention")
+                await self._task_timer.complete_task(self._current_task_id, success=False,
+                                                     error_message="Loop prevention limit reached")
                 return "I'm detecting repeated patterns in the request. Let me break out of the loop and handle this directly."
         except Exception:
             pass
 
+        # Check if task has been cancelled due to timeout
+        if self._current_task_id and not self._task_timer.is_task_active(self._current_task_id):
+            logger.warning(f"Task {self._current_task_id} was cancelled or timed out")
+            return "Sorry, this task took too long to complete and has been cancelled. Please try again with a simpler request."
+
         mem = await self._get_memory(user_id)
         await mem.add("user", user_message)
+        
+        # Update timer with current step
+        await self._task_timer.update_step(self._current_task_id, "memory_loading", 1, 5)
 
         trigger_hook("on_session_start", user_id, self.name)
 
@@ -696,6 +753,15 @@ class Agent:
                     "recommendation": "Use write_to_knowledge() to create a new entry for future queries"
                 })
 
+        # Check if task has been cancelled due to timeout
+        if self._current_task_id and not self._task_timer.is_task_active(self._current_task_id):
+            logger.warning(f"Task {self._current_task_id} was cancelled or timed out")
+            return "Sorry, this task took too long to complete and has been cancelled. Please try again with a simpler request."
+
+        # Update timer - building system prompt
+        if self._current_task_id:
+            await self._task_timer.update_step(self._current_task_id, "building_prompt", 2, 5)
+        
         # Build system prompt with knowledge context (async load to avoid blocking)
         system_prompt = await self._load_system_prompt()
         system_content = system_prompt
@@ -713,21 +779,41 @@ class Agent:
                 messages = result  # Use modified messages from hook
                 logger.debug("pre_llm_call hook modified messages")
 
+        # Update timer - calling LLM
+        if self._current_task_id:
+            await self._task_timer.update_step(self._current_task_id, "llm_call", 3, 5)
+        
         try:
             import httpx
             response, tool_calls = await self.provider.chat(messages, self.model)
         except httpx.TimeoutException as e:
             logger.error(f"LLM provider timeout: {e}")
-            return "Sorry, the LLM service timed out. Please try again."
+            error_msg = "Sorry, the LLM service timed out. Please try again."
+            if self._current_task_id:
+                await self._task_timer.complete_task(self._current_task_id, success=False, error_message=error_msg)
+                self._current_task_id = None
+            return error_msg
         except (httpx.ConnectError, ConnectionError) as e:
             logger.error(f"LLM provider connection error: {e}")
-            return "Sorry, I cannot connect to the LLM service. Please check your connection."
+            error_msg = "Sorry, I cannot connect to the LLM service. Please check your connection."
+            if self._current_task_id:
+                await self._task_timer.complete_task(self._current_task_id, success=False, error_message=error_msg)
+                self._current_task_id = None
+            return error_msg
         except httpx.HTTPStatusError as e:
             logger.error(f"LLM provider HTTP error: {e}")
-            return f"Sorry, the LLM service returned an error: {e.response.status_code}"
+            error_msg = f"Sorry, the LLM service returned an error: {e.response.status_code}"
+            if self._current_task_id:
+                await self._task_timer.complete_task(self._current_task_id, success=False, error_message=error_msg)
+                self._current_task_id = None
+            return error_msg
         except Exception as e:
             logger.exception(f"Unexpected LLM provider error: {e}")
-            return f"Sorry, an unexpected error occurred: {e}"
+            error_msg = f"Sorry, an unexpected error occurred: {e}"
+            if self._current_task_id:
+                await self._task_timer.complete_task(self._current_task_id, success=False, error_message=error_msg)
+                self._current_task_id = None
+            return error_msg
 
         # Trigger post_llm_call hooks
         hook_results = trigger_hook("post_llm_call", response, tool_calls)
@@ -736,6 +822,10 @@ class Agent:
                 response, tool_calls = result  # Allow hooks to modify response/tool_calls
 
         if tool_calls:
+            # Update timer - executing tools
+            if self._current_task_id:
+                await self._task_timer.update_step(self._current_task_id, "executing_tools", 4, 5)
+            
             # Determine if we can use parallel execution
             independent_tools = [tc for tc in tool_calls if is_tool_independent(tc.get("function", {}).get("name", ""))]
 
@@ -841,10 +931,20 @@ class Agent:
                 message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
                 trigger_hook("on_session_end", user_id, self.name, message_count)
 
+                # Complete task timer successfully
+                if self._current_task_id:
+                    await self._task_timer.complete_task(self._current_task_id, success=True)
+                    self._current_task_id = None
+
                 return final_response
             except Exception as e:
                 logger.error(f"LLM second call error: {e}")
-                return f"Tool executed but error getting response: {e}"
+                error_msg = f"Tool executed but error getting response: {e}"
+                # Complete task timer with error
+                if self._current_task_id:
+                    await self._task_timer.complete_task(self._current_task_id, success=False, error_message=error_msg)
+                    self._current_task_id = None
+                return error_msg
 
         # ── No tool calls: validate response is non-empty ────────────────────
         if self._is_empty_response(response):
@@ -857,6 +957,11 @@ class Agent:
         # Trigger on_session_end hook
         message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
         trigger_hook("on_session_end", user_id, self.name, message_count)
+
+        # Complete task timer successfully
+        if self._current_task_id:
+            await self._task_timer.complete_task(self._current_task_id, success=True)
+            self._current_task_id = None
 
         return response
 
