@@ -53,6 +53,7 @@ flowchart TB
     classDef channel fill:#1a4d2e,stroke:#2d7a4a,stroke-width:2px,color:#fff
     classDef data fill:#6a3a14,stroke:#9c5822,stroke-width:2px,color:#fff
     classDef llm fill:#4a1e50,stroke:#863990,stroke-width:2px,color:#fff
+    classDef intelligence fill:#7a5a2a,stroke:#aa7744,stroke-width:2px,color:#fff
 
     %% Channels
     subgraph Interfaces [External Interfaces]
@@ -80,6 +81,12 @@ flowchart TB
             Swarm("🐝 Swarm Orchestrator")
             Spec("🤖 Specialized Agents")
         end
+
+        subgraph Intelligence ["🧠 Intelligence Platform (v0.5)"]
+            GapRes("🔍 Gap Researcher")
+            Bench("📊 Benchmark Runner")
+            Router("🛤️ Intelligent Router")
+        end
     end
 
     %% Data Layer
@@ -87,7 +94,7 @@ flowchart TB
         direction LR
         Mem[("💾 Memory")]
         KB[("📚 Knowledge Base")]
-        SwarmState[("📊 Swarm State")]
+        Lib[("📖 LLM Library")]
         Toolbox[("🔧 ToolBox")]
         Jobs[("📋 Scheduled Jobs")]
     end
@@ -110,22 +117,24 @@ flowchart TB
     Agent <--> Profiles
     Agent <--> AdvancedSystems
     Agent <--> Sched
+    Agent <--> Intelligence
     
     Agent <--> Mem
     Agent <--> KB
+    Agent <--> Lib
     Agent <--> Toolbox
     Sched <--> Jobs
-    Swarm <--> SwarmState
+    GapRes <--> KB
     
     Agent ==> Providers
-    Swarm ==> Providers
-    Spec ==> Providers
-
+    Intelligence ==> Providers
+    
     %% Apply Classes
     class CLI,TG,WA channel
     class GW,Agent,Tools,Profiles,Sched,Swarm,Spec core
-    class Mem,KB,SwarmState,Toolbox,Jobs data
+    class Mem,KB,Lib,Toolbox,Jobs data
     class Local,Cloud llm
+    class GapRes,Bench,Router intelligence
 ```
 
 ---
@@ -214,7 +223,30 @@ ollama run llama3.2
 # Then start the WhatsApp webhook server
 python cli.py gateway
 # Requires WhatsApp enabled in config and a public webhook URL (use ngrok for dev)
+
+### 🤖 Intelligence & Benchmarking (v0.5)
+
+ZenSynora now includes a proactive Intelligence Platform that grows automatically and optimizes itself based on task requirements.
+
+#### 🛤️ Intelligent Routing
+The agent analyzes the complexity of every query. If it detects a high-complexity task (e.g., coding, complex reasoning, architectural design), it can automatically upgrade to a "Premium" tier model if one is configured.
+> **Note:** Intelligent Routing only activates if multiple models are configured in your `config.json`.
+
+#### 🔍 Automatic Knowledge Research
+When the agent detects a "knowledge gap" during a user query, it logs it for background research. A worker runs every 6 hours (configurable) and uses the `scrapling` engine to find information on the web, synthesizing it into a new Knowledge Base entry.
+*   **Idle Check**: Research only runs when the system has been idle for 15+ minutes to ensure zero performance impact while you work.
+
+#### 📊 Performance Benchmarking
+You can evaluate how different models perform on accuracy, latency, and token usage tasks:
+```bash
+# Run full benchmark suite
+python cli.py benchmark
+
+# Benchmark a specific model
+python cli.py benchmark --model gpt-4o --provider openai
 ```
+
+---
 
 ---
 
