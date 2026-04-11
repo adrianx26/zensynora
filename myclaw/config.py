@@ -144,6 +144,10 @@ ENV_OVERRIDES = {
     "intelligence.research_idle_minutes": "MYCLAW_RESEARCH_IDLE",
     "intelligence.intelligent_routing": "MYCLAW_INTELLIGENT_ROUTING",
     "intelligence.benchmarking_enabled": "MYCLAW_BENCHMARKING_ENABLED",
+    "intelligence.routing.enabled": "MYCLAW_ROUTING_ENABLED",
+    "intelligence.routing.prefer_free_models": "MYCLAW_ROUTING_PREFER_FREE",
+    "intelligence.routing.allowed_models": "MYCLAW_ROUTING_ALLOWED_MODELS",
+    "intelligence.routing.allowed_providers": "MYCLAW_ROUTING_ALLOWED_PROVIDERS",
     # Backends
     "backends.ssh.host": "MYCLAW_SSH_HOST",
     "backends.ssh.user": "MYCLAW_SSH_USER",
@@ -416,12 +420,22 @@ class MCPConfig(BaseModel):
     servers: dict[str, MCPServerConfig] = {}
 
 
+class RoutingConfig(BaseModel):
+    """Detailed settings for Intelligent Routing."""
+    enabled: bool = False
+    prefer_free_models: bool = True
+    allowed_models: list[str] = []  # Empty means all registered
+    allowed_providers: list[str] = [] # Empty means all registered
+    auto_disable_on_single: bool = True
+
+
 class IntelligenceConfig(BaseModel):
     """Configuration for AI intelligence features (Research, Routing, Benchmarking)."""
     research_enabled: bool = True
     research_interval_hours: int = 6
     research_idle_minutes: int = 15
-    intelligent_routing: bool = False
+    routing: RoutingConfig = RoutingConfig()
+    intelligent_routing: bool = False # Deprecated but kept for compatibility
     benchmarking_enabled: bool = False
     benchmark_interval_days: int = 7
 

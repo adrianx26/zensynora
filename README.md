@@ -119,9 +119,10 @@ flowchart TB
     Agent <--> Sched
     Agent <--> Intelligence
     
-    Agent <--> Mem
-    Agent <--> KB
-    Agent <--> Lib
+    Agent{MyClaw Agent}
+    Router[Intelligent Router]
+    Agent <--> Router
+    Agent <--> KB[(Knowledge Base: SQLite/MD)]
     Agent <--> Toolbox
     Sched <--> Jobs
     GapRes <--> KB
@@ -234,9 +235,13 @@ ZenSynora monitors your system resources to ensure optimal agent performance.
 - **Diagnostics**: Run `python cli.py hardware` for a full diagnostic report.
 - **Auto-Suggestions**: The agent proactively warns if your selected model exceeds physical RAM or VRAM limits.
 
-#### 🛤️ Intelligent Routing
-The agent analyzes the complexity of every query. If it detects a high-complexity task (e.g., coding, complex reasoning, architectural design), it can automatically upgrade to a "Premium" tier model if one is configured.
-> **Note:** Intelligent Routing only activates if multiple models are configured in your `config.json`.
+#### 🛤️ Intelligent Routing (Phase 1.5)
+ZenSynora now features a sophisticated dynamic dispatch system that selects the best model for ogni task.
+- **Intent Analysis**: Automatically detects if a query requires deep reasoning, coding, or just a quick chat.
+- **Free-First Logic**: Prioritize local hardware (Ollama) or zero-cost APIs (Groq/Gemini Flash) to minimize your wallet impact.
+- **Provider Allowlists**: Complete control over which models and providers are allowed to participate in auto-routing.
+- **Auto-Disable**: Overlays zero overhead when only a single model is configured.
+- **Hardware-Aware**: Integrates with system telemetry to avoid heavy local models on RAM-constrained machines.
 
 #### 🔍 Automatic Knowledge Research
 When the agent detects a "knowledge gap" during a user query, it logs it for background research. A worker runs every 6 hours (configurable) and uses the `scrapling` engine to find information on the web, synthesizing it into a new Knowledge Base entry.

@@ -249,6 +249,10 @@ class Agent:
         self._task_timer = get_task_timer_orchestrator()
         self._current_task_id: Optional[str] = None
 
+        # ── Intelligent Routing ──────────────────────────────────────────────
+        from .backends.router import IntelligentRouter
+        self._router = IntelligentRouter(config)
+
         # ── Hardware Awareness & Optimization Check ──────────────────────────
         try:
             from .backends.hardware import get_system_metrics, get_optimization_suggestions
@@ -672,15 +676,12 @@ class Agent:
         global _LAST_ACTIVE_TIME
         _LAST_ACTIVE_TIME = time.time()
 
-        # Intelligent Routing: Choose model based on complexity if enabled
-        if getattr(self.config.intelligence, 'intelligent_routing', False):
-            complexity = self._analyze_complexity(user_message)
-            if complexity == "high":
-                from .llm_library import get_optimal_model
-                optimal = get_optimal_model(tier="premium")
-                if optimal != self.model:
-                    logger.info(f"Intelligent Routing: Upgrading to {optimal} for high complexity task")
-                    self.model = optimal
+        # Intelligent Routing: Determine model for THIS request only
+        request_model = self.model
+        if self._router:
+            routed_model = self._router.get_routing_decision(user_message, self.model)
+            if routed_model:
+                request_model = routed_model
 
         import uuid
         
@@ -1075,9 +1076,11 @@ class Agent:
             if result and isinstance(result, list):
                 messages = result
 
+        # Step 1: LLM Reasoning & Response
+        messages = await self._build_messages(user_message, memories)
         try:
-            # Use stream_chat for streaming response
-            stream_iterator = await self.provider.chat(messages, self.model, stream=True)
+            # Use request_model assigned by router
+            stream_iterator = await self.provider.chat(messages, request_model, stream=True)
         except Exception as e:
             logger.error(f"LLM provider error: {e}")
             trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
