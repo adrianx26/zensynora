@@ -850,7 +850,7 @@ All agent skills are documented in [`myclaw/skills.md`](myclaw/skills.md) with:
 | Metric | Baseline | Improved |
 |--------|----------|----------|
 | Overall avg score | 0.880 | **0.989** |
-| Tasks passing | 26/26 | **25/25** |
+| Tasks passing | 25/25| **25/25** |
 
 #### Running Evaluations
 

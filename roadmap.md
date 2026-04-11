@@ -1,6 +1,6 @@
 # 🗺️ ZenSynora (MyClaw) – ROADMAP 2026-2027
 
-**Version:** 1.0 (April 2026)  
+**Version:** 1.1 (April 2026)  
 **Author:** Adrian (lead developer)  
 **Status:** Active – in progress
 
@@ -36,7 +36,6 @@ To become the **most complete, easy-to-use, and secure open-source personal AI a
 ### **Phase 1 – Core Upgrade (May – June 2026)**
 - Full MCP
 - Simple Web UI (MVP)
-- Hybrid Memory
 - **Release:** v1.5.0 "MCP Ready"
 
 ### **Phase 2 – Security & Observability (July – Sept 2026)**
@@ -51,6 +50,7 @@ To become the **most complete, easy-to-use, and secure open-source personal AI a
 - CLI - Advanced commands 
 - VS Code Extension
 - One-click self-hosting
+- Hybrid Memory
 - **Release:** v2.5.0 "Community Edition"
 
 ### **Phase 4 – Monetization & Enterprise (2027)**
