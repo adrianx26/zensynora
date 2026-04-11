@@ -144,6 +144,11 @@ ENV_OVERRIDES = {
     "intelligence.research_idle_minutes": "MYCLAW_RESEARCH_IDLE",
     "intelligence.intelligent_routing": "MYCLAW_INTELLIGENT_ROUTING",
     "intelligence.benchmarking_enabled": "MYCLAW_BENCHMARKING_ENABLED",
+    # Backends
+    "backends.ssh.host": "MYCLAW_SSH_HOST",
+    "backends.ssh.user": "MYCLAW_SSH_USER",
+    "backends.ssh.password": "MYCLAW_SSH_PASSWORD",
+    "backends.ssh.key_path": "MYCLAW_SSH_KEY_PATH",
 }
 
 
@@ -374,12 +379,29 @@ class SkillAdapterConfig(BaseModel):
     allow_external_registration: bool = True
 
 
+class DockerBackendConfig(BaseModel):
+    container: str = "zensynora"
+    image: str = "zensynora:latest"
+
+
+class SSHBackendConfig(BaseModel):
+    host: str = ""
+    user: str = "root"
+    port: int = 22
+    key_path: str = ""
+    password: SecretStr = SecretStr("")
+
+
+class WSL2BackendConfig(BaseModel):
+    distro: str = "Ubuntu"
+
+
 class BackendConfig(BaseModel):
     """Configuration for terminal backends."""
     default_backend: str = "local"
-    docker: dict = {"container": "zensynora", "image": "zensynora:latest"}
-    ssh: dict = {"host": "", "user": "", "port": 22, "key_path": ""}
-    wsl2: dict = {"distro": "Ubuntu"}
+    docker: DockerBackendConfig = DockerBackendConfig()
+    ssh: SSHBackendConfig = SSHBackendConfig()
+    wsl2: WSL2BackendConfig = WSL2BackendConfig()
 
 
 class MCPServerConfig(BaseModel):

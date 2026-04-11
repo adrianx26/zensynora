@@ -322,5 +322,69 @@ def benchmark(model, provider):
         click.echo("🚀 Running full benchmark suite...")
         asyncio.run(run_all_benchmarks())
 
+
+@cli.command()
+def hardware():
+    """Show detailed system hardware information and optimization suggestions."""
+    from myclaw.backends.hardware import get_system_metrics, get_optimization_suggestions
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.console import Console
+    
+    cons = Console()
+    cons.print(Panel("[bold cyan]🔍 ZenSynora Hardware Diagnostic[/bold cyan]"))
+    
+    with cons.status("[bold green]Probing hardware metrics..."):
+        metrics = get_system_metrics()
+        suggestions = get_optimization_suggestions(metrics)
+    
+    # CPU Table
+    cpu = metrics["cpu"]
+    cpu_table = Table(title="CPU Information", box=None)
+    cpu_table.add_column("Property", style="dim")
+    cpu_table.add_column("Value")
+    cpu_table.add_row("Model", cpu["model"])
+    cpu_table.add_row("Cores/Threads", f"{cpu['physical_cores']} / {cpu['logical_threads']}")
+    cpu_table.add_row("Current Load", f"{cpu['usage_pct']}%")
+    if cpu["temperature_c"]:
+        cpu_table.add_row("Temperature", f"{cpu['temperature_c']}°C")
+    
+    cons.print(cpu_table)
+    
+    # Memory Table
+    mem = metrics["memory"]
+    mem_table = Table(title="Memory (RAM)", box=None)
+    mem_table.add_column("Property", style="dim")
+    mem_table.add_column("Value")
+    mem_table.add_row("Total Size", f"{mem['total_gb']} GB")
+    mem_table.add_row("Available", f"{mem['available_gb']} GB")
+    mem_table.add_row("Type Hint", mem["type"])
+    
+    cons.print(mem_table)
+    
+    # GPU Table
+    if metrics["gpu"]:
+        gpu_table = Table(title="GPU Details", box=None)
+        gpu_table.add_column("GPU", style="dim")
+        gpu_table.add_column("Memory", style="dim")
+        gpu_table.add_column("Temp")
+        for g in metrics["gpu"]:
+            gpu_table.add_row(g.get("model", "Unknown"), f"{g.get('memory_total_mb', 'N/A')} MB", f"{g.get('temperature_c', 'N/A')}°C")
+        cons.print(gpu_table)
+    else:
+        cons.print("[yellow]No dedicated GPU detected.[/yellow]")
+        
+    # NPU & Network
+    npu = metrics["npu"]
+    net = metrics["network"]
+    cons.print(f"\n[bold]NPU Support:[/bold] {npu['type']} ({'Active' if npu['active'] else 'Inactive'})")
+    cons.print(f"[bold]Network Lag:[/bold] {net['ping_ms']}ms to 8.8.8.8")
+    
+    # Suggestions
+    if suggestions:
+        cons.print("\n[bold green]🛠️ Optimization Suggestions:[/bold green]")
+        for s in suggestions:
+            cons.print(f" • {s}")
+
 if __name__ == "__main__":
     cli()

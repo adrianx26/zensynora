@@ -50,12 +50,12 @@ To become the **most complete, easy-to-use, and secure open-source personal AI a
 - **Release:** v0.5 "Hardened"
 
 ### **Phase 2 – Security & Observability (July – Sept 2026)**
+- ✅ **Hardware Awareness (Diagnostic & Suggestions)**
+- ✅ **SSH Remote Connection Implementation (Key/Password)**
 - Docker Sandbox
-- Hardware Awareness (Auto-optimization for CPU/GPU)
-- SSH Remote Connection Implementation
 - Observability + Tracing (Langfuse Integration)
 - AGPL-3.0 License + Dual Licensing preparation
-- **Release:** v2v1.0.0 "Production Ready"
+- **Release:** v1.0.0 "Production Ready"
 
 ### **Phase 2.1 – Ecosystem & Experience (Oct 2026 – March 2027)**
 - Voice / Multi-modal
@@ -70,6 +70,8 @@ To become the **most complete, easy-to-use, and secure open-source personal AI a
 - **Release:** v2.5.0 "Community Edition"
 
 ### **Phase 2.2 – Monetization & Enterprise (2027)**
+- Multi-Host SSH Management (Advanced Orchestration)
+- Hardware Auto-optimization (Automatic model switching)
 - Paid commercial license
 - Enterprise support (SLA, on-prem, etc.)
 - Public evaluation suite

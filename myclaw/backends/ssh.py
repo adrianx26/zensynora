@@ -1,154 +1,145 @@
-"""SSH backend - Execute commands over SSH connection."""
+"""
+SSH backend - Execute commands over SSH connection using Paramiko.
+Supports both key-based and password-based authentication.
+"""
 
 import asyncio
 import logging
-import shlex
+import os
+import paramiko
 from pathlib import Path
-from typing import Tuple
-
+from typing import Tuple, Optional
 from .base import AbstractBackend
 
 logger = logging.getLogger(__name__)
 
-
 class SSHBackend(AbstractBackend):
-    """SSH remote execution backend."""
+    """SSH remote execution backend using Paramiko."""
 
     def __init__(self, config: dict = None):
         super().__init__(config)
-        self.host = config.get("host", "localhost") if config else "localhost"
-        self.user = config.get("user", "") if config else ""
-        self.port = config.get("port", 22) if config else 22
-        self.key_path = config.get("key_path", "") if config else ""
-        self.password = config.get("password", "") if config else ""
+        # Handle both dict and Pydantic model
+        if hasattr(config, 'model_dump'):
+            cfg = config.model_dump()
+        else:
+            cfg = config or {}
+            
+        self.host = cfg.get("host", "localhost")
+        self.user = cfg.get("user", "root")
+        self.port = cfg.get("port", 22)
+        self.key_path = cfg.get("key_path", "")
+        self.password = cfg.get("password", "")
+        
+        # Resolve password from SecretStr if needed
+        if hasattr(self.password, 'get_secret_value'):
+            self.password = self.password.get_secret_value()
+            
+        self._client: Optional[paramiko.SSHClient] = None
+
+    def _get_client(self) -> paramiko.SSHClient:
+        """Create and connect SSH client."""
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        try:
+            if self.key_path:
+                key_path = Path(self.key_path).expanduser()
+                if key_path.exists():
+                    client.connect(
+                        hostname=self.host,
+                        port=self.port,
+                        username=self.user,
+                        key_filename=str(key_path),
+                        timeout=10,
+                        look_for_keys=False
+                    )
+                    return client
+            
+            # Fallback to password
+            if self.password:
+                client.connect(
+                    hostname=self.host,
+                    port=self.port,
+                    username=self.user,
+                    password=self.password,
+                    timeout=10
+                )
+                return client
+                
+            # Final attempt: default keys
+            client.connect(hostname=self.host, port=self.port, username=self.user, timeout=10)
+            return client
+            
+        except Exception as e:
+            logger.error(f"SSH connection failed to {self.host}: {e}")
+            raise
 
     async def execute(self, command: str, timeout: int = 30) -> Tuple[str, int]:
-        """Execute command over SSH.
-        
-        Args:
-            command: Shell command to execute
-            timeout: Timeout in seconds
-            
-        Returns:
-            Tuple of (output, exit_code)
-        """
-        try:
-            ssh_cmd = self._build_ssh_command(command)
-            
-            process = await asyncio.create_subprocess_shell(
-                ssh_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            
-            try:
-                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-                output = stdout.decode() + stderr.decode()
-                return output.strip(), process.returncode
-            except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
-                return f"Error: SSH command timed out after {timeout} seconds", -1
-                
-        except Exception as e:
-            logger.error(f"SSH execution error: {e}")
-            return f"Error: {e}", -1
+        """Execute command over SSH."""
+        return await asyncio.to_thread(self._execute_sync, command, timeout)
 
-    def _build_ssh_command(self, command: str) -> str:
-        """Build SSH command with options."""
-        user_host = f"{self.user}@{self.host}" if self.user else self.host
-        parts = ["ssh", "-p", str(self.port)]
-        
-        if self.key_path:
-            parts.extend(["-i", self.key_path])
-        
-        parts.extend(["-o", "StrictHostKeyChecking=no"])
-        parts.extend(["-o", "BatchMode=yes"])
-        
-        parts.append(user_host)
-        parts.append(shlex.quote(command))
-        
-        return " ".join(parts)
+    def _execute_sync(self, command: str, timeout: int = 30) -> Tuple[str, int]:
+        """Synchronous execution wrapper for Paramiko."""
+        client = None
+        try:
+            client = self._get_client()
+            stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
+            
+            output = stdout.read().decode('utf-8', errors='replace')
+            error = stderr.read().decode('utf-8', errors='replace')
+            exit_code = stdout.channel.recv_exit_status()
+            
+            combined_output = output + error
+            return combined_output.strip(), exit_code
+            
+        except Exception as e:
+            logger.error(f"SSH execution error on {self.host}: {e}")
+            return f"Error: {e}", -1
+        finally:
+            if client:
+                client.close()
 
     async def upload(self, local_path: str, remote_path: str) -> bool:
-        """Upload file via SCP.
-        
-        Args:
-            local_path: Source path
-            remote_path: Destination path on remote
-            
-        Returns:
-            True if successful
-        """
+        """Upload file via SFTP."""
+        return await asyncio.to_thread(self._upload_sync, local_path, remote_path)
+
+    def _upload_sync(self, local_path: str, remote_path: str) -> bool:
+        client = None
         try:
-            scp_cmd = self._build_scp_command(local_path, remote_path)
-            
-            proc = await asyncio.create_subprocess_shell(
-                scp_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            await proc.communicate()
-            return proc.returncode == 0
-            
+            client = self._get_client()
+            sftp = client.open_sftp()
+            sftp.put(local_path, remote_path)
+            sftp.close()
+            return True
         except Exception as e:
-            logger.error(f"SCP upload error: {e}")
+            logger.error(f"SFTP upload error: {e}")
             return False
+        finally:
+            if client:
+                client.close()
 
     async def download(self, remote_path: str, local_path: str) -> bool:
-        """Download file via SCP.
-        
-        Args:
-            remote_path: Source path on remote
-            local_path: Destination path
-            
-        Returns:
-            True if successful
-        """
-        try:
-            scp_cmd = self._build_scp_command(remote_path, local_path, download=True)
-            
-            proc = await asyncio.create_subprocess_shell(
-                scp_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            await proc.communicate()
-            return proc.returncode == 0
-            
-        except Exception as e:
-            logger.error(f"SCP download error: {e}")
-            return False
+        """Download file via SFTP."""
+        return await asyncio.to_thread(self._download_sync, remote_path, local_path)
 
-    def _build_scp_command(self, src: str, dst: str, download: bool = False) -> str:
-        """Build SCP command."""
-        user_host = f"{self.user}@{self.host}" if self.user else self.host
-        
-        parts = ["scp", "-P", str(self.port), "-o", "StrictHostKeyChecking=no"]
-        
-        if self.key_path:
-            parts.extend(["-i", self.key_path])
-        
-        if download:
-            parts.extend([f"{user_host}:{src}", dst])
-        else:
-            parts.extend([src, f"{user_host}:{dst}"])
-        
-        return " ".join(parts)
+    def _download_sync(self, remote_path: str, local_path: str) -> bool:
+        client = None
+        try:
+            client = self._get_client()
+            sftp = client.open_sftp()
+            sftp.get(remote_path, local_path)
+            sftp.close()
+            return True
+        except Exception as e:
+            logger.error(f"SFTP download error: {e}")
+            return False
+        finally:
+            if client:
+                client.close()
 
     def get_type(self) -> str:
-        """Get backend type."""
         return "ssh"
 
     def _check_availability(self) -> bool:
-        """Check if SSH is available."""
-        try:
-            proc = asyncio.run(asyncio.create_subprocess_shell(
-                "which ssh",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            ))
-            asyncio.run(proc.communicate())
-            return proc.returncode == 0
-        except Exception:
-            return False
+        """Check if library is available and host is configured."""
+        return bool(self.host and (self.key_path or self.password))

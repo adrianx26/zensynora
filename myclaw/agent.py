@@ -248,6 +248,17 @@ class Agent:
         # Initialize task timer orchestrator for tracking user question timeouts
         self._task_timer = get_task_timer_orchestrator()
         self._current_task_id: Optional[str] = None
+
+        # ── Hardware Awareness & Optimization Check ──────────────────────────
+        try:
+            from .backends.hardware import get_system_metrics, get_optimization_suggestions
+            metrics = get_system_metrics()
+            suggestions = get_optimization_suggestions(metrics)
+            if suggestions:
+                for s in suggestions:
+                    logger.info(f"System Optimization Note: {s}")
+        except Exception as e:
+            logger.debug(f"Hardware optimization check skipped: {e}")
     
     def _handle_task_status_update(self, update) -> None:
         """Handle status updates from the task timer."""

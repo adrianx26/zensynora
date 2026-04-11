@@ -29,8 +29,8 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - **Task Scheduling** — Schedule one-shot or recurring tasks with notifications via Telegram or WhatsApp
 - **Telegram Gateway** — Full-featured Telegram bot with commands: `/remind`, `/jobs`, `/cancel`, `/agents`
 - **WhatsApp Gateway** — Full-featured WhatsApp Business Cloud API integration with webhook server, all commands, and agent routing
-- **Advanced Web Scraping** — Built-in integration with [Scrapling](https://github.com/D4Vinci/Scrapling) for anti-bot bypass and adaptive web scraping.
-- **SSH Deployment & Control** — Seamlessly deploy, configure, and communicate with the agent remotely over secure SSH connections.
+- **SSH Deployment & Remote Control** — Seamlessly deploy, configure, and communicate with remote agents via secure SSH connections (Key/Password).
+- **Hardware Awareness (v1.0)** — Deep system telemetry (CPU temps, GPU load, NPU, Net lag) with intelligence-driven optimization suggestions.
 - **Intelligent LLM Routing** — Automatically upgrades to premium models for complex reasoning or coding tasks, optimizing for both performance and cost.
 - **Automated Knowledge Gap Filling** — Proactively identifies missing info in the KB and performs background web research using Scrapling during idle time.
 - **LLM Benchmarking Suite** — Built-in tools to benchmark latency, accuracy, and token usage of your local and cloud providers with `python cli.py benchmark`.
@@ -227,6 +227,12 @@ python cli.py gateway
 ### 🤖 Intelligence & Benchmarking (v0.5)
 
 ZenSynora now includes a proactive Intelligence Platform that grows automatically and optimizes itself based on task requirements.
+
+#### 🖥️ Hardware Awareness & Optimization
+ZenSynora monitors your system resources to ensure optimal agent performance.
+- **Telemetry**: CPU (specs/temp), RAM (size/usage), GPU (model/vram/load), NPU, and Network latency.
+- **Diagnostics**: Run `python cli.py hardware` for a full diagnostic report.
+- **Auto-Suggestions**: The agent proactively warns if your selected model exceeds physical RAM or VRAM limits.
 
 #### 🛤️ Intelligent Routing
 The agent analyzes the complexity of every query. If it detects a high-complexity task (e.g., coding, complex reasoning, architectural design), it can automatically upgrade to a "Premium" tier model if one is configured.
