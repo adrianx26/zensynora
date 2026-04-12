@@ -614,6 +614,106 @@ async def shell_async(cmd: str, timeout: int = 30) -> str:
         return f"Error: {e}"
 
 
+# ── SSH & Hardware Features (Phase 2.0) ────────────────────────────────────────
+
+async def ssh_command(cmd: str, host: str = None, user: str = "root", password: str = "", key_path: str = "", timeout: int = 60) -> str:
+    """Execute a command on a remote host via SSH.
+    
+    Args:
+        cmd: Command to run
+        host: Hostname or IP (if None, uses default from config)
+        user: SSH user
+        password: SSH password (optional)
+        key_path: Path to SSH private key (optional)
+        timeout: Timeout in seconds
+    """
+    try:
+        from .backends.ssh import SSHBackend
+        from .config import SSHBackendConfig
+        from pydantic import SecretStr
+        
+        # Load defaults if not provided
+        config = SSHBackendConfig(
+            host=host or "",
+            user=user,
+            password=SecretStr(password) if password else SecretStr(""),
+            key_path=key_path
+        )
+        
+        backend = SSHBackend(config)
+        result = await backend.run(cmd, timeout=timeout)
+        return result
+    except Exception as e:
+        logger.error(f"SSH tool error: {e}")
+        return f"Error: {e}"
+
+
+async def ssh_put_file(local_path: str, remote_path: str, host: str, user: str = "root", password: str = "", key_path: str = "") -> str:
+    """Upload a local file to a remote host via SFTP."""
+    try:
+        from .backends.ssh import SSHBackend
+        from .config import SSHBackendConfig
+        from pydantic import SecretStr
+        
+        # Validate local path
+        local_p = validate_path(local_path)
+        
+        config = SSHBackendConfig(host=host, user=user, password=SecretStr(password), key_path=key_path)
+        backend = SSHBackend(config)
+        await backend.upload(str(local_p), remote_path)
+        return f"✅ Successfully uploaded {local_path} to {host}:{remote_path}"
+    except Exception as e:
+        return f"Error: {e}"
+
+
+async def ssh_get_file(remote_path: str, local_path: str, host: str, user: str = "root", password: str = "", key_path: str = "") -> str:
+    """Download a remote file to the local workspace via SFTP."""
+    try:
+        from .backends.ssh import SSHBackend
+        from .config import SSHBackendConfig
+        from pydantic import SecretStr
+        
+        # Validate local path
+        local_p = validate_path(local_path)
+        
+        config = SSHBackendConfig(host=host, user=user, password=SecretStr(password), key_path=key_path)
+        backend = SSHBackend(config)
+        await backend.download(remote_path, str(local_p))
+        return f"✅ Successfully downloaded {remote_path} from {host} to {local_path}"
+    except Exception as e:
+        return f"Error: {e}"
+
+
+def get_system_diagnostic() -> str:
+    """Get a detailed diagnostic report of the current system hardware.
+    Includes CPU, GPU, RAM, NPU, and Network metrics.
+    """
+    try:
+        from .backends.hardware import get_system_metrics, get_optimization_suggestions
+        metrics = get_system_metrics()
+        suggestions = get_optimization_suggestions(metrics)
+        
+        lines = ["🖥️ System Diagnostic Report:", ""]
+        lines.append(f"CPU: {metrics['cpu_model']} ({metrics['cpu_cores']} cores, {metrics['cpu_threads']} threads)")
+        lines.append(f"RAM: {metrics['ram_total_gb']:.1f} GB ({metrics['ram_type']})")
+        
+        if metrics['gpus']:
+            lines.append("GPUs:")
+            for g in metrics['gpus']:
+                lines.append(f"  - {g['model']} ({g['memory_gb']:.1f} GB VRAM, {g['temp']}°C)")
+        
+        lines.append(f"Network: {metrics['network_latency_ms']:.1f}ms latency")
+        
+        if suggestions:
+            lines.append("\n💡 Optimization Suggestions:")
+            for s in suggestions:
+                lines.append(f"  - {s}")
+                
+        return "\n".join(lines)
+    except Exception as e:
+        return f"Error: {e}"
+
+
 def shell(cmd: str) -> str:
     """Execute an allowed shell command in the workspace directory.
 
@@ -3154,9 +3254,14 @@ async def swarm_message(
 
 TOOLS: Dict[str, dict] = {
     # Core
-    "shell":                {"func": shell,                "desc": "Execute a shell command"},
+    "shell":                {"func": shell,                "desc": "Execute a shell command locally"},
     "read_file":            {"func": read_file,            "desc": "Read a file from workspace"},
     "write_file":           {"func": write_file,           "desc": "Write a file to workspace"},
+    # SSH & Hardware (Phase 2.0)
+    "ssh_command":          {"func": ssh_command,          "desc": "Execute a command on a remote host via SSH"},
+    "ssh_put_file":         {"func": ssh_put_file,         "desc": "Upload a local file to a remote host via SFTP"},
+    "ssh_get_file":         {"func": ssh_get_file,         "desc": "Download a remote file from host to workspace"},
+    "get_system_diagnostic":{"func": get_system_diagnostic,"desc": "Get current CPU/GPU/RAM hardware telemetry"},
     # Internet & Download
     "browse":               {"func": browse,               "desc": "Browse a URL and return text content"},
     "download_file":        {"func": download_file,        "desc": "Download a file from URL to workspace"},
