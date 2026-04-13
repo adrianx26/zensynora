@@ -75,7 +75,7 @@ To become the **most complete, easy-to-use, and secure open-source personal AI a
 - Desktop App Wrapper (Tauri/Electron)
 - One-click self-hosting
 - Secure Secret Manager (Encrypted Key Vault)
-- **Release:** v2.5.0 "Community Edition"
+- **Release:** v2.1 "Community Edition"
 
 ### **Phase 2.2 – Monetization & Enterprise (2027)**
 - Multi-Host SSH Management (Advanced Orchestration)
