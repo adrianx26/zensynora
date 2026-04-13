@@ -2062,45 +2062,105 @@ def schedule_daily_reflection(user_id: str = "default", hour: int = 20, minute: 
 
 
 def generate_session_insights(user_id: str = "default", save_to_knowledge: bool = True) -> str:
-    """Generate insights from recent session conversations.
-    
-    Analyzes the user's recent conversation history to identify patterns,
-    preferences, key topics, and learning opportunities.
-    
-    user_id: User ID for memory access
-    save_to_knowledge: Whether to save insights to knowledge base (default: True)
-    
+    """Generate insights from recent session conversations and persist them to the knowledge base.
+
+    Reads the user's last 50 messages, asks the LLM to identify key topics, preferences,
+    important facts, and action items, then optionally saves the result as a dated KB entry
+    tagged 'session-insights'.
+
+    user_id: User ID for memory access and knowledge base isolation.
+    save_to_knowledge: Whether to write insights to the knowledge base (default: True).
+
     Returns:
-        Formatted insights summary, or confirmation if saved.
+        Formatted insight summary (and confirmation if saved to KB).
     """
     from .memory import Memory
+    from .config import load_config
+    from .provider import get_provider
+    from datetime import datetime
     import asyncio
-    
+
     try:
-        mem = Memory(user_id=user_id)
-        asyncio.get_event_loop().run_until_complete(mem.initialize())
-        history = asyncio.get_event_loop().run_until_complete(mem.get_history(limit=50))
-        
+        # --- Step 1: Load recent conversation history ---
+        async def _load_history():
+            mem = Memory(user_id=user_id)
+            await mem.initialize()
+            h = await mem.get_history(limit=50)
+            await mem.close()
+            return h
+
+        try:
+            loop = asyncio.new_event_loop()
+            history = loop.run_until_complete(_load_history())
+            loop.close()
+        except Exception as e:
+            logger.error(f"Could not load history: {e}")
+            return f"Error loading conversation history: {e}"
+
         if not history:
             return "No conversation history available for analysis."
-        
-        # Build context for analysis
-        analysis_text = "Analyze these recent conversations and identify:\n"
-        analysis_text += "1. Key topics and themes\n"
-        analysis_text += "2. User's communication style\n"
-        analysis_text += "3. Important facts or decisions\n"
-        analysis_text += "4. User preferences or patterns\n"
-        analysis_text += "5. Learning opportunities\n\n"
-        
-        for m in history[-20:]:  # Last 20 messages
-            analysis_text += f"{m['role']}: {m['content'][:200]}\n"
-        
-        # Return the analysis prompt for LLM to process
-        return analysis_text
-        
+
+        # --- Step 2: Build the analysis prompt ---
+        analysis_lines = [
+            "Analyse the following recent conversation and produce a structured insight report.",
+            "Include: (1) Key topics and themes, (2) Important facts or decisions made,",
+            "(3) User preferences or patterns observed, (4) Actionable items or follow-ups.",
+            "Be concise and specific. Use bullet points.\n",
+        ]
+        for m in history[-20:]:  # Focus on last 20 messages for relevance
+            role = m.get("role", "unknown")
+            content = m.get("content", "")[:250]
+            analysis_lines.append(f"{role}: {content}")
+        analysis_prompt = "\n".join(analysis_lines)
+
+        # --- Step 3: Call the LLM ---
+        async def _call_llm():
+            config = load_config()
+            provider = get_provider(config)
+            model = getattr(config.agents.defaults, "model", "llama3.2")
+            insights, _ = await provider.chat(
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an insightful conversation analyst. "
+                            "Extract and summarise key learnings from the conversation in a clear, structured way."
+                        ),
+                    },
+                    {"role": "user", "content": analysis_prompt},
+                ],
+                model=model,
+            )
+            return insights
+
+        try:
+            loop2 = asyncio.new_event_loop()
+            insights_text = loop2.run_until_complete(_call_llm())
+            loop2.close()
+        except Exception as e:
+            logger.error(f"LLM call failed in generate_session_insights: {e}")
+            return f"Error generating insights from LLM: {e}"
+
+        if not insights_text or not insights_text.strip():
+            return "The LLM returned an empty analysis. Please try again."
+
+        # --- Step 4: Save to knowledge base ---
+        if save_to_knowledge:
+            date_str = datetime.now().strftime("%Y-%m-%d")
+            kb_result = write_to_knowledge(
+                title=f"Session Insights {date_str}",
+                content=insights_text,
+                tags="session-insights,auto-generated,daily-reflection",
+                user_id=user_id,
+            )
+            return f"✅ Session insights saved to knowledge base ({kb_result}).\n\n{insights_text}"
+
+        return insights_text
+
     except Exception as e:
         logger.error(f"Error generating session insights: {e}")
         return f"Error generating insights: {e}"
+
 
 
 def extract_user_preferences(user_id: str = "default") -> str:

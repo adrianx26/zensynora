@@ -44,7 +44,7 @@ import time
 from .memory import Memory
 from .provider import get_provider, SUPPORTED_PROVIDERS
 from .tools import TOOLS, trigger_hook, _HOOKS, get_parallel_executor, is_tool_independent
-from .knowledge import search_notes, build_context
+from .knowledge import search_notes, build_context, write_note
 from .semantic_cache import get_semantic_cache
 from .skill_preloader import get_skill_preloader, start_preloader, stop_preloader
 from .task_timer import get_task_timer_orchestrator, TaskStatus, Colors as TimerColors
@@ -198,6 +198,11 @@ SYSTEM_PROMPT = (
     "swarm_terminate(swarm_id), swarm_list(status), swarm_stats(). "
     "IMPORTANT: When creating tools with register_tool(), first use list_toolbox() to check if a similar tool exists. "
     "You can reference knowledge with memory://permalink. "
+    "KNOWLEDGE GROWTH MANDATE: After EVERY interaction where the user shares factual information, "
+    "preferences, configurations, server details, hostnames, ports, credentials, file paths, "
+    "important decisions, or any data worth remembering — you MUST proactively call "
+    "write_to_knowledge() to persist it permanently. Do NOT wait to be asked. "
+    "Every meaningful exchange must grow the knowledge base. "
     "For all other responses, reply in plain text."
 )
 
@@ -334,6 +339,136 @@ class Agent:
         self._knowledge_gap_cache_enabled = enabled
         if hasattr(self, '_gap_cache'):
             self._gap_cache.set_enabled(enabled)
+
+    # ── Automatic Knowledge Extraction ───────────────────────────────────────
+
+    @staticmethod
+    def _should_extract_knowledge(user_message: str, response: str) -> bool:
+        """Heuristic to decide if an interaction is worth auto-extracting knowledge from.
+
+        Returns True only for exchanges that contain concrete, memorable information
+        (IPs, URLs, config, tech terms, preferences, long substantive text).
+        Prevents spurious KB entries from trivial chit-chat or yes/no replies.
+        """
+        # Skip very short exchanges — almost certainly trivial
+        if len(user_message.strip()) < 30 and len(response.strip()) < 80:
+            return False
+
+        # Skip common non-informational openers
+        _trivial_re = re.compile(
+            r'^\s*(hi|hello|hey|thanks?|thank you|ok|okay|yes|no|sure|great|'
+            r'cool|bye|goodbye|good morning|good night|lol|haha|got it|noted)\W*$',
+            re.IGNORECASE,
+        )
+        if _trivial_re.match(user_message.strip()):
+            return False
+
+        # Positive signals — any of these make the exchange knowledge-worthy
+        _knowledge_signals = [
+            r'\b(?:\d{1,3}\.){3}\d{1,3}\b',                              # IP address
+            r'https?://\S+',                                              # URL
+            r'[A-Za-z]:\\[^\s]+|(?:/[a-z][^\s]+){2,}',                  # file path
+            r'\bversion\s+\d',                                            # version number
+            r'\b(?:config|password|token|api[_\-]?key|secret|endpoint|'  # tech config
+            r'server|host(?:name)?|port|user(?:name)?|database|schema|'  # infra
+            r'install|docker|container|cluster|namespace|region)\b',
+            r'\b(?:i prefer|i always|i use|i like|my \w+ is|'            # user preferences
+            r"i'm using|we use|we're using|our \w+ is)\b",
+            r'\b(?:install|configure|setup|deploy|enable|disable|connect)\b',  # config actions
+            r'\b(?:remember|note that|keep in mind|important:|fyi:)\b',   # explicit memory cues
+        ]
+        combined = user_message + " " + response
+        for pattern in _knowledge_signals:
+            if re.search(pattern, combined, re.IGNORECASE):
+                return True
+
+        # Long substantive exchanges are likely meaningful
+        if len(user_message) > 120 and len(response) > 300:
+            return True
+
+        return False
+
+    async def _extract_and_save_knowledge(
+        self,
+        user_message: str,
+        response: str,
+        user_id: str,
+    ) -> None:
+        """Background task: use the LLM to extract facts from an interaction and save them.
+
+        Sends a short focused extraction prompt and writes any discovered facts to the
+        knowledge base automatically.  Runs fire-and-forget via asyncio.create_task();
+        errors are silently logged so they never disrupt the main pipeline.
+        """
+        try:
+            extraction_system = (
+                "You are a knowledge extraction assistant. "
+                "Analyse the conversation exchange below and extract ONLY concrete, "
+                "factual information worth storing permanently "
+                "(IP addresses, hostnames, credentials placeholders, configurations, "
+                "file paths, user preferences, decisions, important facts). "
+                "Return a JSON array of objects: "
+                '[{"title": "<short title>", "content": "<full detail>", "tags": "tag1,tag2"}]. '
+                "Use specific, searchable titles. "
+                "Return ONLY the JSON array — no explanation, no markdown fences. "
+                "Return [] if nothing is concretely worth saving."
+            )
+            exchange = (
+                f"User: {user_message[:800]}\n\nAssistant: {response[:1200]}"
+            )
+            messages = [
+                {"role": "system", "content": extraction_system},
+                {"role": "user", "content": exchange},
+            ]
+
+            raw, _ = await self.provider.chat(messages, self.model)
+
+            # Strip optional markdown code fences
+            raw = raw.strip()
+            raw = re.sub(r'^```[a-z]*\n?', '', raw)
+            raw = re.sub(r'\n?```$', '', raw)
+
+            facts = json.loads(raw)
+            if not isinstance(facts, list):
+                return
+
+            saved = 0
+            for fact in facts[:5]:  # Hard cap: max 5 entries per turn
+                if not isinstance(fact, dict):
+                    continue
+                title = str(fact.get("title", "")).strip()
+                content = str(fact.get("content", "")).strip()
+                tags_raw = str(fact.get("tags", "")).strip()
+                if not title or not content:
+                    continue
+                tag_list = [t.strip() for t in tags_raw.split(",") if t.strip()]
+                tag_list.append("auto-extracted")
+                try:
+                    write_note(
+                        name=title,
+                        title=title,
+                        content=content,
+                        tags=tag_list,
+                        user_id=user_id,
+                    )
+                    saved += 1
+                    logger.info(
+                        f"[KB-AUTO] Saved: '{title}' for user '{user_id}'"
+                    )
+                except Exception as write_err:
+                    logger.debug(
+                        f"[KB-AUTO] Could not save '{title}': {write_err}"
+                    )
+
+            if saved:
+                logger.info(
+                    f"[KB-AUTO] Auto-extraction saved {saved} entr"
+                    f"{'y' if saved == 1 else 'ies'} from interaction."
+                )
+
+        except Exception as exc:
+            # Never crash the main pipeline
+            logger.debug(f"[KB-AUTO] Extraction skipped: {exc}")
 
     async def _load_system_prompt(self) -> str:
         """Lazy load system prompt with async file I/O."""
@@ -1006,6 +1141,14 @@ class Agent:
 
                 await mem.add("assistant", final_response)
 
+                # Background KB auto-extraction (fire-and-forget, never blocks response)
+                if self._should_extract_knowledge(user_message, final_response):
+                    _kb_task = asyncio.create_task(
+                        self._extract_and_save_knowledge(user_message, final_response, user_id)
+                    )
+                    self._pending_preloads.add(_kb_task)
+                    _kb_task.add_done_callback(self._pending_preloads.discard)
+
                 # Trigger on_session_end hook
                 message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
                 trigger_hook("on_session_end", user_id, self.name, message_count)
@@ -1032,6 +1175,14 @@ class Agent:
             )
 
         await mem.add("assistant", response)
+
+        # Background KB auto-extraction (fire-and-forget, never blocks response)
+        if self._should_extract_knowledge(user_message, response):
+            _kb_task = asyncio.create_task(
+                self._extract_and_save_knowledge(user_message, response, user_id)
+            )
+            self._pending_preloads.add(_kb_task)
+            _kb_task.add_done_callback(self._pending_preloads.discard)
 
         # Trigger on_session_end hook
         message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
@@ -1109,13 +1260,11 @@ class Agent:
             if result and isinstance(result, list):
                 messages = result
 
-        # Step 1: LLM Reasoning & Response
-        messages = await self._build_messages(user_message, memories)
+        # Step 1: LLM Reasoning & Response (messages already built above)
         try:
-            # Use request_model assigned by router
-            stream_iterator = await self.provider.chat(messages, request_model, stream=True)
+            stream_iterator = await self.provider.chat(messages, self.model, stream=True)
         except Exception as e:
-            logger.error(f"LLM provider error: {e}")
+            logger.error(f"LLM provider error in stream_think: {e}")
             trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
             yield f"Sorry, I encountered an error: {e}"
             return
@@ -1153,6 +1302,14 @@ class Agent:
         # Note: Tool calls are not supported in streaming mode yet
         # The full response is returned as chunks
         await mem.add("assistant", full_response)
+
+        # Background KB auto-extraction (fire-and-forget)
+        if self._should_extract_knowledge(user_message, full_response):
+            _kb_task = asyncio.create_task(
+                self._extract_and_save_knowledge(user_message, full_response, user_id)
+            )
+            self._pending_preloads.add(_kb_task)
+            _kb_task.add_done_callback(self._pending_preloads.discard)
 
         # Trigger on_session_end hook
         trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
