@@ -720,6 +720,106 @@ class Agent:
         "default": "You can try: DuckDuckGo (https://duckduckgo.com/?q={topic}), Archive (https://web.archive.org/), or a different mirror.",
     }
 
+    # ── Tool-result Knowledge Extraction ────────────────────────────────────
+
+    # Tools whose output is worth persisting in the knowledge base
+    _KB_WORTHY_TOOLS: frozenset = frozenset({
+        "shell", "browse", "read_file", "write_file",
+        "download_file", "delegate",
+    })
+
+    @staticmethod
+    def _should_save_tool_result(tool_name: str, tool_output: str) -> bool:
+        """Return True when a tool's output is substantial enough to save to the KB.
+
+        Checks both the tool whitelist and a minimum length threshold so that
+        trivial confirmations (e.g. 'File written.') are silently skipped.
+        """
+        return (
+            tool_name in Agent._KB_WORTHY_TOOLS
+            and len(tool_output.strip()) > 120
+        )
+
+    async def _save_tool_result_to_kb(
+        self,
+        tool_name: str,
+        args: dict,
+        tool_output: str,
+        user_message: str,
+        user_id: str,
+    ) -> None:
+        """Background task: extract and save knowledge from a completed tool execution.
+
+        Sends a focused extraction prompt to the LLM asking it to identify concrete
+        facts in the tool output (file contents, command results, downloaded data, etc.)
+        and writes each fact to the KB via write_note().  Runs fire-and-forget;
+        errors are silently logged so the main pipeline is never disrupted.
+        """
+        try:
+            extraction_system = (
+                "You are a knowledge extraction assistant. "
+                "Review the following tool execution result and extract ONLY concrete, "
+                "factual information worth storing permanently "
+                "(file contents, configuration values, command output facts, research results, "
+                "server details, hostnames, paths, versions, credentials placeholders). "
+                "Return a JSON array of objects: "
+                '[{"title": "<short searchable title>", "content": "<full detail>", "tags": "tag1,tag2"}]. '
+                "Return ONLY the JSON array — no explanation, no markdown fences. "
+                "Return [] if nothing is concretely worth saving."
+            )
+            context = (
+                f"Tool: {tool_name}\n"
+                f"Arguments: {json.dumps(args, default=str)[:300]}\n"
+                f"User task context: {user_message[:200]}\n\n"
+                f"Tool output:\n{tool_output[:1500]}"
+            )
+            messages = [
+                {"role": "system", "content": extraction_system},
+                {"role": "user", "content": context},
+            ]
+
+            raw, _ = await self.provider.chat(messages, self.model)
+            raw = raw.strip()
+            raw = re.sub(r'^```[a-z]*\n?', '', raw)
+            raw = re.sub(r'\n?```$', '', raw)
+
+            facts = json.loads(raw)
+            if not isinstance(facts, list):
+                return
+
+            saved = 0
+            for fact in facts[:3]:  # Hard cap: max 3 entries per tool call
+                if not isinstance(fact, dict):
+                    continue
+                title = str(fact.get("title", "")).strip()
+                content = str(fact.get("content", "")).strip()
+                tags_raw = str(fact.get("tags", "")).strip()
+                if not title or not content:
+                    continue
+                tag_list = [t.strip() for t in tags_raw.split(",") if t.strip()]
+                tag_list.extend(["auto-extracted", f"tool-{tool_name}"])
+                try:
+                    write_note(
+                        name=title,
+                        title=title,
+                        content=content,
+                        tags=tag_list,
+                        user_id=user_id,
+                    )
+                    saved += 1
+                    logger.info(f"[KB-TOOL] Saved from {tool_name}: '{title}'")
+                except Exception as we:
+                    logger.debug(f"[KB-TOOL] Could not save '{title}': {we}")
+
+            if saved:
+                logger.info(
+                    f"[KB-TOOL] Saved {saved} "
+                    f"{'entry' if saved == 1 else 'entries'} from {tool_name} result."
+                )
+
+        except Exception as exc:
+            logger.debug(f"[KB-TOOL] Tool result extraction skipped for {tool_name}: {exc}")
+
     @staticmethod
     def _detect_browse_failure(tool_result: str) -> bool:
         """Return True when a tool result string signals a web-browse failure."""
@@ -1038,6 +1138,21 @@ class Agent:
                         content = f"Tool {r['tool_name']} error: {r['error']}"
                     tool_results_by_id[tool_call_id] = content
                     await mem.add("tool", content)
+                    # KB extraction for substantial parallel tool results (fire-and-forget)
+                    if r["success"] and self._should_save_tool_result(
+                        r['tool_name'], r.get('result', '')
+                    ):
+                        _t = asyncio.create_task(
+                            self._save_tool_result_to_kb(
+                                r['tool_name'],
+                                tc.get("function", {}).get("arguments", {}),
+                                r['result'],
+                                user_message,
+                                user_id,
+                            )
+                        )
+                        self._pending_preloads.add(_t)
+                        _t.add_done_callback(self._pending_preloads.discard)
             elif independent_tools:
                 # Single independent tool - execute sequentially below along with dependent ones
                 dependent_tools = tool_calls
@@ -1091,6 +1206,15 @@ class Agent:
                     await mem.add("tool", content)
                     duration = time.time() - start_time
                     logger.info(f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)")
+                    # KB extraction for substantial sequential tool results (fire-and-forget)
+                    if self._should_save_tool_result(tool_name, tool_output):
+                        _t = asyncio.create_task(
+                            self._save_tool_result_to_kb(
+                                tool_name, args, tool_output, user_message, user_id
+                            )
+                        )
+                        self._pending_preloads.add(_t)
+                        _t.add_done_callback(self._pending_preloads.discard)
                 except Exception as e:
                     logger.error(f"Tool execution error ({tool_name}): {e}")
                     logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
