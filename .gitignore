@@ -7,3 +7,7 @@ __pycache__/
 putty/
 test*.py
 *.sh~
+
+# Exclude local virtual environment and temporary packaging artifact
+venv/
+=0.20.0

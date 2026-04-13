@@ -68,6 +68,7 @@ This implementation adds comprehensive knowledge base empty-result handling, str
 
 #### `CHANGELOG.md`
 - Added "Knowledge Gap & Error Handling Enhancement (2026-04-10)" section
+- Added "Bug Fixes (2026-04-13)" section covering researcher import fix and agent UnboundLocalError fix
 - Documented all new features, enhancements, and tests
 
 #### `README.md`
@@ -82,14 +83,16 @@ This implementation adds comprehensive knowledge base empty-result handling, str
 - Added Error Handling & User Experience section (v2.1)
 - Added Knowledge Gap Handling Flow diagram
 - Added Browse Error Handling Flow diagram
+- Updated Knowledge module to include `researcher.py` and `storage.py`
 - Updated test coverage statistics
-- Updated footer with v2.1 information
+- Updated footer with v2.1 information and bug fix notes
 
 #### `docs/architecture_diagram.md`
 - Updated Request Processing flow to include knowledge gap handling
 - Added Error Handling Architecture (v2.1) section with:
   - Browse Tool Error Handling diagram
   - Knowledge Gap Handling diagram
+- Updated file structure to include `researcher.py` under `knowledge/`
 - Updated footer with latest changes
 
 ---
@@ -265,5 +268,59 @@ All tests pass with deprecation warnings only (not errors).
 
 ---
 
+## Post-Implementation Bug Fixes (2026-04-13)
+
+### 1. Knowledge Researcher Import Error
+
+**File:** `myclaw/knowledge/researcher.py`
+
+**Issue:** `ImportError: cannot import name 'KBStorage' from 'myclaw.knowledge.storage'`
+
+The `GapResearcher` class referenced a non-existent `KBStorage` class. The fix replaces this with the actual module-level functions:
+- `KnowledgeDB` from `.db` - for database operations
+- `write_note` from `.storage` - for writing research notes to Markdown files
+- `get_knowledge_dir` from `.storage` - for path resolution
+
+**Testing:** After the fix, `python cli.py onboard` and `python cli.py agent` both start successfully without import errors.
+
+### 2. Agent UnboundLocalError
+
+**File:** `myclaw/agent.py`
+
+**Issue:** `UnboundLocalError: cannot access local variable 'time' where it is not associated with a value`
+
+An inner `import time` inside the `think()` method shadowed the module-level `time` import. The fix removes the redundant inner import and moves `import inspect` to the module top-level.
+
+### 3. OpenAI Tool Message Validation
+
+**Files:** `myclaw/provider.py`, `myclaw/agent.py`
+
+**Issue:** `BadRequestError: 400 - messages with role 'tool' must be a response to a preceding message with 'tool_calls'`
+
+**Initial Fix:**
+- **`provider.py`:** Added `_sanitize_messages_for_openai()` to convert orphaned `role: "tool"` messages to `role: "user"` messages for API compatibility. Updated `_openai_tool_calls_to_dict()` to preserve `id` and `type` fields.
+- **`agent.py`:** Saves the assistant response with `tool_calls` to memory before executing tools. Constructs proper follow-up messages including both the assistant message (`tool_calls`) and the tool result message (`tool_call_id`).
+
+**Follow-up Fix — Parallel Multi-Tool Execution:**
+- OpenAI requires **one tool message per `tool_call_id`**. When the agent executed 2+ independent tools in parallel, it previously aggregated all results into a single tool message, causing a second 400 error (`...did not have response messages: call_xxx`).
+- **`agent.py`:** Refactored tool result collection to use a `tool_results_by_id` dictionary. The follow-up message array now appends individual `role: "tool"` messages (each with its matching `tool_call_id`) for every tool that was invoked.
+- **`provider.py`:** Rewrote `_sanitize_messages_for_openai()` to track multi-message tool blocks via an `in_tool_block` state flag, correctly preserving consecutive tool messages after an assistant with `tool_calls`. Added `_ensure_tool_messages()` as a safety net to auto-insert dummy tool responses for any missing `tool_call_id`s before sending to the API.
+
+**Testing:** Single-tool and parallel multi-tool execution flows (`browse`, `shell`, `search_knowledge`, `fetch_ai_news`, etc.) now work correctly. Examples verified:
+- `tell me the weather in Bucharest` (single browse tool)
+- `search the web for python news and search my knowledge for python` (parallel tools)
+- `what you can do?` (multi-turn with tool history)
+
+### 4. Knowledge Researcher Indentation Fix
+
+**File:** `myclaw/knowledge/researcher.py`
+
+**Issue:** `IndentationError: unexpected indent` on line 1 due to accidental leading whitespace before the module docstring.
+
+**Fix:** Removed the extra whitespace to restore valid Python syntax.
+
+---
+
 *Implementation completed by AI Agent*  
-*Reviewed and tested: 2026-04-10*
+*Reviewed and tested: 2026-04-10*  
+*Bug fixes applied: 2026-04-13*

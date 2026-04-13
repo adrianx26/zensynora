@@ -19,7 +19,8 @@ except ImportError:
 
 from ..config import load_config
 from ..provider import get_provider
-from .storage import KBStorage
+from .db import KnowledgeDB
+from .storage import write_note, get_knowledge_dir
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,6 @@ class GapResearcher:
 
     def __init__(self, config=None):
         self.config = config or load_config()
-        self.storage = KBStorage(config_dir=Path.home() / ".myclaw")
         self._is_running = False
 
     def _get_unprocessed_gaps(self) -> List[Dict[str, Any]]:
@@ -96,23 +96,20 @@ class GapResearcher:
             )
             
             # 3. Store in Knowledge Base
-            from .db import KBDatabase
-            db = KBDatabase(Path.home() / ".myclaw" / "knowledge.db")
+            db = KnowledgeDB()
             
             tags = ["automated-research", "knowledge-gap-filled"]
-            # Extract tags from summary if possible
             
-            note_id = self.storage.save_note(
+            # Save note using existing storage functions
+            note_permalink = write_note(
+                name=f"research-{gap_query.lower().replace(' ', '-')}",
                 title=f"Research: {gap_query}",
                 content=summary,
                 tags=tags
             )
             
-            # Sync to DB for searchability
-            db.index_note(note_id, f"Research: {gap_query}", summary, tags)
-            
             # 4. Log the research
-            self._log_research(gap_query, note_id)
+            self._log_research(gap_query, note_permalink)
             
             return True
             

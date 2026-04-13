@@ -560,10 +560,10 @@ Tool Call Request
 ```
 myclaw/
 ├── __init__.py
-├── agent.py           # Agent class with hooks + profile loading
+├── agent.py           # Agent class with hooks + profile loading + tool_calls fix
 ├── tools.py            # All tools
 ├── memory.py           # Memory with enhanced FTS5 search
-├── provider.py        # LLM providers
+├── provider.py        # LLM providers + OpenAI message sanitization
 ├── config.py          # Configuration (with medic/newtech/backends)
 ├── gateway.py         # Gateway startup
 ├── agents/             # Specialized Agents (NEW)
@@ -585,9 +585,11 @@ myclaw/
 │   ├── storage.py
 │   └── strategies.py
 ├── knowledge/         # Knowledge Base
-│   ├── db.py
-│   ├── graph.py
-│   ├── storage.py
+│   ├── db.py           # SQLite + FTS5 (KnowledgeDB class)
+│   ├── graph.py        # Entity relations
+│   ├── storage.py      # Markdown notes (write_note, read_note functions)
+│   ├── researcher.py   # GapResearcher - background web research
+│   ├── parser.py       # Note parsing
 │   └── sync.py
 ├── channels/          # Communication Channels
 │   ├── telegram.py
@@ -638,5 +640,5 @@ myclaw/
 ```
 
 *Generated: 2026-03-29*
-*Last Updated: 2026-04-10 (Added Knowledge Gap Handling & Enhanced Error Handling v2.1)*
+*Last Updated: 2026-04-13 (Bug fixes: parallel tool execution, OpenAI message sanitization, researcher.py imports, agent.py UnboundLocalError)*
 *Part of: ZenSynora Full Implementation*

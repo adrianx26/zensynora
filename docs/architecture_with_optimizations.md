@@ -381,17 +381,19 @@ flowchart LR
 ```mermaid
 flowchart TD
     subgraph Core["Core Modules"]
-        Agent["agent.py"]
+        Agent["agent.py<br/>(+parallel tool_calls fix 2026-04-13)"]
         Memory["memory.py"]
-        Provider["provider.py"]
+        Provider["provider.py<br/>(+OpenAI message sanitize + _ensure_tool_messages)"]
         Tools["tools.py"]
         Config["config.py"]
     end
 
     subgraph Knowledge["Knowledge"]
-        DB["db.py<br/>(+batch, +checkpoint)"]
+        DB["db.py<br/>(+batch, +checkpoint, KnowledgeDB)"]
         Graph["graph.py<br/>(+batch fetch)"]
         Parser["parser.py"]
+        Storage["storage.py<br/>(write_note, read_note)"]
+        Researcher["researcher.py<br/>(GapResearcher, fixed 2026-04-13)"]
     end
 
     subgraph Swarm["Swarm System"]
@@ -463,6 +465,7 @@ _profile_cache_maxsize = 100  # Profile cache size
 
 ---
 
-*Last Updated: 2026-04-10*
+*Last Updated: 2026-04-13*
 *Optimization Version: 2.1*
 *Includes: Knowledge Gap Handling & Enhanced Error Handling*
+*Bug Fixes Applied: parallel multi-tool execution, OpenAI message sanitization, researcher.py imports, agent.py UnboundLocalError*

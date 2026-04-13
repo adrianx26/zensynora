@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Bug Fixes (2026-04-13)
+
+#### Import Error in Knowledge Researcher (`myclaw/knowledge/researcher.py`)
+- **Fixed:** `ImportError: cannot import name 'KBStorage' from 'myclaw.knowledge.storage'`
+- **Root Cause:** `researcher.py` imported a non-existent `KBStorage` class from `storage.py`.
+- **Fix:** Replaced incorrect import with the correct module-level functions and classes:
+  - `KnowledgeDB` from `.db`
+  - `write_note` and `get_knowledge_dir` from `.storage`
+- **Impact:** `python cli.py onboard` now starts without import errors. The background `GapResearcher` worker correctly persists synthesized web-search notes to the knowledge base.
+
+#### UnboundLocalError in Agent (`myclaw/agent.py`)
+- **Fixed:** `UnboundLocalError: cannot access local variable 'time' where it is not associated with a value`
+- **Root Cause:** An inner `import time` inside the `think()` method shadowed the module-level `time` import, causing Python to treat `time` as a local variable.
+- **Fix:** Removed the redundant inner `import time` (and relocated `import inspect` to the module top-level) so the module-level `time` import is used consistently.
+- **Impact:** `python cli.py agent` no longer crashes on the first user message.
+
+#### OpenAI Tool Message Validation (`myclaw/provider.py`, `myclaw/agent.py`)
+- **Fixed:** `BadRequestError: 400 - messages with role 'tool' must be a response to a preceding message with 'tool_calls'`
+- **Root Cause:** OpenAI's API requires that any `role: "tool"` message immediately follows an assistant message containing `tool_calls`. The agent was not including the assistant message with `tool_calls` before tool results in follow-up API calls, and existing conversation history contained orphaned tool messages.
+- **Fix (Initial):**
+  - Added `_sanitize_messages_for_openai()` in `provider.py` to convert orphaned `role: "tool"` messages to `role: "user"` messages for API compatibility
+  - Updated `_openai_tool_calls_to_dict()` to preserve `id` and `type` fields required for reconstructing proper message sequences
+  - Modified `agent.py` to save the assistant response before tool execution and construct proper follow-up messages with both assistant (`tool_calls`) and tool (`tool_call_id`) roles
+- **Fix (Follow-up — Parallel Tool Execution):**
+  - OpenAI requires **one tool message per `tool_call_id`**. The agent originally aggregated multiple parallel tool results into a single message, causing `400 - An assistant message with 'tool_calls' must be followed by tool messages responding to each 'tool_call_id'`.
+  - Refactored `agent.py` to collect results keyed by `tool_call_id` and append individual `role: "tool"` messages for each executed tool.
+  - Rewrote `provider.py`'s `_sanitize_messages_for_openai()` to track multi-message tool blocks using an `in_tool_block` flag instead of looking only at the immediately preceding message.
+  - Added `_ensure_tool_messages()` in `provider.py` as a safety net to auto-insert dummy tool responses for any missing `tool_call_id`s.
+- **Impact:** Single-tool and multi-tool (parallel) execution flows (`browse`, `shell`, `search_knowledge`, etc.) now work correctly without 400 Bad Request errors. Users can ask queries requiring multiple tools and receive proper responses.
+
+#### Knowledge Researcher Indentation Fix (`myclaw/knowledge/researcher.py`)
+- **Fixed:** `IndentationError: unexpected indent` on line 1 caused by accidental leading whitespace before the module docstring.
+- **Impact:** `python cli.py agent` and `python cli.py onboard` no longer fail at import time for `researcher.py`.
+
 ### Knowledge Gap & Error Handling Enhancement (2026-04-10)
 
 A comprehensive enhancement to knowledge base empty-result handling, structured gap logging, and user-friendly error handling for browse operations.

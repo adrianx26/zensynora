@@ -124,6 +124,22 @@ Channels (CLI, Telegram)  ↓
    - Use `coverage` to ensure new code is well‑covered.
 
 ---
+## Recent Bug Fixes (2026-04-13)
+
+1. **Knowledge Researcher Import Fix** (`myclaw/knowledge/researcher.py`)
+   - Fixed `ImportError` for non-existent `KBStorage` class
+   - Uses correct imports: `KnowledgeDB` from `.db`, `write_note` from `.storage`
+
+2. **Agent UnboundLocalError Fix** (`myclaw/agent.py`)
+   - Fixed `UnboundLocalError` for `time` variable in `think()` method
+   - Removed inner `import time` that shadowed module-level import
+
+3. **OpenAI Tool Message Validation Fix** (`myclaw/provider.py`, `myclaw/agent.py`)
+   - Fixed `BadRequestError: 400` for both single-tool and parallel multi-tool execution
+   - **`agent.py`:** Replaced aggregated tool message with individual `role: "tool"` messages per `tool_call_id`
+   - **`provider.py`:** Rewrote `_sanitize_messages_for_openai()` to track multi-message tool blocks and added `_ensure_tool_messages()` as a safety net for missing tool responses
+   - Tool execution flows (`browse`, `shell`, `search_knowledge`, etc.) now work correctly
+
 ## Reporting Issues / Contributing
 
 - Open a GitHub issue for bugs or feature requests.
@@ -132,3 +148,4 @@ Channels (CLI, Telegram)  ↓
 
 ---
 *Generated on 2026-04-05*
+*Last updated: 2026-04-13 (Bug fixes applied)*

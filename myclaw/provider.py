@@ -327,16 +327,102 @@ def _openai_tool_calls_to_dict(tool_calls) -> Optional[List[Dict]]:
         args = tc.function.arguments
         if isinstance(args, str):
             try:
-                args = _json.loads(args)
+                args_dict = _json.loads(args)
             except Exception:
-                args = {}
+                args_dict = {}
+        else:
+            args_dict = args
         result.append({
+            "id": tc.id,
+            "type": getattr(tc, 'type', 'function'),
             "function": {
                 "name": tc.function.name,
-                "arguments": args,
+                "arguments": args_dict,
+                "arguments_str": args if isinstance(args, str) else _json.dumps(args),
             }
         })
     return result or None
+
+
+def _sanitize_messages_for_openai(messages: List[Dict]) -> List[Dict]:
+    """Sanitize messages to ensure OpenAI API compatibility.
+    
+    Specifically handles orphaned 'tool' messages that don't follow an assistant
+    message with 'tool_calls' by converting them to 'user' messages.
+    Multiple consecutive tool messages following an assistant with tool_calls are preserved.
+    """
+    sanitized = []
+    in_tool_block = False  # True after we see an assistant with tool_calls
+    
+    for msg in messages:
+        role = msg.get("role")
+        
+        if role == "assistant" and msg.get("tool_calls"):
+            in_tool_block = True
+            sanitized.append(msg)
+        elif role == "tool":
+            if in_tool_block:
+                sanitized.append(msg)
+            else:
+                sanitized.append({
+                    "role": "user",
+                    "content": f"[tool result] {msg.get('content', '')}"
+                })
+        else:
+            in_tool_block = False
+            sanitized.append(msg)
+    
+    return sanitized
+
+
+def _ensure_tool_messages(messages: List[Dict]) -> List[Dict]:
+    """Ensure every assistant message with tool_calls is followed by matching tool messages.
+    
+    If an assistant message with tool_calls is not followed by tool messages responding
+    to each tool_call_id, append dummy tool messages to satisfy OpenAI's API requirements.
+    """
+    result = []
+    pending_tool_calls = None
+    
+    for msg in messages:
+        if msg.get("role") == "assistant" and msg.get("tool_calls"):
+            # If there were pending tool calls from a previous assistant, add dummy responses
+            if pending_tool_calls:
+                for tc in pending_tool_calls:
+                    result.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", "call_default"),
+                        "content": "[No tool response available from history]"
+                    })
+            pending_tool_calls = msg.get("tool_calls", [])
+            result.append(msg)
+        elif msg.get("role") == "tool" and pending_tool_calls:
+            # Track which tool calls have been responded to
+            tool_call_id = msg.get("tool_call_id")
+            pending_tool_calls = [tc for tc in pending_tool_calls if tc.get("id") != tool_call_id]
+            result.append(msg)
+        else:
+            # If there were pending tool calls, add dummy responses before non-tool messages
+            if pending_tool_calls:
+                for tc in pending_tool_calls:
+                    result.append({
+                        "role": "tool",
+                        "tool_call_id": tc.get("id", "call_default"),
+                        "content": "[No tool response available from history]"
+                    })
+                pending_tool_calls = None
+            result.append(msg)
+    
+    # Handle any remaining pending tool calls at the end
+    if pending_tool_calls:
+        for tc in pending_tool_calls:
+            result.append({
+                "role": "tool",
+                "tool_call_id": tc.get("id", "call_default"),
+                "content": "[No tool response available from history]"
+            })
+    
+    return result
 
 
 # ── Abstract Base ──────────────────────────────────────────────────────────────
@@ -487,6 +573,10 @@ class OpenAICompatProvider(BaseLLMProvider):
 
     @retry_with_backoff(max_retries=3, base_delay=1.0)
     async def chat(self, messages, model="gpt-4o-mini", stream: bool = False):
+        # Sanitize messages to ensure OpenAI API compatibility
+        messages = _sanitize_messages_for_openai(messages)
+        messages = _ensure_tool_messages(messages)
+        
         # Check semantic cache first (skip for streaming)
         if not stream:
             cache = get_semantic_cache()

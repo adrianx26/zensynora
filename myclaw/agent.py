@@ -33,6 +33,7 @@ import logging
 import asyncio
 import re
 import threading
+import inspect
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, AsyncIterator, Set, Union, Any
 from collections import OrderedDict
@@ -868,12 +869,19 @@ class Agent:
                 response, tool_calls = result  # Allow hooks to modify response/tool_calls
 
         if tool_calls:
+            # Save assistant response with tool_calls to memory (as plain text for now)
+            await mem.add("assistant", response or "[Using tools...]")
+            
             # Update timer - executing tools
             if self._current_task_id:
                 await self._task_timer.update_step(self._current_task_id, "executing_tools", 4, 5)
             
-            # Determine if we can use parallel execution
+            # Collect results per tool_call_id
+            tool_results_by_id: Dict[str, str] = {}
+            
+            # Determine parallel vs sequential execution
             independent_tools = [tc for tc in tool_calls if is_tool_independent(tc.get("function", {}).get("name", ""))]
+            dependent_tools = [tc for tc in tool_calls if not is_tool_independent(tc.get("function", {}).get("name", ""))]
 
             if len(independent_tools) > 1:
                 # Use parallel execution for independent tools
@@ -881,76 +889,101 @@ class Agent:
                 executor = get_parallel_executor()
                 exec_results = await executor.execute_tools(independent_tools, user_id)
 
-                # Format results for the LLM; annotate browse failures
-                result_parts = []
-                for r in exec_results:
+                # Map results back to tool_call_ids
+                for tc, r in zip(independent_tools, exec_results):
+                    tool_call_id = tc.get("id", "call_default")
                     if r["success"]:
                         tool_output = r['result']
                         if r['tool_name'] == 'browse' and self._detect_browse_failure(tool_output):
                             url_match = re.search(r'https?://\S+', tool_output)
                             url = url_match.group(0) if url_match else ""
                             tool_output += self._browse_alternative_hint(url, user_message)
-                        result_parts.append(f"Tool {r['tool_name']} returned: {tool_output}")
+                        content = f"Tool {r['tool_name']} returned: {tool_output}"
                     else:
-                        result_parts.append(f"Tool {r['tool_name']} error: {r['error']}")
+                        content = f"Tool {r['tool_name']} error: {r['error']}"
+                    tool_results_by_id[tool_call_id] = content
+                    await mem.add("tool", content)
+            elif independent_tools:
+                # Single independent tool - execute sequentially below along with dependent ones
+                dependent_tools = tool_calls
+            
+            # Execute dependent (and single independent) tools sequentially
+            for tc in dependent_tools:
+                tool_name = tc.get("function", {}).get("name", "")
+                args = tc.get("function", {}).get("arguments", {})
+                tool_call_id = tc.get("id", "call_default")
 
-                results = result_parts
-            else:
-                # Fall back to sequential execution for single tool or dependent tools
-                import time
-                import inspect
-                results = []
-                for tc in tool_calls:
-                    tool_name = tc.get("function", {}).get("name", "")
-                    args = tc.get("function", {}).get("arguments", {})
+                if tool_name not in TOOLS:
+                    content = f"Unknown tool: {tool_name}"
+                    tool_results_by_id[tool_call_id] = content
+                    await mem.add("tool", content)
+                    logger.warning(f"Unknown tool called: {tool_name}")
+                    continue
 
-                    if tool_name not in TOOLS:
-                        results.append(f"Unknown tool: {tool_name}")
-                        logger.warning(f"Unknown tool called: {tool_name}")
-                        continue
+                if tool_name == "delegate":
+                    args["_depth"] = _depth + 1
 
-                    if tool_name == "delegate":
-                        args["_depth"] = _depth + 1
+                start_time = time.time()
+                logger.info(f"[AUDIT] Tool execution started: {tool_name} with args: {args}")
 
-                    start_time = time.time()
-                    logger.info(f"[AUDIT] Tool execution started: {tool_name} with args: {args}")
+                try:
+                    func = TOOLS[tool_name]["func"]
+                    if inspect.iscoroutinefunction(func):
+                        result = await func(**args)
+                    else:
+                        result = await asyncio.to_thread(func, **args)
 
-                    try:
-                        func = TOOLS[tool_name]["func"]
-                        if inspect.iscoroutinefunction(func):
-                            result = await func(**args)
-                        else:
-                            result = await asyncio.to_thread(func, **args)
+                    tool_output = str(result)
 
-                        tool_output = str(result)
+                    # Error Handling Enhancement 1: browse failure → suggest alternatives
+                    if tool_name == "browse" and self._detect_browse_failure(tool_output):
+                        url = args.get("url", "")
+                        tool_output += self._browse_alternative_hint(url, user_message)
+                        logger.info(f"Browse failure detected for {url}; alternative hint appended.")
 
-                        # Error Handling Enhancement 1: browse failure → suggest alternatives
-                        if tool_name == "browse" and self._detect_browse_failure(tool_output):
-                            url = args.get("url", "")
-                            tool_output += self._browse_alternative_hint(url, user_message)
-                            logger.info(f"Browse failure detected for {url}; alternative hint appended.")
+                    # Error Handling Enhancement 2: empty KB search → nudge KB creation
+                    if tool_name == "search_knowledge":
+                        if "No results found" in tool_output or "Error" in tool_output:
+                            query = args.get("query", user_message[:60])
+                            self._record_kb_gap(user_id, query)
+                            tool_output += (
+                                f"\n\n[Tip: No knowledge base entries matched '{query}'. "
+                                "Use write_to_knowledge() to persist useful information for future use.]"
+                            )
 
-                        # Error Handling Enhancement 2: empty KB search → nudge KB creation
-                        if tool_name == "search_knowledge":
-                            if "No results found" in tool_output or "Error" in tool_output:
-                                query = args.get("query", user_message[:60])
-                                self._record_kb_gap(user_id, query)
-                                tool_output += (
-                                    f"\n\n[Tip: No knowledge base entries matched '{query}'. "
-                                    "Use write_to_knowledge() to persist useful information for future use.]"
-                                )
-
-                        await mem.add("tool", f"Tool {tool_name} returned: {tool_output}")
-                        results.append(tool_output)
-                        duration = time.time() - start_time
-                        logger.info(f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)")
-                    except Exception as e:
-                        logger.error(f"Tool execution error ({tool_name}): {e}")
-                        logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
-                        results.append(f"Tool error: {e}")
-
-            tool_result_msg = "\n".join(results)
-            followup = messages + [{"role": "tool", "content": tool_result_msg}]
+                    content = f"Tool {tool_name} returned: {tool_output}"
+                    tool_results_by_id[tool_call_id] = content
+                    await mem.add("tool", content)
+                    duration = time.time() - start_time
+                    logger.info(f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)")
+                except Exception as e:
+                    logger.error(f"Tool execution error ({tool_name}): {e}")
+                    logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
+                    content = f"Tool error: {e}"
+                    tool_results_by_id[tool_call_id] = content
+                    await mem.add("tool", content)
+            
+            # Build proper followup messages with assistant + individual tool messages for OpenAI compatibility
+            openai_tool_calls = []
+            for tc in tool_calls:
+                openai_tool_calls.append({
+                    "id": tc.get("id", "call_default"),
+                    "type": tc.get("type", "function"),
+                    "function": {
+                        "name": tc["function"]["name"],
+                        "arguments": tc["function"].get("arguments_str", "")
+                    }
+                })
+            
+            followup = messages + [
+                {"role": "assistant", "content": response or "", "tool_calls": openai_tool_calls}
+            ]
+            
+            # Append one tool message per tool_call_id in the same order as tool_calls
+            for tc in tool_calls:
+                tool_call_id = tc.get("id", "call_default")
+                content = tool_results_by_id.get(tool_call_id, "Tool was not executed.")
+                followup.append({"role": "tool", "tool_call_id": tool_call_id, "content": content})
 
             # Trigger pre_llm_call hooks for followup
             hook_results = trigger_hook("pre_llm_call", followup, self.model)
