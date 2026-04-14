@@ -132,13 +132,15 @@ swarm_assign("swarm_xxx", "Research AI developments")
 | Voting | ✅ | Consensus-based decisions |
 
 ### Swarm Tools
-- `swarm_create()` - Create new swarms
-- `swarm_assign()` - Execute tasks
-- `swarm_status()` - Check status
-- `swarm_result()` - Get results
-- `swarm_terminate()` - Stop execution
-- `swarm_list()` - List swarms
-- `swarm_stats()` - View statistics
+- ✅ `swarm_create()` - Create new swarms
+- ✅ `swarm_assign()` - Execute tasks
+- ✅ `swarm_status()` - Check status
+- ✅ `swarm_result()` - Get results
+- ✅ `swarm_terminate()` - Stop execution
+- ✅ `swarm_list()` - List swarms
+- ✅ `swarm_stats()` - View statistics
+- ✅ `swarm_message()` - Inter-agent communication
+
 
 ### Configuration
 ```json

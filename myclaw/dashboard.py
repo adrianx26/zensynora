@@ -438,90 +438,11 @@ class MyClawDashboard:
 
 
 @asynccontextmanager
-async def dashboard_app(dashboard: MyClawDashboard):
-    """Create FastAPI app context for dashboard."""
-    app = FastAPI(title="MyClaw Admin Dashboard")
-    
-    @app.get("/")
-    async def root():
-        return HTMLResponse(DASHBOARD_HTML)
-    
-    @app.get("/api/overview")
-    async def api_overview():
-        return JSONResponse(dashboard.get_overview_data())
-    
-    @app.get("/api/agents")
-    async def api_agents():
-        return JSONResponse(dashboard.get_agent_data())
-    
-    @app.delete("/api/agents/{agent_name}")
-    async def api_remove_agent(agent_name: str):
-        return JSONResponse({"success": True})
-    
-    @app.get("/api/swarms")
-    async def api_swarms():
-        return JSONResponse(dashboard.get_swarm_data())
-    
-    @app.post("/api/swarms/{swarm_id}")
-    async def api_terminate_swarm(swarm_id: str):
-        return JSONResponse({"success": True})
-    
-    @app.get("/api/memory")
-    async def api_memory():
-        return JSONResponse(dashboard.get_memory_data())
-    
-    @app.get("/api/config")
-    async def api_config():
-        return JSONResponse(dashboard.get_config_data())
-    
-    @app.get("/api/logs")
-    async def api_logs():
-        return JSONResponse(dashboard.get_log_data())
-    
+async def dashboard_app(dashboard: "MyClawDashboard"):
+    """Async context manager for managing the dashboard lifecycle."""
+    from .dashboard_server import create_dashboard_app
+    app = create_dashboard_app(dashboard)
     yield app
-
-
-def create_dashboard_app(dashboard: MyClawDashboard) -> FastAPI:
-    """Create the FastAPI application for the dashboard."""
-    app = FastAPI(title="MyClaw Admin Dashboard")
-    
-    @app.get("/", response_class=HTMLResponse)
-    async def root():
-        return DASHBOARD_HTML
-    
-    @app.get("/api/overview")
-    async def api_overview():
-        return JSONResponse(dashboard.get_overview_data())
-    
-    @app.get("/api/agents")
-    async def api_agents():
-        return JSONResponse(dashboard.get_agent_data())
-    
-    @app.delete("/api/agents/{agent_name}")
-    async def api_remove_agent(agent_name: str):
-        return JSONResponse({"success": True})
-    
-    @app.get("/api/swarms")
-    async def api_swarms():
-        return JSONResponse(dashboard.get_swarm_data())
-    
-    @app.post("/api/swarms/{swarm_id}")
-    async def api_terminate_swarm(swarm_id: str):
-        return JSONResponse({"success": True})
-    
-    @app.get("/api/memory")
-    async def api_memory():
-        return JSONResponse(dashboard.get_memory_data())
-    
-    @app.get("/api/config")
-    async def api_config():
-        return JSONResponse(dashboard.get_config_data())
-    
-    @app.get("/api/logs")
-    async def api_logs():
-        return JSONResponse(dashboard.get_log_data())
-    
-    return app
 
 
 __all__ = [

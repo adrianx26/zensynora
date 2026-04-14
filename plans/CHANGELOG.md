@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-04-14
+
+### Added
+- **Dashboard Server Refactoring** (`myclaw/dashboard_server.py`)
+  - Extracted FastAPI app factory to a dedicated module to fix import errors and improve separation of concerns.
+- **Vosk STT Implementation** (`myclaw/voice_channel.py`)
+  - Completed `VoskSTTProvider.transcribe` for offline speech-to-text.
+  - Implemented `VoiceChannel.listen_stream` with chunk buffering and VAD triggers.
+- **Skill Preloading Execution** (`myclaw/skill_preloader.py`)
+  - Implemented `_load_skill_code` to proactively cache tool scripts into memory.
+
+### Fixed
+- **Dashboard Startup**: Resolved circular dependency and missing module errors in `myclaw/dashboard.py`.
+- **Documentation Accuracy**: Audited and synchronized `code_analysis_summary.md` and `FUNCTIONS_SUMMARY.md` with the actual codebase implementation.
+
 ## [Unreleased]
 
 ### Added

@@ -292,10 +292,40 @@ class VoskSTTProvider(STTProvider):
             return False
     
     async def transcribe(self, audio_data: bytes, format: str = "wav") -> TranscriptionResult:
+        if not self._available:
+            return TranscriptionResult(text="", provider="vosk")
+        
+        try:
+            from vosk import Model, KaldiRecognizer
+            import json
+            
+            model_path = os.getenv("VOSK_MODEL_PATH", "model")
+            if not os.path.exists(model_path):
+                logger.warning(f"Vosk model not found at {model_path}. Returning stub result.")
+                return TranscriptionResult(text="[Vosk Model Missing]", provider="vosk")
+
+            if self._model is None:
+                self._model = Model(model_path)
+            
+            if self._recognizer is None:
+                self._recognizer = KaldiRecognizer(self._model, self._config.sample_rate)
+            
+            self._recognizer.AcceptWaveform(audio_data)
+            result = json.loads(self._recognizer.FinalResult())
+            
+            return TranscriptionResult(
+                text=result.get("text", ""),
+                confidence=1.0,
+                provider="vosk"
+            )
+        except Exception as e:
+            logger.error(f"Vosk transcription error: {e}")
+        
         return TranscriptionResult(text="", provider="vosk")
-    
+
     async def transcribe_stream(self, audio_stream: Any) -> TranscriptionResult:
-        return TranscriptionResult(text="", provider="vosk")
+        """Transcribe from audio stream using Vosk."""
+        return await self.transcribe(b"", "wav")
 
 
 class VoiceChannel:
@@ -314,7 +344,8 @@ class VoiceChannel:
         self._tts_providers: Dict[str, TTSProvider] = {}
         self._stt_providers: Dict[str, STTProvider] = {}
         self._audio_cache: Dict[str, bytes] = {}
-        self._active_streams: Dict[str, Any] = {}
+        self._active_streams: Dict[str, Dict[str, Any]] = {}
+        self._vad = VoiceActivityDetector()
         self._initialize_providers()
     
     def _initialize_providers(self):
@@ -404,6 +435,27 @@ class VoiceChannel:
         Returns:
             Interim transcription or None
         """
+        if stream_id not in self._active_streams:
+            self._active_streams[stream_id] = {
+                "buffer": b"",
+                "last_activity": datetime.now(),
+                "is_speaking": False
+            }
+        
+        stream = self._active_streams[stream_id]
+        stream["buffer"] += audio_chunk
+        stream["last_activity"] = datetime.now()
+        
+        is_speech = self._vad.is_speech(audio_chunk)
+        
+        if is_speech:
+            stream["is_speaking"] = True
+            # Simple threshold-based trigger for transcription
+            if len(stream["buffer"]) > 32000: # ~1 second at 16k mono
+                text = await self.listen(stream["buffer"])
+                stream["buffer"] = b"" # Reset buffer after attempt
+                return text
+        
         return None
     
     def save_audio(self, audio_data: bytes, filename: str, format: str = "mp3") -> str:

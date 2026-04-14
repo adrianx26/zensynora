@@ -515,7 +515,14 @@
 ### myclaw/skill_preloader.py
 
 **Classes:**
-- `SkillPreloader` — Proactive skill preloader
+- `SkillPredictor` — Analyzes context to predict needed skills
+- `SkillPreloader` — Proactive skill preloader with caching
+
+**Methods:**
+- `predict_and_preload(messages, current_message)` — Predict and load skills in background
+- `is_preloaded(skill_name)` — Check if skill is in cache
+- `get_stats()` — Get preloading statistics
+- `_load_skill_code(skill_name)` — Load skill script from TOOLBOX into memory
 
 **Async Functions:**
 - `start_preloader()` — Start global preloader
@@ -566,8 +573,13 @@
 - `pyttsx3Provider` — Offline TTS provider
 - `WhisperSTTProvider` — Whisper-based STT
 - `VoskSTTProvider` — Vosk offline STT
-- `VoiceChannel` — Main voice controller
-- `VoiceActivityDetector` — VAD for streams
+- `VoiceChannel` — Main voice controller with VAD and streaming
+- `VoiceActivityDetector` — VAD for detecting speech in audio chunks
+
+**Methods:**
+- `speak(text, provider)` — Synthesize text to speech
+- `listen(audio_data, provider)` — Transcribe audio to text
+- `listen_stream(stream_id, audio_chunk)` — Process real-time audio stream
 
 **Functions:**
 - `create_voice_channel(config)` — Create voice channel
@@ -589,10 +601,21 @@
 ### myclaw/dashboard.py
 
 **Classes:**
-- `MyClawDashboard` — Streamlit dashboard
+- `MyClawDashboard` — Web-based administrative interface
+
+**Methods:**
+- `start()` — Start the dashboard server (via dashboard_server)
+- `_log(message, level)` — Internal dashboard logging
 
 **Async Functions:**
-- `dashboard_app(dashboard)` — Create FastAPI app context
+- `dashboard_app(dashboard)` — Create FastAPI app context (async manager)
+
+---
+
+### myclaw/dashboard_server.py
+
+**Functions:**
+- `create_dashboard_app(dashboard)` — Factory to create the FastAPI web application
 
 ---
 

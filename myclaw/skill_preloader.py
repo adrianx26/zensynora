@@ -15,7 +15,8 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
-TOOLBOX_DIR = TOOLBOX_DIR if 'TOOLBOX_DIR' in globals() else None
+from pathlib import Path
+TOOLBOX_DIR = Path.home() / ".myclaw" / "TOOLBOX"
 SKILL_PATTERNS = {
     'read': ['read', 'view', 'show', 'display', 'cat', 'type', 'open'],
     'write': ['write', 'create', 'save', 'edit', 'modify', 'update'],
@@ -227,8 +228,26 @@ class SkillPreloader:
                 self._loading_skills.discard(skill_name)
     
     async def _load_skill_code(self, skill_name: str):
-        """Load skill code into cache (placeholder for actual implementation)."""
-        await asyncio.sleep(0.1)
+        """Load skill code into cache from TOOLBOX or system."""
+        try:
+            skill_file = TOOLBOX_DIR / f"{skill_name}.py"
+            
+            if skill_file.exists():
+                # Use a thread-safe way to read the file in an async context
+                def read_file():
+                    with open(skill_file, 'r', encoding='utf-8') as f:
+                        return f.read()
+                
+                code = await asyncio.to_thread(read_file)
+                self._skill_code_cache[skill_name] = code
+                logger.debug(f"Loaded skill code for {skill_name}")
+            else:
+                # If it's a built-in tool, we don't necessarily have a file in TOOLBOX
+                # We can store a marker or search the registry
+                self._skill_code_cache[skill_name] = "# system_built_in"
+                
+        except Exception as e:
+            logger.error(f"Failed to load skill code for {skill_name}: {e}")
     
     def is_preloaded(self, skill_name: str) -> bool:
         """Check if a skill is already pre-loaded."""

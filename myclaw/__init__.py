@@ -21,7 +21,7 @@ Configuration:
 - Thresholds are configurable via TaskThresholdConfig
 - Status updates are printed to console with color coding
 """
-__version__ = "0.4.0"
+__version__ = "0.4.1"
 
 # Export task timer for external use
 from .task_timer import (

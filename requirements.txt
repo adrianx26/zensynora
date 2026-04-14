@@ -27,6 +27,10 @@ watchdog>=3.0.0
 # Install: pip install sentence-transformers
 sentence-transformers>=2.2.2
 
+# Offline STT support
+# Install: pip install vosk
+vosk>=0.3.45
+
 # ── LLM Provider SDKs (Install only the ones you need) ────────────────────────
 # OpenAI / LM Studio / llama.cpp / Groq / OpenRouter
 openai>=1.0
