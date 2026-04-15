@@ -112,6 +112,18 @@ def start(config):
             scheduler.start()
             logger.info(f"Knowledge Researcher scheduled every {interval} hours")
 
+        # ── Start Background Knowledge File-Sync Extraction ───────────────────────
+        # Triggered when config.knowledge.auto_extract = true (default: false).
+        # Runs sync_knowledge() every 60 s so any Markdown notes written to disk
+        # are automatically picked up and indexed in the SQLite knowledge graph.
+        if getattr(config.knowledge, 'auto_extract', False):
+            from .knowledge.sync import start_background_extraction
+            try:
+                start_background_extraction(user_id="default", interval_seconds=60)
+                logger.info("Background knowledge file-sync extraction started (interval: 60s)")
+            except Exception as _ke:
+                logger.warning(f"Could not start background knowledge extraction: {_ke}")
+
         # ── Start channel ─────────────────────────────────────────────────────────
         if config.channels.telegram.enabled:
             TelegramChannel(config, registry).run()

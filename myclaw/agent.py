@@ -210,6 +210,14 @@ SYSTEM_PROMPT = (
 class Agent:
     """Personal AI agent with per-user memory, native tool calling, multi-agent delegation."""
 
+    @property
+    def _kb_auto_extract(self) -> bool:
+        """Read-once helper: is automatic KB extraction enabled in config?"""
+        try:
+            return bool(self.config.knowledge.auto_extract)
+        except Exception:
+            return False
+
     def __init__(self, config, name: str = "default", model: str = None, system_prompt: str = None, provider_name: str = None):
         self.name = name
         self._memories: dict[str, Memory] = {}
@@ -1139,7 +1147,7 @@ class Agent:
                     tool_results_by_id[tool_call_id] = content
                     await mem.add("tool", content)
                     # KB extraction for substantial parallel tool results (fire-and-forget)
-                    if r["success"] and self._should_save_tool_result(
+                    if r["success"] and self._kb_auto_extract and self._should_save_tool_result(
                         r['tool_name'], r.get('result', '')
                     ):
                         _t = asyncio.create_task(
@@ -1207,7 +1215,7 @@ class Agent:
                     duration = time.time() - start_time
                     logger.info(f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)")
                     # KB extraction for substantial sequential tool results (fire-and-forget)
-                    if self._should_save_tool_result(tool_name, tool_output):
+                    if self._kb_auto_extract and self._should_save_tool_result(tool_name, tool_output):
                         _t = asyncio.create_task(
                             self._save_tool_result_to_kb(
                                 tool_name, args, tool_output, user_message, user_id
@@ -1266,7 +1274,7 @@ class Agent:
                 await mem.add("assistant", final_response)
 
                 # Background KB auto-extraction (fire-and-forget, never blocks response)
-                if self._should_extract_knowledge(user_message, final_response):
+                if self._kb_auto_extract and self._should_extract_knowledge(user_message, final_response):
                     _kb_task = asyncio.create_task(
                         self._extract_and_save_knowledge(user_message, final_response, user_id)
                     )
@@ -1301,7 +1309,7 @@ class Agent:
         await mem.add("assistant", response)
 
         # Background KB auto-extraction (fire-and-forget, never blocks response)
-        if self._should_extract_knowledge(user_message, response):
+        if self._kb_auto_extract and self._should_extract_knowledge(user_message, response):
             _kb_task = asyncio.create_task(
                 self._extract_and_save_knowledge(user_message, response, user_id)
             )
@@ -1428,7 +1436,7 @@ class Agent:
         await mem.add("assistant", full_response)
 
         # Background KB auto-extraction (fire-and-forget)
-        if self._should_extract_knowledge(user_message, full_response):
+        if self._kb_auto_extract and self._should_extract_knowledge(user_message, full_response):
             _kb_task = asyncio.create_task(
                 self._extract_and_save_knowledge(user_message, full_response, user_id)
             )
