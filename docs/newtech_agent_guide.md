@@ -23,12 +23,23 @@ newtech = {
     "enabled": True,
     "interval_hours": 24,
     "share_consent": True,
-    "github_repo_for_share": "https://github.com/YOUR_USERNAME/zensynora",
+    "github_repo_owner": "YOUR_GITHUB_USERNAME",
+    "github_repo_name": "zensynora",
+    "github_token": "ghp_xxx",
     "max_news_items": 10
 }
 ```
 
 **Important:** Set `share_consent: True` only if you want proposals shared on GitHub.
+
+### GitHub Issue Configuration
+
+`share_proposal(..., format="issue")` now requires both repository fields:
+
+- `newtech.github_repo_owner`
+- `newtech.github_repo_name`
+
+If either field is missing, issue creation fails gracefully with a clear error message while Gist sharing continues to work unchanged.
 
 ## Usage
 
@@ -209,15 +220,15 @@ from myclaw.agents.newtech_agent import share_proposal
 result = share_proposal(
     title="RAG Implementation Proposal",
     content="# Technology Proposal...",
-    format="gist"
+    format="issue"
 )
 print(result)
 ```
 
 **Output:**
 ```
-✅ Shared as gist: RAG Implementation Proposal
-Note: Gist creation requires GitHub token configuration
+✅ Shared as issue: RAG Implementation Proposal
+Note: Issue creation requires github_repo_owner/github_repo_name and github_token
 ```
 
 ## API Reference

@@ -35,14 +35,25 @@ class NewTechAgent:
             self.enabled = config.newtech.enabled if hasattr(config.newtech, 'enabled') else enabled
             self.interval_hours = config.newtech.interval_hours if hasattr(config.newtech, 'interval_hours') else interval_hours
             self.share_consent = config.newtech.share_consent if hasattr(config.newtech, 'share_consent') else share_consent
-            self.github_token = str(config.newtech.github_token) if hasattr(config.newtech, 'github_token') and config.newtech.github_token else github_token
+            if hasattr(config.newtech, 'github_token') and config.newtech.github_token:
+                token_val = config.newtech.github_token
+                if hasattr(token_val, "get_secret_value"):
+                    self.github_token = token_val.get_secret_value()
+                else:
+                    self.github_token = str(token_val)
+            else:
+                self.github_token = github_token
             self.max_news_items = config.newtech.max_news_items if hasattr(config.newtech, 'max_news_items') else 10
+            self.github_repo_owner = getattr(config.newtech, "github_repo_owner", "") or ""
+            self.github_repo_name = getattr(config.newtech, "github_repo_name", "") or ""
         else:
             self.enabled = enabled
             self.interval_hours = interval_hours
             self.share_consent = share_consent
             self.github_token = github_token
             self.max_news_items = 10
+            self.github_repo_owner = ""
+            self.github_repo_name = ""
         
         self.newtech_dir = NEWTECH_DIR
         self.newtech_dir.mkdir(parents=True, exist_ok=True)
@@ -315,6 +326,20 @@ class NewTechAgent:
                 "title": title,
                 "message": "GitHub token not configured. Set github_token in config."
             }
+        if not self.github_repo_owner or not self.github_repo_name:
+            return {
+                "success": False,
+                "type": "issue",
+                "title": title,
+                "message": "GitHub repository not configured. Set github_repo_owner and github_repo_name."
+            }
+        if "/" in self.github_repo_owner or "/" in self.github_repo_name:
+            return {
+                "success": False,
+                "type": "issue",
+                "title": title,
+                "message": "Invalid repository format. Owner and repo name must not contain '/'."
+            }
         
         try:
             import requests
@@ -323,7 +348,7 @@ class NewTechAgent:
                 "body": content
             }
             response = requests.post(
-                f"{GITHUB_API_URL}/repos/OWNER/REPO/issues",
+                f"{GITHUB_API_URL}/repos/{self.github_repo_owner}/{self.github_repo_name}/issues",
                 headers=self._get_github_headers(),
                 json=issue_data,
                 timeout=30

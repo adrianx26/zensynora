@@ -37,8 +37,33 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from .knowledge.researcher import start_researcher_job
 from .agent import get_last_active_time
 from .config import load_config
+from .agents.medic_agent import MedicAgent
+from .agents.medic_agent import set_config as set_medic_config
+from .agents.newtech_agent import set_config as set_newtech_config
 
 logger = logging.getLogger(__name__)
+
+
+def _run_startup_health_check(config):
+    """Run MedicAgent startup scan when explicitly enabled in config."""
+    try:
+        medic_cfg = getattr(config, "medic", None)
+        if not medic_cfg:
+            logger.info("Medic config not found; skipping startup health check.")
+            return
+        if not getattr(medic_cfg, "enabled", False):
+            logger.info("Medic agent disabled; skipping startup health check.")
+            return
+        if not getattr(medic_cfg, "scan_on_startup", False):
+            logger.info("scan_on_startup disabled; skipping startup health check.")
+            return
+
+        logger.info("Starting health check...")
+        medic = MedicAgent()
+        result = medic.scan_system()
+        logger.info("Startup health check completed: %s", result)
+    except Exception as exc:
+        logger.error("Startup health check failed (continuing startup): %s", exc)
 
 def _run_research_if_idle():
     """Background task wrapper: only runs research if system is idle."""
@@ -75,6 +100,10 @@ def start(config):
         discover_backends()
         backend_config = config.backends.__dict__ if hasattr(config, 'backends') else None
         default_backend = get_default_backend(backend_config)
+        if default_backend:
+            logger.info("Default backend selected: %s", default_backend.get_type())
+
+        _run_startup_health_check(config)
 
         registry = {"default": Agent(config, name="default")}
 
@@ -97,6 +126,8 @@ def start(config):
 
         # Inject config into tools module (enables timeout configuration)
         tool_module.set_config(config)
+        set_medic_config(config)
+        set_newtech_config(config)
 
         # ── Start MCP Client ──────────────────────────────────────────────────────
         if hasattr(config, 'mcp') and config.mcp.enabled:

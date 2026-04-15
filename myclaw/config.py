@@ -138,6 +138,27 @@ ENV_OVERRIDES = {
     "knowledge.auto_extract": "MYCLAW_KNOWLEDGE_AUTO_EXTRACT",
     # New Tech
     "newtech.github_token": "MYCLAW_GITHUB_TOKEN",
+    "newtech.github_repo_owner": "MYCLAW_GITHUB_REPO_OWNER",
+    "newtech.github_repo_name": "MYCLAW_GITHUB_REPO_NAME",
+    # Semantic Cache
+    "semantic_cache.enabled": "MYCLAW_SEMANTIC_CACHE_ENABLED",
+    "semantic_cache.max_size": "MYCLAW_SEMANTIC_CACHE_MAX_SIZE",
+    "semantic_cache.ttl": "MYCLAW_SEMANTIC_CACHE_TTL",
+    "semantic_cache.similarity_threshold": "MYCLAW_SEMANTIC_CACHE_SIMILARITY",
+    # Worker Pool
+    "worker_pool.max_workers": "MYCLAW_WORKER_POOL_MAX_WORKERS",
+    "worker_pool.task_timeout": "MYCLAW_WORKER_POOL_TASK_TIMEOUT",
+    "worker_pool.queue_size": "MYCLAW_WORKER_POOL_QUEUE_SIZE",
+    # Sandbox
+    "sandbox.enabled": "MYCLAW_SANDBOX_ENABLED",
+    "sandbox.max_memory_mb": "MYCLAW_SANDBOX_MAX_MEMORY_MB",
+    "sandbox.max_time_seconds": "MYCLAW_SANDBOX_MAX_TIME_SECONDS",
+    "sandbox.allow_network": "MYCLAW_SANDBOX_ALLOW_NETWORK",
+    # Log Rotation
+    "log_rotation.max_size_mb": "MYCLAW_LOG_ROTATION_MAX_SIZE_MB",
+    "log_rotation.max_age_days": "MYCLAW_LOG_ROTATION_MAX_AGE_DAYS",
+    "log_rotation.max_files": "MYCLAW_LOG_ROTATION_MAX_FILES",
+    "log_rotation.compress": "MYCLAW_LOG_ROTATION_COMPRESS",
     # Intelligence
     "intelligence.research_enabled": "MYCLAW_RESEARCH_ENABLED",
     "intelligence.research_interval_hours": "MYCLAW_RESEARCH_INTERVAL",
@@ -374,6 +395,40 @@ class NewTechConfig(BaseModel):
     github_repo_for_share: str = ""
     max_news_items: int = 10
     github_token: SecretStr = SecretStr("")  # GitHub token for API auth
+    github_repo_owner: str = ""
+    github_repo_name: str = ""
+
+
+class SemanticCacheConfig(BaseModel):
+    """Configuration for semantic LLM response caching."""
+    enabled: bool = True
+    max_size: int = 256
+    ttl: int = 3600
+    similarity_threshold: float = 0.92
+
+
+class WorkerPoolConfig(BaseModel):
+    """Configuration for worker pool used by tool execution."""
+    max_workers: int = 5
+    task_timeout: int = 30
+    queue_size: int = 100
+
+
+class SandboxConfig(BaseModel):
+    """Configuration for skill sandboxing."""
+    enabled: bool = True
+    max_memory_mb: int = 256
+    max_time_seconds: int = 30
+    allow_network: bool = False
+    trusted_skills: list[str] = []
+
+
+class LogRotationConfig(BaseModel):
+    """Configuration for audit/application log rotation."""
+    max_size_mb: int = 10
+    max_age_days: int = 7
+    max_files: int = 10
+    compress: bool = True
 
 
 class SkillAdapterConfig(BaseModel):
@@ -451,6 +506,10 @@ class AppConfig(BaseModel):
     security:  SecurityConfig  = SecurityConfig()
     medic:     MedicConfig     = MedicConfig()
     newtech:   NewTechConfig   = NewTechConfig()
+    semantic_cache: SemanticCacheConfig = SemanticCacheConfig()
+    worker_pool: WorkerPoolConfig = WorkerPoolConfig()
+    sandbox: SandboxConfig = SandboxConfig()
+    log_rotation: LogRotationConfig = LogRotationConfig()
     skill_adapter: SkillAdapterConfig = SkillAdapterConfig()
     backends:  BackendConfig   = BackendConfig()
     mcp:       MCPConfig       = MCPConfig()

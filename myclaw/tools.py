@@ -47,7 +47,7 @@ import re
 import requests
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from collections import defaultdict
 
 from .knowledge import (
@@ -89,6 +89,10 @@ from .agents.newtech_agent import (
     share_proposal,
     get_roadmap
 )
+from .semantic_cache import get_semantic_cache, clear_semantic_cache as clear_global_semantic_cache
+from .worker_pool import WorkerPoolManager
+from .sandbox import SecuritySandbox, SecurityPolicy
+from .audit_log import TamperEvidentAuditLog
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +100,8 @@ WORKSPACE         = Path.home() / ".myclaw" / "workspace"
 TOOLBOX_DIR       = Path.home() / ".myclaw" / "TOOLBOX"
 TOOLBOX_REG       = Path.home() / ".myclaw" / "TOOLBOX" / "toolbox_registry.json"
 TOOLBOX_DOCS      = Path.home() / ".myclaw" / "TOOLBOX" / "README.md"
+
+_runtime_config = None
 
 # ── Security lists ────────────────────────────────────────────────────────────
 
@@ -174,6 +180,9 @@ class ToolAuditLogger:
     def __init__(self):
         self._logs: List[Dict] = []
         self._max_logs = 1000
+        self._persistent = TamperEvidentAuditLog(
+            log_path=Path.home() / ".myclaw" / "audit" / "tools_audit.log.jsonl"
+        )
     
     def log(self, tool_name: str, user: str, duration_ms: float, success: bool, 
             error: Optional[str] = None) -> None:
@@ -187,6 +196,11 @@ class ToolAuditLogger:
             "error": error
         }
         self._logs.append(entry)
+        self._persistent.append(
+            event_type=f"tool:{tool_name}",
+            details=entry,
+            severity="INFO" if success else "WARNING",
+        )
         # Keep only recent logs in memory
         if len(self._logs) > self._max_logs:
             self._logs = self._logs[-self._max_logs:]
@@ -201,10 +215,28 @@ class ToolAuditLogger:
     
     def get_logs(self, limit: int = 100, tool_name: Optional[str] = None) -> List[Dict]:
         """Get recent audit logs, optionally filtered by tool name."""
-        logs = self._logs[-limit:]
+        persisted_logs = self._persistent.read_entries(limit=limit * 5)
+        if persisted_logs:
+            logs = [
+                p.get("details", {})
+                for p in persisted_logs
+                if p.get("event_type", "").startswith("tool:")
+            ]
+        else:
+            logs = self._logs[-limit:]
         if tool_name:
             logs = [l for l in logs if l["tool"] == tool_name]
-        return logs
+        return logs[-limit:]
+
+    def verify(self) -> Dict[str, Any]:
+        return self._persistent.verify_integrity()
+
+    def export(self, export_path: str) -> str:
+        return self._persistent.export(export_path)
+
+    def clear(self) -> None:
+        self._persistent.clear()
+        self._logs = []
 
 _tool_audit_logger = ToolAuditLogger()
 
@@ -313,12 +345,30 @@ class ParallelToolExecutor:
                     }
                 
                 func = TOOLS[tool_name]["func"]
+                sandbox_cfg = getattr(_runtime_config, "sandbox", None)
+                sandbox_enabled = bool(getattr(sandbox_cfg, "enabled", False))
+                if sandbox_enabled and _is_untrusted_skill(tool_name):
+                    violations = _validate_skill_for_sandbox(tool_name)
+                    if violations:
+                        _get_security_sandbox()._log_audit(
+                            "sandbox_violation",
+                            {"tool": tool_name, "violations": violations},
+                            severity="WARNING",
+                        )
+                        return {
+                            "tool_name": tool_name,
+                            "result": "",
+                            "error": f"Sandbox blocked execution: {violations}",
+                            "duration": time.time() - start_time,
+                            "success": False,
+                        }
                 
                 # Execute the tool
                 if inspect.iscoroutinefunction(func):
                     result = await func(**args)
                 else:
-                    result = await asyncio.to_thread(func, **args)
+                    pool = _get_worker_pool_manager()
+                    result = await pool.submit(func, **args)
                 
                 duration = time.time() - start_time
                 
@@ -354,6 +404,8 @@ class ParallelToolExecutor:
 
 # Global parallel executor instance
 _parallel_executor: Optional[ParallelToolExecutor] = None
+_worker_pool_manager: Optional[WorkerPoolManager] = None
+_security_sandbox: Optional[SecuritySandbox] = None
 
 
 def get_parallel_executor(max_concurrent: int = 5, timeout: float = 30.0) -> ParallelToolExecutor:
@@ -367,6 +419,58 @@ def get_parallel_executor(max_concurrent: int = 5, timeout: float = 30.0) -> Par
         )
     
     return _parallel_executor
+
+
+def _get_worker_pool_manager() -> WorkerPoolManager:
+    """Get or create worker pool manager configured from runtime config."""
+    global _worker_pool_manager
+    if _worker_pool_manager is None:
+        cfg = getattr(_runtime_config, "worker_pool", None)
+        max_workers = getattr(cfg, "max_workers", 5) if cfg else 5
+        task_timeout = getattr(cfg, "task_timeout", 30) if cfg else 30
+        queue_size = getattr(cfg, "queue_size", 100) if cfg else 100
+        _worker_pool_manager = WorkerPoolManager(
+            max_workers=max_workers,
+            task_timeout=task_timeout,
+            queue_size=queue_size,
+        )
+    return _worker_pool_manager
+
+
+def _get_security_sandbox() -> SecuritySandbox:
+    """Get or create security sandbox configured from runtime config."""
+    global _security_sandbox
+    if _security_sandbox is None:
+        cfg = getattr(_runtime_config, "sandbox", None)
+        policy = SecurityPolicy(
+            max_memory_mb=getattr(cfg, "max_memory_mb", 256),
+            max_execution_seconds=getattr(cfg, "max_time_seconds", 30),
+            allow_network=getattr(cfg, "allow_network", False),
+        )
+        _security_sandbox = SecuritySandbox(policy=policy)
+    return _security_sandbox
+
+
+def _is_untrusted_skill(tool_name: str) -> bool:
+    """Return True when tool looks like an external/custom skill and is not trusted."""
+    if not _runtime_config or not hasattr(_runtime_config, "sandbox"):
+        return False
+    trusted = set(getattr(_runtime_config.sandbox, "trusted_skills", []) or [])
+    if tool_name in trusted:
+        return False
+    return (TOOLBOX_DIR / f"{tool_name}.py").exists()
+
+
+def _validate_skill_for_sandbox(tool_name: str) -> Optional[str]:
+    """Validate tool source before execution when sandboxing is enabled."""
+    skill_path = TOOLBOX_DIR / f"{tool_name}.py"
+    if not skill_path.exists():
+        return None
+    source = skill_path.read_text(encoding="utf-8")
+    violations = _get_security_sandbox().validate_code(source)
+    if violations:
+        return "; ".join(violations)
+    return None
 
 
 def is_tool_independent(tool_name: str) -> bool:
@@ -503,6 +607,14 @@ def set_registry(registry: dict):
     """Called by gateway.py after building the agent registry."""
     global _agent_registry
     _agent_registry = registry
+
+
+def set_config(cfg):
+    """Inject runtime configuration for tools, worker pool, and sandbox."""
+    global _runtime_config, _worker_pool_manager, _security_sandbox
+    _runtime_config = cfg
+    _worker_pool_manager = None
+    _security_sandbox = None
 
 
 def set_job_queue(jq):
@@ -1562,6 +1674,10 @@ def benchmark_skill(skill_name: str, test_cases_json: str = "[]") -> str:
         
         if skill_name not in TOOLS:
             return f"Skill '{skill_name}' is not loaded in memory. Enable it first."
+        if getattr(getattr(_runtime_config, "sandbox", None), "enabled", False) and _is_untrusted_skill(skill_name):
+            violations = _validate_skill_for_sandbox(skill_name)
+            if violations:
+                return f"Sandbox blocked benchmark execution: {violations}"
         
         test_cases = json.loads(test_cases_json)
         
@@ -1832,6 +1948,10 @@ def improve_skill(skill_name: str, improved_code: str, documentation: str = "") 
         
         if 'logger.error' not in improved_code:
             return "Error: Improved code must include error logging using logger.error()."
+        if getattr(getattr(_runtime_config, "sandbox", None), "enabled", False):
+            violations = _get_security_sandbox().validate_code(improved_code)
+            if violations:
+                return f"Sandbox blocked improved skill content: {'; '.join(violations)}"
         
         # Backup existing file
         existing_path = Path(existing_info.get('path', ''))
@@ -3309,6 +3429,112 @@ async def swarm_message(
         return f"Error sending message: {e}"
 
 
+# ── Phase 5/6 Management Tools ─────────────────────────────────────────────────
+
+def clear_semantic_cache() -> str:
+    """Clear the global semantic cache instance."""
+    clear_global_semantic_cache()
+    return "✅ Semantic cache cleared."
+
+
+def get_cache_stats() -> str:
+    """Return semantic cache statistics."""
+    cache_cfg = getattr(_runtime_config, "semantic_cache", None)
+    cache = get_semantic_cache(
+        max_size=getattr(cache_cfg, "max_size", 256),
+        ttl=getattr(cache_cfg, "ttl", 3600),
+        similarity_threshold=getattr(cache_cfg, "similarity_threshold", 0.92),
+    )
+    stats = cache.get_stats()
+    return (
+        f"Semantic Cache Stats:\n"
+        f"  Entries: {stats['entries']}\n"
+        f"  Hits: {stats['hits']}\n"
+        f"  Misses: {stats['misses']}\n"
+        f"  Hit Rate: {stats['hit_rate']}\n"
+        f"  TTL: {stats['ttl']}s\n"
+        f"  Similarity Threshold: {stats['similarity_threshold']}"
+    )
+
+
+def get_worker_pool_stats() -> str:
+    """Return worker pool metrics."""
+    stats = _get_worker_pool_manager().get_stats()
+    return json.dumps(stats, indent=2)
+
+
+async def resize_worker_pool(max_workers: int) -> str:
+    """Resize worker pool at runtime."""
+    result = await _get_worker_pool_manager().resize(max_workers=max_workers)
+    return json.dumps(result, indent=2)
+
+
+def get_sandbox_stats() -> str:
+    """Return sandbox policy and runtime stats."""
+    return json.dumps(_get_security_sandbox().get_stats(), indent=2)
+
+
+def clear_sandbox_audit_log() -> str:
+    """Clear persistent sandbox audit log."""
+    _get_security_sandbox().clear_audit_log()
+    return "✅ Sandbox audit log cleared."
+
+
+def add_trusted_skill(skill_name: str) -> str:
+    """Add a trusted skill that can bypass sandbox checks."""
+    if not _runtime_config or not hasattr(_runtime_config, "sandbox"):
+        return "Error: Sandbox config unavailable."
+    trusted = list(getattr(_runtime_config.sandbox, "trusted_skills", []) or [])
+    if skill_name not in trusted:
+        trusted.append(skill_name)
+        _runtime_config.sandbox.trusted_skills = trusted
+    return f"✅ Added trusted skill: {skill_name}"
+
+
+def verify_audit_log() -> str:
+    """Verify integrity of persistent tool audit log."""
+    return json.dumps(_tool_audit_logger.verify(), indent=2)
+
+
+def get_audit_log_entries(limit: int = 100, tool_name: str = "") -> str:
+    """Get recent tool audit log entries."""
+    logs = _tool_audit_logger.get_logs(limit=limit, tool_name=tool_name or None)
+    return json.dumps(logs, indent=2)
+
+
+def export_audit_log(path: str) -> str:
+    """Export persistent audit log file."""
+    export_path = _tool_audit_logger.export(path)
+    return f"✅ Audit log exported to {export_path}"
+
+
+def rotate_audit_log() -> str:
+    """Force log rotation for tool audit log."""
+    result = _tool_audit_logger._persistent.rotate_now()
+    return json.dumps(result, indent=2)
+
+
+def get_log_rotation_status() -> str:
+    """Get current log rotation configuration."""
+    persistent = _tool_audit_logger._persistent
+    return json.dumps(
+        {
+            "log_path": str(persistent.log_path),
+            "max_size_bytes": persistent.max_size_bytes,
+            "max_age_days": persistent.max_age_days,
+            "max_files": persistent.max_files,
+            "compress": persistent.compress,
+        },
+        indent=2,
+    )
+
+
+def cleanup_old_logs() -> str:
+    """Apply retention cleanup to rotated logs."""
+    _tool_audit_logger._persistent._enforce_retention()
+    return "✅ Log retention cleanup complete."
+
+
 # ── Tool Registry ─────────────────────────────────────────────────────────────
 # NOTE: new custom tools are added to this dict at runtime by register_tool()
 
@@ -3404,6 +3630,24 @@ TOOLS: Dict[str, dict] = {
     "generate_tech_proposal": {"func": generate_tech_proposal, "desc": "Generate implementation proposal for a technology"},
     "share_proposal":        {"func": share_proposal,         "desc": "Share a proposal on GitHub"},
     "get_roadmap":          {"func": get_roadmap,           "desc": "Get the technology roadmap"},
+    # Semantic Cache Management
+    "clear_semantic_cache": {"func": clear_semantic_cache, "desc": "Clear semantic LLM response cache"},
+    "get_cache_stats": {"func": get_cache_stats, "desc": "Get semantic cache usage statistics"},
+    # Worker Pool Management
+    "get_worker_pool_stats": {"func": get_worker_pool_stats, "desc": "Get worker pool metrics and queue stats"},
+    "resize_worker_pool": {"func": resize_worker_pool, "desc": "Resize worker pool max workers"},
+    # Sandbox Management
+    "get_sandbox_stats": {"func": get_sandbox_stats, "desc": "Get sandbox policy and runtime stats"},
+    "clear_sandbox_audit_log": {"func": clear_sandbox_audit_log, "desc": "Clear sandbox audit log"},
+    "add_trusted_skill": {"func": add_trusted_skill, "desc": "Add a trusted skill to bypass sandbox checks"},
+    # Tamper-Evident Audit Log Management
+    "verify_audit_log": {"func": verify_audit_log, "desc": "Verify audit log hash-chain integrity"},
+    "get_audit_log_entries": {"func": get_audit_log_entries, "desc": "Read persistent audit log entries"},
+    "export_audit_log": {"func": export_audit_log, "desc": "Export persistent audit log to a file"},
+    # Log Rotation Management
+    "rotate_audit_log": {"func": rotate_audit_log, "desc": "Force audit log rotation"},
+    "get_log_rotation_status": {"func": get_log_rotation_status, "desc": "Get audit log rotation config/status"},
+    "cleanup_old_logs": {"func": cleanup_old_logs, "desc": "Apply audit log retention cleanup"},
     # Session Reflection & Learning
     "schedule_daily_reflection": {"func": schedule_daily_reflection, "desc": "Schedule daily session reflection at a specific time"},
     "generate_session_insights": {"func": generate_session_insights, "desc": "Analyze recent conversations for insights"},
