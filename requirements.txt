@@ -21,6 +21,11 @@ watchdog>=3.0.0
 # Install: pip install sentence-transformers
 sentence-transformers>=2.2.2
 
+# Specialized Agents (e.g., MedicAgent)
+# Install: pip install PyGithub virustotal-api
+PyGithub>=1.59
+virustotal-api>=0.1.5
+
 # ── LLM Provider SDKs (Install only the ones you need) ────────────────────────
 # OpenAI / LM Studio / llama.cpp / Groq / OpenRouter
 openai>=1.0

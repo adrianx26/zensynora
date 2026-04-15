@@ -9,7 +9,8 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 
 ### Core Capabilities
 - **Flexible LLM Providers** — Run locally using [Ollama](https://github.com/ollama/ollama), LM Studio, or llama.cpp, or connect to cloud providers like OpenAI, Anthropic, Gemini, Groq, and OpenRouter. Complete flexibility to choose your model and privacy level.
-- **Persistent Memory** — SQLite-backed conversation history with per-user isolation. Your chats are stored securely.
+- **Persistent Memory** — SQLite-backed conversation history with per-user isolation. Your chats are stored securely. Includes FTS5 for full-text search and knowledge extraction.
+- **Performance Optimizations** — Significant enhancements as of 2026-04-06, including LRU caching for agent profiles, optimized database queries, and semantic caching for LLM responses.
 - **Tool System** — Execute shell commands, read/write files, and more—all within a secure workspace.
 
 ### Advanced Features
@@ -17,6 +18,7 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - **Per-Agent Prompt Profiles** — Manage individual agent system prompts using dedicated Markdown files (`~/.myclaw/profiles/{name}.md`)
 - **Agent Delegation** — Delegate tasks to specialized agents (e.g., `@coder write a function`)
 - **🐝 Agent Swarms** — Coordinate multiple agents using parallel, sequential, hierarchical, or voting strategies for complex tasks
+- **🤖 Specialized Agents** — Pre-built agents for specific tasks (e.g., `MedicAgent` for system health and file recovery, `NewTechAgent` for monitoring AI news and trends). Easily extendable.
 - **Dynamic Tool Building** — The agent can create and register new Python tools at runtime
 - **Task Scheduling** — Schedule one-shot or recurring tasks with notifications via Telegram or WhatsApp
 - **Telegram Gateway** — Full-featured Telegram bot with commands: `/remind`, `/jobs`, `/cancel`, `/agents`
