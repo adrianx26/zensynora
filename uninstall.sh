@@ -98,7 +98,8 @@ if [[ -d "$MYCLAW_DIR" ]]; then
         info "Removing data but keeping config..."
         run rm -rf "$MYCLAW_DIR/workspace" "$MYCLAW_DIR/knowledge" "$MYCLAW_DIR/memory.db" "$MYCLAW_DIR/task_logs" \
                    "$MYCLAW_DIR/mcp" "$MYCLAW_DIR/TOOLBOX" "$MYCLAW_DIR/backups" "$MYCLAW_DIR/skills" \
-                   "$MYCLAW_DIR/benchmarks" "$MYCLAW_DIR/newtech"
+                   "$MYCLAW_DIR/benchmarks" "$MYCLAW_DIR/newtech" "$MYCLAW_DIR/semantic_cache" \
+                   "$MYCLAW_DIR/sandbox" "$MYCLAW_DIR/audit" "$MYCLAW_DIR/medic"
     else
         if prompt_yes "Remove all MyClaw data in $MYCLAW_DIR?"; then
             run rm -rf "$MYCLAW_DIR"

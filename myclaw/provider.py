@@ -248,6 +248,33 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_TIMEOUT = 60  # seconds
 
+_semantic_cache_cfg = {
+    "enabled": True,
+    "max_size": 256,
+    "ttl": 3600,
+    "similarity_threshold": 0.92,
+}
+
+
+def _configure_semantic_cache(config) -> None:
+    cfg = getattr(config, "semantic_cache", None)
+    if cfg is None:
+        return
+    _semantic_cache_cfg["enabled"] = bool(getattr(cfg, "enabled", True))
+    _semantic_cache_cfg["max_size"] = int(getattr(cfg, "max_size", 256))
+    _semantic_cache_cfg["ttl"] = int(getattr(cfg, "ttl", 3600))
+    _semantic_cache_cfg["similarity_threshold"] = float(getattr(cfg, "similarity_threshold", 0.92))
+
+
+def _get_configured_semantic_cache() -> Optional[SemanticCache]:
+    if not _semantic_cache_cfg["enabled"]:
+        return None
+    return get_semantic_cache(
+        max_size=_semantic_cache_cfg["max_size"],
+        ttl=_semantic_cache_cfg["ttl"],
+        similarity_threshold=_semantic_cache_cfg["similarity_threshold"],
+    )
+
 
 # ── HTTP Connection Pool ───────────────────────────────────────────────────────────
 
@@ -482,11 +509,12 @@ class OllamaProvider(BaseLLMProvider):
     async def chat(self, messages, model="llama3.2", stream: bool = False):
         # Check semantic cache first (skip for streaming)
         if not stream:
-            cache = get_semantic_cache()
-            cached = cache.get(messages, model)
-            if cached:
-                logger.debug(f"Semantic cache hit for {model}")
-                return cached
+            cache = _get_configured_semantic_cache()
+            if cache is not None:
+                cached = cache.get(messages, model)
+                if cached:
+                    logger.debug(f"Semantic cache hit for {model}")
+                    return cached
         
         payload = {
             "model": model,
@@ -525,8 +553,9 @@ class OllamaProvider(BaseLLMProvider):
             result = (msg.get("content", ""), tool_calls)
             
             # Cache the response
-            cache = get_semantic_cache()
-            cache.set(messages, model, result[0], result[1])
+            cache = _get_configured_semantic_cache()
+            if cache is not None:
+                cache.set(messages, model, result[0], result[1])
             
             return result
         except httpx.TimeoutException:
@@ -579,11 +608,12 @@ class OpenAICompatProvider(BaseLLMProvider):
         
         # Check semantic cache first (skip for streaming)
         if not stream:
-            cache = get_semantic_cache()
-            cached = cache.get(messages, model)
-            if cached:
-                logger.debug(f"Semantic cache hit for {model}")
-                return cached
+            cache = _get_configured_semantic_cache()
+            if cache is not None:
+                cached = cache.get(messages, model)
+                if cached:
+                    logger.debug(f"Semantic cache hit for {model}")
+                    return cached
         
         if stream:
             # Streaming response
@@ -611,8 +641,9 @@ class OpenAICompatProvider(BaseLLMProvider):
         result = (msg.content or "", tool_calls)
         
         # Cache the response
-        cache = get_semantic_cache()
-        cache.set(messages, model, result[0], result[1])
+        cache = _get_configured_semantic_cache()
+        if cache is not None:
+            cache.set(messages, model, result[0], result[1])
         
         return result
 
@@ -733,11 +764,12 @@ class AnthropicProvider(BaseLLMProvider):
     async def chat(self, messages, model="claude-3-5-sonnet-20241022", stream: bool = False):
         # Check semantic cache first (skip for streaming)
         if not stream:
-            cache = get_semantic_cache()
-            cached = cache.get(messages, model)
-            if cached:
-                logger.debug(f"Semantic cache hit for {model}")
-                return cached
+            cache = _get_configured_semantic_cache()
+            if cache is not None:
+                cached = cache.get(messages, model)
+                if cached:
+                    logger.debug(f"Semantic cache hit for {model}")
+                    return cached
         
         # Anthropic separates the system prompt from the conversation
         system_parts = []
@@ -801,8 +833,9 @@ class AnthropicProvider(BaseLLMProvider):
         result = ("\n".join(text_parts), (tool_calls or None))
         
         # Cache the response
-        cache = get_semantic_cache()
-        cache.set(messages, model, result[0], result[1])
+        cache = _get_configured_semantic_cache()
+        if cache is not None:
+            cache.set(messages, model, result[0], result[1])
         
         return result
 
@@ -861,11 +894,12 @@ class GeminiProvider(BaseLLMProvider):
     async def chat(self, messages, model="gemini-1.5-flash", stream: bool = False):
         # Check semantic cache first (skip for streaming)
         if not stream:
-            cache = get_semantic_cache()
-            cached = cache.get(messages, model)
-            if cached:
-                logger.debug(f"Semantic cache hit for {model}")
-                return cached
+            cache = _get_configured_semantic_cache()
+            if cache is not None:
+                cached = cache.get(messages, model)
+                if cached:
+                    logger.debug(f"Semantic cache hit for {model}")
+                    return cached
         
         system_parts = []
         history      = []
@@ -922,8 +956,9 @@ class GeminiProvider(BaseLLMProvider):
         result = ("\n".join(text_parts), (tool_calls or None))
         
         # Cache the response
-        cache = get_semantic_cache()
-        cache.set(messages, model, result[0], result[1])
+        cache = _get_configured_semantic_cache()
+        if cache is not None:
+            cache.set(messages, model, result[0], result[1])
         
         return result
 
@@ -962,6 +997,7 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
         ValueError  – API key missing for cloud providers
     """
     name = (provider_name or "ollama").lower().strip()
+    _configure_semantic_cache(config)
     
     # Thread-safe provider cache access
     with _provider_lock:

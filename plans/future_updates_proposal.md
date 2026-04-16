@@ -1,6 +1,7 @@
 # MyClaw Future Updates & Add-ons Proposal
 
 > **Generated:** 2026-03-19  
+> **Last Verified:** 2026-04-15  
 > **Application:** MyClaw (ZenSynora) - Personal AI Agent  
 > **Mode:** Architect - Strategic Planning
 
@@ -65,7 +66,7 @@ graph TD
     B --> F[Slack]
     B --> G[WebSocket]
     B --> H[Email]
-    
+
     style E fill:#f9f,stroke:#333
     style F fill:#f9f,stroke:#333
     style G fill:#f9f,stroke:#333
@@ -112,7 +113,7 @@ graph TD
 - **Export formats** - GraphML, JSON-LD for external tools
 
 #### 3.3 RAG (Retrieval-Augmented Generation)
-- **Document ingestion** - PDF, DOCX,txt parsing
+- **Document ingestion** - PDF, DOCX, txt parsing
 - **Chunking strategies** - Configurable text chunking
 - **Vector embeddings** - Semantic search via embeddings (optional)
 

@@ -14,16 +14,23 @@ import asyncio
 import hashlib
 import logging
 import os
-import resource
 import signal
 import subprocess
 import tempfile
+import sys
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Callable
 
+from .audit_log import TamperEvidentAuditLog
+
 logger = logging.getLogger(__name__)
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - platform-specific
+    resource = None
 
 SANDBOX_DIR = Path.home() / ".myclaw" / "sandbox"
 SANDBOX_DIR.mkdir(parents=True, exist_ok=True)
@@ -94,6 +101,9 @@ class SecuritySandbox:
     def __init__(self, policy: Optional[SecurityPolicy] = None):
         self._policy = policy or self.DEFAULT_POLICY
         self._audit_log: List[AuditEntry] = []
+        self._audit_backend = TamperEvidentAuditLog(
+            log_path=SANDBOX_DIR / "sandbox_audit.log.jsonl"
+        )
         self._active_executions: Dict[str, subprocess.Popen] = {}
     
     @property
@@ -116,6 +126,11 @@ class SecuritySandbox:
             severity=severity
         )
         self._audit_log.append(entry)
+        self._audit_backend.append(
+            event_type=event_type,
+            details=details,
+            severity=severity,
+        )
         
         if len(self._audit_log) > 1000:
             self._audit_log = self._audit_log[-500:]
@@ -323,13 +338,15 @@ except Exception as e:
             stderr=subprocess.PIPE,
             cwd=tmpdir,
             env=env,
-            preexec_fn=self._set_resource_limits if hasattr(os, 'setrlimit') else None
+            preexec_fn=self._set_resource_limits if (hasattr(os, "setrlimit") and resource is not None) else None
         )
         
         return process
     
     def _set_resource_limits(self):
         """Set resource limits for the subprocess."""
+        if resource is None:
+            return
         try:
             max_mem = self._policy.max_memory_mb * 1024 * 1024
             resource.setrlimit(resource.RLIMIT_AS, (max_mem, max_mem))
@@ -366,6 +383,9 @@ except Exception as e:
     
     def get_audit_log(self, limit: int = 100) -> List[Dict[str, Any]]:
         """Get security audit log entries."""
+        persisted = self._audit_backend.read_entries(limit=limit)
+        if persisted:
+            return persisted
         return [
             {
                 "timestamp": e.timestamp.isoformat(),
@@ -375,6 +395,24 @@ except Exception as e:
             }
             for e in self._audit_log[-limit:]
         ]
+
+    def clear_audit_log(self) -> None:
+        """Clear sandbox persistent audit log."""
+        self._audit_backend.clear()
+        self._audit_log = []
+
+    def get_stats(self) -> Dict[str, Any]:
+        """Get current sandbox runtime stats."""
+        return {
+            "active_executions": len(self._active_executions),
+            "memory_audit_entries": len(self._audit_log),
+            "policy": {
+                "max_memory_mb": self._policy.max_memory_mb,
+                "max_execution_seconds": self._policy.max_execution_seconds,
+                "allow_network": self._policy.allow_network,
+            },
+            "audit_integrity": self._audit_backend.verify_integrity(),
+        }
 
 
 class SandboxedFunction:

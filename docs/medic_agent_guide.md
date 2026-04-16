@@ -28,8 +28,27 @@ medic = {
     "enabled": True,
     "enable_hash_check": True,
     "repo_url": "https://github.com/YOUR_USERNAME/zensynora",
-    "scan_on_startup": False,
+    "scan_on_startup": True,
     "max_loop_iterations": 100,
+}
+```
+
+### Startup Health Check
+
+When both `medic.enabled` and `medic.scan_on_startup` are `True`, gateway startup runs a Medic health scan before channels are started.
+
+- Trigger point: `myclaw.gateway.start()`
+- Behavior: logs `"Starting health check..."` and scan results
+- Failure mode: graceful degradation (exceptions are logged, startup continues)
+
+Example startup config:
+
+```json
+{
+  "medic": {
+    "enabled": true,
+    "scan_on_startup": true
+  }
 }
 ```
 

@@ -255,6 +255,9 @@ ensure_pip "fastapi" "fastapi" ">=0.109.0"
 ensure_pip "uvicorn" "uvicorn" ">=0.27.0"
 ensure_pip "websockets" "websockets" ">=12.0.0"
 ensure_pip "mcp" "mcp" ">=1.1.2"
+ensure_pip "numpy" "numpy" ">=1.24.0"
+ensure_pip "sentence_transformers" "sentence-transformers" ">=2.5.0"
+ensure_pip "watchdog" "watchdog" ">=4.0.0"
 
 run "$VENV_DIR/bin/scrapling" install --force
 
@@ -328,6 +331,10 @@ make_dir "$HOME/.myclaw/backups"
 make_dir "$HOME/.myclaw/task_logs"
 make_dir "$HOME/.myclaw/benchmarks"
 make_dir "$HOME/.myclaw/newtech"
+make_dir "$HOME/.myclaw/semantic_cache"
+make_dir "$HOME/.myclaw/sandbox"
+make_dir "$HOME/.myclaw/audit"
+make_dir "$HOME/.myclaw/medic"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 8. OPTIONAL: systemd service

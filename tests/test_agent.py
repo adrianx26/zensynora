@@ -14,11 +14,48 @@ class MockConfig:
             model = "test_model"
         defaults = DefaultsConfig()
         named = []
+        summarization_threshold = 10
+        profiles_dir = "~/.myclaw/profiles"
     agents = AgentsConfig()
 
     class ProvidersConfig:
         pass
     providers = ProvidersConfig()
+
+    class KnowledgeConfig:
+        enabled = True
+        auto_extract = False   # default OFF — tests should not trigger real extraction
+        knowledge_dir = "~/.myclaw/knowledge"
+    knowledge = KnowledgeConfig()
+
+    class IntelligenceConfig:
+        class RoutingConfig:
+            enabled = False
+            prefer_free_models = True
+            allowed_models = []
+            allowed_providers = []
+            auto_disable_on_single = True
+        routing = RoutingConfig()
+        intelligent_routing = False
+        research_enabled = False
+        research_interval_hours = 6
+        research_idle_minutes = 15
+        benchmarking_enabled = False
+        benchmark_interval_days = 7
+    intelligence = IntelligenceConfig()
+
+    class BackendsConfig:
+        class SSHConfig:
+            host = ""
+            user = "root"
+            port = 22
+            key_path = ""
+            class _Password:
+                def get_secret_value(self): return ""
+            password = _Password()
+        ssh = SSHConfig()
+        default_backend = "local"
+    backends = BackendsConfig()
 
 
 def create_mock_agent(tmp_path):
