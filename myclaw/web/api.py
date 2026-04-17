@@ -48,8 +48,14 @@ async def chat_websocket(websocket: WebSocket, agent_name: str):
     try:
         while True:
             data = await websocket.receive_text()
+
+            # Heartbeat ping/pong
+            if data == '__ping__':
+                await websocket.send_text('__pong__')
+                continue
+
             logger.info(f"Received WS message for {agent_name}: {data}")
-            
+
             # Simulated Agent Delay & Stream
             await asyncio.sleep(0.5)
             response = f"**{agent_name.capitalize()}**: I have received your message regarding '{data}'. This is currently a simulated response from the Web UI backend. Full integration with `Agent.think()` will be mapped here."

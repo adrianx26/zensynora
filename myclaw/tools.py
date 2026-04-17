@@ -44,7 +44,8 @@ import json
 import time
 import importlib.util
 import re
-import requests
+import httpx
+import getpass
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -108,7 +109,10 @@ _runtime_config = None
 ALLOWED_COMMANDS = frozenset({
     'ls', 'dir', 'cat', 'type', 'find', 'grep', 'findstr',
     'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'git',
-    'echo', 'pwd', 'python', 'python3', 'pip', 'curl', 'wget'
+    'echo', 'pwd', 'curl', 'wget'
+    # NOTE: python, python3, pip removed (Phase 1.1 security hotfix)
+    # to prevent shell sandbox escape via: python -c "import os; os.system('rm -rf ~')"
+    # Users can still register custom Python tools via register_tool() if needed.
 })
 
 BLOCKED_COMMANDS = frozenset({
@@ -642,6 +646,10 @@ def register_chat_id(user_id: str, chat_id: int):
 
 def validate_path(path: str) -> Path:
     """Validate that path stays within workspace — prevents traversal attacks."""
+    # Reject null bytes which can bypass path validation on some systems
+    if "\x00" in path:
+        raise ValueError(f"Invalid path: null bytes are not allowed")
+
     workspace = WORKSPACE.resolve()
     try:
         target = (workspace / path).resolve()
@@ -651,7 +659,7 @@ def validate_path(path: str) -> Path:
             raise ValueError(f"Path traversal detected: {path}")
         return target
     except (ValueError, RuntimeError) as e:
-        if "Path traversal detected" in str(e):
+        if "Path traversal detected" in str(e) or "null bytes" in str(e):
             raise
         raise ValueError(f"Invalid path: {path}") from e
 
@@ -728,30 +736,54 @@ async def shell_async(cmd: str, timeout: int = 30) -> str:
 
 # ── SSH & Hardware Features (Phase 2.0) ────────────────────────────────────────
 
-async def ssh_command(cmd: str, host: str = None, user: str = "root", password: str = "", key_path: str = "", timeout: int = 60) -> str:
+def _prompt_ssh_password(host: str, user: str) -> str:
+    """Prompt for SSH password using getpass. Never logs the password."""
+    try:
+        return getpass.getpass(f"SSH password for {user}@{host}: ")
+    except Exception:
+        # No TTY available (e.g., web UI, API calls)
+        return ""
+
+
+async def ssh_command(cmd: str, host: str = None, user: str = "root", key_path: str = "", timeout: int = 60) -> str:
     """Execute a command on a remote host via SSH.
-    
+
+    Key-based authentication is strongly preferred. If no key_path is provided,
+    the user will be interactively prompted for a password via getpass.
+    Plaintext passwords are NEVER accepted as parameters to prevent logging
+    or caching of credentials.
+
     Args:
         cmd: Command to run
         host: Hostname or IP (if None, uses default from config)
         user: SSH user
-        password: SSH password (optional)
-        key_path: Path to SSH private key (optional)
+        key_path: Path to SSH private key (recommended)
         timeout: Timeout in seconds
     """
     try:
         from .backends.ssh import SSHBackend
         from .config import SSHBackendConfig
         from pydantic import SecretStr
-        
+
         # Load defaults if not provided
+        effective_host = host or ""
+        password = ""
+
+        if not key_path:
+            password = await asyncio.to_thread(_prompt_ssh_password, effective_host, user)
+            if not password:
+                return (
+                    "Error: SSH key-based authentication is required when no TTY is available. "
+                    "Please provide a key_path or run from an interactive terminal."
+                )
+
         config = SSHBackendConfig(
-            host=host or "",
+            host=effective_host,
             user=user,
-            password=SecretStr(password) if password else SecretStr(""),
+            password=SecretStr(password),
             key_path=key_path
         )
-        
+
         backend = SSHBackend(config)
         result = await backend.run(cmd, timeout=timeout)
         return result
@@ -760,16 +792,28 @@ async def ssh_command(cmd: str, host: str = None, user: str = "root", password: 
         return f"Error: {e}"
 
 
-async def ssh_put_file(local_path: str, remote_path: str, host: str, user: str = "root", password: str = "", key_path: str = "") -> str:
-    """Upload a local file to a remote host via SFTP."""
+async def ssh_put_file(local_path: str, remote_path: str, host: str, user: str = "root", key_path: str = "") -> str:
+    """Upload a local file to a remote host via SFTP.
+
+    Key-based authentication is strongly preferred. See ssh_command() for details.
+    """
     try:
         from .backends.ssh import SSHBackend
         from .config import SSHBackendConfig
         from pydantic import SecretStr
-        
+
         # Validate local path
         local_p = validate_path(local_path)
-        
+
+        password = ""
+        if not key_path:
+            password = await asyncio.to_thread(_prompt_ssh_password, host, user)
+            if not password:
+                return (
+                    "Error: SSH key-based authentication is required when no TTY is available. "
+                    "Please provide a key_path or run from an interactive terminal."
+                )
+
         config = SSHBackendConfig(host=host, user=user, password=SecretStr(password), key_path=key_path)
         backend = SSHBackend(config)
         await backend.upload(str(local_p), remote_path)
@@ -778,16 +822,28 @@ async def ssh_put_file(local_path: str, remote_path: str, host: str, user: str =
         return f"Error: {e}"
 
 
-async def ssh_get_file(remote_path: str, local_path: str, host: str, user: str = "root", password: str = "", key_path: str = "") -> str:
-    """Download a remote file to the local workspace via SFTP."""
+async def ssh_get_file(remote_path: str, local_path: str, host: str, user: str = "root", key_path: str = "") -> str:
+    """Download a remote file to the local workspace via SFTP.
+
+    Key-based authentication is strongly preferred. See ssh_command() for details.
+    """
     try:
         from .backends.ssh import SSHBackend
         from .config import SSHBackendConfig
         from pydantic import SecretStr
-        
+
         # Validate local path
         local_p = validate_path(local_path)
-        
+
+        password = ""
+        if not key_path:
+            password = await asyncio.to_thread(_prompt_ssh_password, host, user)
+            if not password:
+                return (
+                    "Error: SSH key-based authentication is required when no TTY is available. "
+                    "Please provide a key_path or run from an interactive terminal."
+                )
+
         config = SSHBackendConfig(host=host, user=user, password=SecretStr(password), key_path=key_path)
         backend = SSHBackend(config)
         await backend.download(remote_path, str(local_p))
@@ -959,17 +1015,11 @@ def _strip_html(html: str) -> str:
     return html.strip()
 
 
-def browse(url: str, max_length: int = 5000) -> str:
+async def browse(url: str, max_length: int = 5000) -> str:
     """Browse a URL and return its plain-text content (HTML is stripped).
 
-    Implements specific, user-friendly error handling for common failure modes:
-    - Timeout: Suggests trying web.archive.org for cached version
-    - ConnectionError: Advises checking internet connection
-    - HTTP 404: Indicates page was moved/deleted, suggests web search
-    - HTTP 403: Indicates access denied, suggests using search_knowledge() instead
-
-    All errors return a structured payload with human-readable guidance
-    rather than raising exceptions.
+    Uses httpx.AsyncClient for non-blocking async HTTP requests.
+    Implements specific, user-friendly error handling for common failure modes.
 
     Args:
         url: Full URL to fetch (e.g. 'https://example.com')
@@ -979,23 +1029,24 @@ def browse(url: str, max_length: int = 5000) -> str:
     Returns:
         Formatted page content on success, or structured error payload with guidance.
     """
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
     try:
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-        response = requests.get(url, headers=headers, timeout=30)
-        response.raise_for_status()
+        async with httpx.AsyncClient(headers=headers, timeout=30, follow_redirects=True) as client:
+            response = await client.get(url)
+            response.raise_for_status()
 
-        # Strip HTML to plain text
-        text = _strip_html(response.text)
+            # Strip HTML to plain text
+            text = _strip_html(response.text)
 
-        # Limit length
-        if len(text) > max_length:
-            text = text[:max_length] + "\n\n[Content truncated - reached max_length limit]"
+            # Limit length
+            if len(text) > max_length:
+                text = text[:max_length] + "\n\n[Content truncated - reached max_length limit]"
 
-        return f"URL: {url}\nStatus: {response.status_code}\n\nContent:\n{text}"
+            return f"URL: {url}\nStatus: {response.status_code}\n\nContent:\n{text}"
 
-    except requests.exceptions.Timeout as e:
+    except httpx.TimeoutException as e:
         logger.warning(f"Browse timeout for {url}: {e}")
         archive_url = f"https://web.archive.org/web/{url}"
         return (
@@ -1009,7 +1060,7 @@ def browse(url: str, max_length: int = 5000) -> str:
             f"📚 Alternative: Use search_knowledge() to find saved information about this topic"
         )
 
-    except requests.exceptions.ConnectionError as e:
+    except httpx.ConnectError as e:
         logger.warning(f"Browse connection error for {url}: {e}")
         return (
             f"🔌 Connection Error accessing {url}\n\n"
@@ -1022,11 +1073,9 @@ def browse(url: str, max_length: int = 5000) -> str:
             f"📚 Alternative: Use search_knowledge() to find saved information about this topic"
         )
 
-    except requests.exceptions.HTTPError as e:
+    except httpx.HTTPStatusError as e:
         # Handle specific HTTP status codes
-        status_code = None
-        if e.response is not None:
-            status_code = e.response.status_code
+        status_code = e.response.status_code if e.response is not None else None
 
         if status_code == 404:
             logger.warning(f"Browse 404 for {url}")
@@ -1065,7 +1114,7 @@ def browse(url: str, max_length: int = 5000) -> str:
                 f"📚 Alternative: Use search_knowledge() to find saved information"
             )
 
-    except requests.exceptions.RequestException as e:
+    except httpx.RequestError as e:
         logger.error(f"Browse request error for {url}: {e}")
         return (
             f"⚠️ Error accessing {url}\n\n"
@@ -1086,41 +1135,43 @@ def browse(url: str, max_length: int = 5000) -> str:
         )
 
 
-def download_file(url: str, path: str) -> str:
+async def download_file(url: str, path: str) -> str:
     """
     Download a file from a URL and save it to the workspace.
-    
+
+    Uses httpx.AsyncClient for non-blocking async HTTP requests.
+
     url: The URL to download from
     path: The path (relative to workspace) to save the file
     """
     try:
         # Validate the path
         target = validate_path(path)
-        
+
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        
-        response = requests.get(url, headers=headers, timeout=60, stream=True)
-        response.raise_for_status()
-        
+
         # Ensure parent directory exists
         target.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Download and save
-        with open(target, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
-        
+
+        # Download and save using async client
+        async with httpx.AsyncClient(headers=headers, timeout=60) as client:
+            async with client.stream("GET", url, follow_redirects=True) as response:
+                response.raise_for_status()
+                with open(target, 'wb') as f:
+                    async for chunk in response.aiter_bytes(chunk_size=8192):
+                        f.write(chunk)
+
         # Get file size
         size = target.stat().st_size
-        
+
         logger.info(f"Downloaded file from {url} to {path} ({size} bytes)")
         return f"[OK] Downloaded file from {url} to {path} ({size} bytes)"
-        
+
     except ValueError as e:
         return f"Error: {e}"
-    except requests.exceptions.RequestException as e:
+    except httpx.RequestError as e:
         logger.error(f"Download error for {url}: {e}")
         return f"Error downloading from {url}: {e}"
     except Exception as e:
@@ -1217,13 +1268,35 @@ def register_tool(name: str, code: str, documentation: str = "") -> str:
     except SyntaxError as e:
         return f"Syntax error in tool code: {e}"
 
-    # AST validation to prevent dangerous operations
+    # AST validation to prevent dangerous operations (Phase 1.2 hardened)
     import ast
     try:
         tree = ast.parse(code)
-        forbidden_imports = {"os", "sys", "subprocess", "shutil", "socket", "urllib", "http", "pty", "commands"}
-        forbidden_calls = {"eval", "exec", "open", "__import__", "globals", "locals", "compile"}
-        
+        forbidden_imports = {"os", "sys", "subprocess", "shutil", "socket", "urllib", "http", "pty", "commands", "importlib"}
+        forbidden_calls = {"eval", "exec", "__import__", "globals", "locals", "compile"}
+        # open() is restricted to read-only mode checks below
+        restricted_calls = {"open"}
+
+        def _is_builtin_access(node: ast.AST) -> bool:
+            """Detect __builtins__.__dict__['eval'] or getattr(__builtins__, 'eval')."""
+            if isinstance(node, ast.Subscript):
+                # __builtins__.__dict__['eval'] or __builtins__['eval']
+                if isinstance(node.value, ast.Attribute):
+                    if isinstance(node.value.value, ast.Name) and node.value.value.id == '__builtins__':
+                        return True
+                if isinstance(node.value, ast.Name) and node.value.id == '__builtins__':
+                    return True
+            if isinstance(node, ast.Call):
+                # getattr(__builtins__, 'eval') or getattr(__builtins__.__dict__, 'eval')
+                if isinstance(node.func, ast.Name) and node.func.id == 'getattr':
+                    if len(node.args) >= 2:
+                        first = node.args[0]
+                        if isinstance(first, ast.Name) and first.id == '__builtins__':
+                            return True
+                        if isinstance(first, ast.Attribute) and isinstance(first.value, ast.Name) and first.value.id == '__builtins__':
+                            return True
+            return False
+
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
@@ -1233,8 +1306,24 @@ def register_tool(name: str, code: str, documentation: str = "") -> str:
                 if node.module and node.module.split('.')[0] in forbidden_imports:
                     return f"Error: Importing from '{node.module}' is forbidden for security reasons."
             elif isinstance(node, ast.Call):
+                # Direct call: eval(), exec(), etc.
                 if isinstance(node.func, ast.Name) and node.func.id in forbidden_calls:
                     return f"Error: Calling '{node.func.id}' is forbidden for security reasons."
+                # Restricted call: open() — only allow read modes
+                if isinstance(node.func, ast.Name) and node.func.id in restricted_calls:
+                    # Check if open() has a mode argument that is write/append/create
+                    if len(node.args) >= 2:
+                        mode_arg = node.args[1]
+                        if isinstance(mode_arg, ast.Constant) and isinstance(mode_arg.value, str):
+                            mode = mode_arg.value
+                            if any(c in mode for c in 'wax+'):
+                                return f"Error: open() with mode '{mode}' is forbidden. Only read modes ('r') are allowed in tools."
+                # Detect __builtins__ bypasses
+                if _is_builtin_access(node):
+                    return "Error: Accessing __builtins__ dynamically is forbidden for security reasons."
+            elif isinstance(node, ast.Subscript):
+                if _is_builtin_access(node):
+                    return "Error: Accessing __builtins__ dynamically is forbidden for security reasons."
     except Exception as e:
         return f"AST validation error: {e}"
 

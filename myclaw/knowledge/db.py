@@ -7,6 +7,7 @@ Per-user database files for isolation.
 
 import json
 import logging
+import re
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -21,6 +22,48 @@ logger = logging.getLogger(__name__)
 # BM25 default parameters for relevance tuning
 BM25_DEFAULT_K1: float = 1.2  # Term frequency saturation
 BM25_DEFAULT_B: float = 0.75  # Field length normalization
+
+
+# ── FTS5 Query Sanitization (Phase 1.5) ──────────────────────────────────────
+
+_FTS_RESERVED = {"NOT", "NEAR", "AND", "OR"}
+_FTS_RESERVED_RE = re.compile(r'\b(NOT|NEAR|AND|OR)\b', re.IGNORECASE)
+
+
+def sanitize_fts_query(query: str) -> str:
+    """Sanitize a user-provided query for safe use in FTS5 MATCH.
+
+    FTS5 query syntax supports operators like NOT, NEAR, AND, OR, quotes,
+    and prefixes. Unmatched quotes or malicious operators can cause syntax
+    errors or alter query semantics. This function:
+
+    1. Escapes embedded double quotes (FTS5 delimiter)
+    2. Removes standalone reserved operators to prevent boolean injection
+    3. Balances unmatched quotes
+    4. Strips leading/trailing whitespace
+
+    Args:
+        query: Raw user search string
+
+    Returns:
+        Sanitized query safe for FTS5 MATCH
+    """
+    if not query or not query.strip():
+        return "*"
+
+    sanitized = query.strip()
+
+    # Escape embedded double quotes by replacing with spaces
+    sanitized = sanitized.replace('"', ' ')
+
+    # Replace standalone reserved FTS5 operators with spaces
+    # (preserve them when they're part of a larger word)
+    sanitized = _FTS_RESERVED_RE.sub(' ', sanitized)
+
+    # Collapse multiple spaces
+    sanitized = re.sub(r'\s+', ' ', sanitized).strip()
+
+    return sanitized if sanitized else "*"
 
 
 @dataclass
@@ -478,19 +521,22 @@ class KnowledgeDB:
     def search_fts(self, query: str, limit: int = 10) -> List[Entity]:
         """
         Full-text search using FTS5 with BM25 ranking.
-        
+
         Searches both entity names/paths and observation content for more relevant results.
         Uses rank_bm25() for configurable BM25 parameters.
-        
+
         Args:
-            query: Search query
+            query: Search query (will be sanitized for FTS5 safety)
             limit: Maximum results
-            
+
         Returns:
             List of matching entities sorted by BM25 relevance
         """
         conn = self._get_connection()
-        
+
+        # Phase 1.5: Sanitize user input to prevent FTS5 injection
+        safe_query = sanitize_fts_query(query)
+
         # Try enhanced search with observations (optimization 3.1)
         # Fall back to entities-only search for backward compatibility
         try:
@@ -509,7 +555,7 @@ class KnowledgeDB:
                 ORDER BY (COALESCE(fts_e.rank, 0) + COALESCE(fts_o.rank, 0))
                 LIMIT ?
                 """,
-                (query, query, limit)
+                (safe_query, safe_query, limit)
             ).fetchall()
         except sqlite3.OperationalError:
             # Fall back to entities-only search for existing databases
@@ -523,7 +569,7 @@ class KnowledgeDB:
                 ORDER BY fts.rank
                 LIMIT ?
                 """,
-                (query, limit)
+                (safe_query, limit)
             ).fetchall()
         
         entities = []

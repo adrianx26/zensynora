@@ -85,10 +85,38 @@ def onboard():
 
 @cli.command()
 def agent():
-    """Start the interactive AI console"""
+    """Start the interactive AI console with readline support"""
     config = load_config()
     registry = _build_registry(config)
     agent_names = ", ".join(registry.keys())
+
+    # ── Readline setup for history and navigation ────────────────────────────
+    try:
+        import readline
+        histfile = Path.home() / ".myclaw" / ".console_history"
+        histfile.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            readline.read_history_file(str(histfile))
+        except FileNotFoundError:
+            pass
+        readline.set_history_length(1000)
+
+        # Enable tab completion for @agentname
+        agent_names_list = list(registry.keys())
+        def completer(text, state):
+            if text.startswith("@"):
+                matches = [f"@{n} " for n in agent_names_list if n.startswith(text[1:])]
+            else:
+                matches = []
+            if state < len(matches):
+                return matches[state]
+            return None
+
+        readline.parse_and_bind("tab: complete")
+        readline.set_completer(completer)
+    except ImportError:
+        readline = None
+        histfile = None
 
     async def run_agent_chat(registry, agent_names):
         if hasattr(config, 'mcp') and config.mcp.enabled:
@@ -109,6 +137,7 @@ def agent():
         async with registry["default"]:
             print(f"💬 MyClaw console — agents: {agent_names}")
             print("   Use @agentname to address a specific agent. Type 'exit' to quit.")
+            print("   Tab-complete agent names with @. Arrow keys navigate history.\n")
             while True:
                 try:
                     import asyncio
@@ -130,6 +159,10 @@ def agent():
 
                 response = await agent_cls.think(text)
                 print("Claw:", response)
+
+        # Save history on exit
+        if readline and histfile:
+            readline.write_history_file(str(histfile))
 
     asyncio.run(run_agent_chat(registry, agent_names))
 

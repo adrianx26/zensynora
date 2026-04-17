@@ -85,12 +85,17 @@ class KnowledgeGapCache:
 
     Implements a short-lived in-process cache keyed by query and session id,
     with a configurable timeout to reduce noise from repeated empty searches.
+
+    Optimization: Amortized cleanup runs every N calls instead of every call
+    to avoid O(n) dict rebuild overhead under high load.
     """
 
-    def __init__(self, timeout_seconds: float = 300.0):
+    def __init__(self, timeout_seconds: float = 300.0, cleanup_interval: int = 100):
         self._cache: Dict[str, float] = {}
         self._timeout = timeout_seconds
         self._enabled = True
+        self._cleanup_interval = cleanup_interval
+        self._call_count = 0
 
     def is_duplicate(self, query: str, session_id: str) -> bool:
         """Check if this query has been logged recently in this session.
@@ -108,8 +113,11 @@ class KnowledgeGapCache:
         key = f"{session_id}:{query.lower().strip()}"
         now = time.time()
 
-        # Clean expired entries
-        self._cache = {k: v for k, v in self._cache.items() if now - v < self._timeout}
+        # Amortized cleanup: only clean expired entries every N calls
+        self._call_count += 1
+        if self._call_count >= self._cleanup_interval:
+            self._cache = {k: v for k, v in self._cache.items() if now - v < self._timeout}
+            self._call_count = 0
 
         if key in self._cache:
             return True
@@ -120,6 +128,7 @@ class KnowledgeGapCache:
     def clear(self) -> None:
         """Clear all cached entries."""
         self._cache.clear()
+        self._call_count = 0
 
     def set_enabled(self, enabled: bool) -> None:
         """Enable or disable the cache (useful for testing).
@@ -578,14 +587,72 @@ class Agent:
 
         return list(dict.fromkeys(topics))  # Remove duplicates, preserve order
 
-    def _search_knowledge_context(
+    async def _background_summarize_context(
+        self,
+        history: List[Dict[str, str]],
+        user_id: str,
+        mem: Memory
+    ) -> None:
+        """Summarize conversation context in the background after responding.
+
+        This moves the LLM-based summarization off the hot path so the user
+        response is not blocked. The summary is written to the knowledge base
+        as a session note for future context retrieval.
+
+        Args:
+            history: Full conversation history before truncation
+            user_id: User identifier
+            mem: Memory instance for this user
+        """
+        try:
+            # Exclude the most recent 5 messages from summarization
+            to_summarize = history[:-5] if len(history) > 5 else history
+            if not to_summarize:
+                return
+
+            summary_parts = [
+                "Summarize the following conversation context. Focus on key decisions, "
+                "important facts, and user preferences. Preserve information that would be "
+                "important for future context:\n"
+            ]
+            for m in to_summarize:
+                summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
+            summary_prompt = "".join(summary_parts)
+            summary_msgs = [
+                {"role": "system", "content": "You summarize conversations concisely."},
+                {"role": "user", "content": summary_prompt},
+            ]
+
+            summary_text, _ = await self.provider.chat(summary_msgs, self.model)
+            original_len = sum(len(m['content']) for m in to_summarize)
+            compressed_len = len(summary_text)
+            compression_ratio = (1 - compressed_len / original_len) * 100 if original_len > 0 else 0
+            logger.debug(
+                f"Background trajectory compressed: {original_len} -> {compressed_len} chars "
+                f"({compression_ratio:.1f}% reduction)"
+            )
+
+            # Store summary in knowledge base for future retrieval
+            from .knowledge import write_note
+            await asyncio.to_thread(
+                write_note,
+                name=f"session-summary-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}",
+                title=f"Session Summary ({datetime.utcnow().strftime('%Y-%m-%d %H:%M')})",
+                content=summary_text,
+                user_id=user_id,
+                tags=["session_summary", "auto-generated"]
+            )
+        except Exception as e:
+            logger.error(f"Background summarization error: {e}")
+
+    def _search_knowledge_context_sync(
         self,
         message: str,
         user_id: str,
         max_results: int = 3,
         return_structured: bool = False
     ) -> Union[str, KnowledgeSearchResult]:
-        """Auto-search the knowledge base for context relevant to message.
+        """Synchronous implementation of knowledge context search.
 
         Uses a multi-strategy search:
         1. Resolves any explicit memory:// permalink references
@@ -707,6 +774,26 @@ class Agent:
                 metadata=metadata
             )
             return result if return_structured else ""
+
+    async def _search_knowledge_context(
+        self,
+        message: str,
+        user_id: str,
+        max_results: int = 3,
+        return_structured: bool = False
+    ) -> Union[str, KnowledgeSearchResult]:
+        """Async wrapper for knowledge context search.
+
+        Runs the synchronous FTS5 search in a thread pool to avoid blocking
+        the event loop, which is critical when the knowledge base grows large.
+        """
+        return await asyncio.to_thread(
+            self._search_knowledge_context_sync,
+            message,
+            user_id,
+            max_results,
+            return_structured
+        )
 
     async def close(self):
         for mem in self._memories.values():
@@ -981,36 +1068,16 @@ class Agent:
         self._pending_preloads.add(task)
         task.add_done_callback(self._pending_preloads.discard)
 
-        # Feature: Context Summarization with trajectory compression
+        # Feature: Context Summarization moved off hot path
+        # Instead of blocking the user response on an LLM summarization call,
+        # we use the full history for the current response and trigger
+        # background summarization after responding for future turns.
         threshold = getattr(self.config.agents, 'summarization_threshold', 10)
-        if len(history) > threshold:
-            to_summarize = history[:-5]
-            recent = history[-5:]
-            summary_parts = [
-                "Summarize the following conversation context. Focus on key decisions, "
-                "important facts, and user preferences. Preserve information that would be "
-                "important for future context:\n"
-            ]
-            for m in to_summarize:
-                summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
-            summary_prompt = "".join(summary_parts)
-            summary_msgs = [
-                {"role": "system", "content": "You summarize conversations concisely."},
-                {"role": "user", "content": summary_prompt},
-            ]
-            try:
-                summary_text, _ = await self.provider.chat(summary_msgs, self.model)
-                original_len = sum(len(m['content']) for m in to_summarize)
-                compressed_len = len(summary_text)
-                compression_ratio = (1 - compressed_len / original_len) * 100 if original_len > 0 else 0
-                logger.debug(f"Trajectory compressed: {original_len} -> {compressed_len} chars ({compression_ratio:.1f}% reduction)")
-                history = [{"role": "system", "content": f"Previous conversation summary: {summary_text}"}] + recent
-            except Exception as e:
-                logger.error(f"Error summarizing history: {e}")
-                # fallback to raw history if summary fails
+        _should_summarize_after = len(history) > threshold
+        _full_history_for_bg = history.copy() if _should_summarize_after else None
 
         # Search knowledge base for relevant context
-        knowledge_context = self._search_knowledge_context(user_message, user_id)
+        knowledge_context = await self._search_knowledge_context(user_message, user_id)
         had_kb_results = bool(knowledge_context)
 
         # If KB gap exists and no context, hint the agent about KB creation and log the gap
@@ -1285,6 +1352,14 @@ class Agent:
                 message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
                 trigger_hook("on_session_end", user_id, self.name, message_count)
 
+                # Background context summarization (fire-and-forget, off hot path)
+                if _full_history_for_bg:
+                    _summarize_task = asyncio.create_task(
+                        self._background_summarize_context(_full_history_for_bg, user_id, mem)
+                    )
+                    self._pending_preloads.add(_summarize_task)
+                    _summarize_task.add_done_callback(self._pending_preloads.discard)
+
                 # Complete task timer successfully
                 if self._current_task_id:
                     await self._task_timer.complete_task(self._current_task_id, success=True)
@@ -1320,6 +1395,14 @@ class Agent:
         message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
         trigger_hook("on_session_end", user_id, self.name, message_count)
 
+        # Background context summarization (fire-and-forget, off hot path)
+        if _full_history_for_bg:
+            _summarize_task = asyncio.create_task(
+                self._background_summarize_context(_full_history_for_bg, user_id, mem)
+            )
+            self._pending_preloads.add(_summarize_task)
+            _summarize_task.add_done_callback(self._pending_preloads.discard)
+
         # Complete task timer successfully
         if self._current_task_id:
             await self._task_timer.complete_task(self._current_task_id, success=True)
@@ -1340,31 +1423,13 @@ class Agent:
 
         history = await mem.get_history()
 
-        # Feature: Context Summarization with trajectory compression
+        # Feature: Context Summarization moved off hot path
         threshold = getattr(self.config.agents, 'summarization_threshold', 10)
-        if len(history) > threshold:
-            to_summarize = history[:-5]
-            recent = history[-5:]
-            summary_parts = [
-                "Summarize the following conversation context. Focus on key decisions, "
-                "important facts, and user preferences:\n"
-            ]
-            for m in to_summarize:
-                summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
-            summary_prompt = "".join(summary_parts)
-            summary_msgs = [
-                {"role": "system", "content": "You summarize conversations concisely."},
-                {"role": "user", "content": summary_prompt},
-            ]
-            try:
-                summary_text, _ = await self.provider.chat(summary_msgs, self.model)
-                history = [{"role": "system", "content": f"Previous conversation summary: {summary_text}"}] + recent
-            except Exception as e:
-                logger.error(f"Error summarizing history: {e}")
-                # fallback to raw history if summary fails
+        _should_summarize_after_stream = len(history) > threshold
+        _full_history_for_bg_stream = history.copy() if _should_summarize_after_stream else None
 
         # Search knowledge base for relevant context
-        knowledge_context = self._search_knowledge_context(user_message, user_id)
+        knowledge_context = await self._search_knowledge_context(user_message, user_id)
         had_kb_results = bool(knowledge_context)
 
         # KB gap hint for streaming mode
@@ -1442,6 +1507,14 @@ class Agent:
             )
             self._pending_preloads.add(_kb_task)
             _kb_task.add_done_callback(self._pending_preloads.discard)
+
+        # Background context summarization (fire-and-forget, off hot path)
+        if _full_history_for_bg_stream:
+            _summarize_task = asyncio.create_task(
+                self._background_summarize_context(_full_history_for_bg_stream, user_id, mem)
+            )
+            self._pending_preloads.add(_summarize_task)
+            _summarize_task.add_done_callback(self._pending_preloads.discard)
 
         # Trigger on_session_end hook
         trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))

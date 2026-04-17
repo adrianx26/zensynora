@@ -983,13 +983,19 @@ _PROVIDER_MAP = {
 
 SUPPORTED_PROVIDERS = list(_PROVIDER_MAP.keys())
 
-# Lazy provider caching - only create provider instance when needed
-_provider_cache: dict = {}
+# Lazy provider caching with TTL - only create provider instance when needed
+_provider_cache: Dict[str, Any] = {}
+_provider_cache_timestamps: Dict[str, float] = {}
+_provider_cache_ttl: float = 300.0  # 5 minutes default TTL
 _provider_lock = threading.Lock()
 
 
 def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
     """Return an initialised provider instance for *provider_name*.
+
+    Uses a TTL-based cache with config mtime invalidation. If the config
+    file has been modified since the provider was cached, the cache is
+    invalidated and a new provider is created.
 
     Raises:
         ValueError  – unknown provider name
@@ -998,14 +1004,37 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
     """
     name = (provider_name or "ollama").lower().strip()
     _configure_semantic_cache(config)
-    
-    # Thread-safe provider cache access
+
+    # Check config file mtime for cache invalidation
+    config_mtime = 0.0
+    try:
+        config_path = getattr(config, '_config_path', None)
+        if config_path:
+            config_mtime = Path(config_path).stat().st_mtime
+    except Exception:
+        pass
+
+    # Thread-safe provider cache access with TTL check
     with _provider_lock:
-        # Return cached provider if already created
-        if name in _provider_cache:
-            return _provider_cache[name]
-        
-        cls  = _PROVIDER_MAP.get(name)
+        now = time.time()
+        cached_entry = _provider_cache.get(name)
+        cached_time = _provider_cache_timestamps.get(name, 0)
+
+        if cached_entry is not None:
+            # Check if cache entry is expired or config has changed
+            is_expired = (now - cached_time) > _provider_cache_ttl
+            is_stale = cached_time < config_mtime
+
+            if not is_expired and not is_stale:
+                logger.debug(f"Provider cache hit: {name}")
+                return cached_entry
+
+            logger.debug(f"Provider cache invalidated for {name}: "
+                        f"expired={is_expired}, stale={is_stale}")
+            _provider_cache.pop(name, None)
+            _provider_cache_timestamps.pop(name, None)
+
+        cls = _PROVIDER_MAP.get(name)
         if cls is None:
             raise ValueError(
                 f"Unknown provider '{name}'. "
@@ -1014,13 +1043,15 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
         logger.debug(f"Initialising provider: {name}")
         provider = cls(config)
         _provider_cache[name] = provider
+        _provider_cache_timestamps[name] = now
         return provider
 
 
 def clear_provider_cache():
     """Clear the provider cache (useful for testing or config changes)."""
-    global _provider_cache
+    global _provider_cache, _provider_cache_timestamps
     _provider_cache = {}
+    _provider_cache_timestamps = {}
 
 
 # ── Legacy alias (keeps old import `from .provider import LLMProvider` working) ─

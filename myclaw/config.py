@@ -172,7 +172,10 @@ ENV_OVERRIDES = {
     # Backends
     "backends.ssh.host": "MYCLAW_SSH_HOST",
     "backends.ssh.user": "MYCLAW_SSH_USER",
-    "backends.ssh.password": "MYCLAW_SSH_PASSWORD",
+    # NOTE: backends.ssh.password removed (Phase 1.6 security hotfix)
+    # Plaintext SSH passwords are no longer accepted via env var to prevent
+    # credential leakage in logs and process listings. Use key-based auth
+    # or interactive getpass prompt instead.
     "backends.ssh.key_path": "MYCLAW_SSH_KEY_PATH",
 }
 
