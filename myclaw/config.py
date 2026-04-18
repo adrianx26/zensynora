@@ -529,6 +529,88 @@ class AppConfig(BaseModel):
             raise KeyError(key)
 
 
+# ── Validation ────────────────────────────────────────────────────────────────
+
+def _validate_config(config: AppConfig) -> None:
+    """Validate critical configuration and warn about missing required values.
+    
+    Checks:
+      - At least one LLM provider is configured (local or API key)
+      - Required credentials are present for enabled channels
+      - Critical environment variables are set
+    
+    This function logs warnings but does not exit — the agent may still work
+    with interactive configuration or delayed provider setup.
+    """
+    warnings = []
+    
+    # ── LLM Provider Check ──────────────────────────────────────────────────
+    has_local = False
+    has_api_key = False
+    
+    # Check Ollama / LM Studio / llama.cpp (local)
+    if config.providers.ollama.base_url:
+        has_local = True
+    if hasattr(config.providers, 'lmstudio') and config.providers.lmstudio.base_url:
+        has_local = True
+    if hasattr(config.providers, 'llamacpp') and config.providers.llamacpp.base_url:
+        has_local = True
+    
+    # Check cloud provider API keys
+    for prov_name in ('openai', 'anthropic', 'gemini', 'groq', 'openrouter'):
+        prov = getattr(config.providers, prov_name, None)
+        if prov and prov.api_key and prov.api_key.get_secret_value():
+            has_api_key = True
+            break
+    
+    if not has_local and not has_api_key:
+        warnings.append(
+            "No LLM provider configured. Set at least one of:\n"
+            "  - Ollama/LM Studio base_url (local)\n"
+            "  - OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, or OPENROUTER_API_KEY\n"
+            "  Run `python cli.py onboard` for interactive setup."
+        )
+    
+    # ── Telegram Check ──────────────────────────────────────────────────────
+    if config.channels.telegram.enabled:
+        if not config.channels.telegram.token.get_secret_value():
+            warnings.append(
+                "Telegram is enabled but MYCLAW_TELEGRAM_TOKEN is not set.\n"
+                "  Get a token from @BotFather: https://t.me/botfather"
+            )
+        if not config.channels.telegram.allowFrom:
+            warnings.append(
+                "Telegram is enabled but no user IDs are in allowFrom.\n"
+                "  Add your user ID to channels.telegram.allowFrom in config.json"
+            )
+    
+    # ── WhatsApp Check ──────────────────────────────────────────────────────
+    if config.channels.whatsapp.enabled:
+        missing = []
+        if not config.channels.whatsapp.phone_number_id:
+            missing.append("phone_number_id")
+        if not config.channels.whatsapp.access_token.get_secret_value():
+            missing.append("access_token")
+        if not config.channels.whatsapp.verify_token.get_secret_value():
+            missing.append("verify_token")
+        if missing:
+            warnings.append(
+                f"WhatsApp is enabled but missing: {', '.join(missing)}.\n"
+                "  See docs/dev/plans/whatsapp_implementation_plan.md for setup."
+            )
+    
+    # ── Log all warnings ────────────────────────────────────────────────────
+    if warnings:
+        logger.warning("=" * 60)
+        logger.warning("CONFIGURATION WARNINGS — ZenSynora may not work correctly")
+        logger.warning("=" * 60)
+        for i, w in enumerate(warnings, 1):
+            logger.warning(f"  {i}. {w}")
+        logger.warning("=" * 60)
+        logger.warning("Run `zensynora onboard` for interactive setup.")
+        logger.warning("=" * 60)
+
+
 # ── Loaders ───────────────────────────────────────────────────────────────────
 
 def load_config(force_reload: bool = False) -> AppConfig:
@@ -562,6 +644,9 @@ def load_config(force_reload: bool = False) -> AppConfig:
             
             _cached_config = AppConfig(**raw)
             _config_mtime = current_mtime
+            
+            # Validate critical configuration
+            _validate_config(_cached_config)
             
             return _cached_config
         except json.JSONDecodeError as e:

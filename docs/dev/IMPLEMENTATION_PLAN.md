@@ -209,7 +209,7 @@ Added functions:
 
 A comprehensive optimization initiative implementing 21 performance, reliability, and maintainability improvements across the codebase.
 
-See [CODE_OPTIMIZATION_PROPOSAL.md](../CODE_OPTIMIZATION_PROPOSAL.md) for detailed technical documentation.
+See [CODE_OPTIMIZATION_PROPOSAL.md](CODE_OPTIMIZATION_PROPOSAL.md) for detailed technical documentation.
 
 See [docs/architecture_with_optimizations.md](architecture_with_optimizations.md) for updated architecture diagrams.
 

@@ -120,5 +120,5 @@ Address critical security gaps, performance bottlenecks, and maintainability iss
 
 ---
 
-*Plan derived from: `ark/planx.md`*  
+*Plan derived from: `planx.md`*  
 *Focus: Hardening → Testing → Scaling → Features*

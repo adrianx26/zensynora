@@ -268,8 +268,8 @@ Future enhancements that could build on these optimizations:
 
 - [CODE_OPTIMIZATION_PROPOSAL.md](CODE_OPTIMIZATION_PROPOSAL.md) - Detailed technical implementation
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) - Project roadmap with Phase 5
-- [docs/architecture_with_optimizations.md](docs/architecture_with_optimizations.md) - Architecture diagrams
-- [CHANGELOG.md](CHANGELOG.md) - Change history
+- [docs/architecture_with_optimizations.md](../architecture_with_optimizations.md) - Architecture diagrams
+- [CHANGELOG.md](../../CHANGELOG.md) - Change history
 - [CLAUDE.md](CLAUDE.md) - Development workflow
 
 ---

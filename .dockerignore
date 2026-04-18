@@ -1,0 +1,89 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Documentation build artifacts
+docs/_build/
+
+# Development / planning files (already in docs/dev/)
+docs/dev/scripts/
+
+# Node.js (webui source — only dist/ is needed)
+webui/node_modules/
+webui/src/
+webui/public/
+webui/*.config.*
+webui/*.json
+webui/*.html
+!webui/dist/
+
+# Kilo / local dev tools
+.kilo/
+
+# Logs
+*.log
+logs/
+
+# Local env files
+.env
+.env.local
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# CI/CD (not needed in image)
+.github/
+
+# Shell scripts (not needed at runtime — kept for reference)
+# install.sh
+# uninstall.sh
+# cleanup.sh
+
+# Misc
+out.txt
+test_output.txt
+*.tmp

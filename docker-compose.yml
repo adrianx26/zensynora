@@ -1,0 +1,129 @@
+# =============================================================================
+# ZenSynora — Docker Compose Configuration
+# =============================================================================
+# Usage:
+#   docker compose up --build       # Build and start
+#   docker compose up -d            # Start in background
+#   docker compose logs -f          # Follow logs
+#   docker compose down             # Stop and remove
+#   docker compose down -v          # Stop, remove, and DELETE ALL DATA
+#
+# Persistent volumes:
+#   zensynora-data     — Config, memory SQLite DB, knowledge base, TOOLBOX
+#   zensynora-logs     — Application logs
+#
+# Environment:
+#   Copy .env.example to .env and fill in your values.
+#   Or set variables directly in the 'environment:' section below.
+# =============================================================================
+
+services:
+  zensynora:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: zensynora:latest
+    container_name: zensynora
+    restart: unless-stopped
+
+    # Ports
+    # 8000 — WebUI / FastAPI backend
+    # 8080 — WhatsApp webhook (if enabled)
+    ports:
+      - "8000:8000"
+      - "8080:8080"
+
+    # Persistent volumes
+    volumes:
+      # Main data volume: config, SQLite DB, knowledge base, TOOLBOX
+      - zensynora-data:/data/.myclaw
+      # Optional: mount local config for easier editing
+      # - ./config.json:/data/.myclaw/config.json:ro
+      # Optional: mount local knowledge for development
+      # - ./knowledge:/data/.myclaw/knowledge
+
+    # Environment variables (override .env or set directly)
+    env_file:
+      - .env
+    environment:
+      # Ensure the agent knows it's running in Docker
+      - ZENSYNORA_DOCKER=true
+      # Log to stdout for Docker log collection
+      - MYCLAW_LOG_LEVEL=INFO
+      # Config directory inside container
+      - MYCLAW_CONFIG_DIR=/data/.myclaw
+
+    # Health check (matches Dockerfile HEALTHCHECK)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+    # Resource limits (adjust based on your hardware)
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+    # Networking
+    networks:
+      - zensynora-net
+
+    # Default command — override per mode:
+    #   docker compose run --rm zensynora zensynora agent
+    #   docker compose run --rm zensynora zensynora gateway
+    #   docker compose run --rm zensynora zensynora webui --port 8000
+    command: ["zensynora", "webui", "--port", "8000"]
+
+  # ── Optional: Redis for multi-worker state sharing ─────────────────────────
+  # Uncomment to enable Redis-backed state store (Phase 6.1)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: zensynora-redis
+  #   restart: unless-stopped
+  #   volumes:
+  #     - zensynora-redis:/data
+  #   networks:
+  #     - zensynora-net
+
+  # ── Optional: Ollama for local LLM inference ───────────────────────────────
+  # Uncomment to run Ollama alongside ZenSynora in the same compose network
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: zensynora-ollama
+  #   restart: unless-stopped
+  #   volumes:
+  #     - ollama-models:/root/.ollama
+  #   networks:
+  #     - zensynora-net
+  #   # For GPU support (NVIDIA):
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       devices:
+  #   #         - driver: nvidia
+  #   #           count: 1
+  #   #           capabilities: [gpu]
+
+# ── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  zensynora-data:
+    driver: local
+  zensynora-logs:
+    driver: local
+  # zensynora-redis:
+  #   driver: local
+  # ollama-models:
+  #   driver: local
+
+# ── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  zensynora-net:
+    driver: bridge

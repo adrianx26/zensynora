@@ -19,7 +19,7 @@ python onboard.py
 
 Edit `~/.myclaw/config.json` to configure:
 - **Telegram** — bot token + your user ID
-- **WhatsApp** — `phone_number_id`, `access_token`, `verify_token` (see `plans/whatsapp_implementation_plan.md`)
+- **WhatsApp** — `phone_number_id`, `access_token`, `verify_token` (see `../plans/whatsapp_implementation_plan.md`)
 - **Provider** — Ollama, OpenAI, Anthropic, Gemini, or other supported LLM provider
 
 ## Running

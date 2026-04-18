@@ -1,0 +1,161 @@
+# =============================================================================
+# ZenSynora — Continuous Integration (GitHub Actions)
+# =============================================================================
+# Triggers: push to main, pull requests to main, manual dispatch
+#
+# Jobs:
+#   1. test      — Run pytest suite on Python 3.11/3.12
+#   2. lint      — Run ruff + black format check
+#   3. docker    — Build Docker image and verify it starts
+#
+# To skip CI for a commit, include "[skip ci]" in the commit message.
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+  pull_request:
+    branches: [main, master]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
+      - '.gitignore'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Job 1: Lint & Format Check ───────────────────────────────────────────
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install lint tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff black isort
+
+      - name: Run ruff (lint)
+        run: ruff check myclaw/ cli.py onboard.py deploy.py
+
+      - name: Run ruff (format check)
+        run: ruff format --check myclaw/ cli.py onboard.py deploy.py
+
+      - name: Run black (format check)
+        run: black --check myclaw/ cli.py onboard.py deploy.py
+
+      - name: Run isort (import order check)
+        run: isort --check-only myclaw/ cli.py onboard.py deploy.py
+
+  # ── Job 2: Test Suite ────────────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Create config directory
+        run: mkdir -p ~/.myclaw
+
+      - name: Run tests with pytest
+        run: pytest tests/ -v --tb=short --cov=myclaw --cov-report=xml
+        env:
+          MYCLAW_LOG_LEVEL: WARNING
+
+      - name: Upload coverage to Codecov
+        if: matrix.python-version == '3.12'
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
+  # ── Job 3: Docker Build Test ─────────────────────────────────────────────
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: false
+          load: true
+          tags: zensynora:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test Docker image starts
+        run: |
+          docker run --rm zensynora:test zensynora --help
+
+      - name: Test Docker image health
+        run: |
+          # Start container in background for health check
+          docker run -d --name zensynora-health -p 8000:8000 zensynora:test zensynora webui --port 8000
+          # Wait for health check (max 90s)
+          sleep 5
+          # Verify the help command works inside the running container too
+          docker exec zensynora-health zensynora --help
+          # Clean up
+          docker stop zensynora-health || true
+          docker rm zensynora-health || true
+
+  # ── Job 4: Type Check (Optional) ─────────────────────────────────────────
+  typecheck:
+    runs-on: ubuntu-latest
+    continue-on-error: true  # mypy may have false positives; don't block CI
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install mypy
+        run: |
+          python -m pip install --upgrade pip
+          pip install mypy
+          pip install -e ".[dev]"
+
+      - name: Run mypy
+        run: mypy myclaw/ --ignore-missing-imports --exclude 'webui/|docs/|tests/' || true

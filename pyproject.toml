@@ -1,0 +1,180 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "zensynora"
+version = "0.4.1"
+description = "A powerful personal AI agent with multi-provider LLM support, Telegram/WhatsApp gateways, persistent memory, and agent swarms."
+readme = "README.md"
+license = {text = "AGPL-3.0"}
+requires-python = ">=3.11"
+authors = [
+    {name = "Adrian Petrescu", email = "adrianx26@protonmail.com"}
+]
+keywords = [
+    "ai-agent",
+    "local-llm",
+    "multi-agent",
+    "ollama",
+    "telegram-bot",
+    "whatsapp-bot",
+    "personal-ai",
+    "mcp",
+    "swarm-intelligence",
+    "automation"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Communications :: Chat",
+    "Topic :: Utilities",
+]
+
+dependencies = [
+    "python-telegram-bot[job-queue]==21.4",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "requests>=2.31.0",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+    "pydantic>=2.0",
+    "apscheduler>=3.10",
+    "scrapling[all]>=0.4.2",
+    "aiosqlite>=0.20.0",
+    "httpx>=0.24.0",
+    "numpy>=1.24.0",
+    "mcp>=1.1.2",
+    "psutil>=5.9.0",
+    "paramiko>=3.4.0",
+    "GPUtil>=1.4.0",
+    "py-cpuinfo>=9.0.0",
+    "speedtest-cli>=2.1.3",
+    "watchdog>=3.0.0",
+    "sentence-transformers>=2.2.2",
+    "vosk>=0.3.45",
+    "openai>=1.0",
+    "anthropic>=0.25",
+    "google-generativeai>=0.5",
+    "redis>=4.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0",
+    "ruff>=0.4.0",
+    "black>=24.0",
+    "isort>=5.13",
+    "pre-commit>=3.7",
+    "mypy>=1.9",
+]
+
+[project.scripts]
+zensynora = "myclaw.cli:cli"
+myclaw = "myclaw.cli:cli"
+
+[project.urls]
+Homepage = "https://github.com/adrianx26/zensynora"
+Documentation = "https://github.com/adrianx26/zensynora#readme"
+Repository = "https://github.com/adrianx26/zensynora"
+Issues = "https://github.com/adrianx26/zensynora/issues"
+Changelog = "https://github.com/adrianx26/zensynora/blob/main/CHANGELOG.md"
+
+[tool.hatch.build.targets.wheel]
+packages = ["myclaw"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "/myclaw",
+    "/cli.py",
+    "/onboard.py",
+    "/tests",
+    "/docs",
+    "/eval",
+    "/webui",
+    "/requirements.txt",
+    "/install.sh",
+    "/uninstall.sh",
+    "/cleanup.sh",
+    "/CHANGELOG.md",
+    "/LICENSE",
+    "/README.md",
+]
+exclude = [
+    "/docs/dev/scripts",
+    "/__pycache__",
+    "/.pytest_cache",
+    "/.kilo",
+]
+
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+  | webui/node_modules
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 100
+known_first_party = ["myclaw"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # Pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",  # Line too long (handled by black)
+]
+
+[tool.ruff.per-file-ignores]
+"tests/*" = ["S101"]  # assert statements in tests
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+pythonpath = ["."]
+addopts = "-v --tb=short"
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+ignore_missing_imports = true
+exclude = [
+    "webui/",
+    "docs/",
+    "tests/",
+]
