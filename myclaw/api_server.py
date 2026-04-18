@@ -288,7 +288,8 @@ class APIServer:
         
         @app.get("/api/v1/tools")
         async def list_tools(api_key: Optional[str] = Depends(lambda r: self._verify_api_key(r))):
-            from myclaw.tools import TOOL_SCHEMAS
+            from myclaw.tools import TOOL_SCHEMAS, ensure_tool_schemas
+            ensure_tool_schemas()
             return {"tools": TOOL_SCHEMAS, "count": len(TOOL_SCHEMAS)}
         
         @app.post("/api/v1/tools/execute")

@@ -230,6 +230,11 @@ run pip install --quiet --upgrade pip setuptools wheel
 # ─────────────────────────────────────────────────────────────────────────────
 header "4. Core Python dependencies"
 
+info "Installing all dependencies from requirements.txt..."
+run "$VENV_DIR/bin/pip" install --quiet -r "$SCRIPT_DIR/requirements.txt"
+success "Core dependencies installed from requirements.txt"
+
+# Legacy helper for individual package checks (kept for optional installs)
 ensure_pip() {
     local pkg="$1"
     local install_name="${2:-$1}"
@@ -241,23 +246,6 @@ ensure_pip() {
         run "$VENV_DIR/bin/pip" install --quiet "${install_name}${spec}"
     fi
 }
-
-ensure_pip "telegram" "python-telegram-bot[job-queue]" ">=21.4"
-ensure_pip "requests" "requests" ">=2.31.0"
-ensure_pip "yaml" "pyyaml" ">=6.0"
-ensure_pip "rich" "rich" ">=13.0"
-ensure_pip "pydantic" "pydantic" ">=2.0"
-ensure_pip "apscheduler" "apscheduler" ">=3.10"
-ensure_pip "openai" "openai" ">=1.0"
-ensure_pip "httpx" "httpx" ""
-ensure_pip "scrapling" "scrapling[all]" ">=0.4.2"
-ensure_pip "fastapi" "fastapi" ">=0.109.0"
-ensure_pip "uvicorn" "uvicorn" ">=0.27.0"
-ensure_pip "websockets" "websockets" ">=12.0.0"
-ensure_pip "mcp" "mcp" ">=1.1.2"
-ensure_pip "numpy" "numpy" ">=1.24.0"
-ensure_pip "sentence_transformers" "sentence-transformers" ">=2.5.0"
-ensure_pip "watchdog" "watchdog" ">=4.0.0"
 
 run "$VENV_DIR/bin/scrapling" install --force
 
@@ -289,7 +277,19 @@ if [[ "$SKIP_OPTIONAL" == "false" ]]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6.5 WEB UI (Node.js & npm)
+# 6.5 OPTIONAL: Redis (for multi-worker deployments)
+# ─────────────────────────────────────────────────────────────────────────────
+if [[ "$SKIP_OPTIONAL" == "false" ]]; then
+    header "6.5 Redis (optional)"
+    if prompt_yes "  Install Redis Python client for multi-worker state sharing?"; then
+        run "$VENV_DIR/bin/pip" install --quiet "redis>=4.0"
+        success "redis>=4.0 installed."
+        info "To enable: set ZEN_REDIS_URL=redis://localhost:6379/0 or configure state_store in config.json"
+    fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6.6 WEB UI (Node.js & npm)
 # ─────────────────────────────────────────────────────────────────────────────
 header "6.5 Web UI frontend"
 
@@ -372,16 +372,34 @@ header "9. Verification"
 if [[ "$DRY_RUN" == "false" ]]; then
     FAILED=0
     check_import() {
-        if ! "$VENV_DIR/bin/python" -c "import $1" 2>/dev/null; then
-            warn "Import $1 FAILED"
+        local name="$1"
+        local module="${2:-$1}"
+        if ! "$VENV_DIR/bin/python" -c "import $module" 2>/dev/null; then
+            warn "Import $name FAILED"
             FAILED=$((FAILED + 1))
         fi
     }
-    check_import "telegram"
-    check_import "requests"
-    check_import "mcp"
-    check_import "fastapi"
-    
+    check_import "telegram"       "telegram"
+    check_import "httpx"          "httpx"
+    check_import "fastapi"        "fastapi"
+    check_import "mcp"            "mcp"
+    check_import "aiosqlite"      "aiosqlite"
+    check_import "paramiko"       "paramiko"
+    check_import "psutil"         "psutil"
+    check_import "numpy"          "numpy"
+    check_import "pydantic"       "pydantic"
+    check_import "rich"           "rich"
+    check_import "yaml"           "yaml"
+    check_import "uvicorn"        "uvicorn"
+    check_import "apscheduler"    "apscheduler"
+    check_import "scrapling"      "scrapling"
+
+    # Check ZenSynora internal modules
+    if ! "$VENV_DIR/bin/python" -c "import myclaw.state_store, myclaw.async_scheduler" 2>/dev/null; then
+        warn "Internal modules state_store / async_scheduler import FAILED"
+        FAILED=$((FAILED + 1))
+    fi
+
     if [[ "$FAILED" -eq 0 ]]; then success "All core components verified."; fi
 fi
 

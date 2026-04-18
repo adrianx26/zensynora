@@ -54,26 +54,42 @@ flowchart TB
     classDef data fill:#6a3a14,stroke:#9c5822,stroke-width:2px,color:#fff
     classDef llm fill:#4a1e50,stroke:#863990,stroke-width:2px,color:#fff
     classDef intelligence fill:#7a5a2a,stroke:#aa7744,stroke-width:2px,color:#fff
+    classDef infra fill:#3a3a3a,stroke:#666666,stroke-width:2px,color:#fff
 
-    %% Channels
+    %% Channels / Interfaces
     subgraph Interfaces [External Interfaces]
         direction LR
         CLI(["🖥️ CLI"])
         TG(["📱 Telegram Bot"])
         WA(["💬 WhatsApp API"])
+        WebUI(["🌐 Web UI"])
+        API(["🔌 REST API / WS"])
+        MCP(["🔌 MCP Client/Server"])
     end
 
     %% Core Application
-    subgraph MyClaw [MyClaw Platform]
+    subgraph MyClaw [ZenSynora Platform]
         GW{"Gateway Router"}
-        
+
         Agent("🧠 Core Agent")
-        
+
         subgraph Capabilities [Agent Capabilities]
             direction LR
-            Tools("🛠️ Dynamic Tools")
+            ToolsPkg["🛠️ Tools Package"]
             Profiles("📝 Profiles System")
             Sched("⏱️ Task Scheduler")
+        end
+
+        subgraph ToolModules ["Tools Package (decomposed)"]
+            direction TB
+            TCore["core — registry/hooks"]
+            TShell["shell — sandbox"]
+            TFiles["files — I/O"]
+            TWeb["web — httpx"]
+            TKB["kb — search"]
+            TSwarm["swarm — delegation"]
+            TSSH["ssh — remote"]
+            TToolbox["toolbox — skills"]
         end
 
         subgraph AdvancedSystems [Multi-Agent System]
@@ -82,10 +98,15 @@ flowchart TB
             Spec("🤖 Specialized Agents")
         end
 
-        subgraph Intelligence ["🧠 Intelligence Platform (v0.5)"]
+        subgraph Intelligence ["🧠 Intelligence Platform"]
             GapRes("🔍 Gap Researcher")
             Bench("📊 Benchmark Runner")
             Router("🛤️ Intelligent Router")
+        end
+
+        subgraph Infra ["🏗️ Infrastructure (Phase 6)"]
+            StateStore["🗄️ State Store<br/>InMemory / Redis"]
+            AsyncSched["⏰ Async Scheduler<br/>research jobs"]
         end
     end
 
@@ -110,32 +131,43 @@ flowchart TB
     CLI --> GW
     TG --> GW
     WA --> GW
-    
+    WebUI --> API
+    API --> Agent
+    MCP <--> ToolsPkg
+
     GW ==> Agent
-    
-    Agent <--> Tools
+
+    Agent <--> ToolsPkg
     Agent <--> Profiles
     Agent <--> AdvancedSystems
     Agent <--> Sched
     Agent <--> Intelligence
-    
-    Agent{MyClaw Agent}
-    Router[Intelligent Router]
+
+    ToolsPkg --> ToolModules
+
     Agent <--> Router
-    Agent <--> KB[(Knowledge Base: SQLite/MD)]
+    Agent <--> KB
     Agent <--> Toolbox
     Sched <--> Jobs
     GapRes <--> KB
-    
+
+    %% Phase 6 infrastructure
+    Agent -.-> StateStore
+    Sched -.-> StateStore
+    AsyncSched --> GapRes
+    Infra <--> Storage
+
     Agent ==> Providers
     Intelligence ==> Providers
-    
+
     %% Apply Classes
-    class CLI,TG,WA channel
-    class GW,Agent,Tools,Profiles,Sched,Swarm,Spec core
+    class CLI,TG,WA,WebUI,API,MCP channel
+    class GW,Agent,ToolsPkg,Profiles,Sched,Swarm,Spec core
     class Mem,KB,Lib,Toolbox,Jobs data
     class Local,Cloud llm
     class GapRes,Bench,Router intelligence
+    class StateStore,AsyncSched infra
+    class TCore,TShell,TFiles,TWeb,TKB,TSwarm,TSSH,TToolbox core
 ```
 
 ---
@@ -583,7 +615,21 @@ myclaw/
 │   ├── gateway.py           # Channel routing
 │   ├── memory.py            # SQLite persistence
 │   ├── provider.py          # LLM Provider abstraction
-│   ├── tools.py             # Tool definitions
+│   ├── tools/               # 🛠️ Tool definitions (decomposed package)
+│   │   ├── __init__.py      # Package exports & lazy imports
+│   │   ├── core.py          # Registry, hooks, rate limiter, validation
+│   │   ├── shell.py         # Shell execution
+│   │   ├── files.py         # File I/O
+│   │   ├── web.py           # Browse & download
+│   │   ├── ssh.py           # SSH remote execution
+│   │   ├── swarm.py         # Swarm tools
+│   │   ├── kb.py            # Knowledge base tools
+│   │   ├── scheduler.py     # Task scheduling
+│   │   ├── session.py       # Session insights
+│   │   ├── toolbox.py       # TOOLBOX skill management
+│   │   └── management.py    # System management
+│   ├── state_store.py       # 🗄️ Multi-worker state store (Phase 6.1)
+│   ├── async_scheduler.py   # ⏰ Async job queue (Phase 6.2)
 │   ├── swarm/               # 🐝 Agent Swarm system
 │   │   ├── __init__.py
 │   │   ├── models.py        # Data models
@@ -840,14 +886,14 @@ register_tool(
 
 ### Internet & Download Tools
 
-MyClaw now includes built-in tools for browsing the internet and downloading files:
+MyClaw includes built-in tools for browsing the internet and downloading files:
 
 | Tool | Description | Example |
 |------|-------------|---------|
 | `browse(url, max_length)` | Browse a URL, strip HTML and return plain text | `browse("https://example.com")` |
 | `download_file(url, path)` | Download a file to workspace | `download_file("https://example.com/file.pdf", "downloads/file.pdf")` |
 
-These tools include:
+These tools use **httpx.AsyncClient** (fully async) and include:
 - Automatic User-Agent headers
 - Timeout protection (30s for browse, 60s for download)
 - **HTML stripping** — `browse()` removes script/style blocks and all HTML tags, returning clean plain text
@@ -872,14 +918,14 @@ This will:
 
 ### Shell Allowed Commands
 
-The `shell()` tool enforces a strict allowlist for security:
+The `shell()` tool enforces a strict allowlist for security. Interpreters (`python`, `python3`, `pip`) are **explicitly blocked** to prevent sandbox escape:
 
 ```
 ls, dir, cat, type, find, grep, findstr, head, tail, wc, sort, uniq, cut, git,
-echo, pwd, python, python3, pip, curl, wget
+echo, pwd, curl, wget
 ```
 
-Edit `ALLOWED_COMMANDS` in `myclaw/tools.py` to customize.
+Edit `ALLOWED_COMMANDS` in `myclaw/tools/core.py` to customize.
 
 ### Agent Skills Evaluation
 
@@ -944,9 +990,57 @@ The agent now logs knowledge gaps (queries with no results) to a dedicated logge
 
 ---
 
+## 🏗️ Infrastructure & Scaling (Phase 6)
+
+ZenSynora now supports multi-worker deployments with shared state and an asyncio-native job queue.
+
+### Multi-Worker State Store (Phase 6.1)
+
+The `StateStore` abstraction (`myclaw/state_store.py`) enables sharing critical state across multiple worker processes or containers:
+
+| Feature | InMemory (default) | Redis (optional) |
+|---------|-------------------|------------------|
+| Agent registry metadata | ✅ Local dict | ✅ Shared names |
+| Rate limiting | ✅ Per-process | ✅ Distributed |
+| Chat ID mappings | ✅ Local dict | ✅ Shared |
+| Hook metadata | ✅ Local dict | ✅ Shared names |
+| Dependencies | None | `redis>=4.0` |
+
+**Enable Redis backend:**
+```bash
+# Environment variable
+export ZEN_REDIS_URL="redis://localhost:6379/0"
+
+# Or in config.json
+{
+  "state_store": {
+    "backend": "redis",
+    "redis_url": "redis://localhost:6379/0"
+  }
+}
+```
+
+Install Redis support:
+```bash
+pip install redis>=4.0
+```
+
+### Async Job Queue (Phase 6.2)
+
+The `AsyncScheduler` (`myclaw/async_scheduler.py`) replaces `apscheduler.BackgroundScheduler` for background tasks:
+
+- **No external dependencies** — pure asyncio
+- **Interval & date triggers** — recurring and one-shot jobs
+- **Job persistence** — optional JSONL durability across restarts
+- **apscheduler-compatible API** — `add_job(func, 'interval', hours=2)`
+
+Used internally for the knowledge research background worker. The Telegram `JobQueue` remains for channel-specific scheduling.
+
+---
+
 ## ⚠️ Security Notes
 
-- The agent executes shell commands—review the allowlist in [`myclaw/tools.py`](myclaw/tools.py:19)
+- The agent executes shell commands—review the allowlist in [`myclaw/tools/core.py`](myclaw/tools/core.py:36)
 - File operations are restricted to the workspace directory (`~/.myclaw/workspace`)
 - Telegram access is controlled by user ID whitelist
 - Always review what the agent executes, especially with shell commands

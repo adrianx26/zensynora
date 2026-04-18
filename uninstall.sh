@@ -108,6 +108,14 @@ if [[ -d "$MYCLAW_DIR" ]]; then
     fi
 fi
 
+# Phase 6.2: Scheduler persistence cleanup
+header "3.5 Scheduler persistence"
+SCHEDULER_PERSIST="$MYCLAW_DIR/scheduler_jobs.jsonl"
+if [[ -f "$SCHEDULER_PERSIST" ]]; then
+    run rm -f "$SCHEDULER_PERSIST"
+    success "Scheduler persistence file removed."
+fi
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. WEB UI ARTIFACTS
 # ─────────────────────────────────────────────────────────────────────────────

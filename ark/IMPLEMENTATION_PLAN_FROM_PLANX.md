@@ -36,7 +36,7 @@ Address critical security gaps, performance bottlenecks, and maintainability iss
 
 | # | Task | File | Priority | Effort |
 |---|------|------|----------|--------|
-| 3.1 | **Extract `tools.py` into `tools/` package** | — | P2 | 6–8 hrs |
+| 3.1 | **Extract `tools.py` into `tools/` package** | — | P2 | 6–8 hrs | ✅ DONE |
 | | ├── `tools/core.py` — registry, hook system, rate limiter, validation | | | |
 | | ├── `tools/shell.py` — `shell_async()`, sandbox, command allowlist | | | |
 | | ├── `tools/files.py` — `read_file()`, `write_file()`, path validation | | | |
@@ -45,8 +45,8 @@ Address critical security gaps, performance bottlenecks, and maintainability iss
 | | ├── `tools/ssh.py` — SSH remote execution | | | |
 | | ├── `tools/kb.py` — knowledge base tools | | | |
 | | └── `tools/scheduler.py` — task scheduling | | | |
-| 3.2 | **Refactor `agent.py` `think()` method** — extract into sub-methods: `_route_message()`, `_build_context()`, `_execute_tools()`, `_handle_summarization()` | `myclaw/agent.py` | P1 | 4–6 hrs |
-| 3.3 | **Add lazy imports** for heavy modules in `tools.py` to reduce startup time | `myclaw/tools/` | P2 | 1 hr |
+| 3.2 | **Refactor `agent.py` `think()` method** — extract into sub-methods: `_route_message()`, `_build_context()`, `_execute_tools()`, `_handle_summarization()` | `myclaw/agent.py` | P1 | 4–6 hrs | ✅ DONE |
+| 3.3 | **Add lazy imports** for heavy modules in `tools.py` to reduce startup time — `_LazyCallable` wrappers defer `myclaw.agents.{skill_adapter,medic_agent,newtech_agent}` until first invocation; `ensure_tool_schemas()` defers schema generation | `myclaw/tools/` | P2 | 1 hr | ✅ DONE |
 
 ---
 
@@ -80,8 +80,8 @@ Address critical security gaps, performance bottlenecks, and maintainability iss
 
 | # | Task | File | Priority | Effort |
 |---|------|------|----------|--------|
-| 6.1 | **Extract in-memory state to Redis/shared store** — `_agent_registry`, `_HOOKS`, `_rate_limiter` for multi-worker deployments | `myclaw/state_store.py` | P1 | 4–6 hrs |
-| 6.2 | **Replace `apscheduler.BackgroundScheduler` with async job queue** — use `arq` or `celery` for reminders and research jobs | `myclaw/scheduler.py` | P1 | 4–6 hrs |
+| 6.1 | **Extract in-memory state to Redis/shared store** — `_agent_registry`, `_HOOKS`, `_rate_limiter` for multi-worker deployments. Implemented `StateStore` ABC with `InMemoryStateStore` (default, zero deps) and `RedisStateStore` (optional, redis-py). Wired into `tools/core.py` setters and `RateLimiter` with graceful fallback. | `myclaw/state_store.py` | P1 | 4–6 hrs | ✅ DONE |
+| 6.2 | **Replace `apscheduler.BackgroundScheduler` with async job queue** — created `AsyncScheduler` (asyncio-native, no external deps) with interval/date triggers, job persistence, and apscheduler-compatible API. Replaced `BackgroundScheduler` in `gateway.py` for research jobs. Telegram `_job_queue` left intact for channel-specific scheduling. | `myclaw/async_scheduler.py` | P1 | 4–6 hrs | ✅ DONE |
 | 6.3 | **Official `Dockerfile` + `docker-compose.yml`** — separate services: API, Web UI (nginx), Redis | repo root | P2 | 3–4 hrs |
 | 6.4 | **GitHub Actions CI/CD** — lint (`ruff`, `mypy`), tests (`pytest`), security scan (`bandit`), container build/push | `.github/workflows/ci.yml` | P2 | 2–3 hrs |
 | 6.5 | **Encrypt secrets at rest** — use `keyring` or master-password-derived `cryptography.fernet` key for `config.json` | `myclaw/config.py` | P1 | 3–4 hrs |
@@ -90,11 +90,11 @@ Address critical security gaps, performance bottlenecks, and maintainability iss
 
 ## Immediate Action Items (This Sprint)
 
-1. **Security hotfix** — Remove `python`, `python3`, `pip` from `ALLOWED_COMMANDS` (30 min)
-2. **Performance hotfix** — Wrap knowledge search in `asyncio.to_thread()` (1 hr)
-3. **Code health** — Begin `tools.py` extraction into `tools/` package (start with `tools/core.py` + `tools/shell.py`)
-4. **UX fix** — Make Web UI API base URL dynamic via `window.location` (1 hr)
-5. **Test gap** — Create `test_security_path_traversal.py` and `test_register_tool_ast.py`
+1. **Security hotfix** — Remove `python`, `python3`, `pip` from `ALLOWED_COMMANDS` (30 min) ✅ DONE
+2. **Performance hotfix** — Wrap knowledge search in `asyncio.to_thread()` (1 hr) ✅ DONE
+3. **Code health** — Begin `tools.py` extraction into `tools/` package (start with `tools/core.py` + `tools/shell.py`) ✅ DONE
+4. **UX fix** — Make Web UI API base URL dynamic via `window.location` (1 hr) ✅ DONE
+5. **Test gap** — Create `test_security_path_traversal.py` and `test_register_tool_ast.py` ✅ DONE
 
 ---
 

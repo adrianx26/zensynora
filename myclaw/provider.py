@@ -45,7 +45,8 @@ def _get_tool_schemas() -> List[Dict]:
     """Lazy import TOOL_SCHEMAS to prevent circular imports."""
     global _TOOL_SCHEMAS_CACHE
     if _TOOL_SCHEMAS_CACHE is None:
-        from .tools import TOOL_SCHEMAS
+        from .tools import TOOL_SCHEMAS, ensure_tool_schemas
+        ensure_tool_schemas()
         _TOOL_SCHEMAS_CACHE = TOOL_SCHEMAS
     return _TOOL_SCHEMAS_CACHE
 

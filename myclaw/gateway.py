@@ -33,7 +33,7 @@ import asyncio
 import time
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from apscheduler.schedulers.background import BackgroundScheduler
+from .async_scheduler import AsyncScheduler, get_scheduler
 from .knowledge.researcher import start_researcher_job
 from .agent import get_last_active_time
 from .config import load_config
@@ -136,11 +136,18 @@ def start(config):
             loop.create_task(mcp_manager.start_all())
 
         # ── Start Background Research Scheduler ───────────────────────────────────
+        # Phase 6.2: Replaced apscheduler.BackgroundScheduler with AsyncScheduler
+        scheduler = None
         if config.intelligence.research_enabled:
-            scheduler = BackgroundScheduler()
+            scheduler = get_scheduler()
             interval = config.intelligence.research_interval_hours
-            scheduler.add_job(_run_research_if_idle, 'interval', hours=interval)
-            scheduler.start()
+            scheduler.add_job(
+                _run_research_if_idle,
+                'interval',
+                hours=interval,
+                id="research_job",
+            )
+            loop.create_task(scheduler.start())
             logger.info(f"Knowledge Researcher scheduled every {interval} hours")
 
         # ── Start Background Knowledge File-Sync Extraction ───────────────────────
@@ -163,6 +170,19 @@ def start(config):
         else:
             print("No channel is active. Run `python cli.py agent` for console chat.")
     finally:
+        # Phase 6.2: Shutdown AsyncScheduler gracefully
+        try:
+            _sched = get_scheduler()
+            if _sched._running:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    loop.create_task(_sched.shutdown(wait=True))
+                else:
+                    asyncio.run(_sched.shutdown(wait=True))
+                logger.info("AsyncScheduler shutdown complete")
+        except Exception as _sched_err:
+            logger.debug(f"AsyncScheduler shutdown note: {_sched_err}")
+
         print("\nShutting down global ThreadPoolExecutor gracefully...")
         # Use shutdown(wait=False) to avoid blocking the event loop
         # The executor will finish pending tasks in background
