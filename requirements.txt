@@ -48,6 +48,20 @@ google-generativeai>=0.5
 # Install: pip install redis>=4.0
 redis>=4.0
 
+# Prometheus metrics export (Phase 5.1)
+# Install: pip install prometheus-client
+prometheus-client>=0.20.0
+
+# Config encryption at rest (Phase 5.2)
+# Install: pip install cryptography keyring
+cryptography>=42.0.0
+keyring>=25.0.0
+
+# MFA / TOTP (Phase 5.4)
+# Install: pip install pyotp qrcode
+pyotp>=2.9.0
+qrcode>=7.4
+
 # ── Development Dependencies ──────────────────────────────────────────────────
 pytest>=7.0
 pytest-asyncio>=0.21.0

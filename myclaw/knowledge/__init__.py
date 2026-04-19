@@ -22,6 +22,9 @@ from .storage import (
     write_note, read_note, delete_note, list_notes, search_notes,
     get_all_tags, update_note, get_note_by_tag
 )
+from .advanced_search import (
+    search_advanced, SearchFilters, SearchResult, compute_embedding
+)
 from .graph import (
     get_related_entities, get_entity_network, find_path,
     get_central_entities, build_context
@@ -71,6 +74,19 @@ async def a_write_note(
         write_note, name, title, observations, relations, tags, user_id, content
     )
 
+
+async def a_search_advanced(
+    query: str,
+    user_id: str = "default",
+    filters=None,
+    limit: int = 10,
+):
+    """Async wrapper for search_advanced."""
+    from .advanced_search import search_advanced
+    return await asyncio.to_thread(
+        search_advanced, query, user_id, filters, limit
+    )
+
 __all__ = [
     # Database
     "KnowledgeDB",
@@ -91,6 +107,11 @@ __all__ = [
     "get_all_tags",
     "update_note",
     "get_note_by_tag",
+    # Advanced Search
+    "search_advanced",
+    "SearchFilters",
+    "SearchResult",
+    "compute_embedding",
     # Graph
     "get_related_entities",
     "get_entity_network",
@@ -106,4 +127,5 @@ __all__ = [
     "a_build_context",
     "a_read_note",
     "a_write_note",
+    "a_search_advanced",
 ]

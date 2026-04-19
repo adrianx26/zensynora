@@ -265,9 +265,15 @@ class Agent:
         # Store config for later use
         self.config = config
 
+        # Offline mode: enable fallback to local providers on connection failure
+        self._offline_mode = getattr(
+            getattr(config, "intelligence", None), "offline_mode", True
+        )
+        self._fallback_wrapper: Optional[Any] = None
+
         # Initialize knowledge gap cache for deduplication
         self._gap_cache = KnowledgeGapCache(timeout_seconds=300.0)
-        
+
         # Initialize task timer orchestrator for tracking user question timeouts
         self._task_timer = get_task_timer_orchestrator()
         self._current_task_id: Optional[str] = None
@@ -438,7 +444,7 @@ class Agent:
                 {"role": "user", "content": exchange},
             ]
 
-            raw, _ = await self.provider.chat(messages, self.model)
+            raw, _ = await self._provider_chat(messages, self.model)
 
             # Strip optional markdown code fences
             raw = raw.strip()
@@ -566,6 +572,34 @@ class Agent:
                 self._provider_name = "ollama"
         return self._provider
 
+    async def _provider_chat(self, messages, model, stream: bool = False):
+        """Call provider.chat() with optional offline fallback.
+
+        When offline_mode is enabled and the primary provider fails with a
+        connection error, automatically retry with local providers
+        (Ollama → LM Studio → llama.cpp).
+        """
+        if not self._offline_mode:
+            return await self._provider_chat(messages, model, stream=stream)
+
+        try:
+            return await self._provider_chat(messages, model, stream=stream)
+        except (ConnectionError, TimeoutError, OSError) as e:
+            logger.warning(f"Primary provider failed: {e}. Trying offline fallback...")
+        except Exception as e:
+            err_str = str(e).lower()
+            if any(kw in err_str for kw in ("connection", "timeout", "unreachable", "refused")):
+                logger.warning(f"Primary provider failed: {e}. Trying offline fallback...")
+            else:
+                raise
+
+        # Initialize fallback wrapper on first need
+        if self._fallback_wrapper is None:
+            from .offline import FallbackChatWrapper
+            self._fallback_wrapper = FallbackChatWrapper(self.provider, self.config)
+
+        return await self._fallback_wrapper.chat(messages, model, stream=stream)
+
     def _extract_suggested_topics(self, message: str) -> List[str]:
         """Extract suggested topics from a message for knowledge gap guidance.
 
@@ -623,7 +657,7 @@ class Agent:
                 {"role": "user", "content": summary_prompt},
             ]
 
-            summary_text, _ = await self.provider.chat(summary_msgs, self.model)
+            summary_text, _ = await self._provider_chat(summary_msgs, self.model)
             original_len = sum(len(m['content']) for m in to_summarize)
             compressed_len = len(summary_text)
             compression_ratio = (1 - compressed_len / original_len) * 100 if original_len > 0 else 0
@@ -873,7 +907,7 @@ class Agent:
                 {"role": "user", "content": context},
             ]
 
-            raw, _ = await self.provider.chat(messages, self.model)
+            raw, _ = await self._provider_chat(messages, self.model)
             raw = raw.strip()
             raw = re.sub(r'^```[a-z]*\n?', '', raw)
             raw = re.sub(r'\n?```$', '', raw)
@@ -978,7 +1012,7 @@ class Agent:
         ]
 
         try:
-            recovered, _ = await self.provider.chat(recovery_messages, self.model)
+            recovered, _ = await self._provider_chat(recovery_messages, self.model)
             if not self._is_empty_response(recovered):
                 logger.info("Empty-response recovery succeeded.")
                 return recovered
@@ -1323,7 +1357,7 @@ class Agent:
 
         try:
             import httpx as _httpx  # local alias to avoid shadowing outer scope
-            final_response, _ = await self.provider.chat(followup, self.model)
+            final_response, _ = await self._provider_chat(followup, self.model)
 
             # Trigger post_llm_call hooks for followup
             trigger_hook("post_llm_call", final_response, None)
@@ -1410,7 +1444,7 @@ class Agent:
 
         try:
             import httpx
-            response, tool_calls = await self.provider.chat(messages, request_model)
+            response, tool_calls = await self._provider_chat(messages, request_model)
         except httpx.TimeoutException as e:
             logger.error(f"LLM provider timeout: {e}")
             error_msg = "Sorry, the LLM service timed out. Please try again."
@@ -1471,10 +1505,16 @@ class Agent:
 
 
     async def stream_think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> AsyncIterator[str]:
-        """Process a user message and yield response chunks in real-time."""
+        """Process a user message and yield response chunks in real-time.
+
+        Streaming tool call flow:
+            1. Stream initial LLM reasoning
+            2. If tool calls detected → yield markers, execute tools, stream follow-up
+            3. If no tool calls → save response and finish
+        """
         global _LAST_ACTIVE_TIME
         _LAST_ACTIVE_TIME = time.time()
-        
+
         mem = await self._get_memory(user_id)
         await mem.add("user", user_message)
 
@@ -1517,31 +1557,32 @@ class Agent:
             if result and isinstance(result, list):
                 messages = result
 
-        # Step 1: LLM Reasoning & Response (messages already built above)
-        try:
-            stream_iterator = await self.provider.chat(messages, self.model, stream=True)
-        except Exception as e:
-            logger.error(f"LLM provider error in stream_think: {e}")
-            trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
-            yield f"Sorry, I encountered an error: {e}"
-            return
+        # Step 1: Stream initial LLM response
+        stream_result = await self._provider_chat(messages, self.model, stream=True)
+
+        # Providers now return (iterator, tool_calls_collector) for streaming
+        if isinstance(stream_result, tuple) and len(stream_result) == 2:
+            stream_iterator, tool_calls_collector = stream_result
+        else:
+            stream_iterator = stream_result
+            tool_calls_collector = []
 
         response_parts = []
-        tool_calls = None
 
-        # Iterate over the stream
         try:
             async for chunk in stream_iterator:
-                response_parts.append(chunk)
-                yield chunk
+                if chunk:
+                    response_parts.append(chunk)
+                    yield chunk
         except Exception as e:
-            logger.error(f"Error in streaming: {e}")
-            yield f"Error streaming response: {e}"
+            logger.error(f"Error in initial streaming: {e}")
+            yield f"\n\n[Error streaming response: {e}]"
+            trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
             return
 
         full_response = "".join(response_parts)
 
-        # Empty-response recovery for streaming: emit fallback if nothing arrived
+        # Empty-response recovery for streaming
         if self._is_empty_response(full_response):
             logger.warning("Streaming produced empty response — emitting fallback.")
             fallback = "I'm sorry — I wasn't able to generate a response."
@@ -1553,11 +1594,53 @@ class Agent:
             yield fallback
             full_response = fallback
 
-        # Trigger post_llm_call hooks
-        trigger_hook("post_llm_call", full_response, tool_calls)
+        # Trigger post_llm_call hooks for initial response
+        trigger_hook("post_llm_call", full_response, None)
 
-        # Note: Tool calls are not supported in streaming mode yet
-        # The full response is returned as chunks
+        # Step 2: Check for tool calls collected during streaming
+        tool_calls = tool_calls_collector if tool_calls_collector else None
+
+        if tool_calls:
+            # ── Tool calls detected — execute and stream follow-up ──────────────
+            logger.info(f"Streaming tool calls detected: {[tc['function']['name'] for tc in tool_calls]}")
+
+            # Yield tool call markers for frontend visibility
+            yield "__TOOL_CALLS_START__"
+            for tc in tool_calls:
+                yield json.dumps({
+                    "tool": tc["function"]["name"],
+                    "status": "running",
+                    "args": tc["function"].get("arguments", {})
+                })
+            yield "__TOOL_CALLS_END__"
+
+            # Execute tools using existing logic (non-streaming follow-up for now)
+            try:
+                final_response = await self._execute_tools(
+                    tool_calls, messages, user_message, user_id, mem, _depth, had_kb_results
+                )
+
+                # Stream the final response in chunks for UX consistency
+                yield "__STREAM_START__"
+                # Split final response into word chunks to simulate streaming
+                words = final_response.split(" ")
+                for i, word in enumerate(words):
+                    prefix = " " if i > 0 else ""
+                    yield prefix + word
+                yield "__STREAM_END__"
+
+                # Background cleanup after tool-using response
+                await self._handle_summarization(user_message, final_response, user_id, mem, _full_history_for_bg_stream)
+
+            except Exception as e:
+                logger.error(f"Tool execution error during streaming: {e}")
+                yield f"\n\n[Error executing tools: {e}]"
+                yield "__STREAM_END__"
+
+            trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
+            return
+
+        # ── No tool calls — finalize and cleanup ──────────────────────────────
         await mem.add("assistant", full_response)
 
         # Background KB auto-extraction (fire-and-forget)
@@ -1579,4 +1662,4 @@ class Agent:
         # Trigger on_session_end hook
         trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
 
-        yield "[TOOL_CALLS_NONE]"  # Signal that streaming is complete
+        yield "[TOOL_CALLS_NONE]"  # Signal no tools were invoked

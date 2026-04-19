@@ -50,14 +50,10 @@ docs/_build/
 # Development / planning files (already in docs/dev/)
 docs/dev/scripts/
 
-# Node.js (webui source — only dist/ is needed)
+# Node.js (webui source — only dist/ is needed in FINAL image)
+# NOTE: We keep webui source in build context so the frontend-builder
+# stage can compile it. node_modules is excluded to keep context small.
 webui/node_modules/
-webui/src/
-webui/public/
-webui/*.config.*
-webui/*.json
-webui/*.html
-!webui/dist/
 
 # Kilo / local dev tools
 .kilo/

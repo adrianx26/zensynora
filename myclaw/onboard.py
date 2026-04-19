@@ -112,25 +112,51 @@ def onboard():
     print("\n📚 Knowledge Base:")
     print("  The knowledge base stores persistent notes in Markdown format.")
     print("  Files are stored in ~/.myclaw/knowledge/")
-    
+
     kb_enabled = input("Enable knowledge base? [Y/n]: ").strip().lower()
     kb_enabled = kb_enabled in ("", "y", "yes")
-    
+
     config["knowledge"] = {
         "enabled": kb_enabled,
         "auto_extract": False,
         "knowledge_dir": "~/.myclaw/knowledge"
     }
-    
+
+    # ── GDPR Compliance (opt-in, default disabled) ──────────────────────────────
+    print("\n🔒 GDPR Compliance:")
+    print("  Enables user data deletion (right to erasure) and export.")
+    print("  Default: disabled. You can enable later in config.")
+
+    gdpr_input = input("Enable GDPR compliance features? [y/N]: ").strip().lower()
+    gdpr_enabled = gdpr_input in ("y", "yes")
+
+    config["security"] = {
+        "gdpr_enabled": gdpr_enabled,
+        "allowed_commands": [
+            'ls', 'dir', 'cat', 'type', 'find', 'grep', 'findstr',
+            'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'git',
+            'echo', 'pwd', 'curl', 'wget'
+        ],
+        "blocked_commands": [
+            'rm', 'del', 'erase', 'format', 'rd', 'rmdir',
+            'powershell', 'cmd', 'certutil', 'bitsadmin', 'icacls',
+            'takeown', 'reg', 'schtasks', 'net', 'tasklist',
+            'wmic', 'msiexec', 'control', 'explorer', 'shutdown', 'restart'
+        ],
+    }
+
     save_config(config)
     print(f"\n✅ Config saved to {CONFIG_DIR}/config.json")
-    
+
     # Create knowledge directory if enabled
     if kb_enabled:
         from pathlib import Path
         kb_dir = Path.home() / ".myclaw" / "knowledge" / "default"
         kb_dir.mkdir(parents=True, exist_ok=True)
         print(f"📁 Knowledge directory created: {kb_dir}")
+
+    if gdpr_enabled:
+        print("🔒 GDPR compliance enabled. Use `zensynora gdpr delete <user_id>` to erase user data.")
 
     if provider in {"ollama", "lmstudio", "llamacpp"}:
         print(f"\nMake sure your {provider} server is running, then: zensynora agent")

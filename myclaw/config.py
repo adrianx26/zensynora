@@ -38,6 +38,7 @@ from pydantic import BaseModel, SecretStr, ValidationError
 from typing import Optional, Dict, Any, List
 
 from .exceptions import ConfigurationError
+from .config_encryption import load_encrypted_or_plain, save_encrypted
 
 # Thread-safe config loading lock
 _config_lock = threading.Lock()
@@ -165,6 +166,7 @@ ENV_OVERRIDES = {
     "intelligence.research_idle_minutes": "MYCLAW_RESEARCH_IDLE",
     "intelligence.intelligent_routing": "MYCLAW_INTELLIGENT_ROUTING",
     "intelligence.benchmarking_enabled": "MYCLAW_BENCHMARKING_ENABLED",
+    "intelligence.offline_mode": "MYCLAW_OFFLINE_MODE",
     "intelligence.routing.enabled": "MYCLAW_ROUTING_ENABLED",
     "intelligence.routing.prefer_free_models": "MYCLAW_ROUTING_PREFER_FREE",
     "intelligence.routing.allowed_models": "MYCLAW_ROUTING_ALLOWED_MODELS",
@@ -363,7 +365,7 @@ class MemoryCleanupConfig(BaseModel):
 
 
 class SecurityConfig(BaseModel):
-    """Security configuration for command allowlists."""
+    """Security configuration for command allowlists and GDPR."""
     allowed_commands: list[str] = [
         'ls', 'dir', 'cat', 'type', 'find', 'grep', 'findstr',
         'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'git',
@@ -375,6 +377,8 @@ class SecurityConfig(BaseModel):
         'takeown', 'reg', 'schtasks', 'net', 'tasklist',
         'wmic', 'msiexec', 'control', 'explorer', 'shutdown', 'restart'
     ]
+    # GDPR compliance features (opt-in, default disabled)
+    gdpr_enabled: bool = False
 
 
 class MedicConfig(BaseModel):
@@ -493,9 +497,10 @@ class IntelligenceConfig(BaseModel):
     research_interval_hours: int = 6
     research_idle_minutes: int = 15
     routing: RoutingConfig = RoutingConfig()
-    intelligent_routing: bool = False # Deprecated but kept for compatibility
+    intelligent_routing: bool = False  # Deprecated but kept for compatibility
     benchmarking_enabled: bool = False
     benchmark_interval_days: int = 7
+    offline_mode: bool = True  # Auto-fallback to local LLM on connection failure
 
 
 class AppConfig(BaseModel):
@@ -638,7 +643,7 @@ def load_config(force_reload: bool = False) -> AppConfig:
             if not force_reload and _cached_config is not None and current_mtime == _config_mtime:
                 return _cached_config
             
-            raw = json.loads(CONFIG_FILE.read_text(encoding="utf-8"))
+            raw = load_encrypted_or_plain(CONFIG_FILE)
             # Apply environment variable overrides
             raw = _apply_env_overrides(raw)
             
@@ -683,4 +688,4 @@ def save_config(config):
     else:
         raw = config
 
-    CONFIG_FILE.write_text(json.dumps(raw, indent=2, ensure_ascii=False), encoding="utf-8")
+    save_encrypted(CONFIG_FILE, raw)

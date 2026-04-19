@@ -9,12 +9,19 @@ interface Agent {
 interface ChatMessage {
   sender: string;
   text: string;
+  isStreaming?: boolean;
+  tools?: ToolInfo[];
+}
+
+interface ToolInfo {
+  name: string;
+  status: string;
+  args?: Record<string, unknown>;
 }
 
 // ── Configuration: derive API base from window.location ──────────────────────
 function getApiBase(): string {
   const { protocol, hostname, port } = window.location;
-  // If running on the Vite dev server (port 5173 typically), fall back to :8000
   const apiPort = port === '5173' || port === '' ? '8000' : port;
   return `${protocol}//${hostname}:${apiPort}`;
 }
@@ -40,7 +47,8 @@ function loadMessages(agent: string): ChatMessage[] {
 
 function saveMessages(agent: string, messages: ChatMessage[]) {
   try {
-    localStorage.setItem(`${STORAGE_KEY}_${agent}`, JSON.stringify(messages));
+    const toSave = messages.map(m => ({ sender: m.sender, text: m.text }));
+    localStorage.setItem(`${STORAGE_KEY}_${agent}`, JSON.stringify(toSave));
   } catch { /* ignore */ }
 }
 
@@ -66,6 +74,7 @@ function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>(getSavedTheme);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'open' | 'closed'>('connecting');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -74,6 +83,9 @@ function App() {
   const reconnectAttempts = useRef(0);
   const MAX_RECONNECT_ATTEMPTS = 10;
   const RECONNECT_BASE_DELAY = 1000;
+
+  // Track pending tool calls during streaming
+  const pendingToolsRef = useRef<ToolInfo[]>([]);
 
   // Apply theme on mount
   useEffect(() => { setThemeDoc(theme); }, [theme]);
@@ -108,7 +120,7 @@ function App() {
     saveMessages(activeAgent, messages);
   }, [activeAgent, messages]);
 
-  // ── WebSocket with reconnection & heartbeat ────────────────────────────────
+  // ── WebSocket with reconnection, heartbeat, and streaming ──────────────────
   const connectWebSocket = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
@@ -122,14 +134,12 @@ function App() {
       reconnectAttempts.current = 0;
       setConnectionStatus('open');
       setMessages(prev => {
-        // Replace initial connecting message on first connect
         if (prev.length === 1 && prev[0].sender === 'system' && prev[0].text.includes('Connecting')) {
           return [{ sender: 'system', text: `Connected securely to agent [${activeAgent}]` }];
         }
         return [...prev, { sender: 'system', text: `Reconnected to agent [${activeAgent}]` }];
       });
 
-      // Heartbeat: ping every 30s
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       heartbeatRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -139,22 +149,105 @@ function App() {
     };
 
     ws.onmessage = (event) => {
-      if (event.data === '__pong__') return; // heartbeat response
-      setMessages(prev => [...prev, { sender: 'agent', text: event.data }]);
+      const data = event.data as string;
+
+      if (data === '__pong__') return;
+
+      // ── Stream start ──
+      if (data === '__STREAM_START__') {
+        setIsStreaming(true);
+        setMessages(prev => [...prev, { sender: 'agent', text: '', isStreaming: true }]);
+        return;
+      }
+
+      // ── Stream end ──
+      if (data === '__STREAM_END__') {
+        setIsStreaming(false);
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last.sender === 'agent' && last.isStreaming) {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, isStreaming: false };
+            return updated;
+          }
+          return prev;
+        });
+        return;
+      }
+
+      // ── Tool calls start ──
+      if (data === '__TOOL_CALLS_START__') {
+        pendingToolsRef.current = [];
+        setIsStreaming(false);
+        // Finalize the previous streaming message
+        setMessages(prev => {
+          const last = prev[prev.length - 1];
+          if (last && last.sender === 'agent' && last.isStreaming) {
+            const updated = [...prev];
+            updated[updated.length - 1] = { ...last, isStreaming: false };
+            return updated;
+          }
+          return prev;
+        });
+        return;
+      }
+
+      // ── Tool call info (JSON) ──
+      if (data.startsWith('{"tool":')) {
+        try {
+          const toolInfo = JSON.parse(data) as ToolInfo;
+          pendingToolsRef.current.push(toolInfo);
+        } catch { /* ignore malformed */ }
+        return;
+      }
+
+      // ── Tool calls end ──
+      if (data === '__TOOL_CALLS_END__') {
+        const tools = pendingToolsRef.current;
+        pendingToolsRef.current = [];
+        if (tools.length > 0) {
+          const toolList = tools.map(t => `• ${t.name}`).join('\n');
+          setMessages(prev => [...prev, {
+            sender: 'system',
+            text: `🔧 Running tools:\n${toolList}`,
+            tools
+          }]);
+        }
+        return;
+      }
+
+      // ── Error marker ──
+      if (data.startsWith('__ERROR__:')) {
+        setIsStreaming(false);
+        setMessages(prev => [...prev, { sender: 'system', text: data }]);
+        return;
+      }
+
+      // ── Regular chunk ──
+      setMessages(prev => {
+        const last = prev[prev.length - 1];
+        if (last && last.sender === 'agent' && last.isStreaming) {
+          const updated = [...prev];
+          updated[updated.length - 1] = { ...last, text: last.text + data };
+          return updated;
+        }
+        return [...prev, { sender: 'agent', text: data }];
+      });
     };
 
     ws.onclose = () => {
       setConnectionStatus('closed');
+      setIsStreaming(false);
+      pendingToolsRef.current = [];
       if (heartbeatRef.current) {
         clearInterval(heartbeatRef.current);
         heartbeatRef.current = null;
       }
 
-      // Exponential backoff reconnection
       if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
         const delay = Math.min(
           RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts.current),
-          30000 // cap at 30s
+          30000
         );
         reconnectAttempts.current += 1;
         reconnectTimeoutRef.current = setTimeout(() => {
@@ -171,11 +264,11 @@ function App() {
     ws.onerror = (err) => {
       console.error('WebSocket error:', err);
       setConnectionStatus('closed');
+      setIsStreaming(false);
     };
   }, [activeAgent]);
 
   useEffect(() => {
-    // Clean up previous connection before creating new one
     if (wsRef.current) {
       wsRef.current.close();
     }
@@ -315,6 +408,13 @@ function App() {
                 </div>
                 <div className="message-content">
                   {msg.text}
+                  {msg.isStreaming && (
+                    <span className="typing-indicator">
+                      <span className="dot"></span>
+                      <span className="dot"></span>
+                      <span className="dot"></span>
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -325,11 +425,16 @@ function App() {
               <input
                 type="text"
                 className="chat-input"
-                placeholder="Message the swarm..."
+                placeholder={isStreaming ? "Agent is thinking..." : "Message the swarm..."}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
+                disabled={isStreaming || connectionStatus !== 'open'}
               />
-              <button type="submit" className="chat-submit" disabled={connectionStatus !== 'open'}>
+              <button
+                type="submit"
+                className="chat-submit"
+                disabled={isStreaming || connectionStatus !== 'open' || !input.trim()}
+              >
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="22" y1="2" x2="11" y2="13"></line>
                   <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>

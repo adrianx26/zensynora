@@ -297,11 +297,19 @@ class ParallelToolExecutor:
 
                 # Check rate limit
                 if not _rate_limiter.check(tool_name):
+                    duration = time.time() - start_time
+                    try:
+                        from ..metrics import get_metrics
+                        get_metrics().record_tool_execution(
+                            tool_name, duration, status="rate_limited"
+                        )
+                    except Exception:
+                        pass
                     return {
                         "tool_name": tool_name,
                         "result": "",
                         "error": f"Rate limit exceeded for {tool_name}",
-                        "duration": time.time() - start_time,
+                        "duration": duration,
                         "success": False
                     }
 
@@ -311,16 +319,24 @@ class ParallelToolExecutor:
                 if sandbox_enabled and _is_untrusted_skill(tool_name):
                     violations = _validate_skill_for_sandbox(tool_name)
                     if violations:
+                        duration = time.time() - start_time
                         _get_security_sandbox()._log_audit(
                             "sandbox_violation",
                             {"tool": tool_name, "violations": violations},
                             severity="WARNING",
                         )
+                        try:
+                            from ..metrics import get_metrics
+                            get_metrics().record_tool_execution(
+                                tool_name, duration, status="blocked"
+                            )
+                        except Exception:
+                            pass
                         return {
                             "tool_name": tool_name,
                             "result": "",
                             "error": f"Sandbox blocked execution: {violations}",
-                            "duration": time.time() - start_time,
+                            "duration": duration,
                             "success": False,
                         }
 
@@ -338,6 +354,15 @@ class ParallelToolExecutor:
                     tool_name, user_id, duration * 1000, True
                 )
 
+                # Record Prometheus metrics
+                try:
+                    from ..metrics import get_metrics
+                    get_metrics().record_tool_execution(
+                        tool_name, duration, status="success"
+                    )
+                except Exception:
+                    pass
+
                 return {
                     "tool_name": tool_name,
                     "result": str(result),
@@ -353,6 +378,15 @@ class ParallelToolExecutor:
                 _tool_audit_logger.log(
                     tool_name, user_id, duration * 1000, False, str(e)
                 )
+
+                # Record Prometheus metrics
+                try:
+                    from ..metrics import get_metrics
+                    get_metrics().record_tool_execution(
+                        tool_name, duration, status="error"
+                    )
+                except Exception:
+                    pass
 
                 return {
                     "tool_name": tool_name,

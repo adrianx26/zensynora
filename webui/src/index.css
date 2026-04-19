@@ -490,6 +490,62 @@ body {
   }
 }
 
+/* ── Typing Indicator (Streaming) ─────────────────────────────────────────── */
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  vertical-align: middle;
+}
+
+.typing-indicator .dot {
+  width: 6px;
+  height: 6px;
+  background-color: var(--text-secondary);
+  border-radius: 50%;
+  animation: typingBounce 1.4s infinite ease-in-out both;
+}
+
+.typing-indicator .dot:nth-child(1) {
+  animation-delay: -0.32s;
+}
+
+.typing-indicator .dot:nth-child(2) {
+  animation-delay: -0.16s;
+}
+
+@keyframes typingBounce {
+  0%, 80%, 100% {
+    transform: scale(0);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Disabled input state during streaming */
+.chat-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.chat-submit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Tool Execution Status ─────────────────────────────────────────────────── */
+.chat-message.system .message-content {
+  background: rgba(59, 130, 246, 0.1);
+  border-left: 3px solid var(--accent-color);
+  font-style: italic;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
 /* Touch-friendly improvements */
 @media (hover: none) and (pointer: coarse) {
   .agent-item {

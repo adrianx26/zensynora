@@ -125,14 +125,15 @@ def agent():
             mcp_manager = MCPClientManager(config.model_dump())
             await mcp_manager.start_all()
 
-        # ── Start Background Research Scheduler ───────────────────────────────────
+        # ── Start Background Research Scheduler (Phase 6.2: AsyncScheduler) ───────
+        _sched = None
         if hasattr(config.intelligence, 'research_enabled') and config.intelligence.research_enabled:
             from .gateway import _run_research_if_idle
-            from apscheduler.schedulers.background import BackgroundScheduler
-            scheduler = BackgroundScheduler()
+            from .async_scheduler import get_scheduler
+            _sched = get_scheduler()
             interval = config.intelligence.research_interval_hours
-            scheduler.add_job(_run_research_if_idle, 'interval', hours=interval)
-            scheduler.start()
+            _sched.add_job(_run_research_if_idle, 'interval', hours=interval, id="cli_research")
+            await _sched.start()
             logger.info(f"Background Researcher active (every {interval}h)")
 
         async with registry["default"]:
@@ -163,6 +164,11 @@ def agent():
         # Save history on exit
         if readline and histfile:
             readline.write_history_file(str(histfile))
+
+        # Shutdown AsyncScheduler gracefully
+        if _sched is not None:
+            await _sched.shutdown(wait=True)
+            logger.info("AsyncScheduler shutdown complete")
 
     asyncio.run(run_agent_chat(registry, agent_names))
 
@@ -417,3 +423,331 @@ def hardware():
         cons.print("\n[bold green]🛠️ Optimization Suggestions:[/bold green]")
         for s in suggestions:
             cons.print(f" • {s}")
+
+
+# ── Config encryption commands ───────────────────────────────────────────────
+
+@cli.group()
+def config_cmd():
+    """Configuration management commands."""
+    pass
+
+
+@config_cmd.command(name="encrypt")
+def config_encrypt():
+    """Encrypt config.json secrets at rest using Fernet."""
+    from .config_encryption import encrypt_config
+    try:
+        encrypt_config()
+        click.echo("✅ Config encrypted successfully.")
+    except Exception as e:
+        click.echo(f"❌ Encryption failed: {e}")
+        raise click.ClickException(str(e))
+
+
+@config_cmd.command(name="decrypt")
+def config_decrypt():
+    """Decrypt config.json to plaintext (for editing)."""
+    from .config_encryption import decrypt_config
+    try:
+        decrypt_config()
+        click.echo("✅ Config decrypted successfully.")
+    except Exception as e:
+        click.echo(f"❌ Decryption failed: {e}")
+        raise click.ClickException(str(e))
+
+
+@config_cmd.command(name="status")
+def config_status():
+    """Show config encryption status."""
+    from .config_encryption import is_encrypted, CONFIG_FILE, _load_key
+    encrypted = is_encrypted(CONFIG_FILE)
+    key_exists = _load_key() is not None
+    click.echo(f"Config file: {CONFIG_FILE}")
+    click.echo(f"Encrypted: {'yes' if encrypted else 'no'}")
+    click.echo(f"Key available: {'yes' if key_exists else 'no'}")
+    if encrypted and not key_exists:
+        click.echo("⚠️  WARNING: Config is encrypted but no key found!")
+
+
+# ── Audit log commands ───────────────────────────────────────────────────────
+
+@cli.group()
+def audit():
+    """Audit log management commands."""
+    pass
+
+
+@audit.command(name="verify")
+def audit_verify():
+    """Verify the tamper-evident integrity of the audit log."""
+    from .audit_log import TamperEvidentAuditLog
+    log = TamperEvidentAuditLog()
+    result = log.verify_integrity()
+    if result["valid"]:
+        click.echo(f"✅ Audit log integrity verified ({result['entries']} entries, last hash: {result['last_hash'][:16]}...)")
+    else:
+        click.echo(f"❌ Audit log integrity FAILED at entry {result['index']}: {result['reason']}")
+        raise click.ClickException("Audit log has been tampered with or is corrupted.")
+
+
+@audit.command(name="export")
+@click.argument("output_path", required=False, default="audit_export.jsonl")
+def audit_export(output_path: str):
+    """Export the audit log to a file."""
+    from .audit_log import TamperEvidentAuditLog
+    log = TamperEvidentAuditLog()
+    try:
+        exported = log.export(output_path)
+        click.echo(f"✅ Audit log exported to: {exported}")
+    except Exception as e:
+        click.echo(f"❌ Export failed: {e}")
+        raise click.ClickException(str(e))
+
+
+@audit.command(name="status")
+def audit_status():
+    """Show audit log status and recent entries."""
+    from .audit_log import TamperEvidentAuditLog
+    log = TamperEvidentAuditLog()
+    entries = log.read_entries(limit=5)
+    click.echo(f"Audit log path: {log.log_path}")
+    click.echo(f"Recent entries: {len(entries)}")
+    for entry in entries:
+        ts = entry.get("timestamp", "?")
+        event = entry.get("event_type", "?")
+        severity = entry.get("severity", "INFO")
+        click.echo(f"  [{ts}] {severity}: {event}")
+
+
+# ── GDPR compliance commands ─────────────────────────────────────────────────
+
+@cli.group()
+def gdpr():
+    """GDPR compliance helpers (requires gdpr_enabled in config)."""
+    pass
+
+
+@gdpr.command(name="delete")
+@click.argument("user_id")
+@click.option("--dry-run", is_flag=True, help="Show what would be deleted without deleting")
+def gdpr_delete(user_id: str, dry_run: bool):
+    """Delete all data for a user (Right to Erasure)."""
+    from .config import load_config
+    config = load_config()
+    if not getattr(getattr(config, "security", None), "gdpr_enabled", False):
+        click.echo("❌ GDPR features are disabled. Enable in config: security.gdpr_enabled = true")
+        raise click.ClickException("GDPR features disabled")
+
+    from .gdpr import delete_user_data
+    result = delete_user_data(user_id, dry_run=dry_run)
+
+    action = "Would delete" if dry_run else "Deleted"
+    click.echo(f"{action} data for user: {user_id}")
+    for item in result["items"]:
+        if "count" in item:
+            click.echo(f"  • {item['type']}: {item['count']} items")
+        elif "file_count" in item:
+            click.echo(f"  • {item['type']}: {item['file_count']} files")
+        else:
+            click.echo(f"  • {item['type']}: {item['path']}")
+
+    if not dry_run:
+        click.echo(f"✅ Total items deleted: {result['total_items']}")
+    else:
+        click.echo(f"🔍 Total items that would be deleted: {result['total_items']}")
+
+
+@gdpr.command(name="export")
+@click.argument("user_id")
+@click.option("--output", "-o", help="Output ZIP file path")
+def gdpr_export(user_id: str, output: Optional[str]):
+    """Export all data for a user (Right to Data Portability)."""
+    from .config import load_config
+    config = load_config()
+    if not getattr(getattr(config, "security", None), "gdpr_enabled", False):
+        click.echo("❌ GDPR features are disabled. Enable in config: security.gdpr_enabled = true")
+        raise click.ClickException("GDPR features disabled")
+
+    from .gdpr import export_user_data
+    path = export_user_data(user_id, output)
+    click.echo(f"✅ User data exported to: {path}")
+
+
+# ── MFA / TOTP commands ──────────────────────────────────────────────────────
+
+@cli.group()
+def mfa():
+    """Multi-factor authentication (TOTP) management."""
+    pass
+
+
+@mfa.command(name="setup")
+@click.argument("user_id")
+def mfa_setup(user_id: str):
+    """Set up MFA for a user. Displays QR code URL and secret."""
+    from .mfa import MFAAuth
+    auth = MFAAuth()
+    if not auth.is_available():
+        click.echo("❌ pyotp not installed. Run: pip install pyotp")
+        return
+    result = auth.provision_user(user_id)
+    click.echo(f"✅ MFA provisioned for user: {user_id}")
+    click.echo(f"Secret: {result['secret']}")
+    click.echo(f"Provisioning URI: {result['provisioning_uri']}")
+    if result.get("qr_code_png_base64"):
+        click.echo("QR Code (base64 PNG) available. Use an authenticator app to scan.")
+
+
+@mfa.command(name="verify")
+@click.argument("user_id")
+@click.argument("code")
+def mfa_verify(user_id: str, code: str):
+    """Verify a TOTP code for a user."""
+    from .mfa import MFAAuth
+    auth = MFAAuth()
+    if not auth.is_available():
+        click.echo("❌ pyotp not installed.")
+        return
+    ok = auth.verify(user_id, code)
+    click.echo("✅ Code valid" if ok else "❌ Code invalid")
+
+
+@mfa.command(name="disable")
+@click.argument("user_id")
+def mfa_disable(user_id: str):
+    """Disable MFA for a user."""
+    from .mfa import MFAAuth
+    auth = MFAAuth()
+    if not auth.is_available():
+        click.echo("❌ pyotp not installed.")
+        return
+    auth.disable_user(user_id)
+    click.echo(f"✅ MFA disabled for user: {user_id}")
+
+
+@mfa.command(name="status")
+@click.argument("user_id")
+def mfa_status(user_id: str):
+    """Check MFA status for a user."""
+    from .mfa import MFAAuth
+    auth = MFAAuth()
+    enabled = auth.is_enabled_for_user(user_id)
+    click.echo(f"MFA for {user_id}: {'enabled' if enabled else 'disabled'}")
+
+
+# ── Metering commands ────────────────────────────────────────────────────────
+
+@cli.group()
+def metering():
+    """Usage-based metering and quota management."""
+    pass
+
+
+@metering.command(name="status")
+@click.argument("user_id")
+def metering_status(user_id: str):
+    """Show usage and quota status for a user."""
+    from .metering import get_user_summary
+    summary = get_user_summary(user_id)
+    click.echo(f"Usage for {user_id} (period: {summary['period']}):")
+    for qname, info in summary["quotas"].items():
+        click.echo(f"  {qname}: {info['used']} / {info['limit']} (remaining: {info['remaining']})")
+
+
+@metering.command(name="set-quota")
+@click.argument("user_id")
+@click.argument("quota_name")
+@click.argument("limit_value", type=int)
+def metering_set_quota(user_id: str, quota_name: str, limit_value: int):
+    """Set a quota limit for a user."""
+    from .metering import set_quota
+    set_quota(user_id, quota_name, limit_value)
+    click.echo(f"✅ Quota set: {user_id} {quota_name} = {limit_value}")
+
+
+# ── Knowledge Spaces commands ────────────────────────────────────────────────
+
+@cli.group()
+def spaces():
+    """Collaborative knowledge spaces with RBAC."""
+    pass
+
+
+@spaces.command(name="create")
+@click.argument("name")
+@click.option("--owner", "-o", required=True, help="Owner user ID")
+@click.option("--description", "-d", default="", help="Space description")
+def spaces_create(name: str, owner: str, description: str):
+    """Create a new knowledge space."""
+    from .knowledge_spaces import create_space
+    sid = create_space(name=name, owner=owner, description=description)
+    click.echo(f"✅ Space created: {sid}")
+
+
+@spaces.command(name="list")
+@click.argument("user_id")
+def spaces_list(user_id: str):
+    """List spaces for a user."""
+    from .knowledge_spaces import list_spaces
+    spaces = list_spaces(user_id)
+    if not spaces:
+        click.echo("No spaces found.")
+        return
+    click.echo(f"Spaces for {user_id}:")
+    for s in spaces:
+        click.echo(f"  • {s['id']}: {s['name']} (role: {s['user_role']})")
+
+
+@spaces.command(name="members")
+@click.argument("space_id")
+def spaces_members(space_id: str):
+    """Show members of a space."""
+    from .knowledge_spaces import get_space
+    space = get_space(space_id)
+    if not space:
+        click.echo("❌ Space not found.")
+        return
+    click.echo(f"Space: {space['name']} (owner: {space['owner']})")
+    click.echo("Members:")
+    for m in space["members"]:
+        click.echo(f"  • {m['user_id']}: {m['role']}")
+
+
+@spaces.command(name="add-member")
+@click.argument("space_id")
+@click.argument("user_id")
+@click.argument("role")
+@click.option("--by", "added_by", required=True, help="Admin user performing the action")
+def spaces_add_member(space_id: str, user_id: str, role: str, added_by: str):
+    """Add a member to a space."""
+    from .knowledge_spaces import add_member
+    if add_member(space_id, user_id, role, added_by):
+        click.echo(f"✅ Added {user_id} as {role}")
+    else:
+        click.echo("❌ Failed to add member (check permissions and role).")
+
+
+@spaces.command(name="remove-member")
+@click.argument("space_id")
+@click.argument("user_id")
+@click.option("--by", "removed_by", required=True, help="Admin user performing the action")
+def spaces_remove_member(space_id: str, user_id: str, removed_by: str):
+    """Remove a member from a space."""
+    from .knowledge_spaces import remove_member
+    if remove_member(space_id, user_id, removed_by):
+        click.echo(f"✅ Removed {user_id}")
+    else:
+        click.echo("❌ Failed to remove member (check permissions).")
+
+
+@spaces.command(name="delete")
+@click.argument("space_id")
+@click.argument("owner")
+def spaces_delete(space_id: str, owner: str):
+    """Delete a space (owner only)."""
+    from .knowledge_spaces import delete_space
+    if delete_space(space_id, owner):
+        click.echo(f"✅ Space {space_id} deleted.")
+    else:
+        click.echo("❌ Failed to delete space (not found or not owner).")
