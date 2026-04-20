@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Dashboard Startup**: Resolved circular dependency and missing module errors in `myclaw/dashboard.py`.
-- **Documentation Accuracy**: Audited and synchronized `code_analysis_summary.md` and `FUNCTIONS_SUMMARY.md` with the actual codebase implementation.
+- **Documentation Accuracy**: Audited and synchronized `../code_analysis_summary.md` and `../FUNCTIONS_SUMMARY.md` with the actual codebase implementation.
 
 ## [Unreleased]
 
@@ -53,9 +53,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `uvicorn>=0.23.0` — ASGI server to run FastAPI
 
 - **Documentation**
-  - New `plans/whatsapp_implementation_plan.md` — comprehensive implementation plan with architecture diagrams, setup guide, and remaining work items
+  - New `whatsapp_implementation_plan.md` — comprehensive implementation plan with architecture diagrams, setup guide, and remaining work items
   - Updated `README.md` — WhatsApp in features, architecture, config, commands, and project structure
-  - Updated `how to run.md` — WhatsApp gateway instructions
+  - Updated `../how to run.md` — WhatsApp gateway instructions
 
 ### Optimized
 

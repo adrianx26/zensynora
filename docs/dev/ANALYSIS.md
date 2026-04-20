@@ -202,7 +202,7 @@ myclaw/
 ├── requirements.txt         # Dependencies
 ├── docs/
 │   └── agent_swarm_guide.md # 📚 Swarm documentation
-└── plans/
+└── docs/dev/plans/
     └── agent_swarm_implementation_plan.md # Implementation details
 ```
 

@@ -85,12 +85,17 @@ class KnowledgeGapCache:
 
     Implements a short-lived in-process cache keyed by query and session id,
     with a configurable timeout to reduce noise from repeated empty searches.
+
+    Optimization: Amortized cleanup runs every N calls instead of every call
+    to avoid O(n) dict rebuild overhead under high load.
     """
 
-    def __init__(self, timeout_seconds: float = 300.0):
+    def __init__(self, timeout_seconds: float = 300.0, cleanup_interval: int = 100):
         self._cache: Dict[str, float] = {}
         self._timeout = timeout_seconds
         self._enabled = True
+        self._cleanup_interval = cleanup_interval
+        self._call_count = 0
 
     def is_duplicate(self, query: str, session_id: str) -> bool:
         """Check if this query has been logged recently in this session.
@@ -108,8 +113,11 @@ class KnowledgeGapCache:
         key = f"{session_id}:{query.lower().strip()}"
         now = time.time()
 
-        # Clean expired entries
-        self._cache = {k: v for k, v in self._cache.items() if now - v < self._timeout}
+        # Amortized cleanup: only clean expired entries every N calls
+        self._call_count += 1
+        if self._call_count >= self._cleanup_interval:
+            self._cache = {k: v for k, v in self._cache.items() if now - v < self._timeout}
+            self._call_count = 0
 
         if key in self._cache:
             return True
@@ -120,6 +128,7 @@ class KnowledgeGapCache:
     def clear(self) -> None:
         """Clear all cached entries."""
         self._cache.clear()
+        self._call_count = 0
 
     def set_enabled(self, enabled: bool) -> None:
         """Enable or disable the cache (useful for testing).
@@ -256,9 +265,15 @@ class Agent:
         # Store config for later use
         self.config = config
 
+        # Offline mode: enable fallback to local providers on connection failure
+        self._offline_mode = getattr(
+            getattr(config, "intelligence", None), "offline_mode", True
+        )
+        self._fallback_wrapper: Optional[Any] = None
+
         # Initialize knowledge gap cache for deduplication
         self._gap_cache = KnowledgeGapCache(timeout_seconds=300.0)
-        
+
         # Initialize task timer orchestrator for tracking user question timeouts
         self._task_timer = get_task_timer_orchestrator()
         self._current_task_id: Optional[str] = None
@@ -429,7 +444,7 @@ class Agent:
                 {"role": "user", "content": exchange},
             ]
 
-            raw, _ = await self.provider.chat(messages, self.model)
+            raw, _ = await self._provider_chat(messages, self.model)
 
             # Strip optional markdown code fences
             raw = raw.strip()
@@ -557,6 +572,34 @@ class Agent:
                 self._provider_name = "ollama"
         return self._provider
 
+    async def _provider_chat(self, messages, model, stream: bool = False):
+        """Call provider.chat() with optional offline fallback.
+
+        When offline_mode is enabled and the primary provider fails with a
+        connection error, automatically retry with local providers
+        (Ollama → LM Studio → llama.cpp).
+        """
+        if not self._offline_mode:
+            return await self._provider_chat(messages, model, stream=stream)
+
+        try:
+            return await self._provider_chat(messages, model, stream=stream)
+        except (ConnectionError, TimeoutError, OSError) as e:
+            logger.warning(f"Primary provider failed: {e}. Trying offline fallback...")
+        except Exception as e:
+            err_str = str(e).lower()
+            if any(kw in err_str for kw in ("connection", "timeout", "unreachable", "refused")):
+                logger.warning(f"Primary provider failed: {e}. Trying offline fallback...")
+            else:
+                raise
+
+        # Initialize fallback wrapper on first need
+        if self._fallback_wrapper is None:
+            from .offline import FallbackChatWrapper
+            self._fallback_wrapper = FallbackChatWrapper(self.provider, self.config)
+
+        return await self._fallback_wrapper.chat(messages, model, stream=stream)
+
     def _extract_suggested_topics(self, message: str) -> List[str]:
         """Extract suggested topics from a message for knowledge gap guidance.
 
@@ -578,14 +621,72 @@ class Agent:
 
         return list(dict.fromkeys(topics))  # Remove duplicates, preserve order
 
-    def _search_knowledge_context(
+    async def _background_summarize_context(
+        self,
+        history: List[Dict[str, str]],
+        user_id: str,
+        mem: Memory
+    ) -> None:
+        """Summarize conversation context in the background after responding.
+
+        This moves the LLM-based summarization off the hot path so the user
+        response is not blocked. The summary is written to the knowledge base
+        as a session note for future context retrieval.
+
+        Args:
+            history: Full conversation history before truncation
+            user_id: User identifier
+            mem: Memory instance for this user
+        """
+        try:
+            # Exclude the most recent 5 messages from summarization
+            to_summarize = history[:-5] if len(history) > 5 else history
+            if not to_summarize:
+                return
+
+            summary_parts = [
+                "Summarize the following conversation context. Focus on key decisions, "
+                "important facts, and user preferences. Preserve information that would be "
+                "important for future context:\n"
+            ]
+            for m in to_summarize:
+                summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
+            summary_prompt = "".join(summary_parts)
+            summary_msgs = [
+                {"role": "system", "content": "You summarize conversations concisely."},
+                {"role": "user", "content": summary_prompt},
+            ]
+
+            summary_text, _ = await self._provider_chat(summary_msgs, self.model)
+            original_len = sum(len(m['content']) for m in to_summarize)
+            compressed_len = len(summary_text)
+            compression_ratio = (1 - compressed_len / original_len) * 100 if original_len > 0 else 0
+            logger.debug(
+                f"Background trajectory compressed: {original_len} -> {compressed_len} chars "
+                f"({compression_ratio:.1f}% reduction)"
+            )
+
+            # Store summary in knowledge base for future retrieval
+            from .knowledge import write_note
+            await asyncio.to_thread(
+                write_note,
+                name=f"session-summary-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}",
+                title=f"Session Summary ({datetime.utcnow().strftime('%Y-%m-%d %H:%M')})",
+                content=summary_text,
+                user_id=user_id,
+                tags=["session_summary", "auto-generated"]
+            )
+        except Exception as e:
+            logger.error(f"Background summarization error: {e}")
+
+    def _search_knowledge_context_sync(
         self,
         message: str,
         user_id: str,
         max_results: int = 3,
         return_structured: bool = False
     ) -> Union[str, KnowledgeSearchResult]:
-        """Auto-search the knowledge base for context relevant to message.
+        """Synchronous implementation of knowledge context search.
 
         Uses a multi-strategy search:
         1. Resolves any explicit memory:// permalink references
@@ -708,6 +809,26 @@ class Agent:
             )
             return result if return_structured else ""
 
+    async def _search_knowledge_context(
+        self,
+        message: str,
+        user_id: str,
+        max_results: int = 3,
+        return_structured: bool = False
+    ) -> Union[str, KnowledgeSearchResult]:
+        """Async wrapper for knowledge context search.
+
+        Runs the synchronous FTS5 search in a thread pool to avoid blocking
+        the event loop, which is critical when the knowledge base grows large.
+        """
+        return await asyncio.to_thread(
+            self._search_knowledge_context_sync,
+            message,
+            user_id,
+            max_results,
+            return_structured
+        )
+
     async def close(self):
         for mem in self._memories.values():
             await mem.close()
@@ -786,7 +907,7 @@ class Agent:
                 {"role": "user", "content": context},
             ]
 
-            raw, _ = await self.provider.chat(messages, self.model)
+            raw, _ = await self._provider_chat(messages, self.model)
             raw = raw.strip()
             raw = re.sub(r'^```[a-z]*\n?', '', raw)
             raw = re.sub(r'\n?```$', '', raw)
@@ -891,7 +1012,7 @@ class Agent:
         ]
 
         try:
-            recovered, _ = await self.provider.chat(recovery_messages, self.model)
+            recovered, _ = await self._provider_chat(recovery_messages, self.model)
             if not self._is_empty_response(recovered):
                 logger.info("Empty-response recovery succeeded.")
                 return recovered
@@ -910,12 +1031,18 @@ class Agent:
             )
         return " ".join(fallback_parts)
 
-    # ── Main think() ─────────────────────────────────────────────────────────
+    # -- Sub-method: Route message ------------------------------------------------
 
-    async def think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> str:
-        """Process a user message and return the agent's response.
-        
-        Intelligent Routing: choosing model based on task complexity.
+    async def _route_message(
+        self,
+        user_message: str,
+        user_id: str,
+        _depth: int
+    ) -> tuple:
+        """Set up request routing, task timer, and guardrails.
+
+        Returns:
+            (request_model, mem, history, _full_history_for_bg) or None if early-exit.
         """
         global _LAST_ACTIVE_TIME
         _LAST_ACTIVE_TIME = time.time()
@@ -928,10 +1055,10 @@ class Agent:
                 request_model = routed_model
 
         import uuid
-        
+
         # Generate unique task ID for this request
         self._current_task_id = f"task_{user_id}_{uuid.uuid4().hex[:8]}_{int(time.time())}"
-        
+
         # Start task timer for tracking timeouts
         await self._task_timer.start_task_timer(
             task_id=self._current_task_id,
@@ -939,13 +1066,13 @@ class Agent:
             on_status_update=self._handle_task_status_update,
             steps_total=5  # Approximate: memory, knowledge, LLM, tools, response
         )
-        
+
         # Agent Pipeline Integration: Loop prevention
         if _depth > 10:
             logger.warning(f"Max delegation depth reached ({_depth}). Preventing potential infinite loop.")
-            await self._task_timer.complete_task(self._current_task_id, success=False, 
+            await self._task_timer.complete_task(self._current_task_id, success=False,
                                                  error_message="Max delegation depth reached")
-            return "I've reached the maximum delegation depth. Let me handle this request directly."
+            return None
 
         # Medic Agent: Check loop prevention before processing
         try:
@@ -955,18 +1082,18 @@ class Agent:
                 logger.warning("Execution limit reached by loop prevention")
                 await self._task_timer.complete_task(self._current_task_id, success=False,
                                                      error_message="Loop prevention limit reached")
-                return "I'm detecting repeated patterns in the request. Let me break out of the loop and handle this directly."
+                return None
         except Exception:
             pass
 
         # Check if task has been cancelled due to timeout
         if self._current_task_id and not self._task_timer.is_task_active(self._current_task_id):
             logger.warning(f"Task {self._current_task_id} was cancelled or timed out")
-            return "Sorry, this task took too long to complete and has been cancelled. Please try again with a simpler request."
+            return None
 
         mem = await self._get_memory(user_id)
         await mem.add("user", user_message)
-        
+
         # Update timer with current step
         await self._task_timer.update_step(self._current_task_id, "memory_loading", 1, 5)
 
@@ -974,6 +1101,28 @@ class Agent:
 
         history = await mem.get_history()
 
+        # Feature: Context Summarization moved off hot path
+        threshold = getattr(self.config.agents, "summarization_threshold", 10)
+        _should_summarize_after = len(history) > threshold
+        _full_history_for_bg = history.copy() if _should_summarize_after else None
+
+        return request_model, mem, history, _full_history_for_bg
+
+    # -- Sub-method: Build context ------------------------------------------------
+
+    async def _build_context(
+        self,
+        user_message: str,
+        user_id: str,
+        mem: Memory,
+        history: list,
+        request_model: str
+    ) -> tuple:
+        """Build the message context: knowledge search + system prompt + hooks.
+
+        Returns:
+            (messages, had_kb_results, kb_gap_hint)
+        """
         # Optimization #4: Proactive skill pre-loading
         task = asyncio.create_task(
             self._skill_preloader.predict_and_preload(history, user_message)
@@ -981,36 +1130,8 @@ class Agent:
         self._pending_preloads.add(task)
         task.add_done_callback(self._pending_preloads.discard)
 
-        # Feature: Context Summarization with trajectory compression
-        threshold = getattr(self.config.agents, 'summarization_threshold', 10)
-        if len(history) > threshold:
-            to_summarize = history[:-5]
-            recent = history[-5:]
-            summary_parts = [
-                "Summarize the following conversation context. Focus on key decisions, "
-                "important facts, and user preferences. Preserve information that would be "
-                "important for future context:\n"
-            ]
-            for m in to_summarize:
-                summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
-            summary_prompt = "".join(summary_parts)
-            summary_msgs = [
-                {"role": "system", "content": "You summarize conversations concisely."},
-                {"role": "user", "content": summary_prompt},
-            ]
-            try:
-                summary_text, _ = await self.provider.chat(summary_msgs, self.model)
-                original_len = sum(len(m['content']) for m in to_summarize)
-                compressed_len = len(summary_text)
-                compression_ratio = (1 - compressed_len / original_len) * 100 if original_len > 0 else 0
-                logger.debug(f"Trajectory compressed: {original_len} -> {compressed_len} chars ({compression_ratio:.1f}% reduction)")
-                history = [{"role": "system", "content": f"Previous conversation summary: {summary_text}"}] + recent
-            except Exception as e:
-                logger.error(f"Error summarizing history: {e}")
-                # fallback to raw history if summary fails
-
         # Search knowledge base for relevant context
-        knowledge_context = self._search_knowledge_context(user_message, user_id)
+        knowledge_context = await self._search_knowledge_context(user_message, user_id)
         had_kb_results = bool(knowledge_context)
 
         # If KB gap exists and no context, hint the agent about KB creation and log the gap
@@ -1034,7 +1155,7 @@ class Agent:
                     "recommendation": "Use write_to_knowledge() to create a new entry for future queries"
                 }
                 kb_gap_logger.info(gap_data)
-                
+
                 # Write to researchers JSONL file
                 try:
                     GAP_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -1046,12 +1167,12 @@ class Agent:
         # Check if task has been cancelled due to timeout
         if self._current_task_id and not self._task_timer.is_task_active(self._current_task_id):
             logger.warning(f"Task {self._current_task_id} was cancelled or timed out")
-            return "Sorry, this task took too long to complete and has been cancelled. Please try again with a simpler request."
+            return None
 
         # Update timer - building system prompt
         if self._current_task_id:
             await self._task_timer.update_step(self._current_task_id, "building_prompt", 2, 5)
-        
+
         # Build system prompt with knowledge context (async load to avoid blocking)
         system_prompt = await self._load_system_prompt()
         system_content = system_prompt
@@ -1063,19 +1184,267 @@ class Agent:
         messages = [{"role": "system", "content": system_content}] + history
 
         # Trigger pre_llm_call hooks - allow hooks to modify messages
-        hook_results = trigger_hook("pre_llm_call", messages, self.model)
+        hook_results = trigger_hook("pre_llm_call", messages, request_model)
         for result in hook_results:
             if result and isinstance(result, list):
                 messages = result  # Use modified messages from hook
                 logger.debug("pre_llm_call hook modified messages")
 
-        # Update timer - calling LLM
+        return messages, had_kb_results, kb_gap_hint
+
+    # -- Sub-method: Execute tools ------------------------------------------------
+
+    async def _execute_tools(
+        self,
+        tool_calls: list,
+        messages: list,
+        user_message: str,
+        user_id: str,
+        mem: Memory,
+        _depth: int,
+        had_kb_results: bool
+    ) -> str:
+        """Execute tool calls (parallel + sequential) and return final response.
+
+        Returns:
+            Final response string, or error message on failure.
+        """
+        # Save assistant response with tool_calls to memory (as plain text for now)
+        await mem.add("assistant", "")
+
+        # Update timer - executing tools
+        if self._current_task_id:
+            await self._task_timer.update_step(self._current_task_id, "executing_tools", 4, 5)
+
+        # Collect results per tool_call_id
+        tool_results_by_id: Dict[str, str] = {}
+
+        # Determine parallel vs sequential execution
+        independent_tools = [tc for tc in tool_calls if is_tool_independent(tc.get("function", {}).get("name", ""))]
+        dependent_tools = [tc for tc in tool_calls if not is_tool_independent(tc.get("function", {}).get("name", ""))]
+
+        if len(independent_tools) > 1:
+            # Use parallel execution for independent tools
+            logger.info(f"Executing {len(independent_tools)} tools in parallel")
+            executor = get_parallel_executor()
+            exec_results = await executor.execute_tools(independent_tools, user_id)
+
+            # Map results back to tool_call_ids
+            for tc, r in zip(independent_tools, exec_results):
+                tool_call_id = tc.get("id", "call_default")
+                if r["success"]:
+                    tool_output = r["result"]
+                    if r["tool_name"] == "browse" and self._detect_browse_failure(tool_output):
+                        url_match = re.search(r"https?://\S+", tool_output)
+                        url = url_match.group(0) if url_match else ""
+                        tool_output += self._browse_alternative_hint(url, user_message)
+                    content = f"Tool {r["tool_name"]} returned: {tool_output}"
+                else:
+                    content = f"Tool {r["tool_name"]} error: {r["error"]}"
+                tool_results_by_id[tool_call_id] = content
+                await mem.add("tool", content)
+                # KB extraction for substantial parallel tool results (fire-and-forget)
+                if r["success"] and self._kb_auto_extract and self._should_save_tool_result(
+                    r["tool_name"], r.get("result", "")
+                ):
+                    _t = asyncio.create_task(
+                        self._save_tool_result_to_kb(
+                            r["tool_name"],
+                            tc.get("function", {}).get("arguments", {}),
+                            r["result"],
+                            user_message,
+                            user_id,
+                        )
+                    )
+                    self._pending_preloads.add(_t)
+                    _t.add_done_callback(self._pending_preloads.discard)
+        elif independent_tools:
+            # Single independent tool - execute sequentially below along with dependent ones
+            dependent_tools = tool_calls
+
+        # Execute dependent (and single independent) tools sequentially
+        for tc in dependent_tools:
+            tool_name = tc.get("function", {}).get("name", "")
+            args = tc.get("function", {}).get("arguments", {})
+            tool_call_id = tc.get("id", "call_default")
+
+            if tool_name not in TOOLS:
+                content = f"Unknown tool: {tool_name}"
+                tool_results_by_id[tool_call_id] = content
+                await mem.add("tool", content)
+                logger.warning(f"Unknown tool called: {tool_name}")
+                continue
+
+            if tool_name == "delegate":
+                args["_depth"] = _depth + 1
+
+            start_time = time.time()
+            logger.info(f"[AUDIT] Tool execution started: {tool_name} with args: {args}")
+
+            try:
+                func = TOOLS[tool_name]["func"]
+                if inspect.iscoroutinefunction(func):
+                    result = await func(**args)
+                else:
+                    result = await asyncio.to_thread(func, **args)
+
+                tool_output = str(result)
+
+                # Error Handling Enhancement 1: browse failure -> suggest alternatives
+                if tool_name == "browse" and self._detect_browse_failure(tool_output):
+                    url = args.get("url", "")
+                    tool_output += self._browse_alternative_hint(url, user_message)
+                    logger.info(f"Browse failure detected for {url}; alternative hint appended.")
+
+                # Error Handling Enhancement 2: empty KB search -> nudge KB creation
+                if tool_name == "search_knowledge":
+                    if "No results found" in tool_output or "Error" in tool_output:
+                        query = args.get("query", user_message[:60])
+                        self._record_kb_gap(user_id, query)
+                        tool_output += (
+                            f"\n\n[Tip: No knowledge base entries matched '{query}'. "
+                            "Use write_to_knowledge() to persist useful information for future use.]"
+                        )
+
+                content = f"Tool {tool_name} returned: {tool_output}"
+                tool_results_by_id[tool_call_id] = content
+                await mem.add("tool", content)
+                duration = time.time() - start_time
+                logger.info(f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)")
+                # KB extraction for substantial sequential tool results (fire-and-forget)
+                if self._kb_auto_extract and self._should_save_tool_result(tool_name, tool_output):
+                    _t = asyncio.create_task(
+                        self._save_tool_result_to_kb(
+                            tool_name, args, tool_output, user_message, user_id
+                        )
+                    )
+                    self._pending_preloads.add(_t)
+                    _t.add_done_callback(self._pending_preloads.discard)
+            except Exception as e:
+                logger.error(f"Tool execution error ({tool_name}): {e}")
+                logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
+                content = f"Tool error: {e}"
+                tool_results_by_id[tool_call_id] = content
+                await mem.add("tool", content)
+
+        # Build proper followup messages with assistant + individual tool messages for OpenAI compatibility
+        openai_tool_calls = []
+        for tc in tool_calls:
+            openai_tool_calls.append({
+                "id": tc.get("id", "call_default"),
+                "type": tc.get("type", "function"),
+                "function": {
+                    "name": tc["function"]["name"],
+                    "arguments": tc["function"].get("arguments_str", "")
+                }
+            })
+
+        followup = messages + [
+            {"role": "assistant", "content": "", "tool_calls": openai_tool_calls}
+        ]
+
+        # Append one tool message per tool_call_id in the same order as tool_calls
+        for tc in tool_calls:
+            tool_call_id = tc.get("id", "call_default")
+            content = tool_results_by_id.get(tool_call_id, "Tool was not executed.")
+            followup.append({"role": "tool", "tool_call_id": tool_call_id, "content": content})
+
+        # Trigger pre_llm_call hooks for followup
+        hook_results = trigger_hook("pre_llm_call", followup, self.model)
+        for result in hook_results:
+            if result and isinstance(result, list):
+                followup = result
+
+        try:
+            import httpx as _httpx  # local alias to avoid shadowing outer scope
+            final_response, _ = await self._provider_chat(followup, self.model)
+
+            # Trigger post_llm_call hooks for followup
+            trigger_hook("post_llm_call", final_response, None)
+
+            # Empty-response recovery after tool-use followup
+            if self._is_empty_response(final_response):
+                final_response = await self._recover_empty_response(
+                    followup, user_message, user_id, had_kb_results
+                )
+
+            await mem.add("assistant", final_response)
+            return final_response
+        except Exception as e:
+            logger.error(f"LLM second call error: {e}")
+            return f"Tool executed but error getting response: {e}"
+
+    # -- Sub-method: Handle summarization & cleanup -------------------------------
+
+    async def _handle_summarization(
+        self,
+        user_message: str,
+        response: str,
+        user_id: str,
+        mem: Memory,
+        _full_history_for_bg: Optional[list]
+    ) -> None:
+        """Background KB extraction, session end hooks, and context summarization.
+
+        This is called after the response has been sent to the user.
+        All operations are fire-and-forget and never block the response.
+        """
+        # Background KB auto-extraction (fire-and-forget, never blocks response)
+        if self._kb_auto_extract and self._should_extract_knowledge(user_message, response):
+            _kb_task = asyncio.create_task(
+                self._extract_and_save_knowledge(user_message, response, user_id)
+            )
+            self._pending_preloads.add(_kb_task)
+            _kb_task.add_done_callback(self._pending_preloads.discard)
+
+        # Trigger on_session_end hook
+        message_count = len(await mem.get_history()) if hasattr(mem, "get_history") else 0
+        trigger_hook("on_session_end", user_id, self.name, message_count)
+
+        # Background context summarization (fire-and-forget, off hot path)
+        if _full_history_for_bg:
+            _summarize_task = asyncio.create_task(
+                self._background_summarize_context(_full_history_for_bg, user_id, mem)
+            )
+            self._pending_preloads.add(_summarize_task)
+            _summarize_task.add_done_callback(self._pending_preloads.discard)
+
+        # Complete task timer successfully
+        if self._current_task_id:
+            await self._task_timer.complete_task(self._current_task_id, success=True)
+            self._current_task_id = None
+
+    # -- Main think() orchestrator ------------------------------------------------
+
+    async def think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> str:
+        """Process a user message and return the agent's response.
+
+        Orchestrates the pipeline via sub-methods:
+            1. _route_message()    -- routing, timer, guardrails
+            2. _build_context()    -- knowledge search, system prompt
+            3. LLM call            -- primary reasoning
+            4. _execute_tools()    -- tool execution (if any)
+            5. _handle_summarization() -- background cleanup
+        """
+        # 1. Route message
+        route_result = await self._route_message(user_message, user_id, _depth)
+        if route_result is None:
+            return "Sorry, this task took too long to complete and has been cancelled. Please try again with a simpler request."
+        request_model, mem, history, _full_history_for_bg = route_result
+
+        # 2. Build context
+        context_result = await self._build_context(user_message, user_id, mem, history, request_model)
+        if context_result is None:
+            return "Sorry, this task took too long to complete and has been cancelled. Please try again with a simpler request."
+        messages, had_kb_results, kb_gap_hint = context_result
+
+        # 3. LLM call
         if self._current_task_id:
             await self._task_timer.update_step(self._current_task_id, "llm_call", 3, 5)
-        
+
         try:
             import httpx
-            response, tool_calls = await self.provider.chat(messages, self.model)
+            response, tool_calls = await self._provider_chat(messages, request_model)
         except httpx.TimeoutException as e:
             logger.error(f"LLM provider timeout: {e}")
             error_msg = "Sorry, the LLM service timed out. Please try again."
@@ -1109,198 +1478,20 @@ class Agent:
         hook_results = trigger_hook("post_llm_call", response, tool_calls)
         for result in hook_results:
             if result and isinstance(result, tuple) and len(result) == 2:
-                response, tool_calls = result  # Allow hooks to modify response/tool_calls
+                response, tool_calls = result
 
+        # 4. Execute tools (if any) or handle direct response
         if tool_calls:
-            # Save assistant response with tool_calls to memory (as plain text for now)
-            await mem.add("assistant", response or "[Using tools...]")
-            
-            # Update timer - executing tools
-            if self._current_task_id:
-                await self._task_timer.update_step(self._current_task_id, "executing_tools", 4, 5)
-            
-            # Collect results per tool_call_id
-            tool_results_by_id: Dict[str, str] = {}
-            
-            # Determine parallel vs sequential execution
-            independent_tools = [tc for tc in tool_calls if is_tool_independent(tc.get("function", {}).get("name", ""))]
-            dependent_tools = [tc for tc in tool_calls if not is_tool_independent(tc.get("function", {}).get("name", ""))]
-
-            if len(independent_tools) > 1:
-                # Use parallel execution for independent tools
-                logger.info(f"Executing {len(independent_tools)} tools in parallel")
-                executor = get_parallel_executor()
-                exec_results = await executor.execute_tools(independent_tools, user_id)
-
-                # Map results back to tool_call_ids
-                for tc, r in zip(independent_tools, exec_results):
-                    tool_call_id = tc.get("id", "call_default")
-                    if r["success"]:
-                        tool_output = r['result']
-                        if r['tool_name'] == 'browse' and self._detect_browse_failure(tool_output):
-                            url_match = re.search(r'https?://\S+', tool_output)
-                            url = url_match.group(0) if url_match else ""
-                            tool_output += self._browse_alternative_hint(url, user_message)
-                        content = f"Tool {r['tool_name']} returned: {tool_output}"
-                    else:
-                        content = f"Tool {r['tool_name']} error: {r['error']}"
-                    tool_results_by_id[tool_call_id] = content
-                    await mem.add("tool", content)
-                    # KB extraction for substantial parallel tool results (fire-and-forget)
-                    if r["success"] and self._kb_auto_extract and self._should_save_tool_result(
-                        r['tool_name'], r.get('result', '')
-                    ):
-                        _t = asyncio.create_task(
-                            self._save_tool_result_to_kb(
-                                r['tool_name'],
-                                tc.get("function", {}).get("arguments", {}),
-                                r['result'],
-                                user_message,
-                                user_id,
-                            )
-                        )
-                        self._pending_preloads.add(_t)
-                        _t.add_done_callback(self._pending_preloads.discard)
-            elif independent_tools:
-                # Single independent tool - execute sequentially below along with dependent ones
-                dependent_tools = tool_calls
-            
-            # Execute dependent (and single independent) tools sequentially
-            for tc in dependent_tools:
-                tool_name = tc.get("function", {}).get("name", "")
-                args = tc.get("function", {}).get("arguments", {})
-                tool_call_id = tc.get("id", "call_default")
-
-                if tool_name not in TOOLS:
-                    content = f"Unknown tool: {tool_name}"
-                    tool_results_by_id[tool_call_id] = content
-                    await mem.add("tool", content)
-                    logger.warning(f"Unknown tool called: {tool_name}")
-                    continue
-
-                if tool_name == "delegate":
-                    args["_depth"] = _depth + 1
-
-                start_time = time.time()
-                logger.info(f"[AUDIT] Tool execution started: {tool_name} with args: {args}")
-
-                try:
-                    func = TOOLS[tool_name]["func"]
-                    if inspect.iscoroutinefunction(func):
-                        result = await func(**args)
-                    else:
-                        result = await asyncio.to_thread(func, **args)
-
-                    tool_output = str(result)
-
-                    # Error Handling Enhancement 1: browse failure → suggest alternatives
-                    if tool_name == "browse" and self._detect_browse_failure(tool_output):
-                        url = args.get("url", "")
-                        tool_output += self._browse_alternative_hint(url, user_message)
-                        logger.info(f"Browse failure detected for {url}; alternative hint appended.")
-
-                    # Error Handling Enhancement 2: empty KB search → nudge KB creation
-                    if tool_name == "search_knowledge":
-                        if "No results found" in tool_output or "Error" in tool_output:
-                            query = args.get("query", user_message[:60])
-                            self._record_kb_gap(user_id, query)
-                            tool_output += (
-                                f"\n\n[Tip: No knowledge base entries matched '{query}'. "
-                                "Use write_to_knowledge() to persist useful information for future use.]"
-                            )
-
-                    content = f"Tool {tool_name} returned: {tool_output}"
-                    tool_results_by_id[tool_call_id] = content
-                    await mem.add("tool", content)
-                    duration = time.time() - start_time
-                    logger.info(f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)")
-                    # KB extraction for substantial sequential tool results (fire-and-forget)
-                    if self._kb_auto_extract and self._should_save_tool_result(tool_name, tool_output):
-                        _t = asyncio.create_task(
-                            self._save_tool_result_to_kb(
-                                tool_name, args, tool_output, user_message, user_id
-                            )
-                        )
-                        self._pending_preloads.add(_t)
-                        _t.add_done_callback(self._pending_preloads.discard)
-                except Exception as e:
-                    logger.error(f"Tool execution error ({tool_name}): {e}")
-                    logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
-                    content = f"Tool error: {e}"
-                    tool_results_by_id[tool_call_id] = content
-                    await mem.add("tool", content)
-            
-            # Build proper followup messages with assistant + individual tool messages for OpenAI compatibility
-            openai_tool_calls = []
-            for tc in tool_calls:
-                openai_tool_calls.append({
-                    "id": tc.get("id", "call_default"),
-                    "type": tc.get("type", "function"),
-                    "function": {
-                        "name": tc["function"]["name"],
-                        "arguments": tc["function"].get("arguments_str", "")
-                    }
-                })
-            
-            followup = messages + [
-                {"role": "assistant", "content": response or "", "tool_calls": openai_tool_calls}
-            ]
-            
-            # Append one tool message per tool_call_id in the same order as tool_calls
-            for tc in tool_calls:
-                tool_call_id = tc.get("id", "call_default")
-                content = tool_results_by_id.get(tool_call_id, "Tool was not executed.")
-                followup.append({"role": "tool", "tool_call_id": tool_call_id, "content": content})
-
-            # Trigger pre_llm_call hooks for followup
-            hook_results = trigger_hook("pre_llm_call", followup, self.model)
-            for result in hook_results:
-                if result and isinstance(result, list):
-                    followup = result
-
-            try:
-                import httpx as _httpx  # local alias to avoid shadowing outer scope
-                final_response, _ = await self.provider.chat(followup, self.model)
-
-                # Trigger post_llm_call hooks for followup
-                trigger_hook("post_llm_call", final_response, None)
-
-                # Empty-response recovery after tool-use followup
-                if self._is_empty_response(final_response):
-                    final_response = await self._recover_empty_response(
-                        followup, user_message, user_id, had_kb_results
-                    )
-
-                await mem.add("assistant", final_response)
-
-                # Background KB auto-extraction (fire-and-forget, never blocks response)
-                if self._kb_auto_extract and self._should_extract_knowledge(user_message, final_response):
-                    _kb_task = asyncio.create_task(
-                        self._extract_and_save_knowledge(user_message, final_response, user_id)
-                    )
-                    self._pending_preloads.add(_kb_task)
-                    _kb_task.add_done_callback(self._pending_preloads.discard)
-
-                # Trigger on_session_end hook
-                message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
-                trigger_hook("on_session_end", user_id, self.name, message_count)
-
-                # Complete task timer successfully
-                if self._current_task_id:
-                    await self._task_timer.complete_task(self._current_task_id, success=True)
-                    self._current_task_id = None
-
+            final_response = await self._execute_tools(
+                tool_calls, messages, user_message, user_id, mem, _depth, had_kb_results
+            )
+            if final_response.startswith("Tool executed but error"):
                 return final_response
-            except Exception as e:
-                logger.error(f"LLM second call error: {e}")
-                error_msg = f"Tool executed but error getting response: {e}"
-                # Complete task timer with error
-                if self._current_task_id:
-                    await self._task_timer.complete_task(self._current_task_id, success=False, error_message=error_msg)
-                    self._current_task_id = None
-                return error_msg
+            # 5. Handle summarization & cleanup
+            await self._handle_summarization(user_message, final_response, user_id, mem, _full_history_for_bg)
+            return final_response
 
-        # ── No tool calls: validate response is non-empty ────────────────────
+        # No tool calls: validate response is non-empty
         if self._is_empty_response(response):
             response = await self._recover_empty_response(
                 messages, user_message, user_id, had_kb_results
@@ -1308,30 +1499,22 @@ class Agent:
 
         await mem.add("assistant", response)
 
-        # Background KB auto-extraction (fire-and-forget, never blocks response)
-        if self._kb_auto_extract and self._should_extract_knowledge(user_message, response):
-            _kb_task = asyncio.create_task(
-                self._extract_and_save_knowledge(user_message, response, user_id)
-            )
-            self._pending_preloads.add(_kb_task)
-            _kb_task.add_done_callback(self._pending_preloads.discard)
-
-        # Trigger on_session_end hook
-        message_count = len(await mem.get_history()) if hasattr(mem, 'get_history') else 0
-        trigger_hook("on_session_end", user_id, self.name, message_count)
-
-        # Complete task timer successfully
-        if self._current_task_id:
-            await self._task_timer.complete_task(self._current_task_id, success=True)
-            self._current_task_id = None
-
+        # 5. Handle summarization & cleanup
+        await self._handle_summarization(user_message, response, user_id, mem, _full_history_for_bg)
         return response
 
+
     async def stream_think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> AsyncIterator[str]:
-        """Process a user message and yield response chunks in real-time."""
+        """Process a user message and yield response chunks in real-time.
+
+        Streaming tool call flow:
+            1. Stream initial LLM reasoning
+            2. If tool calls detected → yield markers, execute tools, stream follow-up
+            3. If no tool calls → save response and finish
+        """
         global _LAST_ACTIVE_TIME
         _LAST_ACTIVE_TIME = time.time()
-        
+
         mem = await self._get_memory(user_id)
         await mem.add("user", user_message)
 
@@ -1340,31 +1523,13 @@ class Agent:
 
         history = await mem.get_history()
 
-        # Feature: Context Summarization with trajectory compression
+        # Feature: Context Summarization moved off hot path
         threshold = getattr(self.config.agents, 'summarization_threshold', 10)
-        if len(history) > threshold:
-            to_summarize = history[:-5]
-            recent = history[-5:]
-            summary_parts = [
-                "Summarize the following conversation context. Focus on key decisions, "
-                "important facts, and user preferences:\n"
-            ]
-            for m in to_summarize:
-                summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
-            summary_prompt = "".join(summary_parts)
-            summary_msgs = [
-                {"role": "system", "content": "You summarize conversations concisely."},
-                {"role": "user", "content": summary_prompt},
-            ]
-            try:
-                summary_text, _ = await self.provider.chat(summary_msgs, self.model)
-                history = [{"role": "system", "content": f"Previous conversation summary: {summary_text}"}] + recent
-            except Exception as e:
-                logger.error(f"Error summarizing history: {e}")
-                # fallback to raw history if summary fails
+        _should_summarize_after_stream = len(history) > threshold
+        _full_history_for_bg_stream = history.copy() if _should_summarize_after_stream else None
 
         # Search knowledge base for relevant context
-        knowledge_context = self._search_knowledge_context(user_message, user_id)
+        knowledge_context = await self._search_knowledge_context(user_message, user_id)
         had_kb_results = bool(knowledge_context)
 
         # KB gap hint for streaming mode
@@ -1392,31 +1557,32 @@ class Agent:
             if result and isinstance(result, list):
                 messages = result
 
-        # Step 1: LLM Reasoning & Response (messages already built above)
-        try:
-            stream_iterator = await self.provider.chat(messages, self.model, stream=True)
-        except Exception as e:
-            logger.error(f"LLM provider error in stream_think: {e}")
-            trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
-            yield f"Sorry, I encountered an error: {e}"
-            return
+        # Step 1: Stream initial LLM response
+        stream_result = await self._provider_chat(messages, self.model, stream=True)
+
+        # Providers now return (iterator, tool_calls_collector) for streaming
+        if isinstance(stream_result, tuple) and len(stream_result) == 2:
+            stream_iterator, tool_calls_collector = stream_result
+        else:
+            stream_iterator = stream_result
+            tool_calls_collector = []
 
         response_parts = []
-        tool_calls = None
 
-        # Iterate over the stream
         try:
             async for chunk in stream_iterator:
-                response_parts.append(chunk)
-                yield chunk
+                if chunk:
+                    response_parts.append(chunk)
+                    yield chunk
         except Exception as e:
-            logger.error(f"Error in streaming: {e}")
-            yield f"Error streaming response: {e}"
+            logger.error(f"Error in initial streaming: {e}")
+            yield f"\n\n[Error streaming response: {e}]"
+            trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
             return
 
         full_response = "".join(response_parts)
 
-        # Empty-response recovery for streaming: emit fallback if nothing arrived
+        # Empty-response recovery for streaming
         if self._is_empty_response(full_response):
             logger.warning("Streaming produced empty response — emitting fallback.")
             fallback = "I'm sorry — I wasn't able to generate a response."
@@ -1428,11 +1594,53 @@ class Agent:
             yield fallback
             full_response = fallback
 
-        # Trigger post_llm_call hooks
-        trigger_hook("post_llm_call", full_response, tool_calls)
+        # Trigger post_llm_call hooks for initial response
+        trigger_hook("post_llm_call", full_response, None)
 
-        # Note: Tool calls are not supported in streaming mode yet
-        # The full response is returned as chunks
+        # Step 2: Check for tool calls collected during streaming
+        tool_calls = tool_calls_collector if tool_calls_collector else None
+
+        if tool_calls:
+            # ── Tool calls detected — execute and stream follow-up ──────────────
+            logger.info(f"Streaming tool calls detected: {[tc['function']['name'] for tc in tool_calls]}")
+
+            # Yield tool call markers for frontend visibility
+            yield "__TOOL_CALLS_START__"
+            for tc in tool_calls:
+                yield json.dumps({
+                    "tool": tc["function"]["name"],
+                    "status": "running",
+                    "args": tc["function"].get("arguments", {})
+                })
+            yield "__TOOL_CALLS_END__"
+
+            # Execute tools using existing logic (non-streaming follow-up for now)
+            try:
+                final_response = await self._execute_tools(
+                    tool_calls, messages, user_message, user_id, mem, _depth, had_kb_results
+                )
+
+                # Stream the final response in chunks for UX consistency
+                yield "__STREAM_START__"
+                # Split final response into word chunks to simulate streaming
+                words = final_response.split(" ")
+                for i, word in enumerate(words):
+                    prefix = " " if i > 0 else ""
+                    yield prefix + word
+                yield "__STREAM_END__"
+
+                # Background cleanup after tool-using response
+                await self._handle_summarization(user_message, final_response, user_id, mem, _full_history_for_bg_stream)
+
+            except Exception as e:
+                logger.error(f"Tool execution error during streaming: {e}")
+                yield f"\n\n[Error executing tools: {e}]"
+                yield "__STREAM_END__"
+
+            trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
+            return
+
+        # ── No tool calls — finalize and cleanup ──────────────────────────────
         await mem.add("assistant", full_response)
 
         # Background KB auto-extraction (fire-and-forget)
@@ -1443,7 +1651,15 @@ class Agent:
             self._pending_preloads.add(_kb_task)
             _kb_task.add_done_callback(self._pending_preloads.discard)
 
+        # Background context summarization (fire-and-forget, off hot path)
+        if _full_history_for_bg_stream:
+            _summarize_task = asyncio.create_task(
+                self._background_summarize_context(_full_history_for_bg_stream, user_id, mem)
+            )
+            self._pending_preloads.add(_summarize_task)
+            _summarize_task.add_done_callback(self._pending_preloads.discard)
+
         # Trigger on_session_end hook
         trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
 
-        yield "[TOOL_CALLS_NONE]"  # Signal that streaming is complete
+        yield "[TOOL_CALLS_NONE]"  # Signal no tools were invoked

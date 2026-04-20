@@ -61,16 +61,15 @@ class MockConfig:
 def create_mock_agent(tmp_path):
     """Helper function to create a mock agent."""
     with unittest.mock.patch("pathlib.Path.home", return_value=tmp_path):
-        with unittest.mock.patch("myclaw.agent.get_provider") as mock_get_provider:
-            mock_provider_instance = unittest.mock.MagicMock()
-            async def mock_chat(*args, **kwargs):
-                return ("Hi", None)
-            mock_provider_instance.chat = mock_chat
-            mock_get_provider.return_value = mock_provider_instance
+        mock_provider_instance = unittest.mock.MagicMock()
+        async def mock_chat(*args, **kwargs):
+            return ("Hi", None)
+        mock_provider_instance.chat = mock_chat
 
-            agent = Agent(config=MockConfig(), provider_name="test_provider")
-            agent._kb_gaps.clear()
-            return agent
+        agent = Agent(config=MockConfig(), provider_name="test_provider")
+        agent._provider = mock_provider_instance  # Inject mock directly
+        agent._kb_gaps.clear()
+        return agent
 
 
 async def cleanup_agent(agent):
@@ -157,7 +156,7 @@ class TestKnowledgeGapCache:
         assert cache.is_duplicate("test query", "user1")
 
     def test_cache_expiration(self):
-        cache = KnowledgeGapCache(timeout_seconds=0.1)  # 100ms timeout
+        cache = KnowledgeGapCache(timeout_seconds=0.1, cleanup_interval=1)  # 100ms timeout, cleanup every call
         assert not cache.is_duplicate("test query", "user1")
         # Wait for expiration
         time.sleep(0.15)
@@ -206,20 +205,22 @@ class TestKnowledgeSearchResult:
 class TestSearchKnowledgeContext:
     """Tests for _search_knowledge_context method."""
 
-    def test_empty_result_backward_compatible(self, mock_agent_with_clean_gaps):
+    @pytest.mark.asyncio
+    async def test_empty_result_backward_compatible(self, mock_agent_with_clean_gaps):
         """Test that empty search results return empty string by default (backward compatibility)."""
         with patch("myclaw.agent.search_notes", return_value=[]):
-            result = mock_agent_with_clean_gaps._search_knowledge_context(
+            result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "unknown topic about quantum computing",
                 "test_user"
             )
             assert isinstance(result, str)
             assert result == ""
 
-    def test_empty_result_structured(self, mock_agent_with_clean_gaps):
+    @pytest.mark.asyncio
+    async def test_empty_result_structured(self, mock_agent_with_clean_gaps):
         """Test that empty search results return structured result when requested."""
         with patch("myclaw.agent.search_notes", return_value=[]):
-            result = mock_agent_with_clean_gaps._search_knowledge_context(
+            result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "unknown topic about quantum computing",
                 "test_user",
                 return_structured=True
@@ -232,10 +233,11 @@ class TestSearchKnowledgeContext:
                    "computing" in [t.lower() for t in result.suggested_topics]
             assert "write_to_knowledge" in result.context.lower()
 
-    def test_empty_result_includes_guidance(self, mock_agent_with_clean_gaps):
+    @pytest.mark.asyncio
+    async def test_empty_result_includes_guidance(self, mock_agent_with_clean_gaps):
         """Test that empty results include actionable guidance."""
         with patch("myclaw.agent.search_notes", return_value=[]):
-            result = mock_agent_with_clean_gaps._search_knowledge_context(
+            result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "unknown topic",
                 "test_user",
                 return_structured=True
@@ -244,7 +246,8 @@ class TestSearchKnowledgeContext:
             assert "write_to_knowledge" in result.context
             assert "list_knowledge" in result.context
 
-    def test_with_results_structured(self, mock_agent_with_clean_gaps):
+    @pytest.mark.asyncio
+    async def test_with_results_structured(self, mock_agent_with_clean_gaps):
         """Test that search with results returns structured result."""
         mock_note = MagicMock()
         mock_note.title = "Test Note"
@@ -252,7 +255,7 @@ class TestSearchKnowledgeContext:
         mock_note.observations = []
 
         with patch("myclaw.agent.search_notes", return_value=[mock_note]):
-            result = mock_agent_with_clean_gaps._search_knowledge_context(
+            result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "test query",
                 "test_user",
                 return_structured=True
@@ -262,7 +265,8 @@ class TestSearchKnowledgeContext:
             assert "## Relevant Knowledge" in result.context
             assert "Test Note" in result.context
 
-    def test_with_results_backward_compatible(self, mock_agent_with_clean_gaps):
+    @pytest.mark.asyncio
+    async def test_with_results_backward_compatible(self, mock_agent_with_clean_gaps):
         """Test that search with results returns string by default."""
         mock_note = MagicMock()
         mock_note.title = "Test Note"
@@ -270,17 +274,18 @@ class TestSearchKnowledgeContext:
         mock_note.observations = []
 
         with patch("myclaw.agent.search_notes", return_value=[mock_note]):
-            result = mock_agent_with_clean_gaps._search_knowledge_context(
+            result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "test query",
                 "test_user"
             )
             assert isinstance(result, str)
             assert "## Relevant Knowledge" in result
 
-    def test_suggested_topics_extraction(self, mock_agent_with_clean_gaps):
+    @pytest.mark.asyncio
+    async def test_suggested_topics_extraction(self, mock_agent_with_clean_gaps):
         """Test that suggested topics are extracted from query."""
         with patch("myclaw.agent.search_notes", return_value=[]):
-            result = mock_agent_with_clean_gaps._search_knowledge_context(
+            result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "machine learning models and artificial intelligence",
                 "test_user",
                 return_structured=True

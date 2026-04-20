@@ -1,0 +1,259 @@
+# =============================================================================
+# ZenSynora — Production-Ready Docker Compose Configuration
+# =============================================================================
+# Usage:
+#   docker compose up --build              # Build and start (default profile)
+#   docker compose up -d                   # Start in background
+#   docker compose logs -f                 # Follow logs
+#   docker compose down                    # Stop and remove containers
+#   docker compose down -v                 # Stop, remove, and DELETE ALL DATA
+#
+# Profiles (start additional services):
+#   docker compose --profile full up -d    # Start with Redis + Ollama
+#   docker compose --profile dev up -d     # Start dev environment
+#
+# Persistent volumes:
+#   zensynora-data     — Config, memory SQLite DB, knowledge base, TOOLBOX
+#   zensynora-logs     — Application logs
+#   zensynora-redis    — Redis persistence (full profile)
+#   ollama-models      — Ollama model cache (full profile)
+#
+# Environment:
+#   Copy .env.example to .env and fill in your values.
+#   Or set variables directly in the 'environment:' section below.
+#
+# Health:
+#   docker compose ps                      # Check service health
+#   docker compose exec zensynora zensynora --help   # Test CLI inside container
+# =============================================================================
+
+x-default-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "10m"
+    max-file: "5"
+    labels: "service_name,environment"
+
+services:
+  # ── Main ZenSynora Application ─────────────────────────────────────────────
+  zensynora:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        - BUILDKIT_INLINE_CACHE=1
+    image: zensynora:latest
+    container_name: zensynora
+    hostname: zensynora
+    restart: unless-stopped
+
+    # Ports
+    # 8000 — WebUI / FastAPI backend
+    # 8080 — WhatsApp webhook (if enabled)
+    ports:
+      - "${ZENSYNORA_PORT:-8000}:8000"
+      - "${ZENSYNORA_WEBHOOK_PORT:-8080}:8080"
+
+    # Persistent volumes
+    volumes:
+      # Main data volume: config, SQLite DB, knowledge base, TOOLBOX
+      - type: volume
+        source: zensynora-data
+        target: /data/.myclaw
+      # Application logs
+      - type: volume
+        source: zensynora-logs
+        target: /data/.myclaw/logs
+      # Optional: mount local config for easier editing (uncomment for dev)
+      # - type: bind
+      #   source: ./config.json
+      #   target: /data/.myclaw/config.json
+      #   read_only: true
+      # Optional: mount local knowledge for development
+      # - type: bind
+      #   source: ./knowledge
+      #   target: /data/.myclaw/knowledge
+      #   read_only: true
+
+    # Environment variables
+    env_file:
+      - .env
+    environment:
+      # Ensure the agent knows it's running in Docker
+      ZENSYNORA_DOCKER: "true"
+      # Log to stdout for Docker log collection
+      MYCLAW_LOG_LEVEL: ${MYCLAW_LOG_LEVEL:-INFO}
+      # Config directory inside container
+      MYCLAW_CONFIG_DIR: /data/.myclaw
+      # Hostname for service discovery
+      ZENSYNORA_HOSTNAME: zensynora
+
+    # Health check (matches Dockerfile HEALTHCHECK)
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+      start_interval: 5s
+      disable: false
+
+    # Resource limits (adjust based on your hardware)
+    deploy:
+      resources:
+        limits:
+          cpus: ${ZENSYNORA_CPU_LIMIT:-2.0}
+          memory: ${ZENSYNORA_MEMORY_LIMIT:-2G}
+        reservations:
+          cpus: ${ZENSYNORA_CPU_RESERVE:-0.5}
+          memory: ${ZENSYNORA_MEMORY_RESERVE:-512M}
+
+    # Logging configuration
+    logging: *default-logging
+
+    # Networking
+    networks:
+      - zensynora-net
+
+    # Service dependencies
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: false
+
+    # Default command — override per mode:
+    #   docker compose run --rm zensynora zensynora agent
+    #   docker compose run --rm zensynora zensynora gateway
+    #   docker compose run --rm zensynora zensynora webui --port 8000
+    command: ["zensynora", "webui", "--port", "8000"]
+
+  # ── Optional: Redis for multi-worker state sharing ─────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: zensynora-redis
+    hostname: zensynora-redis
+    restart: unless-stopped
+    profiles:
+      - full
+      - redis
+    volumes:
+      - type: volume
+        source: zensynora-redis
+        target: /data
+      # Optional: mount custom redis.conf
+      # - type: bind
+      #   source: ./redis.conf
+      #   target: /usr/local/etc/redis/redis.conf
+      #   read_only: true
+    # command: redis-server /usr/local/etc/redis/redis.conf --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - zensynora-net
+    logging: *default-logging
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
+
+  # ── Optional: Ollama for local LLM inference ───────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: zensynora-ollama
+    hostname: zensynora-ollama
+    restart: unless-stopped
+    profiles:
+      - full
+      - ollama
+    volumes:
+      - type: volume
+        source: ollama-models
+        target: /root/.ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+    networks:
+      - zensynora-net
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: ${OLLAMA_CPU_LIMIT:-4.0}
+          memory: ${OLLAMA_MEMORY_LIMIT:-8G}
+        reservations:
+          cpus: ${OLLAMA_CPU_RESERVE:-1.0}
+          memory: ${OLLAMA_MEMORY_RESERVE:-2G}
+    # Uncomment for NVIDIA GPU support:
+    # runtime: nvidia
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # ── Optional: Watchtower for automatic image updates ───────────────────────
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: zensynora-watchtower
+    restart: unless-stopped
+    profiles:
+      - full
+      - watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=3600
+      - WATCHTOWER_LABEL_ENABLE=true
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    networks:
+      - zensynora-net
+    logging: *default-logging
+
+# ── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  zensynora-data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ${ZENSYNORA_DATA_PATH:-./data}
+  zensynora-logs:
+    driver: local
+  zensynora-redis:
+    driver: local
+  ollama-models:
+    driver: local
+
+# ── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  zensynora-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
+    labels:
+      - "com.zensynora.network=main"

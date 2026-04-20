@@ -248,6 +248,12 @@ class SemanticCache:
                 entry.access_count += 1
                 self._cache.move_to_end(query_hash)
                 logger.debug(f"Semantic cache hit (exact): {query_hash[:8]}...")
+                # Record Prometheus metric
+                try:
+                    from .metrics import get_metrics
+                    get_metrics().record_cache("semantic", hit=True)
+                except Exception:
+                    pass
                 return entry.response, entry.tool_calls
         
         # Try semantic similarity match
@@ -277,9 +283,19 @@ class SemanticCache:
                     entry.access_count += 1
                     self._cache.move_to_end(best_match)
                     logger.debug(f"Semantic cache hit (similarity={best_similarity:.3f}): {best_match[:8]}...")
+                    try:
+                        from .metrics import get_metrics
+                        get_metrics().record_cache("semantic", hit=True)
+                    except Exception:
+                        pass
                     return entry.response, entry.tool_calls
-        
+
         self.misses += 1
+        try:
+            from .metrics import get_metrics
+            get_metrics().record_cache("semantic", hit=False)
+        except Exception:
+            pass
         return None
     
     def _extract_query_text(self, messages: List[Dict]) -> str:

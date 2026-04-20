@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Project Restructure & Professionalization (2026-04-18)
+
+A comprehensive effort to transform ZenSynora from a personal project into a production-ready, open-source AI agent framework. All changes were executed following `docs/dev/ark/planA1.md`.
+
+#### Phase 1: Repository Cleanup & Polish
+- **Root Directory Cleanup**
+  - Created `docs/dev/` and `docs/dev/scripts/` directories
+  - Moved 16 planning/development files into `docs/dev/`: `ANALYSIS.md`, `CLAUDE.md`, `code_analysis_summary.md`, `CODE_OPTIMIZATION_PROPOSAL.md`, `FUNCTIONS_SUMMARY.md`, `how to run.md`, `implementation_gap_report.md`, `IMPLEMENTATION_PLAN.md`, `IMPLEMENTATION_SUMMARY_KNOWLEDGE_GAP_v2.1.md`, `new_think_methods.py`, `OPTIMIZATION_SUMMARY.md`, `roadmap.md`, `Structure.txt`, `tasktodo.md`
+  - Moved `ark/` and `plans/` directories into `docs/dev/`
+  - Moved 8 helper scripts into `docs/dev/scripts/`: `extract_core.py`, `extract_modules.py`, `find_sections.py`, `find_sections2.py`, `test_import.py`, `test_ssh.py`, `deploy_remote.py`, `deploy_ssh.ps1`
+  - Deleted obsolete temp files: `out.txt`, `test_output.txt`, `out_storage.txt`
+  - Updated all internal links across `CHANGELOG.md`, `docs/dev/IMPLEMENTATION_PLAN.md`, `docs/dev/OPTIMIZATION_SUMMARY.md`, `docs/dev/plans/CHANGELOG.md`, `docs/dev/plans/future_updates_proposal.md`, `docs/dev/ANALYSIS.md`, `docs/dev/how to run.md`, `docs/dev/ark/IMPLEMENTATION_PLAN_FROM_PLANX.md`, `README.md`, `onboard.py`
+  - Rewrote `docs/dev/Structure.txt` to reflect the new layout
+
+- **README.md Overhaul**
+  - Added 6 GitHub badges: Python 3.11+, License AGPL-3.0, CI status, GitHub Stars, Last Commit, Docker ready, Tests/pytest
+  - Added **Screenshots & Demo** section with placeholder table (WebUI, Telegram, Agent Swarm) and YouTube embed placeholder
+  - Rewrote **Quick Start** with 4 clear options: (1) One-Command Install, (2) Docker, (3) Automated Linux, (4) Manual
+  - Added concise **Roadmap** section with phase highlights (1–6 ✅, 7 🔄, 8–9 ⏳)
+  - Updated all CLI examples from `python cli.py` to `zensynora` command
+
+- **GitHub Standard Files**
+  - `.github/ISSUE_TEMPLATE/bug_report.md` — structured template with environment, config, logs sections
+  - `.github/ISSUE_TEMPLATE/feature_request.md` — problem statement, use cases, implementation ideas, contribution checkbox
+  - `.github/PULL_REQUEST_TEMPLATE.md` — type of change, testing checklist, code quality checklist
+  - `CONTRIBUTING.md` — full guide: fork/clone/branch, dev setup, project structure, coding standards (PEP 8, type hints, docstrings), step-by-step tool addition guide, testing instructions, commit message guidelines (conventional commits)
+
+#### Phase 2: Packaging & Installation
+- **`pyproject.toml`** — Modern Python packaging (hatchling build backend)
+  - Metadata: name `zensynora`, version `0.4.1`, AGPL-3.0, Python 3.11+
+  - 22 core dependencies + 8 optional dev dependencies (pytest, ruff, black, isort, pre-commit, mypy)
+  - CLI entry points: `zensynora = myclaw.cli:cli`, `myclaw = myclaw.cli:cli`
+  - Project URLs: Homepage, Docs, Repository, Issues, Changelog
+  - Tool configs: `black`, `isort`, `ruff`, `pytest`, `mypy`
+
+- **Package Structure Refactor**
+  - Moved `cli.py` logic into `myclaw/cli.py` with relative imports
+  - Moved `onboard.py` logic into `myclaw/onboard.py` with relative imports
+  - Root `cli.py` and `onboard.py` are now backward-compatible wrappers
+
+- **`.env.example`** — Comprehensive 50+ variable template
+  - LLM provider API keys (OpenAI, Anthropic, Gemini, Groq, OpenRouter)
+  - Local provider URLs, Telegram & WhatsApp credentials
+  - Agent defaults, swarm, timeouts, memory, knowledge, worker pool, sandbox
+  - Log rotation, intelligence platform, routing, SSH backends
+  - Docker usage documentation in header comments
+
+- **Configuration Validation (`myclaw/config.py`)**
+  - Added `_validate_config()` function called on every `load_config()`
+  - Validates at least one LLM provider is configured
+  - Checks Telegram credentials if enabled
+  - Checks WhatsApp credentials if enabled
+  - Logs structured warnings (non-blocking)
+
+#### Phase 3: Deployment & Developer Experience
+- **Docker Support**
+  - `Dockerfile` — Multi-stage build (builder + runtime), Python 3.12-slim, non-root user, health check (`/health`), ports 8000/8080
+  - `docker-compose.yml` — Full orchestration with persistent volume `zensynora-data`, `.env` auto-loading, health checks, resource limits (2 CPU / 2 GB), optional Redis and Ollama sidecars
+  - `.dockerignore` — Excludes git, cache, node_modules, dev scripts, CI configs
+
+- **CI/CD (`.github/workflows/ci.yml`)**
+  - **lint** job: `ruff check`, `ruff format --check`, `black --check`, `isort --check-only`
+  - **test** job: Matrix on Python 3.11 & 3.12, pytest with coverage, Codecov upload
+  - **docker** job: Build image with Buildx layer caching, test `zensynora --help`, verify WebUI starts
+  - **typecheck** job: `mypy` (non-blocking, `continue-on-error`)
+  - Triggers: push/PR to main, manual dispatch, skips docs-only changes
+
+- **Code Quality Tools**
+  - `.pre-commit-config.yaml` — 4 hook sources:
+    - `pre-commit-hooks`: trailing-whitespace, EOF fixer, YAML/JSON/TOML check, large files, merge conflicts, private key detection
+    - `ruff-pre-commit`: lint + format
+    - `black-pre-commit-mirror`: code formatting
+    - `isort`: import sorting (`--profile black`)
+
+#### Phase 4: Code Structure Fixes
+- **Missing `__init__.py` files**
+  - Added `myclaw/agent_profiles/__init__.py` — makes agent profile directory a proper package
+  - Added `tests/__init__.py` — ensures pytest treats tests as a package
+
+- **WebUI Static File Serving (`myclaw/web/api.py`)**
+  - Added `/health` endpoint for Docker health checks
+  - Added `/assets` static file mount for built React frontend
+  - Added catch-all `/{full_path:path}` route to serve `index.html` (SPA routing)
+  - Graceful fallback if frontend isn't built
+  - Fixed incorrect config access: `config.model` → `config.agents.defaults.model`
+
+- **Nested Package Verification**
+  - Confirmed no `myclaw/myclaw/` nested package exists
+
 ### Bug Fixes (2026-04-13)
 
 #### Import Error in Knowledge Researcher (`myclaw/knowledge/researcher.py`)
@@ -292,9 +381,9 @@ A comprehensive code optimization initiative implementing 21 performance, reliab
   - `uvicorn>=0.23.0` — ASGI server to run FastAPI
 
 - **Documentation**
-  - New `plans/whatsapp_implementation_plan.md` — comprehensive implementation plan with architecture diagrams, setup guide, and remaining work items
+  - New `docs/dev/plans/whatsapp_implementation_plan.md` — comprehensive implementation plan with architecture diagrams, setup guide, and remaining work items
   - Updated `README.md` — WhatsApp in features, architecture, config, commands, and project structure
-  - Updated `how to run.md` — WhatsApp gateway instructions
+  - Updated `docs/dev/how to run.md` — WhatsApp gateway instructions
 
 ### Optimized
 

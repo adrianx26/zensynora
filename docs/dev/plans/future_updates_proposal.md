@@ -35,8 +35,8 @@ MyClaw is a mature, feature-rich personal AI agent with robust support for multi
 
 ### ❌ Not Yet Implemented
 
-- Discord/Slack integration (mentioned in ANALYSIS.md as pending)
-- Comprehensive test suite (marked as LOW PRIORITY in tasktodo.md)
+- Discord/Slack integration (mentioned in ../ANALYSIS.md as pending)
+- Comprehensive test suite (marked as LOW PRIORITY in ../tasktodo.md)
 
 ---
 
@@ -228,7 +228,7 @@ myclaw/
 ### Top 5 Priorities
 
 1. **REST API Server** - Enables programmatic access, web UI integration, third-party integrations
-2. **Discord Bot** - Popular platform, requested in ANALYSIS.md
+2. **Discord Bot** - Popular platform, requested in ../ANALYSIS.md
 3. **Streaming Tool Execution** - Improves UX significantly
 4. **Plugin System** - Extensibility for future integrations
 5. **Multimodal Support** - Image understanding is increasingly expected

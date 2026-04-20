@@ -1,16 +1,42 @@
 import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 import subprocess
-import requests.exceptions
+import httpx
 import myclaw.tools
+
+
+def _mock_httpx_response(status_code=200, text="", raise_error=None):
+    """Create a mock httpx.AsyncClient response for use in async context managers."""
+    mock_response = MagicMock()
+    mock_response.status_code = status_code
+    mock_response.text = text
+    if raise_error:
+        mock_response.raise_for_status.side_effect = raise_error
+    else:
+        mock_response.raise_for_status.return_value = None
+
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(return_value=mock_response)
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    return mock_client
+
+
+def _mock_httpx_error(error_class, *args, **kwargs):
+    """Create a mock httpx.AsyncClient that raises an error on get()."""
+    mock_client = AsyncMock()
+    mock_client.get = AsyncMock(side_effect=error_class(*args, **kwargs))
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=None)
+    return mock_client
 
 
 @pytest.fixture
 def mock_workspace(tmp_path, monkeypatch):
     workspace = (tmp_path / "workspace").resolve()
     workspace.mkdir()
-    monkeypatch.setattr(myclaw.tools, "WORKSPACE", workspace)
+    monkeypatch.setattr(myclaw.tools.core, "WORKSPACE", workspace)
     return workspace
 
 
@@ -22,8 +48,8 @@ def test_validate_path_valid(mock_workspace):
 
 def test_validate_path_traversal(mock_workspace):
     path = "../outside.txt"
-    # Current implementation wraps Path traversal ValueError in "Invalid path" ValueError
-    with pytest.raises(ValueError, match="Invalid path"):
+    # Path traversal attacks raise "Path traversal detected"
+    with pytest.raises(ValueError, match="Path traversal detected"):
         myclaw.tools.validate_path(path)
 
 
@@ -69,7 +95,7 @@ def test_read_file_not_found(mock_workspace):
 
 def test_read_file_traversal(mock_workspace):
     result = myclaw.tools.read_file("../traversal.txt")
-    assert "Error: Invalid path" in result
+    assert "Error: Path traversal detected" in result
 
 
 def test_write_file_success(mock_workspace):
@@ -86,7 +112,7 @@ def test_write_file_nested(mock_workspace):
 
 def test_write_file_traversal(mock_workspace):
     result = myclaw.tools.write_file("../forbidden.txt", "evil")
-    assert "Error: Invalid path" in result
+    assert "Error: Path traversal detected" in result
 
 
 # =============================================================================
@@ -96,108 +122,118 @@ def test_write_file_traversal(mock_workspace):
 class TestBrowseErrorHandling:
     """Tests for browse tool error handling."""
 
-    def test_browse_timeout_error(self):
+    @pytest.mark.asyncio
+    async def test_browse_timeout_error(self):
         """Test that timeout errors return structured guidance with Wayback suggestion."""
-        with patch("requests.get", side_effect=requests.exceptions.Timeout("Connection timed out")):
-            result = myclaw.tools.browse("https://example.com/slow-page")
+        mock_client = _mock_httpx_error(httpx.TimeoutException, "Connection timed out")
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await myclaw.tools.browse("https://example.com/slow-page")
 
             assert "Timeout" in result or "timeout" in result.lower()
             assert "web.archive.org" in result or "Wayback" in result
             assert "search_knowledge" in result.lower()
             assert "💡 Suggestions:" in result
 
-    def test_browse_connection_error(self):
+    @pytest.mark.asyncio
+    async def test_browse_connection_error(self):
         """Test that connection errors return structured guidance."""
-        with patch("requests.get", side_effect=requests.exceptions.ConnectionError("No connection")):
-            result = myclaw.tools.browse("https://example.com/offline")
+        mock_client = _mock_httpx_error(httpx.ConnectError, "No connection")
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await myclaw.tools.browse("https://example.com/offline")
 
             assert "Connection" in result or "connection" in result.lower()
             assert "internet" in result.lower() or "check" in result.lower()
             assert "search_knowledge" in result.lower()
 
-    def test_browse_404_error(self):
+    @pytest.mark.asyncio
+    async def test_browse_404_error(self):
         """Test that 404 errors return structured guidance."""
         mock_response = MagicMock()
         mock_response.status_code = 404
-        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
-            "404 Not Found", response=mock_response
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "404 Not Found", request=MagicMock(), response=mock_response
         )
-
-        with patch("requests.get", return_value=mock_response):
-            result = myclaw.tools.browse("https://example.com/deleted-page")
+        mock_client = _mock_httpx_response(status_code=404, raise_error=mock_response.raise_for_status.side_effect)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await myclaw.tools.browse("https://example.com/deleted-page")
 
             assert "404" in result or "Not Found" in result
             assert "search" in result.lower() or "web search" in result.lower()
             assert "web.archive.org" in result or "Wayback" in result
 
-    def test_browse_403_error(self):
+    @pytest.mark.asyncio
+    async def test_browse_403_error(self):
         """Test that 403 errors return structured guidance."""
         mock_response = MagicMock()
         mock_response.status_code = 403
-        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
-            "403 Forbidden", response=mock_response
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "403 Forbidden", request=MagicMock(), response=mock_response
         )
-
-        with patch("requests.get", return_value=mock_response):
-            result = myclaw.tools.browse("https://example.com/restricted")
+        mock_client = _mock_httpx_response(status_code=403, raise_error=mock_response.raise_for_status.side_effect)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await myclaw.tools.browse("https://example.com/restricted")
 
             assert "403" in result or "Access Denied" in result or "Denied" in result
             assert "search_knowledge" in result.lower()
 
-    def test_browse_other_http_error(self):
+    @pytest.mark.asyncio
+    async def test_browse_other_http_error(self):
         """Test that other HTTP errors return structured guidance."""
         mock_response = MagicMock()
         mock_response.status_code = 500
-        mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError(
-            "500 Internal Server Error", response=mock_response
+        mock_response.raise_for_status.side_effect = httpx.HTTPStatusError(
+            "500 Internal Server Error", request=MagicMock(), response=mock_response
         )
-
-        with patch("requests.get", return_value=mock_response):
-            result = myclaw.tools.browse("https://example.com/server-error")
+        mock_client = _mock_httpx_response(status_code=500, raise_error=mock_response.raise_for_status.side_effect)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await myclaw.tools.browse("https://example.com/server-error")
 
             assert "500" in result or "Error" in result
             assert "search_knowledge" in result.lower()
 
-    def test_browse_request_exception(self):
+    @pytest.mark.asyncio
+    async def test_browse_request_exception(self):
         """Test that generic request exceptions return structured guidance."""
-        with patch("requests.get", side_effect=requests.exceptions.RequestException("Generic error")):
-            result = myclaw.tools.browse("https://example.com/error")
+        mock_client = _mock_httpx_error(httpx.RequestError, "Generic error")
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await myclaw.tools.browse("https://example.com/error")
 
             assert "Error" in result
             assert "search_knowledge" in result.lower()
 
-    def test_browse_unexpected_exception(self):
+    @pytest.mark.asyncio
+    async def test_browse_unexpected_exception(self):
         """Test that unexpected exceptions return structured guidance."""
-        with patch("requests.get", side_effect=ValueError("Unexpected")):
-            result = myclaw.tools.browse("https://example.com/unexpected")
+        mock_client = _mock_httpx_error(ValueError, "Unexpected")
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await myclaw.tools.browse("https://example.com/unexpected")
 
             assert "Unexpected" in result or "error" in result.lower()
             assert "search_knowledge" in result.lower()
 
-    def test_browse_success(self):
+    @pytest.mark.asyncio
+    async def test_browse_success(self):
         """Test that successful browse returns expected format."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = "<html><body>Hello World</body></html>"
-        mock_response.raise_for_status.return_value = None
-
-        with patch("requests.get", return_value=mock_response):
-            result = myclaw.tools.browse("https://example.com")
+        mock_client = _mock_httpx_response(
+            status_code=200,
+            text="<html><body>Hello World</body></html>"
+        )
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await myclaw.tools.browse("https://example.com")
 
             assert "URL:" in result
             assert "Status: 200" in result
             assert "Hello World" in result
 
-    def test_browse_content_truncation(self):
+    @pytest.mark.asyncio
+    async def test_browse_content_truncation(self):
         """Test that long content is truncated."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_response.text = "<html><body>" + "A" * 10000 + "</body></html>"
-        mock_response.raise_for_status.return_value = None
-
-        with patch("requests.get", return_value=mock_response):
-            result = myclaw.tools.browse("https://example.com", max_length=100)
-
+        mock_client = _mock_httpx_response(
+            status_code=200,
+            text="<html><body>" + "A" * 10000 + "</body></html>"
+        )
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await myclaw.tools.browse("https://example.com", max_length=100)
             assert "truncated" in result.lower() or "Content truncated" in result
 
 
@@ -249,7 +285,7 @@ class TestSearchKnowledgeEnhancement:
 
     def test_search_knowledge_no_results(self):
         """Test that empty search returns actionable guidance."""
-        with patch("myclaw.tools.search_notes", return_value=[]):
+        with patch("myclaw.tools.kb.search_notes", return_value=[]):
             result = myclaw.tools.search_knowledge("unknown query xyz", user_id="test")
 
             assert "No results found" in result
@@ -261,7 +297,7 @@ class TestSearchKnowledgeEnhancement:
 
     def test_search_knowledge_no_results_includes_broader_terms(self):
         """Test that empty search suggests broader terms."""
-        with patch("myclaw.tools.search_notes", return_value=[]):
+        with patch("myclaw.tools.kb.search_notes", return_value=[]):
             result = myclaw.tools.search_knowledge("machine learning python", user_id="test")
 
             assert "No results found" in result
@@ -276,7 +312,7 @@ class TestSearchKnowledgeEnhancement:
         mock_note.observations = []
         mock_note.tags = ["test"]
 
-        with patch("myclaw.tools.search_notes", return_value=[mock_note]):
+        with patch("myclaw.tools.kb.search_notes", return_value=[mock_note]):
             result = myclaw.tools.search_knowledge("test", user_id="test")
 
             assert "Search results" in result
@@ -295,7 +331,7 @@ class TestSearchKnowledgeEnhancement:
         mock_note.observations = [mock_obs]
         mock_note.tags = []
 
-        with patch("myclaw.tools.search_notes", return_value=[mock_note]):
+        with patch("myclaw.tools.kb.search_notes", return_value=[mock_note]):
             result = myclaw.tools.search_knowledge("test", user_id="test")
 
             assert "Test Note" in result
@@ -303,7 +339,7 @@ class TestSearchKnowledgeEnhancement:
 
     def test_search_knowledge_error_handling(self):
         """Test that search handles errors gracefully."""
-        with patch("myclaw.tools.search_notes", side_effect=Exception("DB Error")):
+        with patch("myclaw.tools.kb.search_notes", side_effect=Exception("DB Error")):
             result = myclaw.tools.search_knowledge("test", user_id="test")
 
             assert "Error" in result
@@ -319,16 +355,18 @@ class TestBackwardCompatibility:
 
     def test_search_knowledge_still_contains_original_phrase(self):
         """Test that empty results still contain 'No results found' phrase."""
-        with patch("myclaw.tools.search_notes", return_value=[]):
+        with patch("myclaw.tools.kb.search_notes", return_value=[]):
             result = myclaw.tools.search_knowledge("test query", user_id="test")
 
             # Code checking for "No results found" should still work
             assert "No results found" in result
 
-    def test_browse_error_still_contains_error_prefix(self):
+    @pytest.mark.asyncio
+    async def test_browse_error_still_contains_error_prefix(self):
         """Test that errors still contain 'Error' prefix."""
-        with patch("requests.get", side_effect=requests.exceptions.Timeout()):
-            result = myclaw.tools.browse("https://example.com")
+        mock_client = _mock_httpx_error(httpx.TimeoutException, "Connection timed out")
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await myclaw.tools.browse("https://example.com")
 
             # Code checking for "Error" prefix should still work
             assert "Error" in result or "error" in result.lower()

@@ -1,0 +1,66 @@
+# =============================================================================
+# ZenSynora — Pre-commit Hooks Configuration
+# =============================================================================
+# Install:   pip install pre-commit
+#             pre-commit install
+# Run all:   pre-commit run --all-files
+# Skip hook: git commit -m "msg" --no-verify   (not recommended)
+#
+# These hooks run locally before every commit to catch issues early.
+# The same checks are enforced in CI via .github/workflows/ci.yml.
+# =============================================================================
+
+repos:
+  # ── Basic file checks ────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # ── Ruff: fast Python linter + formatter (replaces flake8, pydocstyle, etc.)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.10
+    hooks:
+      # Run the linter
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^(myclaw|cli\.py|onboard\.py|deploy\.py)/.*\.py$
+      # Run the formatter
+      - id: ruff-format
+        files: ^(myclaw|cli\.py|onboard\.py|deploy\.py)/.*\.py$
+
+  # ── Black: uncompromising Python code formatter
+  - repo: https://github.com/psf/black-pre-commit-mirror
+    rev: 24.4.2
+    hooks:
+      - id: black
+        language_version: python3.12
+        files: ^(myclaw|cli\.py|onboard\.py|deploy\.py)/.*\.py$
+
+  # ── isort: sort Python imports
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        args: ["--profile", "black"]
+        files: ^(myclaw|cli\.py|onboard\.py|deploy\.py)/.*\.py$
+
+  # ── Commit message format check (optional)
+  # Uncomment to enforce conventional commit messages
+  # - repo: https://github.com/compilerla/conventional-pre-commit
+  #   rev: v3.2.0
+  #   hooks:
+  #     - id: conventional-pre-commit
+  #       stages: [commit-msg]
