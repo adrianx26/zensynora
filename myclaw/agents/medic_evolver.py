@@ -335,7 +335,6 @@ class EvolverEngine:
 
         critical_count = sum(1 for p in result.patterns if p.severity == Severity.CRITICAL.value)
         regression_count = sum(1 for p in result.patterns if p.type == PatternType.REGRESSION.value)
-        inefficiency_count = sum(1 for p in result.patterns if p.type == PatternType.INEFFICIENCY.value)
 
         # Critical patterns
         if critical_count > 0:

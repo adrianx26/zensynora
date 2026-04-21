@@ -78,7 +78,11 @@ class MedicAgent:
         # Evolver engine (v2.0 — capability-evolver integration)
         self._evolver = EvolverEngine()
         self._planner = EvolutionPlanner()
-        self._health_history: List[Dict[str, Any]] = []
+        self._health_history: List[Dict[str, Any]] = self._load_health_history()
+
+        # Syntax check cache: {file_path: {"hash": str, "valid": bool, "errors": int, "ts": float}}
+        self._syntax_cache: Dict[str, Dict[str, Any]] = {}
+        self._syntax_cache_ttl = 60.0  # seconds
 
     def calculate_hash(self, file_path: str) -> Optional[str]:
         """Calculate SHA-256 hash of a file.
@@ -585,6 +589,9 @@ class MedicAgent:
         if len(self._health_history) > 100:
             self._health_history = self._health_history[-100:]
 
+        # Persist to disk
+        self._save_health_history()
+
         return result.to_dict()
 
     def generate_evolution_plan(
@@ -680,15 +687,36 @@ class MedicAgent:
             last_health = self._health_history[-1]["score"]
             log_score = (last_health / 100) * 25
 
-        # Syntax/component health (0-25 points) — scan core files
+        # Syntax/component health (0-25 points) — scan core files with cache
         syntax_score = 25
         errors_found = 0
         files_checked = 0
+        now = datetime.now().timestamp()
         for fp in CORE_FILES:
+            current_hash = self.calculate_hash(fp)
+            cache_entry = self._syntax_cache.get(fp)
+            # Use cache if hash matches and TTL not expired
+            if (
+                cache_entry
+                and cache_entry.get("hash") == current_hash
+                and (now - cache_entry.get("ts", 0)) < self._syntax_cache_ttl
+            ):
+                files_checked += 1
+                if not cache_entry.get("valid", True):
+                    errors_found += cache_entry.get("errors", 0)
+                continue
+            # Re-check and update cache
             result = self.detect_errors(fp)
             files_checked += 1
+            err_count = len(result.get("syntax_errors", [])) if not result.get("syntax_valid", True) else 0
             if not result.get("syntax_valid", True):
-                errors_found += len(result.get("syntax_errors", []))
+                errors_found += err_count
+            self._syntax_cache[fp] = {
+                "hash": current_hash,
+                "valid": result.get("syntax_valid", True),
+                "errors": err_count,
+                "ts": now,
+            }
         if files_checked > 0:
             syntax_score = max(0, 25 - (errors_found * 5))
 
@@ -727,6 +755,29 @@ class MedicAgent:
         if score >= 60:
             return "D"
         return "F"
+
+    def _load_health_history(self) -> List[Dict[str, Any]]:
+        """Load health history from persistent storage."""
+        if not self.health_file.exists():
+            return []
+        try:
+            data = json.loads(self.health_file.read_text(encoding="utf-8"))
+            history = data.get("health_history", [])
+            # Validate entries
+            return [
+                h for h in history
+                if isinstance(h, dict) and "score" in h and "timestamp" in h
+            ]
+        except Exception:
+            return []
+
+    def _save_health_history(self) -> None:
+        """Persist health history to disk."""
+        try:
+            data = {"health_history": self._health_history}
+            self.health_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.warning("Failed to save health history: %s", e)
 
 
 class LoopDetector:
