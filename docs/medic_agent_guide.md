@@ -301,6 +301,10 @@ class MedicAgent:
     def check_execution(execution_id: str, max_calls: int = 50) -> Dict
     def handle_timeout(execution_id: str, timeout_seconds: int = 30) -> Dict
     def get_health_report() -> str
+    # v2.0 — Evolver Engine
+    def analyze_logs_deterministic(logs: List[Dict]) -> Dict
+    def generate_evolution_plan(logs: List[Dict], strategy: str = "auto", target_file: str = "") -> Dict
+    def get_unified_health_score() -> Dict
 ```
 
 ### Tool Functions
@@ -318,6 +322,10 @@ class MedicAgent:
 | `scan_files()` | Scan and record file hashes |
 | `detect_errors_in_file()` | Detect syntax errors |
 | `prevent_infinite_loop()` | Get loop prevention status |
+| `analyze_logs_deterministic()` | Deterministic log pattern analysis (v2.0) |
+| `generate_evolution_plan()` | Generate structured improvement proposal (v2.0) |
+| `get_unified_health_score()` | Unified 0-100 health score (v2.0) |
+| `get_detailed_health_report()` | Detailed health report with components (v2.0) |
 
 ## Troubleshooting
 
@@ -354,6 +362,142 @@ class MedicAgent:
 5. **Monitor loop prevention** - Watch for repeated patterns
 6. **Create local backups** - Use `create_backup()` for important files
 7. **VirusTotal scans** - Scan suspicious files before execution
+8. **Deterministic log analysis** — Use `analyze_logs_deterministic()` for pattern detection and health scoring
+9. **Evolution planning** — Use `generate_evolution_plan()` to get structured improvement recommendations
+10. **Unified health score** — Use `get_unified_health_score()` for a 0-100 system grade
+
+## v2.0 — Evolver Engine Features
+
+### Overview
+
+The Medic Agent v2.0 integrates a **deterministic analysis engine** inspired by [capability-evolver](https://github.com/kennyzir/capability-evolver). This engine performs pure-logic log analysis — no LLM required — producing reproducible, auditable results in sub-100ms.
+
+### 11. Analyze Logs Deterministically
+
+Analyze structured logs to detect patterns, compute health scores, and generate recommendations:
+
+```python
+from myclaw.agents.medic_agent import analyze_logs_deterministic
+
+logs = [
+    {"timestamp": "2025-01-15T10:00:00Z", "level": "error", "message": "ETIMEDOUT", "context": "payment-api.ts"},
+    {"timestamp": "2025-01-15T10:01:00Z", "level": "error", "message": "ETIMEDOUT", "context": "payment-api.ts"},
+    {"timestamp": "2025-01-15T10:02:00Z", "level": "error", "message": "ETIMEDOUT", "context": "payment-api.ts"},
+]
+
+result = analyze_logs_deterministic(logs)
+print(result)
+```
+
+**Output Example:**
+```
+{
+  "patterns": [
+    {
+      "type": "regression",
+      "severity": "high",
+      "description": "ETIMEDOUT",
+      "occurrences": 3,
+      "affected_files": ["payment-api.ts"]
+    }
+  ],
+  "health_score": 25,
+  "recommendations": ["Critical patterns detected — prioritize immediate fixes"],
+  "summary": {"total_logs": 3, "error_count": 3, "warn_count": 0}
+}
+```
+
+### 12. Generate Evolution Plan
+
+Generate a structured improvement proposal based on log analysis:
+
+```python
+from myclaw.agents.medic_agent import generate_evolution_plan
+
+logs = [
+    {"timestamp": "now", "level": "error", "message": "DB timeout", "context": "db.py"},
+    {"timestamp": "now", "level": "error", "message": "DB timeout", "context": "db.py"},
+]
+
+proposal = generate_evolution_plan(logs, strategy="harden")
+print(proposal)
+```
+
+**Strategies:**
+| Strategy | Auto-Trigger | Best For |
+|----------|-------------|----------|
+| `auto` | Health < 40 → repair-only | Let the engine decide |
+| `balanced` | — | Equal weight reliability + features |
+| `innovate` | Health > 70 only | Healthy systems ready to grow |
+| `harden` | Health 40-70 | Systems with frequent failures |
+| `repair-only` | Health < 40 | Systems in crisis |
+
+### 13. Get Unified Health Score
+
+Get a comprehensive 0-100 health score combining all subsystems:
+
+```python
+from myclaw.agents.medic_agent import get_unified_health_score
+
+health = get_unified_health_score()
+print(health)
+```
+
+**Output Example:**
+```
+{
+  "overall_score": 85,
+  "grade": "B",
+  "components": {
+    "integrity": 25,
+    "tasks": 24,
+    "logs": 18,
+    "syntax": 18
+  },
+  "trend": "stable",
+  "history": [...]
+}
+```
+
+### 14. Enhanced Log Analysis (Change Management)
+
+```python
+from myclaw.agents.medic_change_mgmt import analyze_system_logs_enhanced
+
+report = analyze_system_logs_enhanced(since_minutes=60)
+print(report)
+```
+
+### Pattern Types
+
+| Type | Trigger | Severity Logic | Example |
+|------|---------|---------------|---------|
+| `error` | Single occurrence | count-based | One-off exception |
+| `regression` | 3+ occurrences | count-based | Repeated timeout |
+| `inefficiency` | Slow ops (>999ms) | frequency-based | Slow DB query |
+| `cascade` | A errors → B errors | time-window | Auth fails → Payment fails |
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│              Medic Agent v2.0 Architecture                   │
+├─────────────────────────────────────────────────────────────┤
+│                                                              │
+│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
+│  │ EvolverEngine │───→│ HealthScorer │───→│ EvolutionPlanner│ │
+│  └──────────────┘    └──────────────┘    └──────────────┘  │
+│         │                   │                   │            │
+│         ▼                   ▼                   ▼            │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │              MedicAgent (orchestrator)                │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌───────────────┐ │  │
+│  │  │ FileIntegrity│  │ LogAnalyzer │  │ ChangeManagement│ │  │
+│  │  └─────────────┘  └─────────────┘  └───────────────┘ │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                              │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ## Additional Features
 
