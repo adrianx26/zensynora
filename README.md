@@ -28,7 +28,7 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 ### Advanced Features
 - **Natively Integrated Web UI** — Boot up an interactive beautiful web dashboard utilizing glassmorphism and FastAPI WebSockets with `zensynora webui`.
 - **Advanced Click CLI Platform** — Perform administrative tasks on your AI memory blocks, knowledge graphs, and skills locally using a beautiful integrated command line interface. 
-- **Full MCP Support (Model Context Protocol)** — Natively act as an MCP Client (to consume external tools like SQLite via npx) and an MCP Server (to expose ZenSynora's shell and codebase to clients like Cursor or Claude).
+- **Full MCP Support (Model Context Protocol)** — Natively act as an MCP Client (to consume external tools like SQLite via npx) and an MCP Server (to expose ZenSynora's shell and codebase to clients like Cursor or Claude). This also enables compatibility with external skill registries like ClawHub.ai, which adhere to the AgentSkill specification. ZenSynora provides tools to analyze, convert, and register external skills.
 - **Multi-Agent Support** — Create and manage multiple named agents with custom prompts and models
 - **Per-Agent Prompt Profiles** — Manage individual agent system prompts using dedicated Markdown files (`~/.myclaw/profiles/{name}.md`)
 - **Agent Delegation** — Delegate tasks to specialized agents (e.g., `@coder write a function`)
@@ -42,6 +42,7 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - **Intelligent LLM Routing** — Automatically upgrades to premium models for complex reasoning or coding tasks, optimizing for both performance and cost.
 - **Automated Knowledge Gap Filling** — Proactively identifies missing info in the KB and performs background web research using Scrapling during idle time.
 - **LLM Benchmarking Suite** — Built-in tools to benchmark latency, accuracy, and token usage of your local and cloud providers with `zensynora benchmark`.
+- **🏥 Medic Agent** — Self-healing system health monitoring with deterministic log analysis (capability-evolver inspired), unified health scoring, file integrity verification, syntax error detection, GitHub/local recovery, change management with approval workflows, and structured evolution planning.
 
 ### Security
 - Command allowlist/blocklist for shell execution
@@ -134,6 +135,7 @@ flowchart TB
         subgraph Infra ["🏗️ Infrastructure (Phase 6)"]
             StateStore["🗄️ State Store<br/>InMemory / Redis"]
             AsyncSched["⏰ Async Scheduler<br/>research jobs"]
+            Medic["🏥 Medic Agent<br/>health / integrity / evolver"]
         end
     end
 
@@ -182,6 +184,8 @@ flowchart TB
     Agent -.-> StateStore
     Sched -.-> StateStore
     AsyncSched --> GapRes
+    Medic --> Agent
+    Medic --> Storage
     Infra <--> Storage
 
     Agent ==> Providers
@@ -193,7 +197,7 @@ flowchart TB
     class Mem,KB,Lib,Toolbox,Jobs data
     class Local,Cloud llm
     class GapRes,Bench,Router intelligence
-    class StateStore,AsyncSched infra
+    class StateStore,AsyncSched,Medic infra
     class TCore,TShell,TFiles,TWeb,TKB,TSwarm,TSSH,TToolbox core
 ```
 
@@ -297,7 +301,7 @@ Then edit `~/.myclaw/config.json`:
 | 💬 WhatsApp | `zensynora gateway` *(requires public webhook URL — use ngrok for dev)* |
 | 🌐 Web UI | `zensynora webui` |
 
-### 🤖 Intelligence & Benchmarking (v0.5)
+### 🤖 Intelligence & Benchmarking
 
 ZenSynora now includes a proactive Intelligence Platform that grows automatically and optimizes itself based on task requirements.
 
@@ -307,7 +311,7 @@ ZenSynora monitors your system resources to ensure optimal agent performance.
 - **Diagnostics**: Run `zensynora hardware` for a full diagnostic report.
 - **Auto-Suggestions**: The agent proactively warns if your selected model exceeds physical RAM or VRAM limits.
 
-#### 🛤️ Intelligent Routing (Phase 1.5)
+#### 🛤️ Intelligent Routing
 ZenSynora now features a sophisticated dynamic dispatch system that selects the best model for ogni task.
 - **Intent Analysis**: Automatically detects if a query requires deep reasoning, coding, or just a quick chat.
 - **Free-First Logic**: Prioritize local hardware (Ollama) or zero-cost APIs (Groq/Gemini Flash) to minimize your wallet impact.
@@ -1029,7 +1033,7 @@ Results are saved to `eval/results/` as TSV files.
 
 ---
 
-## 📝 Behavioral Changes (v2.1)
+## 📝 Behavioral Changes 
 
 ### Knowledge Base Empty Results
 When `search_knowledge()` finds no matching entries, it now returns an actionable guidance payload instead of a simple "No results" message. The payload includes:
@@ -1058,11 +1062,11 @@ The agent now logs knowledge gaps (queries with no results) to a dedicated logge
 
 ---
 
-## 🏗️ Infrastructure & Scaling (Phase 6)
+## 🏗️ Infrastructure & Scaling
 
 ZenSynora now supports multi-worker deployments with shared state and an asyncio-native job queue.
 
-### Multi-Worker State Store (Phase 6.1)
+### Multi-Worker State Store
 
 The `StateStore` abstraction (`myclaw/state_store.py`) enables sharing critical state across multiple worker processes or containers:
 
@@ -1093,7 +1097,7 @@ Install Redis support:
 pip install redis>=4.0
 ```
 
-### Async Job Queue (Phase 6.2)
+### Async Job Queue
 
 The `AsyncScheduler` (`myclaw/async_scheduler.py`) replaces `apscheduler.BackgroundScheduler` for background tasks:
 

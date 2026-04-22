@@ -15,10 +15,18 @@ import asyncio
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Any, TypedDict
+from typing import Dict, List, Optional, Any, TypedDict, cast
 from enum import Enum
 from datetime import datetime, timedelta
 import time
+
+from .medic_evolver import (
+    EvolverEngine,
+    LogEntry,
+    EvolutionStrategy,
+    Priority as EvolverPriority,
+    Category as EvolverCategory,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -454,7 +462,7 @@ def get_change_management() -> ChangeManagementSystem:
 
 class LogAnalyzer:
     """Continuously ingests and analyzes logs to detect anomalies and failures."""
-    
+
     def __init__(self):
         self.medic_dir = MEDIC_DIR
         self.log_sources: List[Path] = []
@@ -463,6 +471,7 @@ class LogAnalyzer:
             r"timeout", r"failed", r"connection.*refused",
             r"permission denied", r"disk full", r"memory error", r"segmentation fault",
         ]
+        self._evolver = EvolverEngine()
         self._configure_default_sources()
     
     def _configure_default_sources(self) -> None:
@@ -480,7 +489,7 @@ class LogAnalyzer:
             logger.info(f"Added log source: {path}")
     
     def analyze_logs(self, since_minutes: int = 60) -> Dict[str, Any]:
-        """Analyze logs for anomalies."""
+        """Analyze logs for anomalies (legacy regex-based)."""
         results = {
             "timestamp": datetime.now().isoformat(),
             "sources_analyzed": 0,
@@ -490,11 +499,11 @@ class LogAnalyzer:
             "error_rate": 0.0,
             "trends": []
         }
-        
+
         for source in self.log_sources:
             if not source.exists():
                 continue
-            
+
             try:
                 if source.is_dir():
                     for log_file in source.glob("*.log"):
@@ -505,13 +514,44 @@ class LogAnalyzer:
                     self._merge_results(results, file_results)
             except Exception as e:
                 logger.error(f"Error analyzing log source {source}: {e}")
-        
+
         if results["total_lines"] > 0:
             results["error_rate"] = results["anomalies_detected"] / results["total_lines"]
-        
+
         results["trends"] = self._detect_trends(results["anomalies"])
-        
+
         return results
+
+    def analyze_logs_enhanced(self, since_minutes: int = 60) -> Dict[str, Any]:
+        """
+        Enhanced log analysis using the deterministic evolver engine.
+
+        Returns structured result with patterns, health score, recommendations,
+        and summary — compatible with capability-evolver output format.
+        """
+        raw_logs = self._collect_raw_logs(since_minutes)
+
+        entries = []
+        for log in raw_logs:
+            level_str = self._detect_level(log["content"])
+            entries.append(LogEntry(
+                timestamp=log.get("timestamp", datetime.now().isoformat()),
+                level=level_str,  # type: ignore[arg-type]
+                message=log["content"][:200],
+                context=str(log.get("file", "")),
+            ))
+
+        result = self._evolver.analyze(entries)
+
+        return {
+            "timestamp": datetime.now().isoformat(),
+            "sources_analyzed": len(self.log_sources),
+            "total_lines": len(raw_logs),
+            "health_score": result.health_score,
+            "patterns": [p.to_dict() for p in result.patterns],
+            "recommendations": [r.to_dict() for r in result.recommendations],
+            "summary": result.summary,
+        }
     
     def _analyze_log_file(self, log_file: Path) -> Dict[str, Any]:
         """Analyze a single log file."""
@@ -553,13 +593,70 @@ class LogAnalyzer:
             r"(\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})",
             r"(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})",
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, line)
             if match:
                 return match.group(1)
         return None
-    
+
+    def _detect_level(self, content: str) -> str:
+        """Detect log level from content."""
+        upper = content.upper()
+        if any(k in upper for k in ("ERROR", "CRITICAL", "FATAL", "EXCEPTION")):
+            return "error"
+        elif "WARN" in upper:
+            return "warn"
+        elif "DEBUG" in upper:
+            return "debug"
+        return "info"
+
+    def _collect_raw_logs(self, since_minutes: int) -> List[Dict[str, Any]]:
+        """Collect raw log entries from all sources."""
+        raw_logs: List[Dict[str, Any]] = []
+        cutoff = datetime.now() - timedelta(minutes=since_minutes)
+
+        for source in self.log_sources:
+            if not source.exists():
+                continue
+
+            try:
+                if source.is_dir():
+                    for log_file in source.glob("*.log"):
+                        raw_logs.extend(self._parse_log_file(log_file, cutoff))
+                else:
+                    raw_logs.extend(self._parse_log_file(source, cutoff))
+            except Exception as e:
+                logger.error(f"Error reading log source {source}: {e}")
+
+        return raw_logs
+
+    def _parse_log_file(self, log_file: Path, cutoff: datetime) -> List[Dict[str, Any]]:
+        """Parse a single log file and filter by time."""
+        results: List[Dict[str, Any]] = []
+        try:
+            content = log_file.read_text(encoding="utf-8", errors="ignore")
+            for line_num, line in enumerate(content.split("\n"), 1):
+                if not line.strip():
+                    continue
+                ts = self._extract_timestamp(line)
+                if ts:
+                    try:
+                        log_time = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        if log_time < cutoff:
+                            continue
+                    except Exception:
+                        pass
+                results.append({
+                    "file": str(log_file),
+                    "line": line_num,
+                    "content": line,
+                    "timestamp": ts or datetime.now().isoformat(),
+                })
+        except Exception as e:
+            logger.error(f"Error parsing log file {log_file}: {e}")
+        return results
+
     def _detect_trends(self, anomalies: List[Dict]) -> List[Dict[str, Any]]:
         """Detect trends in anomalies."""
         trends = []
@@ -779,6 +876,61 @@ def analyze_system_logs(since_minutes: int = 60) -> str:
     return "\n".join(lines)
 
 
+def analyze_system_logs_enhanced(since_minutes: int = 60) -> str:
+    """
+    Analyze system logs using the deterministic evolver engine.
+
+    Returns a structured report with health score, detected patterns,
+    severity classification, and actionable recommendations.
+    """
+    analyzer = LogAnalyzer()
+    analysis = analyzer.analyze_logs_enhanced(since_minutes)
+
+    lines = [
+        "📊 Enhanced Log Analysis Report (Evolver Engine)",
+        f"Timestamp: {analysis['timestamp']}",
+        "",
+        f"Sources Analyzed: {analysis['sources_analyzed']}",
+        f"Total Lines: {analysis['total_lines']}",
+        f"Health Score: {analysis['health_score']}/100",
+        "",
+    ]
+
+    if analysis['patterns']:
+        lines.append("Detected Patterns:")
+        for p in analysis['patterns'][:10]:
+            icon = {
+                "critical": "🔴", "high": "🟠",
+                "medium": "🟡", "low": "🟢",
+            }.get(p['severity'], "⚪")
+            lines.append(
+                f"  {icon} [{p['type'].upper()}] {p['description'][:60]}"
+                f" ({p['occurrences']}x)"
+            )
+        lines.append("")
+
+    if analysis['recommendations']:
+        lines.append("Recommendations:")
+        for r in analysis['recommendations'][:10]:
+            icon = {
+                "immediate": "🔴", "high": "🟠",
+                "medium": "🟡", "low": "🟢",
+            }.get(r['priority'], "⚪")
+            lines.append(f"  {icon} [{r['category'].upper()}] {r['description'][:70]}")
+        lines.append("")
+
+    summary = analysis.get('summary', {})
+    lines.extend([
+        "Summary:",
+        f"  Total logs: {summary.get('total_logs', 0)}",
+        f"  Errors: {summary.get('error_count', 0)}",
+        f"  Warnings: {summary.get('warn_count', 0)}",
+        f"  Critical patterns: {summary.get('critical_count', 0)}",
+    ])
+
+    return "\n".join(lines)
+
+
 def get_pending_changes() -> str:
     """Get list of pending changes awaiting approval."""
     change_mgmt = get_change_management()
@@ -819,6 +971,7 @@ __all__ = [
     'ChangeManagementSystem', 'ChangeStatus', 'ChangePriority', 'ChangeType',
     'LogAnalyzer', 'ScheduledReviewSystem',
     'get_change_management', 'create_change_plan', 'approve_change',
-    'execute_change', 'analyze_system_logs', 'get_pending_changes',
+    'execute_change', 'analyze_system_logs', 'analyze_system_logs_enhanced',
+    'get_pending_changes',
     'get_change_history', 'start_continuous_monitoring', 'stop_continuous_monitoring'
 ]

@@ -1,14 +1,25 @@
-"""Medic Agent - System health monitoring, integrity checking, and error recovery."""
+"""Medic Agent - System health monitoring, integrity checking, and error recovery.
+
+v2.0 — Enhanced with deterministic evolver analysis engine.
+"""
 
 import ast
 import hashlib
 import json
 import logging
 import re
-import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Any
 from datetime import datetime, timedelta
+
+from .medic_evolver import (
+    EvolverEngine,
+    EvolutionPlanner,
+    LogEntry,
+    AnalysisResult,
+    Pattern,
+    Recommendation,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -63,6 +74,15 @@ class MedicAgent:
         self.health_file = HEALTH_FILE
         self.task_log_file = TASK_LOG_FILE
         self._loop_detector = LoopDetector()
+
+        # Evolver engine (v2.0 — capability-evolver integration)
+        self._evolver = EvolverEngine()
+        self._planner = EvolutionPlanner()
+        self._health_history: List[Dict[str, Any]] = self._load_health_history()
+
+        # Syntax check cache: {file_path: {"hash": str, "valid": bool, "errors": int, "ts": float}}
+        self._syntax_cache: Dict[str, Dict[str, Any]] = {}
+        self._syntax_cache_ttl = 60.0  # seconds
 
     def calculate_hash(self, file_path: str) -> Optional[str]:
         """Calculate SHA-256 hash of a file.
@@ -260,25 +280,35 @@ class MedicAgent:
 
     async def fetch_from_github(self, file_path: str, branch: str = "main") -> Optional[str]:
         """Fetch a file from GitHub repository.
-        
+
+        Uses httpx for async HTTP (cross-platform, no subprocess needed).
+
         Args:
             file_path: Path within repo (e.g., 'myclaw/agent.py')
             branch: Branch name (default: main)
-            
+
         Returns:
             File content as string or None on error
         """
         try:
+            import httpx
             url = f"{self.repo_url.rstrip('/')}/{branch}/{file_path}"
-            result = subprocess.run(
-                ['curl', '-s', url],
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0 and result.stdout:
-                return result.stdout
-            return None
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(url)
+                if response.status_code == 200:
+                    return response.text
+                logger.warning("GitHub fetch returned %s for %s", response.status_code, url)
+                return None
+        except ImportError:
+            # Fallback to synchronous urllib if httpx is unavailable
+            try:
+                from urllib.request import urlopen
+                url = f"{self.repo_url.rstrip('/')}/{branch}/{file_path}"
+                with urlopen(url, timeout=10) as response:
+                    return response.read().decode("utf-8")
+            except Exception as e:
+                logger.error(f"Error fetching from GitHub (fallback): {e}")
+                return None
         except Exception as e:
             logger.error(f"Error fetching from GitHub: {e}")
             return None
@@ -519,41 +549,288 @@ class MedicAgent:
         
         lines.append("")
         lines.append("Status: " + ("✅ Healthy" if integrity.get("valid", 0) > 0 and not integrity.get("corrupted") else "⚠️ Needs Attention"))
-        
+
         return "\n".join(lines)
+
+    # ─── Evolver Engine Integration (v2.0) ─────────────────
+
+    def analyze_logs_deterministic(self, logs: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Deterministic log analysis inspired by capability-evolver.
+
+        Processes structured log entries through a multi-pass analysis engine
+        (pattern detection → health scoring → recommendation generation).
+
+        Args:
+            logs: List of dicts with keys: timestamp, level, message, context
+
+        Returns:
+            Structured analysis with patterns, health_score, recommendations, summary
+        """
+        entries = [
+            LogEntry(
+                timestamp=str(l.get("timestamp", "")),
+                level=l.get("level", "info"),
+                message=str(l.get("message", "")),
+                context=str(l.get("context", "")),
+            )
+            for l in logs
+        ]
+
+        result = self._evolver.analyze(entries)
+
+        # Record health history
+        self._health_history.append({
+            "timestamp": datetime.now().isoformat(),
+            "score": result.health_score,
+            "pattern_count": len(result.patterns),
+        })
+        # Keep last 100 entries
+        if len(self._health_history) > 100:
+            self._health_history = self._health_history[-100:]
+
+        # Persist to disk
+        self._save_health_history()
+
+        return result.to_dict()
+
+    def generate_evolution_plan(
+        self,
+        logs: List[Dict[str, Any]],
+        strategy: str = "auto",
+        target_file: str = "",
+    ) -> Dict[str, Any]:
+        """
+        Generate a structured evolution proposal from log analysis.
+
+        Args:
+            logs: Log entries to analyze
+            strategy: Evolution strategy (auto, balanced, innovate, harden, repair-only)
+            target_file: Optional file to focus analysis on
+
+        Returns:
+            Evolution proposal with prioritized recommendations
+        """
+        analysis_dict = self.analyze_logs_deterministic(logs)
+
+        # Reconstruct AnalysisResult for planner
+        analysis = AnalysisResult(
+            patterns=[
+                Pattern(
+                    type=p.get("type", "error"),
+                    severity=p.get("severity", "low"),
+                    description=p.get("description", ""),
+                    occurrences=p.get("occurrences", 0),
+                    first_seen=p.get("first_seen", ""),
+                    last_seen=p.get("last_seen", ""),
+                    affected_files=p.get("affected_files", []),
+                )
+                for p in analysis_dict.get("patterns", [])
+            ],
+            health_score=analysis_dict.get("health_score", 100),
+            recommendations=[
+                Recommendation(
+                    priority=r.get("priority", "medium"),
+                    category=r.get("category", "stability"),
+                    description=r.get("description", ""),
+                    affected_files=r.get("affected_files", []),
+                    suggested_approach=r.get("suggested_approach", ""),
+                )
+                for r in analysis_dict.get("recommendations", [])
+            ],
+            summary=analysis_dict.get("summary", {}),
+        )
+
+        return self._planner.generate_proposal(
+            analysis, strategy, target_file or None
+        )
+
+    def get_unified_health_score(self) -> Dict[str, Any]:
+        """
+        Calculate unified health score combining all subsystems.
+
+        Components:
+          - File integrity   (0-25 points)
+          - Task performance (0-25 points)
+          - Log health       (0-25 points)
+          - Syntax health    (0-25 points)
+
+        Returns:
+            Dict with overall_score, grade, components, trend, history
+        """
+        # File integrity component (0-25 points)
+        integrity = self.check_integrity()
+        total_files = (
+            integrity.get("valid", 0)
+            + integrity.get("corrupted", 0)
+            + integrity.get("missing", 0)
+        )
+        integrity_score = (
+            (integrity.get("valid", 0) / max(total_files, 1)) * 25
+            if total_files > 0 else 25
+        )
+
+        # Task performance component (0-25 points)
+        tasks = self.get_task_analytics()
+        task_score = 0
+        if tasks.get("status") == "ok" and tasks.get("tasks"):
+            avg_success = sum(
+                s.get("success_rate", 0) for s in tasks["tasks"].values()
+            ) / max(len(tasks["tasks"]), 1)
+            task_score = avg_success * 25
+        else:
+            task_score = 25  # no data = assume good
+
+        # Log health component (0-25 points) — from last analysis
+        log_score = 25
+        if self._health_history:
+            last_health = self._health_history[-1]["score"]
+            log_score = (last_health / 100) * 25
+
+        # Syntax/component health (0-25 points) — scan core files with cache
+        syntax_score = 25
+        errors_found = 0
+        files_checked = 0
+        now = datetime.now().timestamp()
+        for fp in CORE_FILES:
+            current_hash = self.calculate_hash(fp)
+            cache_entry = self._syntax_cache.get(fp)
+            # Use cache if hash matches and TTL not expired
+            if (
+                cache_entry
+                and cache_entry.get("hash") == current_hash
+                and (now - cache_entry.get("ts", 0)) < self._syntax_cache_ttl
+            ):
+                files_checked += 1
+                if not cache_entry.get("valid", True):
+                    errors_found += cache_entry.get("errors", 0)
+                continue
+            # Re-check and update cache
+            result = self.detect_errors(fp)
+            files_checked += 1
+            err_count = len(result.get("syntax_errors", [])) if not result.get("syntax_valid", True) else 0
+            if not result.get("syntax_valid", True):
+                errors_found += err_count
+            self._syntax_cache[fp] = {
+                "hash": current_hash,
+                "valid": result.get("syntax_valid", True),
+                "errors": err_count,
+                "ts": now,
+            }
+        if files_checked > 0:
+            syntax_score = max(0, 25 - (errors_found * 5))
+
+        overall = round(integrity_score + task_score + log_score + syntax_score)
+
+        # Trend
+        trend = "stable"
+        if len(self._health_history) >= 2:
+            recent = [h["score"] for h in self._health_history[-5:]]
+            if len(recent) >= 2:
+                slope = (recent[-1] - recent[0]) / len(recent)
+                trend = "improving" if slope > 2 else "degrading" if slope < -2 else "stable"
+
+        return {
+            "overall_score": overall,
+            "grade": self._score_to_grade(overall),
+            "components": {
+                "integrity": round(integrity_score),
+                "tasks": round(task_score),
+                "logs": round(log_score),
+                "syntax": round(syntax_score),
+            },
+            "trend": trend,
+            "history": self._health_history[-10:],
+        }
+
+    @staticmethod
+    def _score_to_grade(score: int) -> str:
+        """Convert numeric score to letter grade."""
+        if score >= 90:
+            return "A"
+        if score >= 80:
+            return "B"
+        if score >= 70:
+            return "C"
+        if score >= 60:
+            return "D"
+        return "F"
+
+    def _load_health_history(self) -> List[Dict[str, Any]]:
+        """Load health history from persistent storage."""
+        if not self.health_file.exists():
+            return []
+        try:
+            data = json.loads(self.health_file.read_text(encoding="utf-8"))
+            history = data.get("health_history", [])
+            # Validate entries
+            return [
+                h for h in history
+                if isinstance(h, dict) and "score" in h and "timestamp" in h
+            ]
+        except Exception:
+            return []
+
+    def _save_health_history(self) -> None:
+        """Persist health history to disk."""
+        try:
+            data = {"health_history": self._health_history}
+            self.health_file.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.warning("Failed to save health history: %s", e)
 
 
 class LoopDetector:
     """Detects and prevents infinite loops in execution."""
 
-    def __init__(self):
+    def __init__(self, max_iterations: int = 100):
         self._executions: Dict[str, List[float]] = {}
+        self._max_iterations = max_iterations
 
-    def is_looping(self, pattern: str, max_iterations: int) -> bool:
+    def is_looping(self, pattern: str, max_iterations: Optional[int] = None) -> bool:
         """Check if pattern has exceeded max iterations."""
+        max_iter = max_iterations or self._max_iterations
+
         if pattern not in self._executions:
             self._executions[pattern] = []
-        
+
         self._executions[pattern].append(datetime.now().timestamp())
-        
+
         cutoff = datetime.now().timestamp() - 60
         recent = [t for t in self._executions[pattern] if t > cutoff]
         self._executions[pattern] = recent
-        
-        return len(recent) > max_iterations
 
-    def check(self, execution_id: str, max_calls: int) -> Tuple[bool, int]:
+        return len(recent) > max_iter
+
+    def check(self, execution_id: str, max_calls: int = 50) -> Tuple[bool, int]:
         """Check if execution has exceeded call limit."""
         if execution_id not in self._executions:
             self._executions[execution_id] = []
-        
+
+        # FIXED: Increment the counter
+        self._executions[execution_id].append(datetime.now().timestamp())
+
         count = len(self._executions[execution_id])
         return count >= max_calls, count
 
+    def record_iteration(self, pattern: str) -> bool:
+        """Record an iteration and return whether still allowed."""
+        if pattern not in self._executions:
+            self._executions[pattern] = []
+
+        self._executions[pattern].append(datetime.now().timestamp())
+
+        # Trim old entries (keep last 60 seconds)
+        cutoff = datetime.now().timestamp() - 60
+        self._executions[pattern] = [
+            t for t in self._executions[pattern] if t > cutoff
+        ]
+
+        return len(self._executions[pattern]) <= self._max_iterations
+
     def clear(self, execution_id: str) -> None:
         """Clear execution tracking."""
-        if execution_id in self._executions:
-            del self._executions[execution_id]
+        self._executions.pop(execution_id, None)
 
 
 def check_system_health() -> str:
@@ -566,7 +843,7 @@ def check_system_health() -> str:
     return medic.get_health_report()
 
 
-def verify_file_integrity(file_path: str = None) -> str:
+def verify_file_integrity(file_path: Optional[str] = None) -> str:
     """Verify file integrity against recorded hashes.
     
     Args:
@@ -896,3 +1173,107 @@ def check_file_virustotal(file_path: str, api_key: str = "") -> str:
     except Exception as e:
         logger.error(f"Error checking VirusTotal: {e}")
         return f"❌ Error checking VirusTotal: {e}"
+
+
+# ─── Evolver Engine Wrapper Functions (v2.0) ───────────────
+
+def analyze_logs_deterministic(logs: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Analyze logs using the deterministic evolver engine.
+
+    Args:
+        logs: List of dicts with keys: timestamp, level, message, context
+
+    Returns:
+        Structured analysis with patterns, health_score, recommendations
+    """
+    medic = MedicAgent()
+    return medic.analyze_logs_deterministic(logs)
+
+
+def generate_evolution_plan(
+    logs: List[Dict[str, Any]],
+    strategy: str = "auto",
+    target_file: str = "",
+) -> Dict[str, Any]:
+    """
+    Generate a structured evolution proposal from log analysis.
+
+    Args:
+        logs: Log entries to analyze
+        strategy: Evolution strategy (auto, balanced, innovate, harden, repair-only)
+        target_file: Optional file to focus analysis on
+
+    Returns:
+        Evolution proposal with prioritized recommendations
+    """
+    medic = MedicAgent()
+    return medic.generate_evolution_plan(logs, strategy, target_file)
+
+
+def get_unified_health_score() -> Dict[str, Any]:
+    """
+    Get unified health score combining all subsystems.
+
+    Returns:
+        Dict with overall_score, grade, components, trend, history
+    """
+    medic = MedicAgent()
+    return medic.get_unified_health_score()
+
+
+def get_detailed_health_report() -> str:
+    """
+    Get a detailed health report including unified score and components.
+
+    Returns:
+        Formatted health report string
+    """
+    medic = MedicAgent()
+    health = medic.get_unified_health_score()
+
+    lines = [
+        "🏥 ZenSynora Detailed Health Report",
+        "",
+        f"Timestamp: {datetime.now().isoformat()}",
+        f"Overall Score: {health['overall_score']}/100 (Grade: {health['grade']})",
+        f"Trend: {health['trend'].capitalize()}",
+        "",
+        "Component Breakdown:",
+        f"  • File Integrity:   {health['components']['integrity']}/25",
+        f"  • Task Performance: {health['components']['tasks']}/25",
+        f"  • Log Health:       {health['components']['logs']}/25",
+        f"  • Syntax Health:    {health['components']['syntax']}/25",
+        "",
+    ]
+
+    # Append legacy report
+    lines.append(medic.get_health_report())
+    return "\n".join(lines)
+
+
+__all__ = [
+    # Classes
+    "MedicAgent",
+    "LoopDetector",
+    # Legacy functions
+    "check_system_health",
+    "verify_file_integrity",
+    "recover_file",
+    "create_backup",
+    "list_backups",
+    "get_health_report",
+    "validate_modification",
+    "record_task_execution",
+    "get_task_analytics",
+    "enable_hash_check",
+    "scan_files",
+    "detect_errors_in_file",
+    "prevent_infinite_loop",
+    "check_file_virustotal",
+    # Evolver v2.0 functions
+    "analyze_logs_deterministic",
+    "generate_evolution_plan",
+    "get_unified_health_score",
+    "get_detailed_health_report",
+]
