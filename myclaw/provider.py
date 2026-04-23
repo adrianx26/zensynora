@@ -41,11 +41,13 @@ from .semantic_cache import get_semantic_cache, SemanticCache
 # tools.py imports from many modules, so we import at runtime
 _TOOL_SCHEMAS_CACHE = None
 
+
 def _get_tool_schemas() -> List[Dict]:
     """Lazy import TOOL_SCHEMAS to prevent circular imports."""
     global _TOOL_SCHEMAS_CACHE
     if _TOOL_SCHEMAS_CACHE is None:
         from .tools import TOOL_SCHEMAS, ensure_tool_schemas
+
         ensure_tool_schemas()
         _TOOL_SCHEMAS_CACHE = TOOL_SCHEMAS
     return _TOOL_SCHEMAS_CACHE
@@ -68,6 +70,7 @@ import functools
 @dataclass
 class _CacheInfo:
     """Cache statistics similar to functools.lru_cache."""
+
     hits: int = 0
     misses: int = 0
     maxsize: int = 128
@@ -77,8 +80,9 @@ class _CacheInfo:
 
 class _CacheEntry:
     """A single cache entry with value and expiration time."""
-    __slots__ = ['value', 'expires_at']
-    
+
+    __slots__ = ["value", "expires_at"]
+
     def __init__(self, value: Any, expires_at: float):
         self.value = value
         self.expires_at = expires_at
@@ -86,7 +90,7 @@ class _CacheEntry:
 
 class LRUCacheWithTTL:
     """Thread-safe LRU cache with TTL support.
-    
+
     Improvements over basic implementation:
     - Actual thread-safety using RLock
     - Faster key generation (no MD5 overhead)
@@ -94,17 +98,17 @@ class LRUCacheWithTTL:
     - Efficient entry storage using __slots__
     - Automatic cleanup of expired entries during access
     """
-    
+
     def __init__(self, maxsize: int = 128, ttl: int = 300):
         self.maxsize = maxsize
         self.ttl = ttl
         self._cache: OrderedDict = OrderedDict()
         self._lock = threading.RLock()
         self._info = _CacheInfo(maxsize=maxsize, ttl=ttl)
-    
+
     def _make_key(self, *args, **kwargs) -> int:
         """Create a fast hashable cache key from arguments.
-        
+
         Uses hash() for speed instead of MD5. Handles unhashable types
         by converting to a hashable representation.
         """
@@ -114,17 +118,20 @@ class LRUCacheWithTTL:
                 return hash(args)
             except TypeError:
                 pass
-        
+
         # Build a hashable key
+        # PERF FIX (2026-04-23): Include ALL args in the cache key.
+        # Previously skipped args[0] assuming it was 'self', causing cache
+        # collisions when the same method was called with different first args
+        # on the same instance, or when used on free functions.
         key_parts = []
-        for i, arg in enumerate(args):
-            if i >= 1:  # Skip self (index 0)
-                try:
-                    key_parts.append(hash(arg))
-                except TypeError:
-                    # For unhashable types, use the string representation hash
-                    key_parts.append(hash(str(arg)))
-        
+        for arg in args:
+            try:
+                key_parts.append(hash(arg))
+            except TypeError:
+                # For unhashable types, use the string representation hash
+                key_parts.append(hash(str(arg)))
+
         if kwargs:
             for k in sorted(kwargs.keys()):
                 v = kwargs[k]
@@ -132,42 +139,39 @@ class LRUCacheWithTTL:
                     key_parts.append((k, hash(v)))
                 except TypeError:
                     key_parts.append((k, hash(str(v))))
-        
+
         return hash(tuple(key_parts))
-    
+
     def _cleanup_expired(self):
         """Remove expired entries efficiently."""
         now = time.time()
-        expired_keys = [
-            k for k, entry in self._cache.items()
-            if now > entry.expires_at
-        ]
+        expired_keys = [k for k, entry in self._cache.items() if now > entry.expires_at]
         for k in expired_keys:
             del self._cache[k]
-    
+
     def get(self, key: int) -> Any:
         """Get value from cache if exists and not expired."""
         with self._lock:
             if key not in self._cache:
                 return None
-            
+
             entry = self._cache[key]
             if time.time() > entry.expires_at:
                 # Expired - remove it
                 del self._cache[key]
                 self._info.currsize = len(self._cache)
                 return None
-            
+
             # Move to end (most recently used)
             self._cache.move_to_end(key)
             self._info.hits += 1
             return entry.value
-    
+
     def set(self, key: int, value: Any):
         """Set value in cache with TTL."""
         with self._lock:
             now = time.time()
-            
+
             if key in self._cache:
                 # Update existing entry
                 self._cache[key] = _CacheEntry(value, now + self.ttl)
@@ -177,22 +181,22 @@ class LRUCacheWithTTL:
                 if len(self._cache) >= self.maxsize:
                     # First, try to clean up expired entries
                     self._cleanup_expired()
-                    
+
                     # If still at capacity, evict oldest
                     if len(self._cache) >= self.maxsize:
                         oldest_key = next(iter(self._cache))
                         del self._cache[oldest_key]
-                
+
                 self._cache[key] = _CacheEntry(value, now + self.ttl)
-            
+
             self._info.currsize = len(self._cache)
-    
+
     def clear(self):
         """Clear all cache entries."""
         with self._lock:
             self._cache.clear()
             self._info.currsize = 0
-    
+
     def cache_info(self) -> _CacheInfo:
         """Return cache statistics."""
         with self._lock:
@@ -202,43 +206,45 @@ class LRUCacheWithTTL:
 
 def lru_cache_with_ttl(maxsize: int = 128, ttl: int = 300):
     """Decorator that adds LRU caching with TTL to an async function.
-    
+
     Args:
         maxsize: Maximum number of entries to cache (default 128)
         ttl: Time-to-live in seconds (default 300 = 5 minutes)
     """
+
     def decorator(func):
         cache = LRUCacheWithTTL(maxsize=maxsize, ttl=ttl)
-        
+
         @wraps(func)
         async def wrapper(*args, **kwargs):
             # Generate cache key from messages and model
             cache_key = cache._make_key(*args, **kwargs)
-            
+
             # Try to get from cache
             cached_value = cache.get(cache_key)
             if cached_value is not None:
                 return cached_value
-            
+
             # Call the original function
             result = await func(*args, **kwargs)
-            
+
             # Store in cache
             cache.set(cache_key, result)
             return result
-        
+
         # Expose cache management methods on the wrapper
         def clear_cache():
             """Clear all cache entries."""
             cache.clear()
-        
+
         def cache_info() -> _CacheInfo:
             """Return cache statistics (hits, misses, maxsize, currsize, ttl)."""
             return cache.cache_info()
-        
+
         wrapper.clear_cache = clear_cache
         wrapper.cache_info = cache_info
         return wrapper
+
     return decorator
 
 
@@ -279,48 +285,64 @@ def _get_configured_semantic_cache() -> Optional[SemanticCache]:
 
 # ── HTTP Connection Pool ───────────────────────────────────────────────────────────
 
+
 class HTTPClientPool:
-    """Shared HTTP client with connection pooling."""
-    
-    _instance: Optional[httpx.AsyncClient] = None
+    """Shared HTTP client with connection pooling.
+
+    SECURITY / STABILITY FIX (2026-04-23):
+        - Stores clients per-event-loop instead of a global singleton.
+        - Prevents crashes when the event loop changes (tests, reloads).
+    """
+
+    _clients: dict[int, httpx.AsyncClient] = {}
     _timeout: int = DEFAULT_TIMEOUT
-    
+
     @classmethod
     def get_client(cls, timeout: int = None) -> httpx.AsyncClient:
         """Get or create the shared async client with connection pooling."""
         if timeout is not None:
             cls._timeout = timeout
-        
-        if cls._instance is None:
-            cls._instance = httpx.AsyncClient(
+
+        loop = asyncio.get_running_loop()
+        client = cls._clients.get(id(loop))
+
+        if client is None or client.is_closed:
+            client = httpx.AsyncClient(
                 timeout=httpx.Timeout(cls._timeout),
                 limits=httpx.Limits(
-                    max_keepalive_connections=20,
-                    max_connections=100,
-                    keepalive_expiry=30.0
+                    max_keepalive_connections=20, max_connections=100, keepalive_expiry=30.0
                 ),
-                http2=True  # Enable HTTP/2 for better multiplexing
+                http2=True,  # Enable HTTP/2 for better multiplexing
             )
-        return cls._instance
-    
+            cls._clients[id(loop)] = client
+
+        return client
+
     @classmethod
     async def close(cls):
-        """Close the shared client."""
-        if cls._instance is not None:
-            await cls._instance.aclose()
-            cls._instance = None
+        """Close all shared clients."""
+        for client in list(cls._clients.values()):
+            if not client.is_closed:
+                await client.aclose()
+        cls._clients.clear()
 
 
 # ── Retry Logic with Exponential Backoff ─────────────────────────────────────────
+
 
 def retry_with_backoff(
     max_retries: int = DEFAULT_MAX_RETRIES,
     base_delay: float = DEFAULT_BACKOFF_BASE,
     max_delay: float = DEFAULT_BACKOFF_MAX,
     exponential_base: float = DEFAULT_BACKOFF_EXPONENTIAL,
-    retriable_exceptions: tuple = (httpx.TimeoutException, httpx.ConnectError, httpx.HTTPStatusError)
+    retriable_exceptions: tuple = (
+        httpx.TimeoutException,
+        httpx.ConnectError,
+        httpx.HTTPStatusError,
+    ),
 ):
     """Decorator for retrying async functions with exponential backoff."""
+
     def decorator(func):
         @wraps(func)
         async def wrapper(*args, **kwargs):
@@ -331,7 +353,7 @@ def retry_with_backoff(
                 except retriable_exceptions as e:
                     last_exception = e
                     if attempt < max_retries:
-                        delay = min(base_delay * (exponential_base ** attempt), max_delay)
+                        delay = min(base_delay * (exponential_base**attempt), max_delay)
                         logger.warning(
                             f"Attempt {attempt + 1}/{max_retries + 1} failed: {e}. "
                             f"Retrying in {delay:.1f}s..."
@@ -340,11 +362,14 @@ def retry_with_backoff(
                     else:
                         logger.error(f"All {max_retries + 1} attempts failed")
             raise last_exception
+
         return wrapper
+
     return decorator
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _openai_tool_calls_to_dict(tool_calls) -> Optional[List[Dict]]:
     """Convert openai SDK ToolCall objects to the dict format agent.py expects."""
@@ -360,31 +385,33 @@ def _openai_tool_calls_to_dict(tool_calls) -> Optional[List[Dict]]:
                 args_dict = {}
         else:
             args_dict = args
-        result.append({
-            "id": tc.id,
-            "type": getattr(tc, 'type', 'function'),
-            "function": {
-                "name": tc.function.name,
-                "arguments": args_dict,
-                "arguments_str": args if isinstance(args, str) else _json.dumps(args),
+        result.append(
+            {
+                "id": tc.id,
+                "type": getattr(tc, "type", "function"),
+                "function": {
+                    "name": tc.function.name,
+                    "arguments": args_dict,
+                    "arguments_str": args if isinstance(args, str) else _json.dumps(args),
+                },
             }
-        })
+        )
     return result or None
 
 
 def _sanitize_messages_for_openai(messages: List[Dict]) -> List[Dict]:
     """Sanitize messages to ensure OpenAI API compatibility.
-    
+
     Specifically handles orphaned 'tool' messages that don't follow an assistant
     message with 'tool_calls' by converting them to 'user' messages.
     Multiple consecutive tool messages following an assistant with tool_calls are preserved.
     """
     sanitized = []
     in_tool_block = False  # True after we see an assistant with tool_calls
-    
+
     for msg in messages:
         role = msg.get("role")
-        
+
         if role == "assistant" and msg.get("tool_calls"):
             in_tool_block = True
             sanitized.append(msg)
@@ -392,36 +419,37 @@ def _sanitize_messages_for_openai(messages: List[Dict]) -> List[Dict]:
             if in_tool_block:
                 sanitized.append(msg)
             else:
-                sanitized.append({
-                    "role": "user",
-                    "content": f"[tool result] {msg.get('content', '')}"
-                })
+                sanitized.append(
+                    {"role": "user", "content": f"[tool result] {msg.get('content', '')}"}
+                )
         else:
             in_tool_block = False
             sanitized.append(msg)
-    
+
     return sanitized
 
 
 def _ensure_tool_messages(messages: List[Dict]) -> List[Dict]:
     """Ensure every assistant message with tool_calls is followed by matching tool messages.
-    
+
     If an assistant message with tool_calls is not followed by tool messages responding
     to each tool_call_id, append dummy tool messages to satisfy OpenAI's API requirements.
     """
     result = []
     pending_tool_calls = None
-    
+
     for msg in messages:
         if msg.get("role") == "assistant" and msg.get("tool_calls"):
             # If there were pending tool calls from a previous assistant, add dummy responses
             if pending_tool_calls:
                 for tc in pending_tool_calls:
-                    result.append({
-                        "role": "tool",
-                        "tool_call_id": tc.get("id", "call_default"),
-                        "content": "[No tool response available from history]"
-                    })
+                    result.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.get("id", "call_default"),
+                            "content": "[No tool response available from history]",
+                        }
+                    )
             pending_tool_calls = msg.get("tool_calls", [])
             result.append(msg)
         elif msg.get("role") == "tool" and pending_tool_calls:
@@ -433,27 +461,32 @@ def _ensure_tool_messages(messages: List[Dict]) -> List[Dict]:
             # If there were pending tool calls, add dummy responses before non-tool messages
             if pending_tool_calls:
                 for tc in pending_tool_calls:
-                    result.append({
-                        "role": "tool",
-                        "tool_call_id": tc.get("id", "call_default"),
-                        "content": "[No tool response available from history]"
-                    })
+                    result.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.get("id", "call_default"),
+                            "content": "[No tool response available from history]",
+                        }
+                    )
                 pending_tool_calls = None
             result.append(msg)
-    
+
     # Handle any remaining pending tool calls at the end
     if pending_tool_calls:
         for tc in pending_tool_calls:
-            result.append({
-                "role": "tool",
-                "tool_call_id": tc.get("id", "call_default"),
-                "content": "[No tool response available from history]"
-            })
-    
+            result.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.get("id", "call_default"),
+                    "content": "[No tool response available from history]",
+                }
+            )
+
     return result
 
 
 # ── Abstract Base ──────────────────────────────────────────────────────────────
+
 
 class BaseLLMProvider(ABC):
     """All providers implement this interface."""
@@ -483,18 +516,19 @@ class BaseLLMProvider(ABC):
         model: str,
     ) -> AsyncIterator[str]:
         """Stream chat response as an async iterator.
-        
+
         Default implementation falls back to non-streaming and yields chunks.
         Override this in subclasses for true streaming support.
         """
         response, _ = await self.chat(messages, model, stream=False)
         # Yield in small chunks to simulate streaming
         for i in range(0, len(response), 4):
-            yield response[i:i+4]
+            yield response[i : i + 4]
             await asyncio.sleep(0.01)
 
 
 # ── Local Providers ────────────────────────────────────────────────────────────
+
 
 class OllamaProvider(BaseLLMProvider):
     """Ollama native API (http://localhost:11434)."""
@@ -516,7 +550,7 @@ class OllamaProvider(BaseLLMProvider):
                 if cached:
                     logger.debug(f"Semantic cache hit for {model}")
                     return cached
-        
+
         payload = {
             "model": model,
             "messages": messages,
@@ -526,13 +560,16 @@ class OllamaProvider(BaseLLMProvider):
         try:
             # Use pooled client instead of creating new one
             client = HTTPClientPool.get_client(self.timeout)
-            
+
             if stream:
                 # Streaming response with tool call collection
                 tool_calls_collector: List[Dict] = []
+
                 async def generate():
                     _final_msg = None
-                    async with client.stream("POST", f"{self.base_url}/api/chat", json=payload) as r:
+                    async with client.stream(
+                        "POST", f"{self.base_url}/api/chat", json=payload
+                    ) as r:
                         r.raise_for_status()
                         async for line in r.aiter_lines():
                             if line.strip():
@@ -550,17 +587,22 @@ class OllamaProvider(BaseLLMProvider):
                     # Populate collector from final message if tool_calls were present
                     if _final_msg and _final_msg.get("tool_calls"):
                         for tc in _final_msg["tool_calls"]:
-                            tool_calls_collector.append({
-                                "id": tc.get("id", f"call_{len(tool_calls_collector)}"),
-                                "type": "function",
-                                "function": {
-                                    "name": tc["function"]["name"],
-                                    "arguments": tc["function"].get("arguments", {}),
-                                    "arguments_str": _json.dumps(tc["function"].get("arguments", {})),
+                            tool_calls_collector.append(
+                                {
+                                    "id": tc.get("id", f"call_{len(tool_calls_collector)}"),
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc["function"]["name"],
+                                        "arguments": tc["function"].get("arguments", {}),
+                                        "arguments_str": _json.dumps(
+                                            tc["function"].get("arguments", {})
+                                        ),
+                                    },
                                 }
-                            })
+                            )
+
                 return generate(), tool_calls_collector
-            
+
             r = await client.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
@@ -573,9 +615,8 @@ class OllamaProvider(BaseLLMProvider):
             # Record metrics
             try:
                 from .metrics import get_metrics
-                get_metrics().record_llm_request(
-                    provider="ollama", model=model, status="success"
-                )
+
+                get_metrics().record_llm_request(provider="ollama", model=model, status="success")
             except Exception:
                 pass
 
@@ -592,7 +633,9 @@ class OllamaProvider(BaseLLMProvider):
         except httpx.HTTPStatusError as e:
             raise RuntimeError(f"Ollama HTTP error: {e}") from e
 
-    async def stream_chat(self, messages: List[Dict], model: str = "llama3.2") -> AsyncIterator[str]:
+    async def stream_chat(
+        self, messages: List[Dict], model: str = "llama3.2"
+    ) -> AsyncIterator[str]:
         """Stream chat response from Ollama."""
         async for chunk in await self.chat(messages, model, stream=True):
             yield chunk
@@ -614,13 +657,15 @@ class OpenAICompatProvider(BaseLLMProvider):
         extra_headers: Optional[Dict[str, str]] = None,
     ):
         try:
-            from openai import OpenAI
+            from openai import AsyncOpenAI
         except ImportError:
             raise ImportError(
                 "The 'openai' package is required for this provider.\n"
                 "Install it with:  pip install openai"
             )
-        self.client = OpenAI(
+        # SECURITY / PERF FIX (2026-04-23): Use AsyncOpenAI instead of sync OpenAI.
+        # The sync client blocks the event loop, freezing all concurrent requests.
+        self.client = AsyncOpenAI(
             api_key=api_key or "no-key",
             base_url=base_url,
             timeout=timeout,
@@ -632,7 +677,7 @@ class OpenAICompatProvider(BaseLLMProvider):
         # Sanitize messages to ensure OpenAI API compatibility
         messages = _sanitize_messages_for_openai(messages)
         messages = _ensure_tool_messages(messages)
-        
+
         # Check semantic cache first (skip for streaming)
         if not stream:
             cache = _get_configured_semantic_cache()
@@ -641,20 +686,21 @@ class OpenAICompatProvider(BaseLLMProvider):
                 if cached:
                     logger.debug(f"Semantic cache hit for {model}")
                     return cached
-        
+
         if stream:
             # Streaming response with tool call collection
             tool_calls_collector: List[Dict] = []
+
             async def generate():
                 # Buffer for incremental tool call assembly (OpenAI streams tool_calls in deltas)
                 _tc_buffer: Dict[int, Dict] = {}
-                response = self.client.chat.completions.create(
+                response = await self.client.chat.completions.create(
                     model=model,
                     messages=messages,
                     tools=_get_tool_schemas(),
                     stream=True,
                 )
-                for chunk in response:
+                async for chunk in response:
                     if chunk.choices and len(chunk.choices) > 0:
                         delta = chunk.choices[0].delta
                         if delta and delta.content:
@@ -679,18 +725,21 @@ class OpenAICompatProvider(BaseLLMProvider):
                             args = _json.loads(tc["arguments"]) if tc["arguments"] else {}
                         except _json.JSONDecodeError:
                             args = {}
-                        tool_calls_collector.append({
-                            "id": tc["id"] or f"call_{idx}",
-                            "type": "function",
-                            "function": {
-                                "name": tc["name"],
-                                "arguments": args,
-                                "arguments_str": tc["arguments"],
+                        tool_calls_collector.append(
+                            {
+                                "id": tc["id"] or f"call_{idx}",
+                                "type": "function",
+                                "function": {
+                                    "name": tc["name"],
+                                    "arguments": args,
+                                    "arguments_str": tc["arguments"],
+                                },
                             }
-                        })
+                        )
+
             return generate(), tool_calls_collector
-        
-        response = self.client.chat.completions.create(
+
+        response = await self.client.chat.completions.create(
             model=model,
             messages=messages,
             tools=_get_tool_schemas(),
@@ -702,6 +751,7 @@ class OpenAICompatProvider(BaseLLMProvider):
         # Record metrics (token usage if available)
         try:
             from .metrics import get_metrics
+
             metrics = get_metrics()
             usage = getattr(response, "usage", None)
             pt = getattr(usage, "prompt_tokens", 0) if usage else 0
@@ -716,6 +766,7 @@ class OpenAICompatProvider(BaseLLMProvider):
             # Record cost
             try:
                 from .cost_tracker import record_usage
+
                 record_usage("openai_compat", model, pt, ct)
             except Exception:
                 pass
@@ -729,7 +780,9 @@ class OpenAICompatProvider(BaseLLMProvider):
 
         return result
 
-    async def stream_chat(self, messages: List[Dict], model: str = "gpt-4o-mini") -> AsyncIterator[str]:
+    async def stream_chat(
+        self, messages: List[Dict], model: str = "gpt-4o-mini"
+    ) -> AsyncIterator[str]:
         """Stream chat response from OpenAI-compatible providers."""
         async for chunk in await self.chat(messages, model, stream=True):
             yield chunk
@@ -742,10 +795,10 @@ class LMStudioProvider(OpenAICompatProvider):
         try:
             cfg = config.providers.lmstudio
             base_url = cfg.base_url
-            api_key  = cfg.api_key.get_secret_value()
+            api_key = cfg.api_key.get_secret_value()
         except Exception:
             base_url = "http://localhost:1234/v1"
-            api_key  = "lm-studio"
+            api_key = "lm-studio"
         super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
 
 
@@ -756,14 +809,15 @@ class LlamaCppProvider(OpenAICompatProvider):
         try:
             cfg = config.providers.llamacpp
             base_url = cfg.base_url
-            api_key  = cfg.api_key.get_secret_value()
+            api_key = cfg.api_key.get_secret_value()
         except Exception:
             base_url = "http://localhost:8080/v1"
-            api_key  = "no-key"
+            api_key = "no-key"
         super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
 
 
 # ── Online Providers ───────────────────────────────────────────────────────────
+
 
 class OpenAIProvider(OpenAICompatProvider):
     """OpenAI cloud (gpt-4o, gpt-4-turbo, gpt-3.5-turbo, …)."""
@@ -771,10 +825,10 @@ class OpenAIProvider(OpenAICompatProvider):
     def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
         try:
             cfg = config.providers.openai
-            api_key  = cfg.api_key.get_secret_value()
+            api_key = cfg.api_key.get_secret_value()
             base_url = cfg.base_url
         except Exception:
-            api_key  = ""
+            api_key = ""
             base_url = "https://api.openai.com/v1"
         if not api_key:
             raise ValueError("openai.api_key is not set in config.")
@@ -787,10 +841,10 @@ class GroqProvider(OpenAICompatProvider):
     def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
         try:
             cfg = config.providers.groq
-            api_key  = cfg.api_key.get_secret_value()
+            api_key = cfg.api_key.get_secret_value()
             base_url = cfg.base_url
         except Exception:
-            api_key  = ""
+            api_key = ""
             base_url = "https://api.groq.com/openai/v1"
         if not api_key:
             raise ValueError("groq.api_key is not set in config.")
@@ -803,14 +857,14 @@ class OpenRouterProvider(OpenAICompatProvider):
     def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
         try:
             cfg = config.providers.openrouter
-            api_key   = cfg.api_key.get_secret_value()
-            base_url  = cfg.base_url
-            site_url  = cfg.site_url
+            api_key = cfg.api_key.get_secret_value()
+            base_url = cfg.base_url
+            site_url = cfg.site_url
             site_name = cfg.site_name
         except Exception:
-            api_key   = ""
-            base_url  = "https://openrouter.ai/api/v1"
-            site_url  = ""
+            api_key = ""
+            base_url = "https://openrouter.ai/api/v1"
+            site_url = ""
             site_name = ""
         if not api_key:
             raise ValueError("openrouter.api_key is not set in config.")
@@ -830,8 +884,7 @@ class AnthropicProvider(BaseLLMProvider):
             from anthropic import AsyncAnthropic
         except ImportError:
             raise ImportError(
-                "The 'anthropic' package is required.\n"
-                "Install it with:  pip install anthropic"
+                "The 'anthropic' package is required.\nInstall it with:  pip install anthropic"
             )
         try:
             api_key = config.providers.anthropic.api_key.get_secret_value()
@@ -839,7 +892,7 @@ class AnthropicProvider(BaseLLMProvider):
             api_key = ""
         if not api_key:
             raise ValueError("anthropic.api_key is not set in config.")
-        self.client  = AsyncAnthropic(api_key=api_key)
+        self.client = AsyncAnthropic(api_key=api_key)
         self.timeout = timeout
 
     @retry_with_backoff(max_retries=3, base_delay=1.0)
@@ -852,10 +905,10 @@ class AnthropicProvider(BaseLLMProvider):
                 if cached:
                     logger.debug(f"Semantic cache hit for {model}")
                     return cached
-        
+
         # Anthropic separates the system prompt from the conversation
         system_parts = []
-        conv_messages  = []
+        conv_messages = []
         for m in messages:
             role = m["role"]
             content = m.get("content", "")
@@ -872,11 +925,13 @@ class AnthropicProvider(BaseLLMProvider):
         ant_tools = []
         for ts in _get_tool_schemas():
             f = ts["function"]
-            ant_tools.append({
-                "name":        f["name"],
-                "description": f.get("description", ""),
-                "input_schema": f.get("parameters", {"type": "object", "properties": {}}),
-            })
+            ant_tools.append(
+                {
+                    "name": f["name"],
+                    "description": f.get("description", ""),
+                    "input_schema": f.get("parameters", {"type": "object", "properties": {}}),
+                }
+            )
 
         kwargs = dict(
             model=model,
@@ -890,54 +945,63 @@ class AnthropicProvider(BaseLLMProvider):
         if stream:
             # Streaming response with tool call collection
             tool_calls_collector: List[Dict] = []
+
             async def generate():
                 async with self.client.messages.stream(**kwargs) as stream_response:
                     # Iterate over raw events to capture both text and tool_use blocks
                     async for event in stream_response:
                         # Text delta events
-                        if hasattr(event, 'type') and event.type == "content_block_delta":
-                            if hasattr(event, 'delta') and hasattr(event.delta, 'text'):
+                        if hasattr(event, "type") and event.type == "content_block_delta":
+                            if hasattr(event, "delta") and hasattr(event.delta, "text"):
                                 yield event.delta.text
                         # Capture completed tool_use blocks
-                        if hasattr(event, 'type') and event.type == "content_block_stop":
-                            if hasattr(event, 'content_block') and event.content_block:
+                        if hasattr(event, "type") and event.type == "content_block_stop":
+                            if hasattr(event, "content_block") and event.content_block:
                                 block = event.content_block
-                                if getattr(block, 'type', None) == "tool_use":
-                                    tool_calls_collector.append({
-                                        "id": getattr(block, 'id', f"call_{len(tool_calls_collector)}"),
-                                        "type": "function",
-                                        "function": {
-                                            "name": getattr(block, 'name', ''),
-                                            "arguments": getattr(block, 'input', {}) if isinstance(getattr(block, 'input', {}), dict) else {},
+                                if getattr(block, "type", None) == "tool_use":
+                                    tool_calls_collector.append(
+                                        {
+                                            "id": getattr(
+                                                block, "id", f"call_{len(tool_calls_collector)}"
+                                            ),
+                                            "type": "function",
+                                            "function": {
+                                                "name": getattr(block, "name", ""),
+                                                "arguments": getattr(block, "input", {})
+                                                if isinstance(getattr(block, "input", {}), dict)
+                                                else {},
+                                            },
                                         }
-                                    })
+                                    )
+
             return generate(), tool_calls_collector
 
         response = await self.client.messages.create(**kwargs)
 
-        text_parts  = []
-        tool_calls  = []
+        text_parts = []
+        tool_calls = []
 
         for block in response.content:
             if block.type == "text":
                 text_parts.append(block.text)
             elif block.type == "tool_use":
                 args = block.input if isinstance(block.input, dict) else {}
-                tool_calls.append({
-                    "function": {
-                        "name":      block.name,
-                        "arguments": args,
+                tool_calls.append(
+                    {
+                        "function": {
+                            "name": block.name,
+                            "arguments": args,
+                        }
                     }
-                })
+                )
 
         result = ("\n".join(text_parts), (tool_calls or None))
 
         # Record metrics
         try:
             from .metrics import get_metrics
-            get_metrics().record_llm_request(
-                provider="anthropic", model=model, status="success"
-            )
+
+            get_metrics().record_llm_request(provider="anthropic", model=model, status="success")
         except Exception:
             pass
 
@@ -948,7 +1012,9 @@ class AnthropicProvider(BaseLLMProvider):
 
         return result
 
-    async def stream_chat(self, messages: List[Dict], model: str = "claude-3-5-sonnet-20241022") -> AsyncIterator[str]:
+    async def stream_chat(
+        self, messages: List[Dict], model: str = "claude-3-5-sonnet-20241022"
+    ) -> AsyncIterator[str]:
         """Stream chat response from Anthropic."""
         async for chunk in await self.chat(messages, model, stream=True):
             yield chunk
@@ -972,12 +1038,13 @@ class GeminiProvider(BaseLLMProvider):
         if not api_key:
             raise ValueError("gemini.api_key is not set in config.")
         genai.configure(api_key=api_key)
-        self._genai    = genai
-        self.timeout   = timeout
+        self._genai = genai
+        self.timeout = timeout
 
     def _build_tools(self):
         """Convert _get_tool_schemas() to Gemini FunctionDeclaration list."""
         from google.generativeai.types import content_types
+
         declarations = []
         for ts in _get_tool_schemas():
             f = ts["function"]
@@ -1009,13 +1076,13 @@ class GeminiProvider(BaseLLMProvider):
                 if cached:
                     logger.debug(f"Semantic cache hit for {model}")
                     return cached
-        
+
         system_parts = []
-        history      = []
-        last_user    = None
+        history = []
+        last_user = None
 
         for m in messages:
-            role    = m["role"]
+            role = m["role"]
             content = m.get("content", "")
             if role == "system":
                 system_parts.append(content)
@@ -1034,10 +1101,11 @@ class GeminiProvider(BaseLLMProvider):
         )
 
         chat_session = gen_model.start_chat(history=history[:-1] if history else [])
-        
+
         if stream:
             # Streaming response with tool call collection
             tool_calls_collector: List[Dict] = []
+
             async def generate():
                 response = await chat_session.send_message_async(last_user or "", stream=True)
                 async for chunk in response:
@@ -1047,17 +1115,20 @@ class GeminiProvider(BaseLLMProvider):
                         # Capture function calls from streaming chunks
                         if hasattr(part, "function_call") and part.function_call:
                             fc = part.function_call
-                            tool_calls_collector.append({
-                                "id": f"call_{len(tool_calls_collector)}",
-                                "type": "function",
-                                "function": {
-                                    "name": fc.name,
-                                    "arguments": dict(fc.args) if hasattr(fc, 'args') else {},
+                            tool_calls_collector.append(
+                                {
+                                    "id": f"call_{len(tool_calls_collector)}",
+                                    "type": "function",
+                                    "function": {
+                                        "name": fc.name,
+                                        "arguments": dict(fc.args) if hasattr(fc, "args") else {},
+                                    },
                                 }
-                            })
+                            )
+
             return generate(), tool_calls_collector
 
-        response     = await chat_session.send_message_async(last_user or "")
+        response = await chat_session.send_message_async(last_user or "")
 
         text_parts = []
         tool_calls = []
@@ -1067,21 +1138,22 @@ class GeminiProvider(BaseLLMProvider):
                 text_parts.append(part.text)
             if hasattr(part, "function_call") and part.function_call:
                 fc = part.function_call
-                tool_calls.append({
-                    "function": {
-                        "name":      fc.name,
-                        "arguments": dict(fc.args),
+                tool_calls.append(
+                    {
+                        "function": {
+                            "name": fc.name,
+                            "arguments": dict(fc.args),
+                        }
                     }
-                })
+                )
 
         result = ("\n".join(text_parts), (tool_calls or None))
 
         # Record metrics
         try:
             from .metrics import get_metrics
-            get_metrics().record_llm_request(
-                provider="gemini", model=model, status="success"
-            )
+
+            get_metrics().record_llm_request(provider="gemini", model=model, status="success")
         except Exception:
             pass
 
@@ -1092,7 +1164,9 @@ class GeminiProvider(BaseLLMProvider):
 
         return result
 
-    async def stream_chat(self, messages: List[Dict], model: str = "gemini-1.5-flash") -> AsyncIterator[str]:
+    async def stream_chat(
+        self, messages: List[Dict], model: str = "gemini-1.5-flash"
+    ) -> AsyncIterator[str]:
         """Stream chat response from Gemini."""
         async for chunk in await self.chat(messages, model, stream=True):
             yield chunk
@@ -1101,13 +1175,13 @@ class GeminiProvider(BaseLLMProvider):
 # ── Provider Factory ──────────────────────────────────────────────────────────
 
 _PROVIDER_MAP = {
-    "ollama":     OllamaProvider,
-    "lmstudio":   LMStudioProvider,
-    "llamacpp":   LlamaCppProvider,
-    "openai":     OpenAIProvider,
-    "anthropic":  AnthropicProvider,
-    "gemini":     GeminiProvider,
-    "groq":       GroqProvider,
+    "ollama": OllamaProvider,
+    "lmstudio": LMStudioProvider,
+    "llamacpp": LlamaCppProvider,
+    "openai": OpenAIProvider,
+    "anthropic": AnthropicProvider,
+    "gemini": GeminiProvider,
+    "groq": GroqProvider,
     "openrouter": OpenRouterProvider,
 }
 
@@ -1138,7 +1212,7 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
     # Check config file mtime for cache invalidation
     config_mtime = 0.0
     try:
-        config_path = getattr(config, '_config_path', None)
+        config_path = getattr(config, "_config_path", None)
         if config_path:
             config_mtime = Path(config_path).stat().st_mtime
     except Exception:
@@ -1159,16 +1233,16 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
                 logger.debug(f"Provider cache hit: {name}")
                 return cached_entry
 
-            logger.debug(f"Provider cache invalidated for {name}: "
-                        f"expired={is_expired}, stale={is_stale}")
+            logger.debug(
+                f"Provider cache invalidated for {name}: expired={is_expired}, stale={is_stale}"
+            )
             _provider_cache.pop(name, None)
             _provider_cache_timestamps.pop(name, None)
 
         cls = _PROVIDER_MAP.get(name)
         if cls is None:
             raise ValueError(
-                f"Unknown provider '{name}'. "
-                f"Supported: {', '.join(SUPPORTED_PROVIDERS)}"
+                f"Unknown provider '{name}'. Supported: {', '.join(SUPPORTED_PROVIDERS)}"
             )
         logger.debug(f"Initialising provider: {name}")
         provider = cls(config)

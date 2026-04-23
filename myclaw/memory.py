@@ -55,14 +55,26 @@ from .knowledge.storage import write_note
 
 # Patterns for knowledge extraction
 ENTITY_PATTERNS = [
-    r'\b([A-Z][a-z]+ (?:Project|System|API|Tool|Framework|Library|Database|Server))\b',
-    r'\b([A-Z][a-zA-Z]+(?:\d+)?)\b',  # Capitalized words (potential proper nouns)
+    r"\b([A-Z][a-z]+ (?:Project|System|API|Tool|Framework|Library|Database|Server))\b",
+    r"\b([A-Z][a-zA-Z]+(?:\d+)?)\b",  # Capitalized words (potential proper nouns)
 ]
 
 RELATION_KEYWORDS = [
-    'uses', 'depends on', 'requires', 'integrates with', 'connects to',
-    'implements', 'extends', 'inherits from', 'calls', 'triggers',
-    'leads to', 'results in', 'causes', 'enables', 'blocks'
+    "uses",
+    "depends on",
+    "requires",
+    "integrates with",
+    "connects to",
+    "implements",
+    "extends",
+    "inherits from",
+    "calls",
+    "triggers",
+    "leads to",
+    "results in",
+    "causes",
+    "enables",
+    "blocks",
 ]
 
 # ── Configuration Constants ────────────────────────────────────────────────────
@@ -77,6 +89,7 @@ CACHE_TTL_SECONDS = 1.0
 
 # ── Async SQLite Connection Pool (Optimization #1) ─────────────────────────────
 
+
 class AsyncSQLitePool:
     """True async connection pool for SQLite databases using aiosqlite.
 
@@ -84,71 +97,93 @@ class AsyncSQLitePool:
     semaphore-based checkout system to allow concurrent operations to the
     same user's DB without complete serialization.
 
-    Optimization: Replaces single-connection-per-DB model that blocked all
-    concurrent operations with a real pool.
+    SECURITY / STABILITY FIX (2026-04-23):
+        - Tracks checked-out connections by id(conn) to prevent double-release
+          and semaphore drift.
+        - release_connection() now requires the connection object to ensure
+          the correct semaphore slot is freed.
+        - All connections are created with WAL mode and NORMAL synchronous.
     """
 
     _pool_size: int = 3
-    _pools: dict[str, List[aiosqlite.Connection]] = {}
+    _pools: dict[str, list[aiosqlite.Connection]] = {}
+    _checked_out: dict[str, set[int]] = {}  # Track by id(conn)
     _semaphores: dict[str, asyncio.Semaphore] = {}
-    _refcounts: dict[str, int] = {}
-    _pool_lock = asyncio.Lock()
+    _locks: dict[int, asyncio.Lock] = {}
+
+    @classmethod
+    def _get_lock(cls) -> asyncio.Lock:
+        """Return a lock bound to the current event loop."""
+        loop = asyncio.get_running_loop()
+        if id(loop) not in cls._locks:
+            cls._locks[id(loop)] = asyncio.Lock()
+        return cls._locks[id(loop)]
 
     @classmethod
     async def get_connection(cls, db_path: Path) -> aiosqlite.Connection:
         """Get a pooled async connection (checkout from pool)."""
         key = str(db_path)
 
-        async with cls._pool_lock:
+        async with cls._get_lock():
             if key not in cls._semaphores:
                 cls._semaphores[key] = asyncio.Semaphore(cls._pool_size)
-                cls._refcounts[key] = 0
+                cls._checked_out[key] = set()
                 cls._pools[key] = []
 
         # Acquire semaphore (blocks if all connections are checked out)
         await cls._semaphores[key].acquire()
 
         try:
-            async with cls._pool_lock:
+            async with cls._get_lock():
+                pool = cls._pools[key]
+                checked = cls._checked_out[key]
+
                 # Return an existing free connection if available
-                for conn in cls._pools[key]:
-                    # Simple heuristic: all connections in pool are available
-                    # since we hold the semaphore
-                    cls._refcounts[key] += 1
-                    return conn
+                for conn in pool:
+                    if id(conn) not in checked:
+                        checked.add(id(conn))
+                        return conn
 
                 # No available connection and semaphore allows us -
                 # create a new one (up to pool_size)
-                if len(cls._pools[key]) < cls._pool_size:
+                if len(pool) < cls._pool_size:
                     conn = await aiosqlite.connect(db_path, check_same_thread=False)
                     await conn.execute("PRAGMA journal_mode=WAL")
                     await conn.execute("PRAGMA synchronous=NORMAL")
-                    cls._pools[key].append(conn)
-                    cls._refcounts[key] += 1
+                    pool.append(conn)
+                    checked.add(id(conn))
                     return conn
 
                 # Fallback: should not reach here if semaphore is correct
-                cls._refcounts[key] += 1
-                return cls._pools[key][0]
+                conn = pool[0]
+                checked.add(id(conn))
+                return conn
         except Exception:
             # Release semaphore on error so other waiters can proceed
             cls._semaphores[key].release()
             raise
 
     @classmethod
-    async def release_connection(cls, db_path: Path):
-        """Release a connection back to the pool (checkin)."""
-        key = str(db_path)
-        async with cls._pool_lock:
-            cls._refcounts[key] = max(0, cls._refcounts[key] - 1)
+    async def release_connection(cls, db_path: Path, conn: aiosqlite.Connection):
+        """Release a connection back to the pool (checkin).
 
-        if key in cls._semaphores:
-            cls._semaphores[key].release()
+        Args:
+            db_path: Path to the database file.
+            conn: The connection object that was checked out.
+        """
+        key = str(db_path)
+        async with cls._get_lock():
+            checked = cls._checked_out.get(key, set())
+            if id(conn) in checked:
+                checked.remove(id(conn))
+            # Only release semaphore if we actually had it checked out
+            if key in cls._semaphores:
+                cls._semaphores[key].release()
 
     @classmethod
     async def close_all(cls):
         """Close all pooled connections."""
-        async with cls._pool_lock:
+        async with cls._get_lock():
             for conn_list in cls._pools.values():
                 for conn in conn_list:
                     try:
@@ -156,63 +191,65 @@ class AsyncSQLitePool:
                     except Exception:
                         pass
             cls._pools.clear()
-            cls._refcounts.clear()
+            cls._checked_out.clear()
             cls._semaphores.clear()
+            cls._locks.clear()
 
 
 # ── Sync SQLite Connection Pool (legacy, for backwards compatibility) ─────────
 
+
 class SQLitePool:
     """Simple connection pool for SQLite databases with idle timeout."""
-    
+
     _pools: dict[str, sqlite3.Connection] = {}
     _locks: dict[str, threading.Lock] = {}
     _refcounts: dict[str, int] = {}
     _last_used: dict[str, float] = {}
     _pool_lock = threading.Lock()
     IDLE_TIMEOUT = 300  # 5 minutes
-    
+
     @classmethod
     def get_connection(cls, db_path: Path) -> sqlite3.Connection:
         """Get or create a pooled connection."""
         key = str(db_path)
-        
-        with cls._pool_lock:
+
+        with cls._get_lock():
             if key not in cls._locks:
                 cls._locks[key] = threading.Lock()
                 cls._refcounts[key] = 0
-        
+
         # Use lock for this specific DB
         cls._locks[key].acquire()
-        
+
         if key not in cls._pools:
             conn = sqlite3.connect(db_path, check_same_thread=False)
             conn.execute("PRAGMA journal_mode=WAL")  # Enable WAL for better concurrency
             conn.execute("PRAGMA synchronous=NORMAL")  # Balance safety/speed
             cls._pools[key] = conn
-        
-        with cls._pool_lock:
+
+        with cls._get_lock():
             cls._refcounts[key] += 1
             cls._last_used[key] = time.time()
-            
+
         return cls._pools[key]
-    
+
     @classmethod
     def release_connection(cls, db_path: Path):
         """Release a connection back to the pool."""
         key = str(db_path)
-        with cls._pool_lock:
+        with cls._get_lock():
             cls._refcounts[key] -= 1
             if cls._refcounts[key] <= 0:
                 cls._last_used[key] = time.time()
-        
+
         if key in cls._locks:
             cls._locks[key].release()
-    
+
     @classmethod
     def close_all(cls):
         """Close all pooled connections."""
-        with cls._pool_lock:
+        with cls._get_lock():
             for conn in cls._pools.values():
                 try:
                     conn.close()
@@ -221,14 +258,15 @@ class SQLitePool:
             cls._pools.clear()
             cls._refcounts.clear()
             cls._last_used.clear()
-    
+
     @classmethod
     def cleanup_idle(cls):
         """Close connections idle for longer than IDLE_TIMEOUT."""
         now = time.time()
-        with cls._pool_lock:
+        with cls._get_lock():
             idle_keys = [
-                key for key, last in cls._last_used.items()
+                key
+                for key, last in cls._last_used.items()
                 if cls._refcounts.get(key, 0) <= 0 and (now - last) > cls.IDLE_TIMEOUT
             ]
             for key in idle_keys:
@@ -252,8 +290,13 @@ class Memory:
     """Async SQLite-backed conversation memory with per-user isolation."""
 
     _cleanup_count: int = 0
-    
-    def __init__(self, user_id: str = "default", auto_cleanup_days: int = DEFAULT_CLEANUP_DAYS, auto_cleanup_enabled: bool = True):
+
+    def __init__(
+        self,
+        user_id: str = "default",
+        auto_cleanup_days: int = DEFAULT_CLEANUP_DAYS,
+        auto_cleanup_enabled: bool = True,
+    ):
         db_path = Path.home() / ".myclaw" / f"memory_{user_id}.db"
         self.db = db_path
         self.db.parent.mkdir(parents=True, exist_ok=True)
@@ -276,7 +319,7 @@ class Memory:
         if self._initialized:
             return
         self.conn = await AsyncSQLitePool.get_connection(self.db)
-        
+
         await self.conn.execute("""CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY,
             role TEXT,
@@ -316,7 +359,7 @@ class Memory:
         await self.flush()
         if self.conn:
             try:
-                await AsyncSQLitePool.release_connection(self.db)
+                await AsyncSQLitePool.release_connection(self.db, self.conn)
                 logger.info(f"Async database connection released: {self.db.name}")
             except Exception as e:
                 logger.error(f"Error releasing database connection: {e}")
@@ -327,19 +370,19 @@ class Memory:
         """Flush any pending messages to the database."""
         if not self._pending_messages:
             return 0
-        
+
         try:
             await self.conn.executemany(
                 "INSERT INTO messages (role, content, timestamp) VALUES (?, ?, ?)",
-                self._pending_messages
+                self._pending_messages,
             )
             await self.conn.commit()
-            
+
             count = len(self._pending_messages)
             self._pending_messages = []
             self._last_flush = datetime.now()
             self._history_cache.clear()
-            
+
             logger.info(f"Flushed {count} messages to database")
             return count
         except Exception as e:
@@ -350,22 +393,24 @@ class Memory:
         """Add a message to the conversation history (with batching)."""
         if not self._initialized:
             await self.initialize()
-        
+
         self._pending_messages.append((role, content, datetime.now().isoformat()))
-        
+
         should_flush = (
-            len(self._pending_messages) >= self._batch_size or
-            (datetime.now() - self._last_flush).total_seconds() >= self._batch_timeout
+            len(self._pending_messages) >= self._batch_size
+            or (datetime.now() - self._last_flush).total_seconds() >= self._batch_timeout
         )
-        
+
         if should_flush:
             await self.flush()
 
-    async def get_history(self, limit: int = DEFAULT_HISTORY_LIMIT, columns: Optional[List[str]] = None) -> list:
+    async def get_history(
+        self, limit: int = DEFAULT_HISTORY_LIMIT, columns: Optional[List[str]] = None
+    ) -> list:
         """Get the last N messages in chronological order, efficiently with caching."""
         if not self._initialized:
             await self.initialize()
-        
+
         is_default_columns = columns is None or columns == ["role", "content"]
         if is_default_columns:
             cache_key = limit
@@ -394,7 +439,7 @@ class Memory:
             """
             cur = await self.conn.execute(query, (limit,))
             rows = await cur.fetchall()
-            
+
             result = [dict(zip(columns, row)) for row in rows]
 
             if is_default_columns:
@@ -413,39 +458,42 @@ class Memory:
         """Delete messages older than specified days in chunks."""
         if not self._initialized:
             await self.initialize()
-        
+
         if days is None:
             days = self.auto_cleanup_days
 
         total_deleted = 0
-        
+
         try:
             cutoff = datetime.now() - timedelta(days=days)
 
             while True:
+                # QUALITY FIX (2026-04-23): Standard SQLite does not support
+                # DELETE ... LIMIT. Use rowid subquery instead.
                 cursor = await self.conn.execute(
-                    "DELETE FROM messages WHERE timestamp < ? LIMIT ?",
-                    (cutoff.isoformat(), self._cleanup_chunk_size)
+                    "DELETE FROM messages WHERE rowid IN ("
+                    "SELECT rowid FROM messages WHERE timestamp < ? LIMIT ?)",
+                    (cutoff.isoformat(), self._cleanup_chunk_size),
                 )
                 await self.conn.commit()
                 deleted = cursor.rowcount
-                
+
                 if deleted == 0:
                     break
-                    
+
                 total_deleted += deleted
                 logger.debug(f"Cleaned up chunk of {deleted} messages (total: {total_deleted})")
-            
+
             if total_deleted > 0:
                 self.cleanup_count += 1
                 if self.cleanup_count >= self.vacuum_interval:
                     await self.conn.execute("VACUUM")
                     self.cleanup_count = 0
                     logger.info(f"VACUUM performed after {self.vacuum_interval} cleanups")
-                
+
                 self._history_cache.clear()
                 logger.info(f"Cleaned up {total_deleted} old messages")
-            
+
             return total_deleted
 
         except Exception as e:
@@ -457,13 +505,11 @@ class Memory:
         if not self._initialized:
             await self.initialize()
         try:
-            cur = await self.conn.execute("SELECT COUNT(*), MIN(timestamp), MAX(timestamp) FROM messages")
+            cur = await self.conn.execute(
+                "SELECT COUNT(*), MIN(timestamp), MAX(timestamp) FROM messages"
+            )
             count, oldest, newest = await cur.fetchone()
-            return {
-                "total_messages": count,
-                "oldest_message": oldest,
-                "newest_message": newest
-            }
+            return {"total_messages": count, "oldest_message": oldest, "newest_message": newest}
         except Exception as e:
             logger.error(f"Error getting stats: {e}")
             return {"error": str(e)}
@@ -472,57 +518,60 @@ class Memory:
         """Extract potential knowledge entities from recent conversation history."""
         if not self._initialized:
             await self.initialize()
-        
+
         try:
             cur = await self.conn.execute(
-                "SELECT content FROM messages ORDER BY id DESC LIMIT ?",
-                (limit,)
+                "SELECT content FROM messages ORDER BY id DESC LIMIT ?", (limit,)
             )
             messages = [row[0] async for row in cur.fetchall()]
-            
-            text = ' '.join(messages)
-            
+
+            text = " ".join(messages)
+
             candidates = []
-            
+
             for pattern in ENTITY_PATTERNS:
                 matches = re.findall(pattern, text)
                 for match in matches:
                     if len(match) > 3:
                         count = text.count(match)
                         if count >= 2:
-                            candidates.append({
-                                'type': 'entity',
-                                'name': match,
-                                'mentions': count,
-                                'confidence': min(count / 5, 1.0),
-                                'source': 'pattern_match'
-                            })
-            
-            definition_pattern = r'([A-Z][\w\s]+)\s+is\s+(?:a|an|the)\s+([\w\s]+)'
+                            candidates.append(
+                                {
+                                    "type": "entity",
+                                    "name": match,
+                                    "mentions": count,
+                                    "confidence": min(count / 5, 1.0),
+                                    "source": "pattern_match",
+                                }
+                            )
+
+            definition_pattern = r"([A-Z][\w\s]+)\s+is\s+(?:a|an|the)\s+([\w\s]+)"
             definitions = re.findall(definition_pattern, text)
             for entity, definition in definitions:
                 entity_clean = entity.strip()
                 if len(entity_clean) > 3:
-                    candidates.append({
-                        'type': 'definition',
-                        'name': entity_clean,
-                        'definition': definition.strip(),
-                        'confidence': 0.7,
-                        'source': 'definition_pattern'
-                    })
-            
+                    candidates.append(
+                        {
+                            "type": "definition",
+                            "name": entity_clean,
+                            "definition": definition.strip(),
+                            "confidence": 0.7,
+                            "source": "definition_pattern",
+                        }
+                    )
+
             seen = set()
             unique_candidates = []
             for c in candidates:
-                name = c['name'].lower()
+                name = c["name"].lower()
                 if name not in seen:
                     seen.add(name)
                     unique_candidates.append(c)
-            
-            unique_candidates.sort(key=lambda x: x['confidence'], reverse=True)
-            
+
+            unique_candidates.sort(key=lambda x: x["confidence"], reverse=True)
+
             return unique_candidates[:20]
-            
+
         except Exception as e:
             logger.error(f"Error extracting knowledge: {e}")
             return []
@@ -532,33 +581,29 @@ class Memory:
         entity_name: str,
         observations: Optional[List[str]] = None,
         tags: Optional[List[str]] = None,
-        user_id: str = "default"
+        user_id: str = "default",
     ) -> Optional[str]:
         """Save an extracted knowledge entity to the knowledge base."""
         if not self._initialized:
             await self.initialize()
-        
+
         try:
             obs_objects = []
             if observations:
                 for obs in observations:
-                    obs_objects.append(Observation(
-                        category='extracted',
-                        content=obs,
-                        tags=[]
-                    ))
-            
+                    obs_objects.append(Observation(category="extracted", content=obs, tags=[]))
+
             permalink = write_note(
                 name=entity_name,
                 title=entity_name,
                 observations=obs_objects,
-                tags=tags or ['auto-extracted'],
-                user_id=user_id
+                tags=tags or ["auto-extracted"],
+                user_id=user_id,
             )
-            
+
             logger.info(f"Saved extracted knowledge: {entity_name} ({permalink})")
             return permalink
-            
+
         except Exception as e:
             logger.error(f"Error saving extracted knowledge: {e}")
             return None
@@ -567,25 +612,25 @@ class Memory:
         """Search messages using full-text search with intelligent query processing."""
         if not self._initialized:
             await self.initialize()
-        
+
         try:
             # Security: Sanitize query - only allow alphanumeric and basic FTS operators
             # Remove potentially dangerous characters that could manipulate FTS queries
-            sanitized_query = re.sub(r'[^\w\s"\*\-\(\)ANDORNOT]', '', query)
+            sanitized_query = re.sub(r'[^\w\s"\*\-\(\)ANDORNOT]', "", query)
             processed_query = sanitized_query
-            
+
             exact_phrases = re.findall(r'"([^"]+)"', processed_query)
             if exact_phrases:
                 for phrase in exact_phrases:
                     processed_query = processed_query.replace(f'"{phrase}"', f'"{phrase}"')
-            
-            if not any(op in processed_query.upper() for op in ['AND', 'OR', 'NOT', '*']):
+
+            if not any(op in processed_query.upper() for op in ["AND", "OR", "NOT", "*"]):
                 words = processed_query.split()
                 if len(words) == 1:
                     processed_query = f"{processed_query}*"
                 elif len(words) <= 3:
                     processed_query = " ".join(f"{w}*" for w in words)
-            
+
             if boost_recent:
                 sql = """
                     SELECT m.role, m.content, m.timestamp,
@@ -606,18 +651,17 @@ class Memory:
                     ORDER BY rank
                     LIMIT ?
                 """
-            
+
             cur = await self.conn.execute(sql, (processed_query, limit))
             rows = await cur.fetchall()
 
             if boost_recent:
                 return [
-                    {"role": r, "content": c, "timestamp": t, "score": s}
-                    for r, c, t, s, _ in rows
+                    {"role": r, "content": c, "timestamp": t, "score": s} for r, c, t, s, _ in rows
                 ]
             else:
                 return [{"role": r, "content": c, "timestamp": t} for r, c, t in rows]
-                
+
         except Exception as e:
             logger.error(f"Error searching: {e}")
             return []

@@ -25,6 +25,7 @@ Usage:
     # Auto-detect and decrypt during load_config()
     raw = load_encrypted_or_plain(CONFIG_FILE)
 """
+
 from __future__ import annotations
 
 import base64
@@ -45,6 +46,7 @@ _ENCRYPTION_MARKER = "__encrypted__"
 
 try:
     from cryptography.fernet import Fernet, InvalidToken
+
     _CRYPTO_AVAILABLE = True
 except ImportError:
     _CRYPTO_AVAILABLE = False
@@ -56,6 +58,7 @@ def _get_keyring_password() -> Optional[str]:
     """Try to retrieve key from OS keychain."""
     try:
         import keyring
+
         return keyring.get_password("zensynora", "config_key")
     except Exception:
         return None
@@ -65,6 +68,7 @@ def _set_keyring_password(password: str) -> bool:
     """Store key in OS keychain."""
     try:
         import keyring
+
         keyring.set_password("zensynora", "config_key", password)
         return True
     except Exception:
@@ -79,17 +83,29 @@ def _generate_key() -> str:
 
 
 def _get_or_create_key() -> str:
-    """Get existing key or create + store a new one."""
-    # 1. Try keyring
+    """Get existing key or create + store a new one.
+
+    SECURITY FIX (2026-04-23): Key resolution priority:
+        1. ZENSYNORA_CONFIG_KEY environment variable (for containers)
+        2. OS keyring (preferred for desktop)
+        3. Existing key file (fallback)
+        4. Generate new key and store in keyring, else key file
+    """
+    # 1. Environment variable (highest priority — useful for Docker/cloud)
+    env_key = os.environ.get("ZENSYNORA_CONFIG_KEY", "").strip()
+    if env_key:
+        return env_key
+
+    # 2. Try keyring
     key = _get_keyring_password()
     if key:
         return key
 
-    # 2. Try key file
+    # 3. Try key file
     if KEY_FILE.exists():
         return KEY_FILE.read_text(encoding="utf-8").strip()
 
-    # 3. Generate new key
+    # 4. Generate new key
     key = _generate_key()
 
     # Store in keyring if available
@@ -98,8 +114,14 @@ def _get_or_create_key() -> str:
     else:
         # Fall back to key file with restricted permissions
         KEY_FILE.write_text(key, encoding="utf-8")
-        os.chmod(KEY_FILE, 0o600)
-        logger.info(f"Config encryption key stored in {KEY_FILE} (permissions 0o600)")
+        try:
+            os.chmod(KEY_FILE, 0o600)
+        except Exception:
+            pass
+        logger.warning(
+            f"Config encryption key stored in {KEY_FILE}. "
+            f"Consider using the OS keyring or ZENSYNORA_CONFIG_KEY env var for better security."
+        )
 
     return key
 
@@ -157,10 +179,9 @@ def encrypt_config(config_path: Optional[Path] = None) -> None:
     fernet = _get_fernet()
     ciphertext = fernet.encrypt(plaintext.encode("utf-8"))
 
-    encrypted = json.dumps({
-        _ENCRYPTION_MARKER: True,
-        "data": base64.b64encode(ciphertext).decode("ascii")
-    }, indent=2)
+    encrypted = json.dumps(
+        {_ENCRYPTION_MARKER: True, "data": base64.b64encode(ciphertext).decode("ascii")}, indent=2
+    )
 
     path.write_text(encrypted, encoding="utf-8")
     logger.info(f"Config encrypted: {path}")
@@ -251,9 +272,7 @@ def load_encrypted_or_plain(path: Path) -> Dict[str, Any]:
             try:
                 plaintext = fernet.decrypt(ciphertext).decode("utf-8")
             except InvalidToken:
-                raise RuntimeError(
-                    "Config decryption failed: invalid key or corrupted file."
-                )
+                raise RuntimeError("Config decryption failed: invalid key or corrupted file.")
             return json.loads(plaintext)
     except (json.JSONDecodeError, KeyError, RuntimeError):
         # If it's not valid JSON or not encrypted format, re-raise RuntimeError
@@ -279,10 +298,10 @@ def save_encrypted(path: Path, data: Dict[str, Any]) -> None:
     if _CRYPTO_AVAILABLE and _load_key():
         fernet = _get_fernet()
         ciphertext = fernet.encrypt(text.encode("utf-8"))
-        encrypted = json.dumps({
-            _ENCRYPTION_MARKER: True,
-            "data": base64.b64encode(ciphertext).decode("ascii")
-        }, indent=2)
+        encrypted = json.dumps(
+            {_ENCRYPTION_MARKER: True, "data": base64.b64encode(ciphertext).decode("ascii")},
+            indent=2,
+        )
         path.write_text(encrypted, encoding="utf-8")
         logger.debug(f"Config saved encrypted: {path}")
     else:

@@ -50,6 +50,13 @@ A powerful personal AI agent that runs locally or in the cloud using various LLM
 - Per-user memory isolation
 - Configurable Telegram access control (whitelist by user ID)
 - Configurable WhatsApp access control (whitelist by phone number)
+- **API-key authentication** for all admin endpoints (`/api/admin/*`, `/api/mfa/*`, `/api/spaces/*`)
+- **CORS hardened** — origins loaded from config instead of wildcard `*`
+- **MFA secret protection** — TOTP secrets never exposed in API responses
+- **SSH host-key validation** — `RejectPolicy` with `known_hosts` verification
+- **SSRF protection** — private IPs and localhost blocked in web tools
+- **Tamper-evident audit logs** — HMAC-SHA256 signed entries
+- **Config encryption** — supports `ZENSYNORA_CONFIG_KEY` env variable
 
 ---
 
@@ -214,9 +221,34 @@ flowchart TB
 ```bash
 git clone https://github.com/adrianx26/zensynora.git
 cd zensynora
+
+# Core only (~15 deps)
 pip install -e .
+
+# With specific LLM providers
+pip install -e ".[openai,anthropic]"
+
+# Everything included
+pip install -e ".[all]"
+
 zensynora --help        # or: myclaw --help
 ```
+
+**Optional extras:**
+| Extra | Installs | Use case |
+|-------|----------|----------|
+| `openai` | `openai>=1.0` | OpenAI / Groq / OpenRouter |
+| `anthropic` | `anthropic>=0.25` | Claude |
+| `google` | `google-generativeai>=0.5` | Gemini |
+| `semantic-cache` | `sentence-transformers>=2.2.2` | Semantic similarity caching |
+| `voice` | `vosk>=0.3.45` | Offline speech-to-text |
+| `redis` | `redis>=4.0` | Multi-worker state sharing |
+| `metrics` | `prometheus-client>=0.20.0` | Metrics export |
+| `security` | `cryptography>=42.0.0`, `keyring>=25.0.0` | Config encryption |
+| `mfa` | `pyotp>=2.9.0`, `qrcode>=7.4` | TOTP MFA |
+| `ssh` | `paramiko>=3.4.0` | SSH remote execution |
+| `all` | All of the above | Full feature set |
+| `dev` | `pytest`, `ruff`, `black`, `mypy` | Development |
 
 ### Option 2 — Docker (Recommended for Production)
 
@@ -627,6 +659,49 @@ See [docs/agent_catalog.md](docs/agent_catalog.md) for the complete agent catalo
 
 ---
 
+## 🆕 What's New in v0.4.1
+
+A comprehensive security, stability, and quality overhaul:
+
+### 🔒 Security Hardening
+- **Fixed infinite recursion** in chat provider delegation (`agent.py`)
+- **Eliminated shell command injection** — switched from `subprocess_shell` to `subprocess_exec`; removed `python`, `pip`, `curl`, `wget` from allowlist
+- **Fixed CORS misconfiguration** — origins now loaded from config; no more wildcard `*` with credentials
+- **Added API-key authentication** for all admin endpoints via `require_admin_api_key` FastAPI dependency
+- **Fixed MFA secret exposure** — raw TOTP secrets no longer returned in API responses
+- **Fixed SSH MITM vulnerability** — `RejectPolicy` + `known_hosts` verification replaces `AutoAddPolicy`
+- **Added SSRF protection** — private IPs, localhost, and non-HTTP schemes blocked in `browse()` and `download_file()`
+- **Hardened AST validation** — blocked `getattr`, `importlib`, and `open()` in dynamically registered tools
+- **Fixed MCP error disclosure** — both server and client now return generic errors; full traces logged server-side
+- **Added MCP reconnect resilience** — exponential-backoff reconnect with tracked background tasks
+- **Added HMAC-SHA256 audit log signing** — prevents tampering with audit trail
+- **Improved config key storage** — `ZENSYNORA_CONFIG_KEY` env variable support with OS keyring fallback
+
+### ⚡ Performance & Stability
+- **Migrated to async OpenAI client** — `AsyncOpenAI` replaces sync `OpenAI`; event loop no longer blocks during LLM calls
+- **Fixed broken AsyncSQLitePool** — proper checkout tracking by `id(conn)` prevents double-release and DB lock errors
+- **Fixed rate limiter race condition** — dual `threading.Lock` + `asyncio.Lock` for sync and async contexts
+- **Fixed HTTPClientPool crashes** — per-loop-id client storage instead of global singleton
+- **Fixed scheduler thundering herd** — `max_concurrency` semaphore (default 10) around job execution
+- **Fixed LRU cache collisions** — cache key now includes ALL arguments
+- **Fixed hardware probe blocking** — `get_system_metrics()` deferred to background daemon thread
+- **Fixed unbounded memory leak** — `_pending_preloads` capped at 100 with automatic pruning
+- **Fixed semantic cache latency** — scan limited to 64 newest entries instead of full O(n) traversal
+- **Fixed FTS5 Cartesian product** — `UNION` of independent subqueries replaces LEFT JOIN chain
+- **Improved token counting** — `tiktoken` for OpenAI models; per-provider tokenizer mapping; better fallback heuristic
+
+### 🏗️ Architecture & Quality
+- **Restructured dependencies** — core reduced to ~15 packages; providers and features moved to optional extras
+- **Added comprehensive test suite** — `tests/test_infrastructure.py` covers AsyncSQLitePool, RateLimiter, HTTPClientPool, SemanticCache, AsyncScheduler
+- **Fixed broken memory tests** — aligned AsyncSQLitePool tests with real checkout-tracking API
+- **Fixed DELETE LIMIT syntax error** — SQLite-compatible rowid subquery
+- **Fixed pool lock event-loop binding** — per-loop lock storage
+- **Created exception hierarchy** — `ZenSynoraError` base with `ConfigError`, `ProviderError`, `SecurityError`, `ToolError`
+- **Refactored global mutable state** — `_HOOKS` extracted into `HookRegistry` class with backwards-compatible alias
+- **Started Agent decomposition** — `myclaw/agent/` package with `MessageRouter`, `ContextBuilder`, `ToolExecutor`, `ResponseHandler`
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -634,6 +709,12 @@ myclaw/
 ├── myclaw/
 │   ├── __init__.py          # Package init
 │   ├── agent.py             # Core agent logic
+│   ├── agent/               # 🧠 Agent decomposition (Phase 4.7)
+│   │   ├── __init__.py
+│   │   ├── message_router.py   # Route messages to handlers
+│   │   ├── context_builder.py  # Assemble conversation context
+│   │   ├── tool_executor.py    # Execute tools with sandboxing
+│   │   └── response_handler.py # Stream/format responses
 │   ├── agent_profiles/      # 🤖 Specialized agent profiles
 │   │   ├── core-development/
 │   │   │   ├── backend-developer.md
@@ -656,6 +737,7 @@ myclaw/
 │   │   ├── newtech_agent.py # Tech tracking
 │   │   └── skill_adapter.py # Skill adaptation
 │   ├── config.py            # Configuration management
+│   ├── exceptions.py        # 🚨 Exception hierarchy (ZenSynoraError)
 │   ├── gateway.py           # Channel routing
 │   ├── memory.py            # SQLite persistence
 │   ├── provider.py          # LLM Provider abstraction
@@ -665,13 +747,14 @@ myclaw/
 │   │   ├── shell.py         # Shell execution
 │   │   ├── files.py         # File I/O
 │   │   ├── web.py           # Browse & download
-│   │   ├── ssh.py           # SSH remote execution
-│   │   ├── swarm.py         # Swarm tools
 │   │   ├── kb.py            # Knowledge base tools
 │   │   ├── scheduler.py     # Task scheduling
 │   │   ├── session.py       # Session insights
 │   │   ├── toolbox.py       # TOOLBOX skill management
 │   │   └── management.py    # System management
+│   ├── web/                 # 🌐 Web API
+│   │   ├── api.py           # FastAPI endpoints
+│   │   └── auth.py          # API-key authentication
 │   ├── state_store.py       # 🗄️ Multi-worker state store (Phase 6.1)
 │   ├── async_scheduler.py   # ⏰ Async job queue (Phase 6.2)
 │   ├── swarm/               # 🐝 Agent Swarm system
@@ -700,8 +783,16 @@ myclaw/
 │       ├── storage.py       # File operations
 │       ├── graph.py         # Graph traversal
 │       └── sync.py          # File-DB sync
+├── tests/                   # 🧪 Test suite
+│   ├── test_infrastructure.py  # Pool, limiter, cache, scheduler
+│   ├── test_memory.py       # Memory & AsyncSQLitePool
+│   ├── test_security.py     # Shell security tests
+│   ├── test_agent.py        # Agent logic
+│   ├── test_knowledge.py    # Knowledge base
+│   └── test_tools.py        # Tool definitions
 ├── docs/                    # Documentation
 │   └── agent_swarm_guide.md # Swarm documentation
+├── ACTION_PLAN.md           # 📋 Security & quality roadmap
 ├── onboard.py               # Setup wizard
 ├── cli.py                   # CLI entry point
 ├── requirements.txt         # Dependencies
@@ -1113,8 +1204,17 @@ Used internally for the knowledge research background worker. The Telegram `JobQ
 ## ⚠️ Security Notes
 
 - The agent executes shell commands—review the allowlist in [`myclaw/tools/core.py`](myclaw/tools/core.py:36)
+- **Shell uses `subprocess_exec`** — no shell interpretation occurs; each argument is passed separately
+- **Interpreters blocked** — `python`, `python3`, `pip`, `pip3`, `curl`, `wget` are explicitly removed from the allowlist to prevent sandbox escape
 - File operations are restricted to the workspace directory (`~/.myclaw/workspace`)
-- Telegram access is controlled by user ID whitelist
+- Telegram/WhatsApp access is controlled by user ID / phone number whitelist
+- **Admin endpoints require API key** — set `security.admin_api_key` in config or the `X-API-Key` header will be rejected
+- **CORS origins are configurable** — defaults to `http://localhost:5173`; never uses wildcard `*` with credentials
+- **MFA secrets are never exposed** in API responses — only provisioning URI and QR code are returned
+- **SSH connections verify host keys** against `~/.ssh/known_hosts`; unknown hosts are rejected
+- **Web tools block SSRF** — private IP ranges, localhost, and non-HTTP schemes are forbidden
+- **Audit logs are tamper-evident** — each entry is signed with HMAC-SHA256
+- **Config encryption supports env vars** — set `ZENSYNORA_CONFIG_KEY` for containerized deployments
 - Always review what the agent executes, especially with shell commands
 
 ---
@@ -1123,6 +1223,8 @@ Used internally for the knowledge research background worker. The Telegram `JobQ
 
 See the full roadmap in [`docs/dev/roadmap.md`](docs/dev/roadmap.md) for detailed phases and upcoming features.
 
+See [`ACTION_PLAN.md`](ACTION_PLAN.md) for the complete security, stability, and quality audit log.
+
 **Highlights:**
 - ✅ **Phase 1** — Core agent, Telegram, tools, memory, knowledge base
 - ✅ **Phase 2** — Agent profiles, multi-agent, task scheduling, WebUI
@@ -1130,8 +1232,8 @@ See the full roadmap in [`docs/dev/roadmap.md`](docs/dev/roadmap.md) for detaile
 - ✅ **Phase 4** — Agent discovery, 136+ specialized agents, scrapling integration
 - ✅ **Phase 5** — Intelligent routing, benchmarking, hardware awareness, knowledge gap filling
 - ✅ **Phase 6** — Multi-worker state store, async scheduler, infra scaling
-- 🔄 **Phase 7** — Docker, CI/CD, pip packaging, code quality *(in progress)*
-- ⏳ **Phase 8** — Plugin system, streaming tool execution, webhook mode
+- ✅ **Phase 7** — Security hardening, async migration, dependency restructure, test suite *(completed in v0.4.1)*
+- 🔄 **Phase 8** — Plugin system, streaming tool execution, webhook mode
 - ⏳ **Phase 9** — Discord/Slack integration, enterprise features
 
 ---

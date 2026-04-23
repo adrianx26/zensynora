@@ -7,36 +7,86 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .core import (
-    WORKSPACE, TOOLBOX_DIR, TOOLBOX_REG, TOOLBOX_DOCS,
-    ALLOWED_COMMANDS, BLOCKED_COMMANDS,
-    _rate_limiter, _tool_audit_logger,
-    _agent_registry, _job_queue, _user_chat_ids, _notification_callback,
+    WORKSPACE,
+    TOOLBOX_DIR,
+    TOOLBOX_REG,
+    TOOLBOX_DOCS,
+    ALLOWED_COMMANDS,
+    BLOCKED_COMMANDS,
+    _rate_limiter,
+    _tool_audit_logger,
+    _agent_registry,
+    _job_queue,
+    _user_chat_ids,
+    _notification_callback,
     _runtime_config,
-    TOOLS, TOOL_SCHEMAS,
+    TOOLS,
+    TOOL_SCHEMAS,
     validate_path,
     get_parallel_executor,
     is_tool_independent,
 )
 
+import ipaddress
 import re
 import httpx
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
+
+def _is_safe_url(url: str) -> tuple[bool, str]:
+    """SSRF guard: validate that a URL does not target internal/private resources.
+
+    Returns:
+        (is_safe, reason) where reason is empty if safe.
+    """
+    parsed = urlparse(url)
+    hostname = parsed.hostname
+    if not hostname:
+        return False, "Invalid URL: no hostname found."
+
+    # Block non-HTTP(S) schemes
+    if parsed.scheme not in {"http", "https"}:
+        return False, f"URL scheme '{parsed.scheme}' is not allowed. Only http/https permitted."
+
+    # Block localhost variants
+    lowered = hostname.lower()
+    if lowered in {"localhost", "127.0.0.1", "::1", "0.0.0.0"}:
+        return False, "Access to localhost is not allowed for security reasons."
+
+    # Block private/reserved IP ranges
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_reserved or ip.is_multicast:
+            return False, f"Access to IP address {hostname} is not allowed for security reasons."
+    except ValueError:
+        pass  # hostname is not an IP, continue
+
+    return True, ""
+
+
 # ── Internet & Download Tools ────────────────────────────────────────────────
+
 
 def _strip_html(html: str) -> str:
     """Strip HTML tags and collapse whitespace to produce clean plain text."""
     # Remove <script> and <style> blocks entirely
-    html = re.sub(r'<(script|style)[^>]*>.*?</(\1)>', '', html, flags=re.DOTALL | re.IGNORECASE)
+    html = re.sub(r"<(script|style)[^>]*>.*?</(\1)>", "", html, flags=re.DOTALL | re.IGNORECASE)
     # Remove all remaining tags
-    html = re.sub(r'<[^>]+>', ' ', html)
+    html = re.sub(r"<[^>]+>", " ", html)
     # Decode common HTML entities
-    html = html.replace('&amp;', '&').replace('&lt;', '<').replace('&gt;', '>') \
-               .replace('&quot;', '"').replace('&#39;', "'").replace('&nbsp;', ' ')
+    html = (
+        html.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", '"')
+        .replace("&#39;", "'")
+        .replace("&nbsp;", " ")
+    )
     # Collapse whitespace
-    html = re.sub(r'[ \t]+', ' ', html)
-    html = re.sub(r'\n{3,}', '\n\n', html)
+    html = re.sub(r"[ \t]+", " ", html)
+    html = re.sub(r"\n{3,}", "\n\n", html)
     return html.strip()
 
 
@@ -54,9 +104,13 @@ async def browse(url: str, max_length: int = 5000) -> str:
     Returns:
         Formatted page content on success, or structured error payload with guidance.
     """
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-    }
+    # SECURITY FIX (2026-04-23): SSRF guard before any outbound request.
+    safe, reason = _is_safe_url(url)
+    if not safe:
+        logger.warning(f"SSRF blocked browse to {url}: {reason}")
+        return f"Error: {reason}"
+
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     try:
         async with httpx.AsyncClient(headers=headers, timeout=30, follow_redirects=True) as client:
             response = await client.get(url)
@@ -169,13 +223,17 @@ async def download_file(url: str, path: str) -> str:
     url: The URL to download from
     path: The path (relative to workspace) to save the file
     """
+    # SECURITY FIX (2026-04-23): SSRF guard before any outbound request.
+    safe, reason = _is_safe_url(url)
+    if not safe:
+        logger.warning(f"SSRF blocked download from {url}: {reason}")
+        return f"Error: {reason}"
+
     try:
         # Validate the path
         target = validate_path(path)
 
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
 
         # Ensure parent directory exists
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -184,7 +242,7 @@ async def download_file(url: str, path: str) -> str:
         async with httpx.AsyncClient(headers=headers, timeout=60) as client:
             async with client.stream("GET", url, follow_redirects=True) as response:
                 response.raise_for_status()
-                with open(target, 'wb') as f:
+                with open(target, "wb") as f:
                     async for chunk in response.aiter_bytes(chunk_size=8192):
                         f.write(chunk)
 
@@ -202,5 +260,3 @@ async def download_file(url: str, path: str) -> str:
     except Exception as e:
         logger.error(f"Unexpected download error: {e}")
         return f"Error: {e}"
-
-

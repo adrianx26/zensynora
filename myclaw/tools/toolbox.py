@@ -7,12 +7,22 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from .core import (
-    WORKSPACE, TOOLBOX_DIR, TOOLBOX_REG, TOOLBOX_DOCS,
-    ALLOWED_COMMANDS, BLOCKED_COMMANDS,
-    _rate_limiter, _tool_audit_logger,
-    _agent_registry, _job_queue, _user_chat_ids, _notification_callback,
+    WORKSPACE,
+    TOOLBOX_DIR,
+    TOOLBOX_REG,
+    TOOLBOX_DOCS,
+    ALLOWED_COMMANDS,
+    BLOCKED_COMMANDS,
+    _rate_limiter,
+    _tool_audit_logger,
+    _agent_registry,
+    _job_queue,
+    _user_chat_ids,
+    _notification_callback,
     _runtime_config,
-    TOOLS, TOOL_SCHEMAS, _generate_schemas,
+    TOOLS,
+    TOOL_SCHEMAS,
+    _generate_schemas,
     validate_path,
     get_parallel_executor,
     is_tool_independent,
@@ -31,6 +41,7 @@ logger = logging.getLogger(__name__)
 
 # ── Feature 4: Agent Builds Its Own Tools ────────────────────────────────────
 
+
 def list_tools() -> str:
     """Return the names of all currently registered tools."""
     return "Available tools: " + ", ".join(sorted(TOOLS.keys()))
@@ -40,11 +51,9 @@ def register_mcp_tool(name: str, server_name: str, func, documentation: str = ""
     """Register a remote tool retrieved via MCP."""
     global TOOLS
     local_name = f"mcp_{server_name}_{name}"
-    TOOLS[local_name] = {
-        "func": func,
-        "desc": f"[{server_name} MCP] {documentation}"
-    }
+    TOOLS[local_name] = {"func": func, "desc": f"[{server_name} MCP] {documentation}"}
     return f"MCP tool '{local_name}' registered successfully."
+
 
 def register_tool(name: str, code: str, documentation: str = "") -> str:
     """Dynamically create a new tool from Python source code and store it in TOOLBOX.
@@ -68,15 +77,38 @@ def register_tool(name: str, code: str, documentation: str = "") -> str:
         return f"Error: '{name}' is not a valid Python identifier."
 
     # Check if tool already exists in TOOLBOX or is a core tool
-    if name in TOOLS or name in ["shell", "read_file", "write_file", "browse", "download_file",
-                                       "delegate", "list_tools", "register_tool", "schedule",
-                                       "edit_schedule", "split_schedule", "suspend_schedule",
-                                       "resume_schedule", "cancel_schedule", "list_schedules",
-                                       "write_to_knowledge", "search_knowledge", "read_knowledge",
-                                       "list_knowledge", "get_knowledge_context", "get_related_knowledge",
-                                       "sync_knowledge_base", "list_knowledge_tags",
-                                       "swarm_create", "swarm_assign", "swarm_status", "swarm_result",
-                                       "swarm_terminate", "swarm_list", "swarm_stats"]:
+    if name in TOOLS or name in [
+        "shell",
+        "read_file",
+        "write_file",
+        "browse",
+        "download_file",
+        "delegate",
+        "list_tools",
+        "register_tool",
+        "schedule",
+        "edit_schedule",
+        "split_schedule",
+        "suspend_schedule",
+        "resume_schedule",
+        "cancel_schedule",
+        "list_schedules",
+        "write_to_knowledge",
+        "search_knowledge",
+        "read_knowledge",
+        "list_knowledge",
+        "get_knowledge_context",
+        "get_related_knowledge",
+        "sync_knowledge_base",
+        "list_knowledge_tags",
+        "swarm_create",
+        "swarm_assign",
+        "swarm_status",
+        "swarm_result",
+        "swarm_terminate",
+        "swarm_list",
+        "swarm_stats",
+    ]:
         return f"Error: Tool '{name}' already exists or is a protected core tool. Use list_tools() to see all available tools."
 
     # Check if file already exists in TOOLBOX directory
@@ -86,7 +118,9 @@ def register_tool(name: str, code: str, documentation: str = "") -> str:
         return f"Error: Tool file '{name}.py' already exists in TOOLBOX. Please choose a different name or modify the existing tool."
 
     # Check for similar tools based on name similarity
-    similar_tools = [t for t in TOOLS.keys() if name.lower() in t.lower() or t.lower() in name.lower()]
+    similar_tools = [
+        t for t in TOOLS.keys() if name.lower() in t.lower() or t.lower() in name.lower()
+    ]
     if similar_tools:
         return f"Error: Similar tool(s) already exist in TOOLBOX: {', '.join(similar_tools)}. Please check if an existing tool meets your needs using list_tools() or choose a more specific name."
 
@@ -98,11 +132,27 @@ def register_tool(name: str, code: str, documentation: str = "") -> str:
 
     # AST validation to prevent dangerous operations (Phase 1.2 hardened)
     import ast
+
     try:
         tree = ast.parse(code)
-        forbidden_imports = {"os", "sys", "subprocess", "shutil", "socket", "urllib", "http", "pty", "commands", "importlib"}
-        forbidden_calls = {"eval", "exec", "__import__", "globals", "locals", "compile"}
-        # open() is restricted to read-only mode checks below
+        # SECURITY FIX (2026-04-23): Hardened AST whitelist.
+        # - Added importlib to prevent dynamic imports.
+        # - Added getattr to prevent attribute-based bypasses (e.g. getattr(__builtins__, 'eval')).
+        # - open() is blocked entirely for dynamic tools; use injected file helpers instead.
+        forbidden_imports = {
+            "os",
+            "sys",
+            "subprocess",
+            "shutil",
+            "socket",
+            "urllib",
+            "http",
+            "pty",
+            "commands",
+            "importlib",
+        }
+        forbidden_calls = {"eval", "exec", "__import__", "globals", "locals", "compile", "getattr"}
+        # Block open() entirely — dynamic tools should not access the filesystem directly.
         restricted_calls = {"open"}
 
         def _is_builtin_access(node: ast.AST) -> bool:
@@ -110,42 +160,46 @@ def register_tool(name: str, code: str, documentation: str = "") -> str:
             if isinstance(node, ast.Subscript):
                 # __builtins__.__dict__['eval'] or __builtins__['eval']
                 if isinstance(node.value, ast.Attribute):
-                    if isinstance(node.value.value, ast.Name) and node.value.value.id == '__builtins__':
+                    if (
+                        isinstance(node.value.value, ast.Name)
+                        and node.value.value.id == "__builtins__"
+                    ):
                         return True
-                if isinstance(node.value, ast.Name) and node.value.id == '__builtins__':
+                if isinstance(node.value, ast.Name) and node.value.id == "__builtins__":
                     return True
             if isinstance(node, ast.Call):
                 # getattr(__builtins__, 'eval') or getattr(__builtins__.__dict__, 'eval')
-                if isinstance(node.func, ast.Name) and node.func.id == 'getattr':
+                if isinstance(node.func, ast.Name) and node.func.id == "getattr":
                     if len(node.args) >= 2:
                         first = node.args[0]
-                        if isinstance(first, ast.Name) and first.id == '__builtins__':
+                        if isinstance(first, ast.Name) and first.id == "__builtins__":
                             return True
-                        if isinstance(first, ast.Attribute) and isinstance(first.value, ast.Name) and first.value.id == '__builtins__':
+                        if (
+                            isinstance(first, ast.Attribute)
+                            and isinstance(first.value, ast.Name)
+                            and first.value.id == "__builtins__"
+                        ):
                             return True
             return False
 
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    if alias.name.split('.')[0] in forbidden_imports:
+                    if alias.name.split(".")[0] in forbidden_imports:
                         return f"Error: Importing '{alias.name}' is forbidden for security reasons."
             elif isinstance(node, ast.ImportFrom):
-                if node.module and node.module.split('.')[0] in forbidden_imports:
-                    return f"Error: Importing from '{node.module}' is forbidden for security reasons."
+                if node.module and node.module.split(".")[0] in forbidden_imports:
+                    return (
+                        f"Error: Importing from '{node.module}' is forbidden for security reasons."
+                    )
             elif isinstance(node, ast.Call):
                 # Direct call: eval(), exec(), etc.
                 if isinstance(node.func, ast.Name) and node.func.id in forbidden_calls:
                     return f"Error: Calling '{node.func.id}' is forbidden for security reasons."
-                # Restricted call: open() — only allow read modes
+                # SECURITY: open() is forbidden entirely in dynamically registered tools.
+                # File access should be performed through injected, audited helpers.
                 if isinstance(node.func, ast.Name) and node.func.id in restricted_calls:
-                    # Check if open() has a mode argument that is write/append/create
-                    if len(node.args) >= 2:
-                        mode_arg = node.args[1]
-                        if isinstance(mode_arg, ast.Constant) and isinstance(mode_arg.value, str):
-                            mode = mode_arg.value
-                            if any(c in mode for c in 'wax+'):
-                                return f"Error: open() with mode '{mode}' is forbidden. Only read modes ('r') are allowed in tools."
+                    return "Error: open() is forbidden in dynamic tools. Use injected file helpers instead."
                 # Detect __builtins__ bypasses
                 if _is_builtin_access(node):
                     return "Error: Accessing __builtins__ dynamically is forbidden for security reasons."
@@ -159,10 +213,10 @@ def register_tool(name: str, code: str, documentation: str = "") -> str:
     if '"""' not in code and "'''" not in code:
         return "Error: Tool code must include a docstring explaining its purpose and usage."
 
-    if 'try:' not in code or 'except' not in code:
+    if "try:" not in code or "except" not in code:
         return "Error: Tool code must include error handling with try-except blocks."
 
-    if 'logger.error' not in code:
+    if "logger.error" not in code:
         return "Error: Tool code must include error logging using logger.error()."
 
     # Write to disk
@@ -195,7 +249,7 @@ Errors are logged to the standard logging system and can be found in the applica
     # Dynamic load
     try:
         spec = importlib.util.spec_from_file_location(name, tool_path)
-        mod  = importlib.util.module_from_spec(spec)
+        mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
         func = getattr(mod, name)
     except AttributeError:
@@ -231,7 +285,7 @@ Errors are logged to the standard logging system and can be found in the applica
         "eval_score": None,
         "eval_count": 0,
         "enabled": True,
-        "errors": []
+        "errors": [],
     }
     TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
 
@@ -301,14 +355,14 @@ def list_toolbox() -> str:
 
         lines = ["[TOOLBOX] Contents:", ""]
         for name, info in sorted(registry.items()):
-            enabled = info.get('enabled', True)
+            enabled = info.get("enabled", True)
             status = "🟢" if enabled else "🔴"
-            eval_score = info.get('eval_score')
+            eval_score = info.get("eval_score")
 
             lines.append(f"{status} [TOOL] {name} v{info.get('version', '1.0.0')}")
             lines.append(f"   Author: {info.get('author', 'unknown')}")
             lines.append(f"   Created: {info.get('created', 'Unknown')}")
-            if info.get('tags'):
+            if info.get("tags"):
                 lines.append(f"   Tags: {', '.join(info.get('tags', []))}")
             lines.append(f"   Description: {info.get('description', 'No description')[:80]}...")
             if eval_score is not None:
@@ -365,7 +419,7 @@ def load_custom_tools():
                 continue
 
             # Skip disabled tools
-            if isinstance(info, dict) and not info.get('enabled', True):
+            if isinstance(info, dict) and not info.get("enabled", True):
                 logger.info(f"Skipping disabled tool from TOOLBOX: {name}")
                 continue
 
@@ -393,6 +447,7 @@ def load_custom_tools():
 
 
 # ── Skill Evaluation Harness ─────────────────────────────────────────────────
+
 
 def get_skill_info(skill_name: str) -> str:
     """Get detailed information about a skill from the TOOLBOX registry.
@@ -422,19 +477,21 @@ def get_skill_info(skill_name: str) -> str:
             f"   Last Modified: {info.get('last_modified', 'Unknown')}",
         ]
 
-        if info.get('tags'):
+        if info.get("tags"):
             lines.append(f"   Tags: {', '.join(info.get('tags', []))}")
 
-        if info.get('description'):
+        if info.get("description"):
             lines.append(f"   Description: {info.get('description')}")
 
-        lines.extend([
-            f"   Evaluation Score: {info.get('eval_score', 'Not evaluated')}",
-            f"   Evaluation Count: {info.get('eval_count', 0)}",
-            f"   Path: {info.get('path', 'Unknown')}",
-        ])
+        lines.extend(
+            [
+                f"   Evaluation Score: {info.get('eval_score', 'Not evaluated')}",
+                f"   Evaluation Count: {info.get('eval_count', 0)}",
+                f"   Path: {info.get('path', 'Unknown')}",
+            ]
+        )
 
-        if info.get('errors'):
+        if info.get("errors"):
             lines.append(f"   Recent Errors: {len(info['errors'])}")
 
         return "\n".join(lines)
@@ -461,7 +518,7 @@ def enable_skill(skill_name: str) -> str:
         if skill_name not in registry:
             return f"Skill '{skill_name}' not found in TOOLBOX."
 
-        registry[skill_name]['enabled'] = True
+        registry[skill_name]["enabled"] = True
         TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
 
         # Reload the tool into TOOLS if it was previously disabled
@@ -475,7 +532,10 @@ def enable_skill(skill_name: str) -> str:
                         mod = importlib.util.module_from_spec(spec)
                         spec.loader.exec_module(mod)
                         func = getattr(mod, skill_name)
-                        TOOLS[skill_name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {skill_name}"}
+                        TOOLS[skill_name] = {
+                            "func": func,
+                            "desc": func.__doc__ or f"Custom tool: {skill_name}",
+                        }
                         logger.info(f"Enabled and loaded skill: {skill_name}")
                 except Exception as e:
                     return f"Skill enabled but failed to reload: {e}"
@@ -507,7 +567,7 @@ def disable_skill(skill_name: str) -> str:
         if skill_name not in registry:
             return f"Skill '{skill_name}' not found in TOOLBOX."
 
-        registry[skill_name]['enabled'] = False
+        registry[skill_name]["enabled"] = False
         TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
 
         # Remove from TOOLS to prevent execution
@@ -524,7 +584,9 @@ def disable_skill(skill_name: str) -> str:
         return f"Error disabling skill: {e}"
 
 
-def update_skill_metadata(skill_name: str, tags: str = None, description: str = None, version: str = None) -> str:
+def update_skill_metadata(
+    skill_name: str, tags: str = None, description: str = None, version: str = None
+) -> str:
     """Update metadata for an existing skill.
 
     skill_name: The name of the skill to update
@@ -545,22 +607,26 @@ def update_skill_metadata(skill_name: str, tags: str = None, description: str = 
             return f"Skill '{skill_name}' not found in TOOLBOX."
 
         if tags is not None:
-            registry[skill_name]['tags'] = [t.strip() for t in tags.split(",") if t.strip()]
+            registry[skill_name]["tags"] = [t.strip() for t in tags.split(",") if t.strip()]
 
         if description is not None:
-            registry[skill_name]['description'] = description
+            registry[skill_name]["description"] = description
             # Also update the documentation file
             doc_path = TOOLBOX_DIR / f"{skill_name}_README.md"
             if doc_path.exists():
                 content = doc_path.read_text()
                 if "## Description" in content:
-                    content = content.split("## Description")[0] + f"## Description\n{description}\n" + content.split("## Description")[1].split("\n##")[1:]
+                    content = (
+                        content.split("## Description")[0]
+                        + f"## Description\n{description}\n"
+                        + content.split("## Description")[1].split("\n##")[1:]
+                    )
                     doc_path.write_text(content)
 
         if version is not None:
-            registry[skill_name]['version'] = version
+            registry[skill_name]["version"] = version
 
-        registry[skill_name]['last_modified'] = datetime.now().isoformat()
+        registry[skill_name]["last_modified"] = datetime.now().isoformat()
         TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
 
         return f"✅ Skill '{skill_name}' metadata updated."
@@ -591,7 +657,9 @@ def benchmark_skill(skill_name: str, test_cases_json: str = "[]") -> str:
 
         if skill_name not in TOOLS:
             return f"Skill '{skill_name}' is not loaded in memory. Enable it first."
-        if getattr(getattr(_runtime_config, "sandbox", None), "enabled", False) and _is_untrusted_skill(skill_name):
+        if getattr(
+            getattr(_runtime_config, "sandbox", None), "enabled", False
+        ) and _is_untrusted_skill(skill_name):
             violations = _validate_skill_for_sandbox(skill_name)
             if violations:
                 return f"Sandbox blocked benchmark execution: {violations}"
@@ -627,18 +695,18 @@ def benchmark_skill(skill_name: str, test_cases_json: str = "[]") -> str:
 
                 if success:
                     passed += 1
-                    results.append(f"  ✅ Test {i+1}: PASS")
+                    results.append(f"  ✅ Test {i + 1}: PASS")
                 else:
-                    results.append(f"  ❌ Test {i+1}: FAIL (got: {str(result)[:50]}...)")
+                    results.append(f"  ❌ Test {i + 1}: FAIL (got: {str(result)[:50]}...)")
 
             except Exception as e:
-                results.append(f"  ❌ Test {i+1}: ERROR - {str(e)}")
+                results.append(f"  ❌ Test {i + 1}: ERROR - {str(e)}")
 
         score = (passed / len(test_cases)) * 100 if test_cases else 0
 
         # Update registry with new evaluation score
-        current_count = registry[skill_name].get('eval_count', 0)
-        current_score = registry[skill_name].get('eval_score')
+        current_count = registry[skill_name].get("eval_count", 0)
+        current_score = registry[skill_name].get("eval_score")
 
         if current_score is not None:
             # Running average
@@ -646,12 +714,12 @@ def benchmark_skill(skill_name: str, test_cases_json: str = "[]") -> str:
         else:
             new_avg = score
 
-        registry[skill_name]['eval_score'] = round(new_avg, 2)
-        registry[skill_name]['eval_count'] = current_count + 1
+        registry[skill_name]["eval_score"] = round(new_avg, 2)
+        registry[skill_name]["eval_count"] = current_count + 1
 
         # Auto-disable if score is too low (< 30%)
         if score < 30 and len(test_cases) >= 3:
-            registry[skill_name]['enabled'] = False
+            registry[skill_name]["enabled"] = False
             if skill_name in TOOLS:
                 del TOOLS[skill_name]
 
@@ -737,21 +805,21 @@ def evaluate_skill(skill_name: str) -> str:
             checks.append(("Has docstring", False))
 
         # Check 4: Has error handling
-        if 'try:' in code and 'except' in code:
+        if "try:" in code and "except" in code:
             checks.append(("Has error handling", True))
             score += 15
         else:
             checks.append(("Has error handling", False))
 
         # Check 5: Has logging
-        if 'logger' in code:
+        if "logger" in code:
             checks.append(("Has logging", True))
             score += 10
         else:
             checks.append(("Has logging", False))
 
         # Check 6: Registry metadata complete
-        required_fields = ['version', 'description', 'tags', 'author', 'created']
+        required_fields = ["version", "description", "tags", "author", "created"]
         missing = [f for f in required_fields if f not in info or not info[f]]
         if not missing:
             checks.append(("Registry metadata complete", True))
@@ -761,16 +829,16 @@ def evaluate_skill(skill_name: str) -> str:
             checks.append((f"Missing fields: {', '.join(missing)}", False))
 
         # Update evaluation score
-        current_count = info.get('eval_count', 0)
-        current_score = info.get('eval_score')
+        current_count = info.get("eval_count", 0)
+        current_score = info.get("eval_score")
 
         if current_score is not None:
             new_avg = (current_score * current_count + score) / (current_count + 1)
         else:
             new_avg = score
 
-        registry[skill_name]['eval_score'] = round(new_avg, 2)
-        registry[skill_name]['eval_count'] = current_count + 1
+        registry[skill_name]["eval_score"] = round(new_avg, 2)
+        registry[skill_name]["eval_count"] = current_count + 1
         TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
 
         lines = [
@@ -798,6 +866,7 @@ def evaluate_skill(skill_name: str) -> str:
 
 
 # ── Skill Self-Improvement ───────────────────────────────────────────────────
+
 
 def improve_skill(skill_name: str, improved_code: str, documentation: str = "") -> str:
     """Improve an existing skill with new code, with safety checks and evaluation.
@@ -837,18 +906,29 @@ def improve_skill(skill_name: str, improved_code: str, documentation: str = "") 
 
         # AST validation for security
         import ast
+
         try:
             tree = ast.parse(improved_code)
-            forbidden_imports = {"os", "sys", "subprocess", "shutil", "socket", "urllib", "http", "pty", "commands"}
+            forbidden_imports = {
+                "os",
+                "sys",
+                "subprocess",
+                "shutil",
+                "socket",
+                "urllib",
+                "http",
+                "pty",
+                "commands",
+            }
             forbidden_calls = {"eval", "exec", "open", "__import__", "globals", "locals", "compile"}
 
             for node in ast.walk(tree):
                 if isinstance(node, ast.Import):
                     for alias in node.names:
-                        if alias.name.split('.')[0] in forbidden_imports:
+                        if alias.name.split(".")[0] in forbidden_imports:
                             return f"Error: Importing '{alias.name}' is forbidden for security reasons."
                 elif isinstance(node, ast.ImportFrom):
-                    if node.module and node.module.split('.')[0] in forbidden_imports:
+                    if node.module and node.module.split(".")[0] in forbidden_imports:
                         return f"Error: Importing from '{node.module}' is forbidden for security reasons."
                 elif isinstance(node, ast.Call):
                     if isinstance(node.func, ast.Name) and node.func.id in forbidden_calls:
@@ -860,10 +940,10 @@ def improve_skill(skill_name: str, improved_code: str, documentation: str = "") 
         if '"""' not in improved_code and "'''" not in improved_code:
             return "Error: Improved code must include a docstring explaining its purpose and usage."
 
-        if 'try:' not in improved_code or 'except' not in improved_code:
+        if "try:" not in improved_code or "except" not in improved_code:
             return "Error: Improved code must include error handling with try-except blocks."
 
-        if 'logger.error' not in improved_code:
+        if "logger.error" not in improved_code:
             return "Error: Improved code must include error logging using logger.error()."
         if getattr(getattr(_runtime_config, "sandbox", None), "enabled", False):
             violations = _get_security_sandbox().validate_code(improved_code)
@@ -871,11 +951,12 @@ def improve_skill(skill_name: str, improved_code: str, documentation: str = "") 
                 return f"Sandbox blocked improved skill content: {'; '.join(violations)}"
 
         # Backup existing file
-        existing_path = Path(existing_info.get('path', ''))
+        existing_path = Path(existing_info.get("path", ""))
         backup_path = None
         if existing_path.exists():
-            backup_path = existing_path.with_suffix('.py.bak')
+            backup_path = existing_path.with_suffix(".py.bak")
             import shutil
+
             shutil.copy2(existing_path, backup_path)
 
         # Write new code
@@ -883,7 +964,7 @@ def improve_skill(skill_name: str, improved_code: str, documentation: str = "") 
 
         # Update documentation if provided
         if not documentation:
-            documentation = existing_info.get('description', '')
+            documentation = existing_info.get("description", "")
 
         if documentation:
             doc_path = TOOLBOX_DIR / f"{skill_name}_README.md"
@@ -901,7 +982,7 @@ def improve_skill(skill_name: str, improved_code: str, documentation: str = "") 
 {datetime.now().isoformat()}
 
 ## Previous Version
-{existing_info.get('version', '1.0.0')}
+{existing_info.get("version", "1.0.0")}
 
 ## Error Logging
 Errors are logged to the standard logging system.
@@ -931,11 +1012,11 @@ Errors are logged to the standard logging system.
             return f"Error loading improved code: {e}. Previous version restored."
 
         # Update version (increment patch version)
-        old_version = existing_info.get('version', '1.0.0')
+        old_version = existing_info.get("version", "1.0.0")
         try:
-            parts = old_version.split('.')
+            parts = old_version.split(".")
             patch = int(parts[-1]) + 1
-            new_version = '.'.join(parts[:-1]) + '.' + str(patch)
+            new_version = ".".join(parts[:-1]) + "." + str(patch)
         except:
             new_version = "1.1.0"
 
@@ -944,15 +1025,15 @@ Errors are logged to the standard logging system.
             "path": str(existing_path),
             "name": skill_name,
             "version": new_version,
-            "description": documentation or existing_info.get('description', ''),
-            "tags": existing_info.get('tags', []),
+            "description": documentation or existing_info.get("description", ""),
+            "tags": existing_info.get("tags", []),
             "author": "agent",
-            "created": existing_info.get('created', datetime.now().isoformat()),
+            "created": existing_info.get("created", datetime.now().isoformat()),
             "last_modified": datetime.now().isoformat(),
-            "eval_score": existing_info.get('eval_score'),
-            "eval_count": existing_info.get('eval_count', 0),
+            "eval_score": existing_info.get("eval_score"),
+            "eval_count": existing_info.get("eval_count", 0),
             "enabled": True,
-            "errors": []
+            "errors": [],
         }
         TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
 
@@ -997,22 +1078,23 @@ def rollback_skill(skill_name: str) -> str:
             return f"Skill '{skill_name}' not found in TOOLBOX."
 
         existing_info = registry[skill_name]
-        existing_path = Path(existing_info.get('path', ''))
-        backup_path = existing_path.with_suffix('.py.bak')
+        existing_path = Path(existing_info.get("path", ""))
+        backup_path = existing_path.with_suffix(".py.bak")
 
         if not backup_path.exists():
             return f"No backup found for '{skill_name}'. Cannot rollback."
 
         # Restore backup
         import shutil
+
         shutil.copy2(backup_path, existing_path)
 
         # Update version (decrement)
-        old_version = existing_info.get('version', '1.0.0')
+        old_version = existing_info.get("version", "1.0.0")
         try:
-            parts = old_version.split('.')
+            parts = old_version.split(".")
             patch = max(0, int(parts[-1]) - 1)
-            new_version = '.'.join(parts[:-1]) + '.' + str(patch)
+            new_version = ".".join(parts[:-1]) + "." + str(patch)
         except:
             new_version = "1.0.0"
 
@@ -1023,13 +1105,16 @@ def rollback_skill(skill_name: str) -> str:
                 mod = importlib.util.module_from_spec(spec)
                 spec.loader.exec_module(mod)
                 func = getattr(mod, skill_name)
-                TOOLS[skill_name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {skill_name}"}
+                TOOLS[skill_name] = {
+                    "func": func,
+                    "desc": func.__doc__ or f"Custom tool: {skill_name}",
+                }
         except Exception as e:
             return f"Restored but failed to reload: {e}"
 
         # Update registry
-        registry[skill_name]['version'] = new_version
-        registry[skill_name]['last_modified'] = datetime.now().isoformat()
+        registry[skill_name]["version"] = new_version
+        registry[skill_name]["last_modified"] = datetime.now().isoformat()
         TOOLBOX_REG.write_text(json.dumps(registry, indent=2))
 
         TOOL_SCHEMAS.clear()
@@ -1044,4 +1129,3 @@ def rollback_skill(skill_name: str) -> str:
     except Exception as e:
         logger.error(f"Error rolling back skill: {e}")
         return f"Error rolling back skill: {e}"
-

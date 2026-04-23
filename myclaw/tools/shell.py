@@ -12,11 +12,15 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .core import (
-    WORKSPACE, ALLOWED_COMMANDS, BLOCKED_COMMANDS,
-    _rate_limiter, _tool_audit_logger,
+    WORKSPACE,
+    ALLOWED_COMMANDS,
+    BLOCKED_COMMANDS,
+    _rate_limiter,
+    _tool_audit_logger,
 )
 
 logger = logging.getLogger(__name__)
+
 
 async def shell_async(cmd: str, timeout: int = 30) -> str:
     """Execute an allowed shell command asynchronously in the workspace directory.
@@ -39,12 +43,12 @@ async def shell_async(cmd: str, timeout: int = 30) -> str:
     start_time = time.time()
     try:
         # 5.1: Rate limiting check
-        if not _rate_limiter.check("shell", max_calls=10, window=60):
+        if not await _rate_limiter.acheck("shell", max_calls=10, window=60):
             _tool_audit_logger.log("shell_async", "", 0, False, "Rate limit exceeded")
             return "Error: Rate limit exceeded for shell tool (10 calls/minute)"
 
         # Security: Validate command doesn't contain dangerous characters
-        dangerous = re.compile(r'[;&|`$(){}\[\]\\]')
+        dangerous = re.compile(r"[;&|`$(){}\[\]\\]")
         if dangerous.search(cmd):
             logger.warning(f"Blocked command with dangerous characters: {cmd}")
             _tool_audit_logger.log("shell_async", "", 0, False, "Dangerous characters detected")
@@ -59,14 +63,18 @@ async def shell_async(cmd: str, timeout: int = 30) -> str:
             _tool_audit_logger.log("shell_async", "", 0, False, f"Blocked command: {first_cmd}")
             return f"Error: Command '{first_cmd}' is blocked for security"
         if first_cmd not in ALLOWED_COMMANDS:
-            return f"Error: '{first_cmd}' not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
+            return (
+                f"Error: '{first_cmd}' not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
+            )
 
-        # Use the full command string for shell execution
-        process = await asyncio.create_subprocess_shell(
-            cmd,
+        # SECURITY FIX: Use exec (not shell) to prevent command injection.
+        # Each part is passed as a separate argument; no shell interpretation occurs.
+        process = await asyncio.create_subprocess_exec(
+            parts[0],
+            *parts[1:],
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            cwd=WORKSPACE
+            cwd=WORKSPACE,
         )
 
         try:
@@ -84,9 +92,9 @@ async def shell_async(cmd: str, timeout: int = 30) -> str:
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         _tool_audit_logger.log("shell_async", "", duration_ms, False, str(e))
-        logger.error(f"Shell async error: {e}")
-        return f"Error: {e}"
-
+        # SECURITY: Do not leak internal exception details to the caller.
+        logger.error(f"Shell async error (internal): {e}", exc_info=True)
+        return "Error: Shell execution failed. Check server logs."
 
 
 def shell(cmd: str) -> str:
@@ -108,7 +116,7 @@ def shell(cmd: str) -> str:
         'Error: Rate limit exceeded for shell tool' if rate limited.
 
     Allowed commands: ls, dir, cat, type, find, grep, findstr, head, tail,
-        wc, sort, uniq, cut, git, echo, pwd, python, python3, pip, curl, wget
+        wc, sort, uniq, cut, git, echo, pwd
     """
     start_time = time.time()
     try:
@@ -118,7 +126,7 @@ def shell(cmd: str) -> str:
             return "Error: Rate limit exceeded for shell tool (10 calls/minute)"
 
         # Security: Validate command doesn't contain dangerous characters
-        dangerous = re.compile(r'[;&|`$(){}\[\]\\]')
+        dangerous = re.compile(r"[;&|`$(){}\[\]\\]")
         if dangerous.search(cmd):
             logger.warning(f"Blocked command with dangerous characters: {cmd}")
             _tool_audit_logger.log("shell", "", 0, False, "Dangerous characters detected")
@@ -133,10 +141,11 @@ def shell(cmd: str) -> str:
             _tool_audit_logger.log("shell", "", 0, False, f"Blocked command: {first_cmd}")
             return f"Error: Command '{first_cmd}' is blocked for security"
         if first_cmd not in ALLOWED_COMMANDS:
-            return f"Error: '{first_cmd}' not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
+            return (
+                f"Error: '{first_cmd}' not allowed. Allowed: {', '.join(sorted(ALLOWED_COMMANDS))}"
+            )
         result = subprocess.run(
-            parts, shell=False, cwd=WORKSPACE,
-            capture_output=True, text=True, timeout=30
+            parts, shell=False, cwd=WORKSPACE, capture_output=True, text=True, timeout=30
         )
         duration_ms = (time.time() - start_time) * 1000
         # 5.4: Audit logging
@@ -149,6 +158,6 @@ def shell(cmd: str) -> str:
     except Exception as e:
         duration_ms = (time.time() - start_time) * 1000
         _tool_audit_logger.log("shell", "", duration_ms, False, str(e))
-        logger.error(f"Shell error: {e}")
-        return f"Error: {e}"
-
+        # SECURITY: Do not leak internal exception details to the caller.
+        logger.error(f"Shell error (internal): {e}", exc_info=True)
+        return "Error: Shell execution failed. Check server logs."

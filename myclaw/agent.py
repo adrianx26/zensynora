@@ -73,6 +73,7 @@ class KnowledgeSearchResult:
         gap_logged: Whether this search was recorded as a knowledge gap
         metadata: Additional search metadata (query, timestamp, etc.)
     """
+
     context: str
     has_results: bool
     suggested_topics: List[str] = field(default_factory=list)
@@ -182,7 +183,7 @@ def _load_profile_cached(name: str, profile_path: Path) -> str:
 
 async def _load_profile_cached_async(name: str, profile_path: Path) -> str:
     """Async wrapper for _load_profile_cached using thread pool.
-    
+
     Avoids blocking the event loop during file I/O.
     """
     return await asyncio.to_thread(_load_profile_cached, name, profile_path)
@@ -227,7 +228,14 @@ class Agent:
         except Exception:
             return False
 
-    def __init__(self, config, name: str = "default", model: str = None, system_prompt: str = None, provider_name: str = None):
+    def __init__(
+        self,
+        config,
+        name: str = "default",
+        model: str = None,
+        system_prompt: str = None,
+        provider_name: str = None,
+    ):
         self.name = name
         self._memories: dict[str, Memory] = {}
 
@@ -235,7 +243,7 @@ class Agent:
         # Store config and provider name for lazy initialization
         self._config = config
         self._provider = None  # Will be initialized on first access
-        
+
         try:
             default_provider = config.agents.defaults.provider or "ollama"
         except Exception:
@@ -251,24 +259,26 @@ class Agent:
 
         # Store paths for lazy profile loading (to avoid blocking in __init__)
         self._local_profiles_dir = Path(__file__).parent / "profiles"
-        self._user_profiles_dir = Path(getattr(config.agents, "profiles_dir", "~/.myclaw/profiles")).expanduser()
+        self._user_profiles_dir = Path(
+            getattr(config.agents, "profiles_dir", "~/.myclaw/profiles")
+        ).expanduser()
         self._custom_system_prompt = system_prompt
         self._system_prompt_loaded = False
         self._system_prompt = ""
-        
+
         # Initialize skill preloader for this agent
         self._skill_preloader = get_skill_preloader()
 
         # Store pending preload tasks to prevent garbage collection
+        # PERF FIX (2026-04-23): Bounded set to prevent memory leaks under burst load.
         self._pending_preloads: set[asyncio.Task] = set()
+        self._max_pending_preloads = 100
 
         # Store config for later use
         self.config = config
 
         # Offline mode: enable fallback to local providers on connection failure
-        self._offline_mode = getattr(
-            getattr(config, "intelligence", None), "offline_mode", True
-        )
+        self._offline_mode = getattr(getattr(config, "intelligence", None), "offline_mode", True)
         self._fallback_wrapper: Optional[Any] = None
 
         # Initialize knowledge gap cache for deduplication
@@ -280,40 +290,70 @@ class Agent:
 
         # ── Intelligent Routing ──────────────────────────────────────────────
         from .backends.router import IntelligentRouter
+
         self._router = IntelligentRouter(config)
 
         # ── Hardware Awareness & Optimization Check ──────────────────────────
-        try:
-            from .backends.hardware import get_system_metrics, get_optimization_suggestions
-            metrics = get_system_metrics()
-            suggestions = get_optimization_suggestions(metrics)
-            if suggestions:
-                for s in suggestions:
-                    logger.info(f"System Optimization Note: {s}")
-        except Exception as e:
-            logger.debug(f"Hardware optimization check skipped: {e}")
-    
+        # PERF FIX (2026-04-23): Hardware probes block startup by 100-500ms.
+        # Defer to a background thread so __init__ returns immediately.
+        def _deferred_hardware_check():
+            try:
+                from .backends.hardware import get_system_metrics, get_optimization_suggestions
+
+                metrics = get_system_metrics()
+                suggestions = get_optimization_suggestions(metrics)
+                if suggestions:
+                    for s in suggestions:
+                        logger.info(f"System Optimization Note: {s}")
+            except Exception as e:
+                logger.debug(f"Hardware optimization check skipped: {e}")
+
+        threading.Thread(target=_deferred_hardware_check, daemon=True).start()
+
     def _handle_task_status_update(self, update) -> None:
         """Handle status updates from the task timer."""
         # Format and print the status update to console
         timestamp = datetime.fromtimestamp(update.timestamp).strftime("%H:%M:%S")
         elapsed = f"[{update.elapsed_seconds:.1f}s]"
-        
-        print(f"\n{TimerColors.TIMESTAMP}[{timestamp}]{TimerColors.RESET} "
-              f"{TimerColors.METRIC}{elapsed}{TimerColors.RESET}", end="")
-        
+
+        print(
+            f"\n{TimerColors.TIMESTAMP}[{timestamp}]{TimerColors.RESET} "
+            f"{TimerColors.METRIC}{elapsed}{TimerColors.RESET}",
+            end="",
+        )
+
         if update.threshold:
-            print(f" {TimerColors.WARNING}[THRESHOLD: {update.threshold}s]{TimerColors.RESET}", end="")
+            print(
+                f" {TimerColors.WARNING}[THRESHOLD: {update.threshold}s]{TimerColors.RESET}", end=""
+            )
         print()
-        
+
         if update.step_name:
             print(f"  Step: {TimerColors.STEP_NAME}{update.step_name}{TimerColors.RESET}")
-        
+
         print(f"  {update.color}{update.message}{TimerColors.RESET}")
-        
+
         # If it's the max timeout failure, the task is already being terminated
         if update.threshold == 300 and update.message_type == "fatal":
             logger.critical(f"Task {update.task_id} reached maximum timeout")
+
+    def _track_preload(self, task: asyncio.Task) -> None:
+        """Safely track a preload task with bounded memory.
+
+        PERF FIX (2026-04-23): Evicts oldest completed tasks if the set
+        exceeds _max_pending_preloads to prevent unbounded growth.
+        """
+        # Prune completed tasks if we're near the limit
+        if len(self._pending_preloads) >= self._max_pending_preloads:
+            completed = {t for t in self._pending_preloads if t.done()}
+            self._pending_preloads.difference_update(completed)
+            # If still at limit, evict oldest by removing arbitrary tasks
+            while len(self._pending_preloads) >= self._max_pending_preloads:
+                try:
+                    self._pending_preloads.pop()
+                except KeyError:
+                    break
+        self._track_preload(task)
 
     # ── Context-gap tracking ─────────────────────────────────────────────────
     # Tracks topics per user for which the KB returned no results, so they can
@@ -333,7 +373,7 @@ class Agent:
             True if gap was recorded, False if duplicate (not recorded)
         """
         # Check deduplication cache unless skipped
-        if not skip_cache and hasattr(self, '_gap_cache'):
+        if not skip_cache and hasattr(self, "_gap_cache"):
             if self._gap_cache.is_duplicate(topic, user_id):
                 logger.debug(f"KB gap duplicate suppressed for user '{user_id}': {topic[:60]}")
                 return False
@@ -350,7 +390,7 @@ class Agent:
 
     def clear_gap_cache(self) -> None:
         """Clear the gap deduplication cache (useful for testing)."""
-        if hasattr(self, '_gap_cache'):
+        if hasattr(self, "_gap_cache"):
             self._gap_cache.clear()
 
     def set_gap_cache_enabled(self, enabled: bool) -> None:
@@ -360,7 +400,7 @@ class Agent:
             enabled: Whether to enable deduplication caching
         """
         self._knowledge_gap_cache_enabled = enabled
-        if hasattr(self, '_gap_cache'):
+        if hasattr(self, "_gap_cache"):
             self._gap_cache.set_enabled(enabled)
 
     # ── Automatic Knowledge Extraction ───────────────────────────────────────
@@ -379,8 +419,8 @@ class Agent:
 
         # Skip common non-informational openers
         _trivial_re = re.compile(
-            r'^\s*(hi|hello|hey|thanks?|thank you|ok|okay|yes|no|sure|great|'
-            r'cool|bye|goodbye|good morning|good night|lol|haha|got it|noted)\W*$',
+            r"^\s*(hi|hello|hey|thanks?|thank you|ok|okay|yes|no|sure|great|"
+            r"cool|bye|goodbye|good morning|good night|lol|haha|got it|noted)\W*$",
             re.IGNORECASE,
         )
         if _trivial_re.match(user_message.strip()):
@@ -388,17 +428,17 @@ class Agent:
 
         # Positive signals — any of these make the exchange knowledge-worthy
         _knowledge_signals = [
-            r'\b(?:\d{1,3}\.){3}\d{1,3}\b',                              # IP address
-            r'https?://\S+',                                              # URL
-            r'[A-Za-z]:\\[^\s]+|(?:/[a-z][^\s]+){2,}',                  # file path
-            r'\bversion\s+\d',                                            # version number
-            r'\b(?:config|password|token|api[_\-]?key|secret|endpoint|'  # tech config
-            r'server|host(?:name)?|port|user(?:name)?|database|schema|'  # infra
-            r'install|docker|container|cluster|namespace|region)\b',
-            r'\b(?:i prefer|i always|i use|i like|my \w+ is|'            # user preferences
+            r"\b(?:\d{1,3}\.){3}\d{1,3}\b",  # IP address
+            r"https?://\S+",  # URL
+            r"[A-Za-z]:\\[^\s]+|(?:/[a-z][^\s]+){2,}",  # file path
+            r"\bversion\s+\d",  # version number
+            r"\b(?:config|password|token|api[_\-]?key|secret|endpoint|"  # tech config
+            r"server|host(?:name)?|port|user(?:name)?|database|schema|"  # infra
+            r"install|docker|container|cluster|namespace|region)\b",
+            r"\b(?:i prefer|i always|i use|i like|my \w+ is|"  # user preferences
             r"i'm using|we use|we're using|our \w+ is)\b",
-            r'\b(?:install|configure|setup|deploy|enable|disable|connect)\b',  # config actions
-            r'\b(?:remember|note that|keep in mind|important:|fyi:)\b',   # explicit memory cues
+            r"\b(?:install|configure|setup|deploy|enable|disable|connect)\b",  # config actions
+            r"\b(?:remember|note that|keep in mind|important:|fyi:)\b",  # explicit memory cues
         ]
         combined = user_message + " " + response
         for pattern in _knowledge_signals:
@@ -436,9 +476,7 @@ class Agent:
                 "Return ONLY the JSON array — no explanation, no markdown fences. "
                 "Return [] if nothing is concretely worth saving."
             )
-            exchange = (
-                f"User: {user_message[:800]}\n\nAssistant: {response[:1200]}"
-            )
+            exchange = f"User: {user_message[:800]}\n\nAssistant: {response[:1200]}"
             messages = [
                 {"role": "system", "content": extraction_system},
                 {"role": "user", "content": exchange},
@@ -448,8 +486,8 @@ class Agent:
 
             # Strip optional markdown code fences
             raw = raw.strip()
-            raw = re.sub(r'^```[a-z]*\n?', '', raw)
-            raw = re.sub(r'\n?```$', '', raw)
+            raw = re.sub(r"^```[a-z]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
 
             facts = json.loads(raw)
             if not isinstance(facts, list):
@@ -475,13 +513,9 @@ class Agent:
                         user_id=user_id,
                     )
                     saved += 1
-                    logger.info(
-                        f"[KB-AUTO] Saved: '{title}' for user '{user_id}'"
-                    )
+                    logger.info(f"[KB-AUTO] Saved: '{title}' for user '{user_id}'")
                 except Exception as write_err:
-                    logger.debug(
-                        f"[KB-AUTO] Could not save '{title}': {write_err}"
-                    )
+                    logger.debug(f"[KB-AUTO] Could not save '{title}': {write_err}")
 
             if saved:
                 logger.info(
@@ -514,9 +548,7 @@ class Agent:
         # Load user dialectic profile if it exists (for personalization)
         dialectic_path = self._local_profiles_dir / "user_dialectic.md"
         if dialectic_path.exists():
-            dialectic_content = await asyncio.to_thread(
-                dialectic_path.read_text, encoding="utf-8"
-            )
+            dialectic_content = await asyncio.to_thread(dialectic_path.read_text, encoding="utf-8")
             dialectic_content = dialectic_content.strip()
             if dialectic_content and dialectic_content != prompt:
                 prompt = f"{prompt}\n\n## User Profile\n{dialectic_content}"
@@ -535,12 +567,22 @@ class Agent:
     def _analyze_complexity(self, message: str) -> str:
         """Simple heuristic to determine task complexity."""
         high_complexity_keywords = [
-            'implement', 'debug', 'fix', 'refactor', 'architect',
-            'analyze', 'compare', 'optimize', 'write a program',
-            'complex', 'threading', 'asyncio', 'database schema'
+            "implement",
+            "debug",
+            "fix",
+            "refactor",
+            "architect",
+            "analyze",
+            "compare",
+            "optimize",
+            "write a program",
+            "complex",
+            "threading",
+            "asyncio",
+            "database schema",
         ]
         message_lower = message.lower()
-        
+
         # Check for length and keywords
         if len(message) > 500 or any(kw in message_lower for kw in high_complexity_keywords):
             return "high"
@@ -556,7 +598,7 @@ class Agent:
     @property
     def provider(self):
         """Lazy provider initialization - initializes on first access.
-        
+
         This improves startup performance by deferring provider initialization
         until the provider is actually needed (e.g., on first think() call).
         """
@@ -580,10 +622,10 @@ class Agent:
         (Ollama → LM Studio → llama.cpp).
         """
         if not self._offline_mode:
-            return await self._provider_chat(messages, model, stream=stream)
+            return await self.provider.chat(messages, model, stream=stream)
 
         try:
-            return await self._provider_chat(messages, model, stream=stream)
+            return await self.provider.chat(messages, model, stream=stream)
         except (ConnectionError, TimeoutError, OSError) as e:
             logger.warning(f"Primary provider failed: {e}. Trying offline fallback...")
         except Exception as e:
@@ -596,6 +638,7 @@ class Agent:
         # Initialize fallback wrapper on first need
         if self._fallback_wrapper is None:
             from .offline import FallbackChatWrapper
+
             self._fallback_wrapper = FallbackChatWrapper(self.provider, self.config)
 
         return await self._fallback_wrapper.chat(messages, model, stream=stream)
@@ -609,23 +652,20 @@ class Agent:
         Returns:
             List of suggested topic keywords (words > 3 chars, bigrams)
         """
-        cleaned = re.sub(r'[^\w\s]', ' ', message.lower())
+        cleaned = re.sub(r"[^\w\s]", " ", message.lower())
         words = [w for w in cleaned.split() if len(w) > 3]
 
         topics = words[:5]  # Top single words
 
         # Add bigrams for more context
         if len(words) >= 2:
-            bigrams = [f"{words[i]} {words[i+1]}" for i in range(min(len(words) - 1, 3))]
+            bigrams = [f"{words[i]} {words[i + 1]}" for i in range(min(len(words) - 1, 3))]
             topics.extend(bigrams)
 
         return list(dict.fromkeys(topics))  # Remove duplicates, preserve order
 
     async def _background_summarize_context(
-        self,
-        history: List[Dict[str, str]],
-        user_id: str,
-        mem: Memory
+        self, history: List[Dict[str, str]], user_id: str, mem: Memory
     ) -> None:
         """Summarize conversation context in the background after responding.
 
@@ -658,7 +698,7 @@ class Agent:
             ]
 
             summary_text, _ = await self._provider_chat(summary_msgs, self.model)
-            original_len = sum(len(m['content']) for m in to_summarize)
+            original_len = sum(len(m["content"]) for m in to_summarize)
             compressed_len = len(summary_text)
             compression_ratio = (1 - compressed_len / original_len) * 100 if original_len > 0 else 0
             logger.debug(
@@ -668,23 +708,20 @@ class Agent:
 
             # Store summary in knowledge base for future retrieval
             from .knowledge import write_note
+
             await asyncio.to_thread(
                 write_note,
                 name=f"session-summary-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}",
                 title=f"Session Summary ({datetime.utcnow().strftime('%Y-%m-%d %H:%M')})",
                 content=summary_text,
                 user_id=user_id,
-                tags=["session_summary", "auto-generated"]
+                tags=["session_summary", "auto-generated"],
             )
         except Exception as e:
             logger.error(f"Background summarization error: {e}")
 
     def _search_knowledge_context_sync(
-        self,
-        message: str,
-        user_id: str,
-        max_results: int = 3,
-        return_structured: bool = False
+        self, message: str, user_id: str, max_results: int = 3, return_structured: bool = False
     ) -> Union[str, KnowledgeSearchResult]:
         """Synchronous implementation of knowledge context search.
 
@@ -712,15 +749,15 @@ class Agent:
             "query": message[:200],
             "user_id": user_id,
             "timestamp": datetime.utcnow().isoformat(),
-            "max_results": max_results
+            "max_results": max_results,
         }
 
         try:
             # Resolve explicit memory:// references
-            memory_refs = re.findall(r'memory://([\w\-]+)', message)
+            memory_refs = re.findall(r"memory://([\w\-]+)", message)
 
             # Clean the message for keyword extraction
-            cleaned = re.sub(r'[^\w\s]', ' ', message.lower())
+            cleaned = re.sub(r"[^\w\s]", " ", message.lower())
             words = [w for w in cleaned.split() if len(w) > 3]
 
             notes = []
@@ -730,9 +767,9 @@ class Agent:
 
                 if not notes:
                     # Strategy 2: bigram + single-keyword OR query
-                    bigrams = [f"{words[i]} {words[i+1]}" for i in range(len(words) - 1)]
+                    bigrams = [f"{words[i]} {words[i + 1]}" for i in range(len(words) - 1)]
                     candidates = bigrams[:3] + words[:5]
-                    query = " OR ".join(f'"{t}"' if ' ' in t else t for t in candidates)
+                    query = " OR ".join(f'"{t}"' if " " in t else t for t in candidates)
                     notes = search_notes(query, user_id, limit=max_results)
 
             if not notes and not memory_refs:
@@ -749,13 +786,15 @@ class Agent:
                 for topic in suggested_topics[:5]:
                     guidance_lines.append(f"- {topic}")
 
-                guidance_lines.extend([
-                    "\n**You can:**",
-                    f"1. Create a new knowledge entry: `write_to_knowledge(title='Your Topic', content='Details...')`",
-                    f"2. Browse existing entries: `list_knowledge()`",
-                    f"3. Try different keywords in your search",
-                    "\n---\n"
-                ])
+                guidance_lines.extend(
+                    [
+                        "\n**You can:**",
+                        f"1. Create a new knowledge entry: `write_to_knowledge(title='Your Topic', content='Details...')`",
+                        f"2. Browse existing entries: `list_knowledge()`",
+                        f"3. Try different keywords in your search",
+                        "\n---\n",
+                    ]
+                )
 
                 context = "\n".join(guidance_lines)
 
@@ -764,7 +803,7 @@ class Agent:
                     has_results=False,
                     suggested_topics=suggested_topics,
                     gap_logged=gap_logged,
-                    metadata=metadata
+                    metadata=metadata,
                 )
 
                 return result if return_structured else ""
@@ -782,7 +821,9 @@ class Agent:
                 if note.permalink in memory_refs:
                     full_context = build_context(note.permalink, user_id, depth=1)
                     context_lines.append("\nRelated context:")
-                    context_lines.append(full_context[:500] + "..." if len(full_context) > 500 else full_context)
+                    context_lines.append(
+                        full_context[:500] + "..." if len(full_context) > 500 else full_context
+                    )
 
             context_lines.append("\n---\n")
             context = "\n".join(context_lines)
@@ -792,7 +833,7 @@ class Agent:
                 has_results=True,
                 suggested_topics=[],
                 gap_logged=False,
-                metadata={**metadata, "results_count": len(notes)}
+                metadata={**metadata, "results_count": len(notes)},
             )
 
             return result if return_structured else context
@@ -805,16 +846,12 @@ class Agent:
                 has_results=False,
                 suggested_topics=[],
                 gap_logged=False,
-                metadata=metadata
+                metadata=metadata,
             )
             return result if return_structured else ""
 
     async def _search_knowledge_context(
-        self,
-        message: str,
-        user_id: str,
-        max_results: int = 3,
-        return_structured: bool = False
+        self, message: str, user_id: str, max_results: int = 3, return_structured: bool = False
     ) -> Union[str, KnowledgeSearchResult]:
         """Async wrapper for knowledge context search.
 
@@ -822,11 +859,7 @@ class Agent:
         the event loop, which is critical when the knowledge base grows large.
         """
         return await asyncio.to_thread(
-            self._search_knowledge_context_sync,
-            message,
-            user_id,
-            max_results,
-            return_structured
+            self._search_knowledge_context_sync, message, user_id, max_results, return_structured
         )
 
     async def close(self):
@@ -852,10 +885,16 @@ class Agent:
     # ── Tool-result Knowledge Extraction ────────────────────────────────────
 
     # Tools whose output is worth persisting in the knowledge base
-    _KB_WORTHY_TOOLS: frozenset = frozenset({
-        "shell", "browse", "read_file", "write_file",
-        "download_file", "delegate",
-    })
+    _KB_WORTHY_TOOLS: frozenset = frozenset(
+        {
+            "shell",
+            "browse",
+            "read_file",
+            "write_file",
+            "download_file",
+            "delegate",
+        }
+    )
 
     @staticmethod
     def _should_save_tool_result(tool_name: str, tool_output: str) -> bool:
@@ -864,10 +903,7 @@ class Agent:
         Checks both the tool whitelist and a minimum length threshold so that
         trivial confirmations (e.g. 'File written.') are silently skipped.
         """
-        return (
-            tool_name in Agent._KB_WORTHY_TOOLS
-            and len(tool_output.strip()) > 120
-        )
+        return tool_name in Agent._KB_WORTHY_TOOLS and len(tool_output.strip()) > 120
 
     async def _save_tool_result_to_kb(
         self,
@@ -909,8 +945,8 @@ class Agent:
 
             raw, _ = await self._provider_chat(messages, self.model)
             raw = raw.strip()
-            raw = re.sub(r'^```[a-z]*\n?', '', raw)
-            raw = re.sub(r'\n?```$', '', raw)
+            raw = re.sub(r"^```[a-z]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
 
             facts = json.loads(raw)
             if not isinstance(facts, list):
@@ -970,12 +1006,14 @@ class Agent:
     def _browse_alternative_hint(url: str, user_message: str) -> str:
         """Generate an alternative-source suggestion for a failed browse."""
         # Extract a simple topic from the URL or user message
-        topic = re.sub(r'https?://[^/]*', '', url).strip('/').replace('-', '+').replace('_', '+')[:60]
+        topic = (
+            re.sub(r"https?://[^/]*", "", url).strip("/").replace("-", "+").replace("_", "+")[:60]
+        )
         if not topic:
             # Fall back to first 4 meaningful words from the user message
-            topic = '+'.join(
-                w for w in re.sub(r'[^\w\s]', '', user_message).split() if len(w) > 2
-            )[:60]
+            topic = "+".join(w for w in re.sub(r"[^\w\s]", "", user_message).split() if len(w) > 2)[
+                :60
+            ]
         hint = Agent._BROWSE_ALTERNATIVES["default"].format(topic=topic)
         return f"\n\n[Web-browsing failed. Alternative sources you could try: {hint}]"
 
@@ -1020,25 +1058,18 @@ class Agent:
             logger.error(f"Recovery LLM call failed: {e}")
 
         # Build a meaningful fallback
-        fallback_parts = [
-            "I'm sorry — I wasn't able to generate a useful response right now."
-        ]
+        fallback_parts = ["I'm sorry — I wasn't able to generate a useful response right now."]
         if not had_kb_results:
             fallback_parts.append(
                 f"\n\nI also noticed my knowledge base has no entries related to your query. "
                 f"You can add information with:\n"
-                f"  `write_to_knowledge(title=\"<topic>\", content=\"<details>\")`"
+                f'  `write_to_knowledge(title="<topic>", content="<details>")`'
             )
         return " ".join(fallback_parts)
 
     # -- Sub-method: Route message ------------------------------------------------
 
-    async def _route_message(
-        self,
-        user_message: str,
-        user_id: str,
-        _depth: int
-    ) -> tuple:
+    async def _route_message(self, user_message: str, user_id: str, _depth: int) -> tuple:
         """Set up request routing, task timer, and guardrails.
 
         Returns:
@@ -1064,24 +1095,31 @@ class Agent:
             task_id=self._current_task_id,
             user_question=user_message,
             on_status_update=self._handle_task_status_update,
-            steps_total=5  # Approximate: memory, knowledge, LLM, tools, response
+            steps_total=5,  # Approximate: memory, knowledge, LLM, tools, response
         )
 
         # Agent Pipeline Integration: Loop prevention
         if _depth > 10:
-            logger.warning(f"Max delegation depth reached ({_depth}). Preventing potential infinite loop.")
-            await self._task_timer.complete_task(self._current_task_id, success=False,
-                                                 error_message="Max delegation depth reached")
+            logger.warning(
+                f"Max delegation depth reached ({_depth}). Preventing potential infinite loop."
+            )
+            await self._task_timer.complete_task(
+                self._current_task_id, success=False, error_message="Max delegation depth reached"
+            )
             return None
 
         # Medic Agent: Check loop prevention before processing
         try:
             from myclaw.agents.medic_agent import prevent_infinite_loop
+
             loop_status = prevent_infinite_loop()
             if "limit reached" in loop_status.lower():
                 logger.warning("Execution limit reached by loop prevention")
-                await self._task_timer.complete_task(self._current_task_id, success=False,
-                                                     error_message="Loop prevention limit reached")
+                await self._task_timer.complete_task(
+                    self._current_task_id,
+                    success=False,
+                    error_message="Loop prevention limit reached",
+                )
                 return None
         except Exception:
             pass
@@ -1111,12 +1149,7 @@ class Agent:
     # -- Sub-method: Build context ------------------------------------------------
 
     async def _build_context(
-        self,
-        user_message: str,
-        user_id: str,
-        mem: Memory,
-        history: list,
-        request_model: str
+        self, user_message: str, user_id: str, mem: Memory, history: list, request_model: str
     ) -> tuple:
         """Build the message context: knowledge search + system prompt + hooks.
 
@@ -1124,11 +1157,8 @@ class Agent:
             (messages, had_kb_results, kb_gap_hint)
         """
         # Optimization #4: Proactive skill pre-loading
-        task = asyncio.create_task(
-            self._skill_preloader.predict_and_preload(history, user_message)
-        )
-        self._pending_preloads.add(task)
-        task.add_done_callback(self._pending_preloads.discard)
+        task = asyncio.create_task(self._skill_preloader.predict_and_preload(history, user_message))
+        self._track_preload(task)
 
         # Search knowledge base for relevant context
         knowledge_context = await self._search_knowledge_context(user_message, user_id)
@@ -1152,7 +1182,7 @@ class Agent:
                     "user_id": user_id,
                     "session_context": "System will preserve context to avoid redundant empty searches in this session",
                     "timestamp": datetime.utcnow().isoformat(),
-                    "recommendation": "Use write_to_knowledge() to create a new entry for future queries"
+                    "recommendation": "Use write_to_knowledge() to create a new entry for future queries",
                 }
                 kb_gap_logger.info(gap_data)
 
@@ -1202,7 +1232,7 @@ class Agent:
         user_id: str,
         mem: Memory,
         _depth: int,
-        had_kb_results: bool
+        had_kb_results: bool,
     ) -> str:
         """Execute tool calls (parallel + sequential) and return final response.
 
@@ -1220,8 +1250,14 @@ class Agent:
         tool_results_by_id: Dict[str, str] = {}
 
         # Determine parallel vs sequential execution
-        independent_tools = [tc for tc in tool_calls if is_tool_independent(tc.get("function", {}).get("name", ""))]
-        dependent_tools = [tc for tc in tool_calls if not is_tool_independent(tc.get("function", {}).get("name", ""))]
+        independent_tools = [
+            tc for tc in tool_calls if is_tool_independent(tc.get("function", {}).get("name", ""))
+        ]
+        dependent_tools = [
+            tc
+            for tc in tool_calls
+            if not is_tool_independent(tc.get("function", {}).get("name", ""))
+        ]
 
         if len(independent_tools) > 1:
             # Use parallel execution for independent tools
@@ -1238,14 +1274,16 @@ class Agent:
                         url_match = re.search(r"https?://\S+", tool_output)
                         url = url_match.group(0) if url_match else ""
                         tool_output += self._browse_alternative_hint(url, user_message)
-                    content = f"Tool {r["tool_name"]} returned: {tool_output}"
+                    content = f"Tool {r['tool_name']} returned: {tool_output}"
                 else:
-                    content = f"Tool {r["tool_name"]} error: {r["error"]}"
+                    content = f"Tool {r['tool_name']} error: {r['error']}"
                 tool_results_by_id[tool_call_id] = content
                 await mem.add("tool", content)
                 # KB extraction for substantial parallel tool results (fire-and-forget)
-                if r["success"] and self._kb_auto_extract and self._should_save_tool_result(
-                    r["tool_name"], r.get("result", "")
+                if (
+                    r["success"]
+                    and self._kb_auto_extract
+                    and self._should_save_tool_result(r["tool_name"], r.get("result", ""))
                 ):
                     _t = asyncio.create_task(
                         self._save_tool_result_to_kb(
@@ -1256,8 +1294,7 @@ class Agent:
                             user_id,
                         )
                     )
-                    self._pending_preloads.add(_t)
-                    _t.add_done_callback(self._pending_preloads.discard)
+                    self._track_preload(_t)
         elif independent_tools:
             # Single independent tool - execute sequentially below along with dependent ones
             dependent_tools = tool_calls
@@ -1310,7 +1347,9 @@ class Agent:
                 tool_results_by_id[tool_call_id] = content
                 await mem.add("tool", content)
                 duration = time.time() - start_time
-                logger.info(f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)")
+                logger.info(
+                    f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)"
+                )
                 # KB extraction for substantial sequential tool results (fire-and-forget)
                 if self._kb_auto_extract and self._should_save_tool_result(tool_name, tool_output):
                     _t = asyncio.create_task(
@@ -1318,8 +1357,7 @@ class Agent:
                             tool_name, args, tool_output, user_message, user_id
                         )
                     )
-                    self._pending_preloads.add(_t)
-                    _t.add_done_callback(self._pending_preloads.discard)
+                    self._track_preload(_t)
             except Exception as e:
                 logger.error(f"Tool execution error ({tool_name}): {e}")
                 logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
@@ -1330,14 +1368,16 @@ class Agent:
         # Build proper followup messages with assistant + individual tool messages for OpenAI compatibility
         openai_tool_calls = []
         for tc in tool_calls:
-            openai_tool_calls.append({
-                "id": tc.get("id", "call_default"),
-                "type": tc.get("type", "function"),
-                "function": {
-                    "name": tc["function"]["name"],
-                    "arguments": tc["function"].get("arguments_str", "")
+            openai_tool_calls.append(
+                {
+                    "id": tc.get("id", "call_default"),
+                    "type": tc.get("type", "function"),
+                    "function": {
+                        "name": tc["function"]["name"],
+                        "arguments": tc["function"].get("arguments_str", ""),
+                    },
                 }
-            })
+            )
 
         followup = messages + [
             {"role": "assistant", "content": "", "tool_calls": openai_tool_calls}
@@ -1357,6 +1397,7 @@ class Agent:
 
         try:
             import httpx as _httpx  # local alias to avoid shadowing outer scope
+
             final_response, _ = await self._provider_chat(followup, self.model)
 
             # Trigger post_llm_call hooks for followup
@@ -1382,7 +1423,7 @@ class Agent:
         response: str,
         user_id: str,
         mem: Memory,
-        _full_history_for_bg: Optional[list]
+        _full_history_for_bg: Optional[list],
     ) -> None:
         """Background KB extraction, session end hooks, and context summarization.
 
@@ -1394,8 +1435,7 @@ class Agent:
             _kb_task = asyncio.create_task(
                 self._extract_and_save_knowledge(user_message, response, user_id)
             )
-            self._pending_preloads.add(_kb_task)
-            _kb_task.add_done_callback(self._pending_preloads.discard)
+            self._track_preload(_kb_task)
 
         # Trigger on_session_end hook
         message_count = len(await mem.get_history()) if hasattr(mem, "get_history") else 0
@@ -1406,8 +1446,7 @@ class Agent:
             _summarize_task = asyncio.create_task(
                 self._background_summarize_context(_full_history_for_bg, user_id, mem)
             )
-            self._pending_preloads.add(_summarize_task)
-            _summarize_task.add_done_callback(self._pending_preloads.discard)
+            self._track_preload(_summarize_task)
 
         # Complete task timer successfully
         if self._current_task_id:
@@ -1433,7 +1472,9 @@ class Agent:
         request_model, mem, history, _full_history_for_bg = route_result
 
         # 2. Build context
-        context_result = await self._build_context(user_message, user_id, mem, history, request_model)
+        context_result = await self._build_context(
+            user_message, user_id, mem, history, request_model
+        )
         if context_result is None:
             return "Sorry, this task took too long to complete and has been cancelled. Please try again with a simpler request."
         messages, had_kb_results, kb_gap_hint = context_result
@@ -1444,33 +1485,42 @@ class Agent:
 
         try:
             import httpx
+
             response, tool_calls = await self._provider_chat(messages, request_model)
         except httpx.TimeoutException as e:
             logger.error(f"LLM provider timeout: {e}")
             error_msg = "Sorry, the LLM service timed out. Please try again."
             if self._current_task_id:
-                await self._task_timer.complete_task(self._current_task_id, success=False, error_message=error_msg)
+                await self._task_timer.complete_task(
+                    self._current_task_id, success=False, error_message=error_msg
+                )
                 self._current_task_id = None
             return error_msg
         except (httpx.ConnectError, ConnectionError) as e:
             logger.error(f"LLM provider connection error: {e}")
             error_msg = "Sorry, I cannot connect to the LLM service. Please check your connection."
             if self._current_task_id:
-                await self._task_timer.complete_task(self._current_task_id, success=False, error_message=error_msg)
+                await self._task_timer.complete_task(
+                    self._current_task_id, success=False, error_message=error_msg
+                )
                 self._current_task_id = None
             return error_msg
         except httpx.HTTPStatusError as e:
             logger.error(f"LLM provider HTTP error: {e}")
             error_msg = f"Sorry, the LLM service returned an error: {e.response.status_code}"
             if self._current_task_id:
-                await self._task_timer.complete_task(self._current_task_id, success=False, error_message=error_msg)
+                await self._task_timer.complete_task(
+                    self._current_task_id, success=False, error_message=error_msg
+                )
                 self._current_task_id = None
             return error_msg
         except Exception as e:
             logger.exception(f"Unexpected LLM provider error: {e}")
             error_msg = f"Sorry, an unexpected error occurred: {e}"
             if self._current_task_id:
-                await self._task_timer.complete_task(self._current_task_id, success=False, error_message=error_msg)
+                await self._task_timer.complete_task(
+                    self._current_task_id, success=False, error_message=error_msg
+                )
                 self._current_task_id = None
             return error_msg
 
@@ -1488,7 +1538,9 @@ class Agent:
             if final_response.startswith("Tool executed but error"):
                 return final_response
             # 5. Handle summarization & cleanup
-            await self._handle_summarization(user_message, final_response, user_id, mem, _full_history_for_bg)
+            await self._handle_summarization(
+                user_message, final_response, user_id, mem, _full_history_for_bg
+            )
             return final_response
 
         # No tool calls: validate response is non-empty
@@ -1503,8 +1555,9 @@ class Agent:
         await self._handle_summarization(user_message, response, user_id, mem, _full_history_for_bg)
         return response
 
-
-    async def stream_think(self, user_message: str, user_id: str = "default", _depth: int = 0) -> AsyncIterator[str]:
+    async def stream_think(
+        self, user_message: str, user_id: str = "default", _depth: int = 0
+    ) -> AsyncIterator[str]:
         """Process a user message and yield response chunks in real-time.
 
         Streaming tool call flow:
@@ -1524,7 +1577,7 @@ class Agent:
         history = await mem.get_history()
 
         # Feature: Context Summarization moved off hot path
-        threshold = getattr(self.config.agents, 'summarization_threshold', 10)
+        threshold = getattr(self.config.agents, "summarization_threshold", 10)
         _should_summarize_after_stream = len(history) > threshold
         _full_history_for_bg_stream = history.copy() if _should_summarize_after_stream else None
 
@@ -1589,7 +1642,7 @@ class Agent:
             if not had_kb_results:
                 fallback += (
                     " My knowledge base has no entries on this topic. "
-                    "You can add information with: write_to_knowledge(title=\"<topic>\", content=\"<details>\")"
+                    'You can add information with: write_to_knowledge(title="<topic>", content="<details>")'
                 )
             yield fallback
             full_response = fallback
@@ -1602,16 +1655,20 @@ class Agent:
 
         if tool_calls:
             # ── Tool calls detected — execute and stream follow-up ──────────────
-            logger.info(f"Streaming tool calls detected: {[tc['function']['name'] for tc in tool_calls]}")
+            logger.info(
+                f"Streaming tool calls detected: {[tc['function']['name'] for tc in tool_calls]}"
+            )
 
             # Yield tool call markers for frontend visibility
             yield "__TOOL_CALLS_START__"
             for tc in tool_calls:
-                yield json.dumps({
-                    "tool": tc["function"]["name"],
-                    "status": "running",
-                    "args": tc["function"].get("arguments", {})
-                })
+                yield json.dumps(
+                    {
+                        "tool": tc["function"]["name"],
+                        "status": "running",
+                        "args": tc["function"].get("arguments", {}),
+                    }
+                )
             yield "__TOOL_CALLS_END__"
 
             # Execute tools using existing logic (non-streaming follow-up for now)
@@ -1630,7 +1687,9 @@ class Agent:
                 yield "__STREAM_END__"
 
                 # Background cleanup after tool-using response
-                await self._handle_summarization(user_message, final_response, user_id, mem, _full_history_for_bg_stream)
+                await self._handle_summarization(
+                    user_message, final_response, user_id, mem, _full_history_for_bg_stream
+                )
 
             except Exception as e:
                 logger.error(f"Tool execution error during streaming: {e}")
@@ -1648,16 +1707,14 @@ class Agent:
             _kb_task = asyncio.create_task(
                 self._extract_and_save_knowledge(user_message, full_response, user_id)
             )
-            self._pending_preloads.add(_kb_task)
-            _kb_task.add_done_callback(self._pending_preloads.discard)
+            self._track_preload(_kb_task)
 
         # Background context summarization (fire-and-forget, off hot path)
         if _full_history_for_bg_stream:
             _summarize_task = asyncio.create_task(
                 self._background_summarize_context(_full_history_for_bg_stream, user_id, mem)
             )
-            self._pending_preloads.add(_summarize_task)
-            _summarize_task.add_done_callback(self._pending_preloads.discard)
+            self._track_preload(_summarize_task)
 
         # Trigger on_session_end hook
         trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))

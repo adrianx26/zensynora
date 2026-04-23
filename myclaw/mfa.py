@@ -15,6 +15,7 @@ Usage:
     # During verification:
     ok = mfa.verify("alice", "123456")
 """
+
 from __future__ import annotations
 
 import base64
@@ -33,6 +34,7 @@ _MFA_DB_PATH = Path.home() / ".myclaw" / "mfa.db"
 
 try:
     import pyotp
+
     _PYOTP_AVAILABLE = True
 except ImportError:
     _PYOTP_AVAILABLE = False
@@ -41,6 +43,7 @@ except ImportError:
 
 try:
     import qrcode
+
     _QR_AVAILABLE = True
 except ImportError:
     _QR_AVAILABLE = False
@@ -77,9 +80,7 @@ class MFAAuth:
         if not _PYOTP_AVAILABLE:
             return False
         conn = self._get_db()
-        row = conn.execute(
-            "SELECT enabled FROM mfa_users WHERE user_id = ?", (user_id,)
-        ).fetchone()
+        row = conn.execute("SELECT enabled FROM mfa_users WHERE user_id = ?", (user_id,)).fetchone()
         conn.close()
         return bool(row and row["enabled"])
 
@@ -87,7 +88,7 @@ class MFAAuth:
         """Provision MFA for a user. Returns provisioning URI and QR code.
 
         Returns:
-            {"secret": "...", "provisioning_uri": "...", "qr_code_png_base64": "..."}
+            {"provisioning_uri": "...", "qr_code_png_base64": "..."}
         """
         if not _PYOTP_AVAILABLE:
             raise RuntimeError("pyotp is not installed. Run: pip install pyotp")
@@ -120,8 +121,11 @@ class MFAAuth:
             qr_b64 = base64.b64encode(buf.getvalue()).decode("ascii")
 
         logger.info(f"MFA provisioned for user: {user_id}")
+        # SECURITY FIX: Never return the raw TOTP secret in API responses.
+        # The provisioning URI contains the secret and is rendered as a QR code
+        # by the client. Returning the raw secret enables account takeover if
+        # the response is intercepted or logged.
         return {
-            "secret": secret,
             "provisioning_uri": uri,
             "qr_code_png_base64": qr_b64,
         }
@@ -149,9 +153,7 @@ class MFAAuth:
             return False
 
         conn = self._get_db()
-        conn.execute(
-            "UPDATE mfa_users SET enabled = 0 WHERE user_id = ?", (user_id,)
-        )
+        conn.execute("UPDATE mfa_users SET enabled = 0 WHERE user_id = ?", (user_id,))
         conn.commit()
         conn.close()
         logger.info(f"MFA disabled for user: {user_id}")

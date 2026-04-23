@@ -13,6 +13,7 @@ import json
 import time
 import re
 import inspect
+import threading
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -24,33 +25,71 @@ from ..audit_log import TamperEvidentAuditLog
 
 logger = logging.getLogger(__name__)
 
-WORKSPACE         = Path.home() / ".myclaw" / "workspace"
-TOOLBOX_DIR       = Path.home() / ".myclaw" / "TOOLBOX"
-TOOLBOX_REG       = Path.home() / ".myclaw" / "TOOLBOX" / "toolbox_registry.json"
-TOOLBOX_DOCS      = Path.home() / ".myclaw" / "TOOLBOX" / "README.md"
+WORKSPACE = Path.home() / ".myclaw" / "workspace"
+TOOLBOX_DIR = Path.home() / ".myclaw" / "TOOLBOX"
+TOOLBOX_REG = Path.home() / ".myclaw" / "TOOLBOX" / "toolbox_registry.json"
+TOOLBOX_DOCS = Path.home() / ".myclaw" / "TOOLBOX" / "README.md"
 
 _runtime_config = None
 
 # ── Security lists ────────────────────────────────────────────────────────────
 
-ALLOWED_COMMANDS = frozenset({
-    'ls', 'dir', 'cat', 'type', 'find', 'grep', 'findstr',
-    'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'git',
-    'echo', 'pwd', 'curl', 'wget'
-    # NOTE: python, python3, pip removed (Phase 1.1 security hotfix)
-    # to prevent shell sandbox escape via: python -c "import os; os.system('rm -rf ~')"
-    # Users can still register custom Python tools via register_tool() if needed.
-})
+ALLOWED_COMMANDS = frozenset(
+    {
+        "ls",
+        "dir",
+        "cat",
+        "type",
+        "find",
+        "grep",
+        "findstr",
+        "head",
+        "tail",
+        "wc",
+        "sort",
+        "uniq",
+        "cut",
+        "git",
+        "echo",
+        "pwd",
+        "curl",
+        "wget",
+        # NOTE: python, python3, pip removed (Phase 1.1 security hotfix)
+        # to prevent shell sandbox escape via: python -c "import os; os.system('rm -rf ~')"
+        # Users can still register custom Python tools via register_tool() if needed.
+    }
+)
 
-BLOCKED_COMMANDS = frozenset({
-    'rm', 'del', 'erase', 'format', 'rd', 'rmdir',
-    'powershell', 'cmd', 'certutil', 'bitsadmin', 'icacls',
-    'takeown', 'reg', 'schtasks', 'net', 'tasklist',
-    'wmic', 'msiexec', 'control', 'explorer', 'shutdown', 'restart'
-})
+BLOCKED_COMMANDS = frozenset(
+    {
+        "rm",
+        "del",
+        "erase",
+        "format",
+        "rd",
+        "rmdir",
+        "powershell",
+        "cmd",
+        "certutil",
+        "bitsadmin",
+        "icacls",
+        "takeown",
+        "reg",
+        "schtasks",
+        "net",
+        "tasklist",
+        "wmic",
+        "msiexec",
+        "control",
+        "explorer",
+        "shutdown",
+        "restart",
+    }
+)
 
 
 # ── 5.1 Rate Limiter for Tool Execution ──────────────────────────────────────────
+
 
 class RateLimiter:
     """Per-tool rate limiter using token bucket algorithm.
@@ -59,28 +98,36 @@ class RateLimiter:
 
     Phase 6.1: When a Redis-backed StateStore is configured, rate-limit checks
     are distributed across workers. Otherwise falls back to in-memory tracking.
+
+    SECURITY FIX (2026-04-23): Added asyncio.Lock for async contexts and
+    threading.Lock for sync contexts to prevent race conditions under
+    concurrent tool execution.
     """
+
     def __init__(self):
         # _limits: tool_name -> (timestamps list, max_calls, window_seconds)
         self._limits = defaultdict(lambda: ([], 10, 60))
+        self._async_lock = asyncio.Lock()
+        self._sync_lock = threading.Lock()
 
     def _get_state_store(self):
         """Lazy import to avoid circular dependencies."""
         try:
             from ..state_store import get_state_store
+
             return get_state_store()
         except Exception:
             return None
 
-    def check(self, tool_name: str, max_calls: int = 10, window: int = 60) -> bool:
-        """Check if tool can be executed. Returns True if allowed, False if rate limited."""
+    def _do_check(self, tool_name: str, max_calls: int, window: int) -> bool:
+        """Internal check logic (not thread-safe — caller must hold lock)."""
         now = time.time()
         timestamps, _, _ = self._limits[tool_name]
         # Remove old timestamps outside the window
         self._limits[tool_name] = (
             [t for t in timestamps if now - t < window],
             max_calls,
-            window
+            window,
         )
 
         timestamps, max_calls, window = self._limits[tool_name]
@@ -94,6 +141,7 @@ class RateLimiter:
         if store is not None:
             try:
                 from ..state_store import RedisStateStore
+
                 if isinstance(store, RedisStateStore):
                     store.rate_limit_add(tool_name, max_calls, window)
                     # Note: Redis result is advisory; local already decided
@@ -103,6 +151,16 @@ class RateLimiter:
 
         return True
 
+    def check(self, tool_name: str, max_calls: int = 10, window: int = 60) -> bool:
+        """Synchronous check. Use in sync tool functions like shell()."""
+        with self._sync_lock:
+            return self._do_check(tool_name, max_calls, window)
+
+    async def acheck(self, tool_name: str, max_calls: int = 10, window: int = 60) -> bool:
+        """Asynchronous check. Use in async tool functions like shell_async()."""
+        async with self._async_lock:
+            return self._do_check(tool_name, max_calls, window)
+
     def get_remaining(self, tool_name: str, max_calls: int = 10, window: int = 60) -> int:
         """Get remaining calls available for the tool in current window."""
         now = time.time()
@@ -110,15 +168,12 @@ class RateLimiter:
         current_calls = len([t for t in timestamps if now - t < window])
         return max(0, max_calls - current_calls)
 
-        now = time.time()
-        timestamps, max_calls, window = self._limits[tool_name]
-        current_calls = len([t for t in timestamps if now - t < window])
-        return max(0, max_calls - current_calls)
 
 _rate_limiter = RateLimiter()
 
 
 # ── 5.3 Runtime Allowlist Updates ────────────────────────────────────────────────
+
 
 def update_allowlist(new_commands: List[str]) -> None:
     """Update the allowed commands list at runtime.
@@ -135,6 +190,7 @@ def update_allowlist(new_commands: List[str]) -> None:
 
 # ── 5.4 Tool Execution Audit Logging ─────────────────────────────────────────────
 
+
 class ToolAuditLogger:
     """Structured audit logger for tool executions."""
 
@@ -145,8 +201,14 @@ class ToolAuditLogger:
             log_path=Path.home() / ".myclaw" / "audit" / "tools_audit.log.jsonl"
         )
 
-    def log(self, tool_name: str, user: str, duration_ms: float, success: bool,
-            error: Optional[str] = None) -> None:
+    def log(
+        self,
+        tool_name: str,
+        user: str,
+        duration_ms: float,
+        success: bool,
+        error: Optional[str] = None,
+    ) -> None:
         """Log a tool execution event."""
         entry = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -154,7 +216,7 @@ class ToolAuditLogger:
             "user": user or "system",
             "duration_ms": duration_ms,
             "success": success,
-            "error": error
+            "error": error,
         }
         self._logs.append(entry)
         self._persistent.append(
@@ -164,15 +226,15 @@ class ToolAuditLogger:
         )
         # Keep only recent logs in memory
         if len(self._logs) > self._max_logs:
-            self._logs = self._logs[-self._max_logs:]
+            self._logs = self._logs[-self._max_logs :]
 
         # Log to standard logger
         if success:
-            logger.info(f"AUDIT: {tool_name} executed by {user or 'system'} "
-                       f"in {duration_ms:.2f}ms")
+            logger.info(f"AUDIT: {tool_name} executed by {user or 'system'} in {duration_ms:.2f}ms")
         else:
-            logger.warning(f"AUDIT: {tool_name} failed for {user or 'system'} "
-                          f"in {duration_ms:.2f}ms: {error}")
+            logger.warning(
+                f"AUDIT: {tool_name} failed for {user or 'system'} in {duration_ms:.2f}ms: {error}"
+            )
 
     def get_logs(self, limit: int = 100, tool_name: Optional[str] = None) -> List[Dict]:
         """Get recent audit logs, optionally filtered by tool name."""
@@ -199,10 +261,12 @@ class ToolAuditLogger:
         self._persistent.clear()
         self._logs = []
 
+
 _tool_audit_logger = ToolAuditLogger()
 
 
 # ── Parallel Tool Executor (Optimization #3) ───────────────────────────────────
+
 
 class ParallelToolExecutor:
     """Execute multiple independent tools concurrently for better throughput.
@@ -217,9 +281,7 @@ class ParallelToolExecutor:
         self._semaphore = asyncio.Semaphore(max_concurrent)
 
     async def execute_tools(
-        self,
-        tool_calls: List[Dict],
-        user_id: str = "default"
+        self, tool_calls: List[Dict], user_id: str = "default"
     ) -> List[Dict[str, str]]:
         """Execute multiple tools in parallel.
 
@@ -242,8 +304,7 @@ class ParallelToolExecutor:
         # Execute all in parallel with semaphore limiting
         try:
             results = await asyncio.wait_for(
-                asyncio.gather(*tasks, return_exceptions=True),
-                timeout=self.timeout
+                asyncio.gather(*tasks, return_exceptions=True), timeout=self.timeout
             )
 
             # Process results
@@ -252,13 +313,15 @@ class ParallelToolExecutor:
                 if isinstance(result, Exception):
                     tc = tool_calls[i]
                     tool_name = tc.get("function", {}).get("name", "unknown")
-                    processed_results.append({
-                        "tool_name": tool_name,
-                        "result": "",
-                        "error": str(result),
-                        "duration": 0.0,
-                        "success": False
-                    })
+                    processed_results.append(
+                        {
+                            "tool_name": tool_name,
+                            "result": "",
+                            "error": str(result),
+                            "duration": 0.0,
+                            "success": False,
+                        }
+                    )
                 else:
                     processed_results.append(result)
 
@@ -266,19 +329,17 @@ class ParallelToolExecutor:
 
         except asyncio.TimeoutError:
             logger.error(f"Parallel tool execution timed out after {self.timeout}s")
-            return [{
-                "tool_name": "parallel_executor",
-                "result": "",
-                "error": f"Execution timed out after {self.timeout}s",
-                "duration": self.timeout,
-                "success": False
-            }]
+            return [
+                {
+                    "tool_name": "parallel_executor",
+                    "result": "",
+                    "error": f"Execution timed out after {self.timeout}s",
+                    "duration": self.timeout,
+                    "success": False,
+                }
+            ]
 
-    async def _execute_single_tool(
-        self,
-        tool_call: Dict,
-        user_id: str
-    ) -> Dict[str, str]:
+    async def _execute_single_tool(self, tool_call: Dict, user_id: str) -> Dict[str, str]:
         """Execute a single tool with semaphore control."""
         async with self._semaphore:
             tool_name = tool_call.get("function", {}).get("name", "")
@@ -292,14 +353,15 @@ class ParallelToolExecutor:
                         "result": "",
                         "error": f"Unknown tool: {tool_name}",
                         "duration": time.time() - start_time,
-                        "success": False
+                        "success": False,
                     }
 
                 # Check rate limit
-                if not _rate_limiter.check(tool_name):
+                if not await _rate_limiter.acheck(tool_name):
                     duration = time.time() - start_time
                     try:
                         from ..metrics import get_metrics
+
                         get_metrics().record_tool_execution(
                             tool_name, duration, status="rate_limited"
                         )
@@ -310,7 +372,7 @@ class ParallelToolExecutor:
                         "result": "",
                         "error": f"Rate limit exceeded for {tool_name}",
                         "duration": duration,
-                        "success": False
+                        "success": False,
                     }
 
                 func = TOOLS[tool_name]["func"]
@@ -327,6 +389,7 @@ class ParallelToolExecutor:
                         )
                         try:
                             from ..metrics import get_metrics
+
                             get_metrics().record_tool_execution(
                                 tool_name, duration, status="blocked"
                             )
@@ -350,16 +413,13 @@ class ParallelToolExecutor:
                 duration = time.time() - start_time
 
                 # Log the execution
-                _tool_audit_logger.log(
-                    tool_name, user_id, duration * 1000, True
-                )
+                _tool_audit_logger.log(tool_name, user_id, duration * 1000, True)
 
                 # Record Prometheus metrics
                 try:
                     from ..metrics import get_metrics
-                    get_metrics().record_tool_execution(
-                        tool_name, duration, status="success"
-                    )
+
+                    get_metrics().record_tool_execution(tool_name, duration, status="success")
                 except Exception:
                     pass
 
@@ -368,23 +428,20 @@ class ParallelToolExecutor:
                     "result": str(result),
                     "error": "",
                     "duration": duration,
-                    "success": True
+                    "success": True,
                 }
 
             except Exception as e:
                 duration = time.time() - start_time
                 logger.error(f"Tool execution error ({tool_name}): {e}")
 
-                _tool_audit_logger.log(
-                    tool_name, user_id, duration * 1000, False, str(e)
-                )
+                _tool_audit_logger.log(tool_name, user_id, duration * 1000, False, str(e))
 
                 # Record Prometheus metrics
                 try:
                     from ..metrics import get_metrics
-                    get_metrics().record_tool_execution(
-                        tool_name, duration, status="error"
-                    )
+
+                    get_metrics().record_tool_execution(tool_name, duration, status="error")
                 except Exception:
                     pass
 
@@ -393,7 +450,7 @@ class ParallelToolExecutor:
                     "result": "",
                     "error": str(e),
                     "duration": duration,
-                    "success": False
+                    "success": False,
                 }
 
 
@@ -408,10 +465,7 @@ def get_parallel_executor(max_concurrent: int = 5, timeout: float = 30.0) -> Par
     global _parallel_executor
 
     if _parallel_executor is None:
-        _parallel_executor = ParallelToolExecutor(
-            max_concurrent=max_concurrent,
-            timeout=timeout
-        )
+        _parallel_executor = ParallelToolExecutor(max_concurrent=max_concurrent, timeout=timeout)
 
     return _parallel_executor
 
@@ -476,9 +530,15 @@ def is_tool_independent(tool_name: str) -> bool:
     """
     # Tools that are NOT safe for parallel execution
     dependent_tools = {
-        "shell", "run_command", "delegate",
-        "write_file", "create_file", "edit_file",
-        "schedule", "cancel_schedule", "edit_schedule"
+        "shell",
+        "run_command",
+        "delegate",
+        "write_file",
+        "create_file",
+        "edit_file",
+        "schedule",
+        "cancel_schedule",
+        "edit_schedule",
     }
 
     return tool_name not in dependent_tools
@@ -486,20 +546,87 @@ def is_tool_independent(tool_name: str) -> bool:
 
 # ── Module-level references injected by gateway / telegram / whatsapp ──────────
 
-_agent_registry: dict = {}   # name -> Agent  (Feature 2 / 3)
-_job_queue      = None        # python-telegram-bot JobQueue  (Feature 1 / 5)
-_user_chat_ids: dict = {}     # user_id -> chat_id  (Feature 5 notifications)
-_notification_callback = None  # Callback: async fn(user_id, message) for channel-agnostic notifications
+_agent_registry: dict = {}  # name -> Agent  (Feature 2 / 3)
+_job_queue = None  # python-telegram-bot JobQueue  (Feature 1 / 5)
+_user_chat_ids: dict = {}  # user_id -> chat_id  (Feature 5 notifications)
+_notification_callback = (
+    None  # Callback: async fn(user_id, message) for channel-agnostic notifications
+)
 
 
 # ── Plugin Lifecycle Hooks ──────────────────────────────────────────────────────
 
-_HOOKS: dict[str, list] = {
-    "pre_llm_call": [],      # Called before LLM request: fn(messages, model) -> modified messages
-    "post_llm_call": [],     # Called after LLM response: fn(response, tool_calls) -> modified response
-    "on_session_start": [],  # Called when session starts: fn(user_id, agent_name) -> None
-    "on_session_end": [],    # Called when session ends: fn(user_id, agent_name, message_count) -> None
-}
+# QUALITY FIX (2026-04-23): Extracted _HOOKS into HookRegistry class to reduce
+# global mutable state. The module-level _HOOKS dict remains for backwards
+# compatibility but is now backed by a class that can be instantiated per-test.
+
+
+class HookRegistry:
+    """Lifecycle hook registry with typed event support."""
+
+    _VALID_EVENTS = frozenset(
+        {"pre_llm_call", "post_llm_call", "on_session_start", "on_session_end"}
+    )
+
+    def __init__(self):
+        self._hooks: dict[str, list] = {ev: [] for ev in self._VALID_EVENTS}
+
+    def register(self, event_type: str, callback) -> str:
+        if event_type not in self._VALID_EVENTS:
+            return f"Error: Invalid event type '{event_type}'. Use: {', '.join(sorted(self._VALID_EVENTS))}"
+        if not callable(callback):
+            return "Error: Callback must be a callable function"
+        if callback not in self._hooks[event_type]:
+            self._hooks[event_type].append(callback)
+            logger.info(f"Hook registered: {event_type} -> {callback.__name__}")
+            return f"Hook registered: {event_type}"
+        return f"Hook already registered for {event_type}"
+
+    def trigger(self, event_type: str, *args, **kwargs):
+        if event_type not in self._hooks:
+            return []
+        results = []
+        for callback in list(self._hooks[event_type]):
+            try:
+                result = callback(*args, **kwargs)
+                results.append(result)
+            except Exception as e:
+                logger.error(f"Hook error in {event_type}->{callback.__name__}: {e}")
+                results.append({"error": str(e)})
+        return results
+
+    def list(self) -> str:
+        lines = ["Registered hooks:"]
+        for event_type, callbacks in self._hooks.items():
+            if callbacks:
+                lines.append(f"  {event_type}:")
+                for cb in callbacks:
+                    lines.append(f"    - {cb.__name__}")
+            else:
+                lines.append(f"  {event_type}: (empty)")
+        return "\n".join(lines)
+
+    def clear(self, event_type: str | None = None) -> str:
+        if event_type:
+            if event_type in self._hooks:
+                count = len(self._hooks[event_type])
+                self._hooks[event_type] = []
+                return f"Cleared {count} hooks for {event_type}"
+            return f"Error: Unknown event type '{event_type}'"
+        for event_type in self._hooks:
+            self._hooks[event_type] = []
+        return "Cleared all hooks"
+
+    def __getitem__(self, event_type: str):
+        return self._hooks.get(event_type, [])
+
+    def __contains__(self, event_type: str) -> bool:
+        return event_type in self._hooks
+
+
+# Backwards-compatible module-level registry
+_hook_registry = HookRegistry()
+_HOOKS: dict[str, list] = _hook_registry._hooks  # alias for existing code
 
 
 def register_hook(event_type: str, callback) -> str:
@@ -515,20 +642,7 @@ def register_hook(event_type: str, callback) -> str:
     Returns:
         Success or error message.
     """
-    valid_events = {"pre_llm_call", "post_llm_call", "on_session_start", "on_session_end"}
-
-    if event_type not in valid_events:
-        return f"Error: Invalid event type '{event_type}'. Use: {', '.join(sorted(valid_events))}"
-
-    if not callable(callback):
-        return "Error: Callback must be a callable function"
-
-    if callback not in _HOOKS[event_type]:
-        _HOOKS[event_type].append(callback)
-        logger.info(f"Hook registered: {event_type} -> {callback.__name__}")
-        return f"Hook registered: {event_type}"
-    else:
-        return f"Hook already registered for {event_type}"
+    return _hook_registry.register(event_type, callback)
 
 
 def trigger_hook(event_type: str, *args, **kwargs):
@@ -540,19 +654,7 @@ def trigger_hook(event_type: str, *args, **kwargs):
     Returns:
         List of results from each callback (if they return anything).
     """
-    if event_type not in _HOOKS:
-        return []
-
-    results = []
-    for callback in _HOOKS[event_type]:
-        try:
-            result = callback(*args, **kwargs)
-            results.append(result)
-        except Exception as e:
-            logger.error(f"Hook error in {event_type}->{callback.__name__}: {e}")
-            results.append({"error": str(e)})
-
-    return results
+    return _hook_registry.trigger(event_type, *args, **kwargs)
 
 
 def list_hooks() -> str:
@@ -561,20 +663,7 @@ def list_hooks() -> str:
     Returns:
         Formatted list of registered hooks by event type.
     """
-    if not any(_HOOKS.values()):
-        return "No hooks registered. Use register_hook(event_type, callback) to add hooks."
-
-    lines = ["📋 Registered Lifecycle Hooks:", ""]
-
-    for event_type, callbacks in _HOOKS.items():
-        if callbacks:
-            lines.append(f"  {event_type}:")
-            for cb in callbacks:
-                lines.append(f"    - {cb.__name__}")
-        else:
-            lines.append(f"  {event_type}: (empty)")
-
-    return "\n".join(lines)
+    return _hook_registry.list()
 
 
 def clear_hooks(event_type: str = None) -> str:
@@ -585,17 +674,7 @@ def clear_hooks(event_type: str = None) -> str:
     Returns:
         Success message.
     """
-    if event_type:
-        if event_type in _HOOKS:
-            count = len(_HOOKS[event_type])
-            _HOOKS[event_type] = []
-            return f"Cleared {count} hooks for {event_type}"
-        else:
-            return f"Error: Unknown event type '{event_type}'"
-    else:
-        for event_type in _HOOKS:
-            _HOOKS[event_type] = []
-        return "All hooks cleared"
+    return _hook_registry.clear(event_type)
 
 
 def set_registry(registry: dict):
@@ -605,6 +684,7 @@ def set_registry(registry: dict):
     # Phase 6.1: Sync to state store for multi-worker awareness
     try:
         from ..state_store import get_state_store
+
         store = get_state_store()
         store.set_agent_registry(registry)
     except Exception:
@@ -620,6 +700,7 @@ def set_config(cfg):
     # Phase 6.1: Initialise state store with config (triggers Redis if configured)
     try:
         from ..state_store import get_state_store
+
         get_state_store(config=cfg)
     except Exception:
         pass
@@ -642,6 +723,7 @@ def set_notification_callback(callback):
     # Phase 6.1: Sync to state store
     try:
         from ..state_store import get_state_store
+
         store = get_state_store()
         store.set_notification_callback(callback)
     except Exception:
@@ -654,6 +736,7 @@ def register_chat_id(user_id: str, chat_id: int):
     # Phase 6.1: Sync to state store for multi-worker awareness
     try:
         from ..state_store import get_state_store
+
         store = get_state_store()
         store.set_chat_id(user_id, chat_id)
     except Exception:
@@ -661,6 +744,7 @@ def register_chat_id(user_id: str, chat_id: int):
 
 
 # ── Core Tools ────────────────────────────────────────────────────────────────
+
 
 def validate_path(path: str) -> Path:
     """Validate that path stays within workspace — prevents traversal attacks."""
@@ -682,15 +766,11 @@ def validate_path(path: str) -> Path:
         raise ValueError(f"Invalid path: {path}") from e
 
 
-
 def register_mcp_tool(name: str, server_name: str, func, documentation: str = "") -> str:
     """Register a remote tool retrieved via MCP."""
     global TOOLS
     local_name = f"mcp_{server_name}_{name}"
-    TOOLS[local_name] = {
-        "func": func,
-        "desc": f"[{server_name} MCP] {documentation}"
-    }
+    TOOLS[local_name] = {"func": func, "desc": f"[{server_name} MCP] {documentation}"}
     return f"MCP tool '{local_name}' registered successfully."
 
 
@@ -708,59 +788,69 @@ def _generate_schemas() -> list[dict]:
             sig = inspect.signature(func)
         except ValueError:
             continue
-            
+
         params = {}
         required = []
         for param_name, param in sig.parameters.items():
             if param_name in ("user_id", "_depth", "context"):
                 continue
-                
+
             ptype = "string"
-            if param.annotation == int: ptype = "integer"
-            elif param.annotation == bool: ptype = "boolean"
-            elif param.annotation == float: ptype = "number"
-            
+            if param.annotation == int:
+                ptype = "integer"
+            elif param.annotation == bool:
+                ptype = "boolean"
+            elif param.annotation == float:
+                ptype = "number"
+
             params[param_name] = {"type": ptype, "description": ""}
             if param.default == inspect.Parameter.empty:
                 required.append(param_name)
-                
-        schemas.append({
-            "type": "function",
-            "function": {
-                "name": name,
-                "description": info["desc"] or "",
-            "parameters": {
-                    "type": "object",
-                    "properties": params,
-                    "required": required
-                }
+
+        schemas.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": info["desc"] or "",
+                    "parameters": {"type": "object", "properties": params, "required": required},
+                },
             }
-        })
+        )
     return schemas
+
 
 TOOL_SCHEMAS: list[dict] = []
 
 
 class _ToolFunctionsProxy(dict):
     """Proxy dict that reads tool functions from TOOLS registry."""
+
     def __contains__(self, key):
         return key in TOOLS
+
     def __getitem__(self, key):
         return TOOLS[key]["func"]
+
     def get(self, key, default=None):
         if key in TOOLS:
             return TOOLS[key]["func"]
         return default
+
     def keys(self):
         return TOOLS.keys()
+
     def __iter__(self):
         return iter(TOOLS)
+
     def __len__(self):
         return len(TOOLS)
+
     def items(self):
         return ((k, TOOLS[k]["func"]) for k in TOOLS)
+
     def values(self):
         return (TOOLS[k]["func"] for k in TOOLS)
 
-TOOL_FUNCTIONS = _ToolFunctionsProxy()
 
+TOOL_FUNCTIONS = _ToolFunctionsProxy()

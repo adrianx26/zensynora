@@ -47,6 +47,7 @@ _config_lock = threading.Lock()
 try:
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
+
     WATCHDOG_AVAILABLE = True
 except ImportError:
     WATCHDOG_AVAILABLE = False
@@ -60,7 +61,7 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 WORKSPACE = CONFIG_DIR / "workspace"
 
 # Config caching for faster imports
-_cached_config: Optional['AppConfig'] = None
+_cached_config: Optional["AppConfig"] = None
 _config_mtime: float = 0
 
 # 6.1: File watcher for config auto-reload
@@ -69,10 +70,11 @@ _config_file_watcher = None
 
 class _ConfigFileWatcher(FileSystemEventHandler if WATCHDOG_AVAILABLE else object):
     """6.1: Watch config file for changes and invalidate cache."""
+
     def __init__(self):
         super().__init__()
         self._last_reload_time = 0
-    
+
     def on_modified(self, event):
         if event.src_path == str(CONFIG_FILE):
             # Debounce: only reload if at least 1 second since last reload
@@ -87,14 +89,14 @@ class _ConfigFileWatcher(FileSystemEventHandler if WATCHDOG_AVAILABLE else objec
 def _start_config_watcher():
     """6.1: Start file watcher for config changes."""
     global _config_file_watcher
-    
+
     if not WATCHDOG_AVAILABLE:
         logger.debug("Watchdog not available, using mtime-based caching")
         return
-    
+
     if _config_file_watcher is not None:
         return  # Already watching
-    
+
     try:
         _config_file_watcher = _ConfigFileWatcher()
         observer = Observer()
@@ -104,6 +106,7 @@ def _start_config_watcher():
         logger.info("Config file watcher started")
     except Exception as e:
         logger.warning(f"Failed to start config file watcher: {e}")
+
 
 # Environment variable override mapping
 ENV_OVERRIDES = {
@@ -184,6 +187,7 @@ ENV_OVERRIDES = {
 
 def _apply_env_overrides(config_dict: Dict[str, Any]) -> Dict[str, Any]:
     """Apply environment variable overrides to config dictionary."""
+
     def deep_get(d: Dict[str, Any], key: str) -> Any:
         """Get nested dict value using dot notation."""
         keys = key.split(".")
@@ -193,7 +197,7 @@ def _apply_env_overrides(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 return None
         return d if d else None
-    
+
     def deep_set(d: Dict[str, Any], key: str, value: Any) -> None:
         """Set nested dict value using dot notation."""
         keys = key.split(".")
@@ -203,17 +207,17 @@ def _apply_env_overrides(config_dict: Dict[str, Any]) -> Dict[str, Any]:
                 current[k] = {}
             current = current[k]
         current[keys[-1]] = value
-    
+
     for config_key, env_var in ENV_OVERRIDES.items():
         env_value = os.environ.get(env_var)
         if env_value is not None:
             logger.info(f"Applying env override: {env_var} -> {config_key}")
-            
+
             # Try to infer type from current value
             current_value = deep_get(config_dict, config_key)
             if isinstance(current_value, bool):
                 # Parse boolean
-                deep_set(config_dict, config_key, env_value.lower() in ('true', '1', 'yes'))
+                deep_set(config_dict, config_key, env_value.lower() in ("true", "1", "yes"))
             elif isinstance(current_value, int):
                 # Parse integer
                 try:
@@ -223,11 +227,12 @@ def _apply_env_overrides(config_dict: Dict[str, Any]) -> Dict[str, Any]:
             else:
                 # String value
                 deep_set(config_dict, config_key, env_value)
-    
+
     return config_dict
 
 
 # ── Schema Models ─────────────────────────────────────────────────────────────
+
 
 class TelegramConfig(BaseModel):
     enabled: bool = False
@@ -247,27 +252,33 @@ class WhatsAppConfig(BaseModel):
 
 # ── Local Providers ───────────────────────────────────────────────────────────
 
+
 class OllamaConfig(BaseModel):
     base_url: str = "http://localhost:11434"
 
 
 class LMStudioConfig(BaseModel):
     """LM Studio local server — OpenAI-compatible REST API."""
+
     base_url: str = "http://localhost:1234/v1"
-    api_key: SecretStr = SecretStr("lm-studio")   # LM Studio ignores the key but openai SDK requires one
+    api_key: SecretStr = SecretStr(
+        "lm-studio"
+    )  # LM Studio ignores the key but openai SDK requires one
 
 
 class LlamaCppConfig(BaseModel):
     """llama.cpp server (`llama-server`) — OpenAI-compatible REST API."""
+
     base_url: str = "http://localhost:8080/v1"
     api_key: SecretStr = SecretStr("no-key")
 
 
 # ── Online Providers ──────────────────────────────────────────────────────────
 
+
 class OpenAIConfig(BaseModel):
     api_key: SecretStr = SecretStr("")
-    base_url: str = "https://api.openai.com/v1"   # override for Azure, proxies, etc.
+    base_url: str = "https://api.openai.com/v1"  # override for Azure, proxies, etc.
 
 
 class AnthropicConfig(BaseModel):
@@ -286,35 +297,38 @@ class GroqConfig(BaseModel):
 class OpenRouterConfig(BaseModel):
     api_key: SecretStr = SecretStr("")
     base_url: str = "https://openrouter.ai/api/v1"
-    site_url: str = ""    # optional X-OpenRouter-Site-URL header
-    site_name: str = ""   # optional X-OpenRouter-Title header
+    site_url: str = ""  # optional X-OpenRouter-Site-URL header
+    site_name: str = ""  # optional X-OpenRouter-Title header
 
 
 # ── Providers Container ───────────────────────────────────────────────────────
 
+
 class ProvidersConfig(BaseModel):
-    ollama:      OllamaConfig      = OllamaConfig()
-    lmstudio:    LMStudioConfig    = LMStudioConfig()
-    llamacpp:    LlamaCppConfig    = LlamaCppConfig()
-    openai:      OpenAIConfig      = OpenAIConfig()
-    anthropic:   AnthropicConfig   = AnthropicConfig()
-    gemini:      GeminiConfig      = GeminiConfig()
-    groq:        GroqConfig        = GroqConfig()
-    openrouter:  OpenRouterConfig  = OpenRouterConfig()
+    ollama: OllamaConfig = OllamaConfig()
+    lmstudio: LMStudioConfig = LMStudioConfig()
+    llamacpp: LlamaCppConfig = LlamaCppConfig()
+    openai: OpenAIConfig = OpenAIConfig()
+    anthropic: AnthropicConfig = AnthropicConfig()
+    gemini: GeminiConfig = GeminiConfig()
+    groq: GroqConfig = GroqConfig()
+    openrouter: OpenRouterConfig = OpenRouterConfig()
 
 
 # ── Agent Config ──────────────────────────────────────────────────────────────
 
+
 class AgentDefaults(BaseModel):
-    model: str    = "llama3.2"
-    provider: str = "ollama"   # which provider to use by default
+    model: str = "llama3.2"
+    provider: str = "ollama"  # which provider to use by default
 
 
 class NamedAgentConfig(BaseModel):
     """A named agent with its own model, provider, and optional custom system prompt."""
+
     name: str
-    model: str    = "llama3.2"
-    provider: str = ""         # empty = inherit from defaults
+    model: str = "llama3.2"
+    provider: str = ""  # empty = inherit from defaults
     system_prompt: str = ""
 
 
@@ -342,6 +356,7 @@ class KnowledgeConfig(BaseModel):
 
 class SwarmConfig(BaseModel):
     """Configuration for Agent Swarm functionality."""
+
     enabled: bool = True
     max_concurrent_swarms: int = 3
     default_strategy: str = "parallel"
@@ -352,6 +367,7 @@ class SwarmConfig(BaseModel):
 
 class TimeoutConfig(BaseModel):
     """Timeout configuration for various operations."""
+
     shell_seconds: int = 30
     llm_seconds: int = 60
     http_seconds: int = 30
@@ -359,6 +375,7 @@ class TimeoutConfig(BaseModel):
 
 class MemoryCleanupConfig(BaseModel):
     """Memory cleanup configuration."""
+
     auto_cleanup_days: int = 30
     auto_cleanup_enabled: bool = True  # Set to False to disable cleanup on init
     vacuum_threshold: int = 100  # Run VACUUM after this many deletions
@@ -366,23 +383,63 @@ class MemoryCleanupConfig(BaseModel):
 
 class SecurityConfig(BaseModel):
     """Security configuration for command allowlists and GDPR."""
+
     allowed_commands: list[str] = [
-        'ls', 'dir', 'cat', 'type', 'find', 'grep', 'findstr',
-        'head', 'tail', 'wc', 'sort', 'uniq', 'cut', 'git',
-        'echo', 'pwd', 'python', 'python3', 'pip', 'curl', 'wget'
+        "ls",
+        "dir",
+        "cat",
+        "type",
+        "find",
+        "grep",
+        "findstr",
+        "head",
+        "tail",
+        "wc",
+        "sort",
+        "uniq",
+        "cut",
+        "git",
+        "echo",
+        "pwd",
+        # SECURITY: Removed python, python3, pip, curl, wget — an AI agent
+        # executing arbitrary code or downloading files is a remote-code-execution
+        # vulnerability. Use dedicated tools (e.g. browse, download) instead.
     ]
     blocked_commands: list[str] = [
-        'rm', 'del', 'erase', 'format', 'rd', 'rmdir',
-        'powershell', 'cmd', 'certutil', 'bitsadmin', 'icacls',
-        'takeown', 'reg', 'schtasks', 'net', 'tasklist',
-        'wmic', 'msiexec', 'control', 'explorer', 'shutdown', 'restart'
+        "rm",
+        "del",
+        "erase",
+        "format",
+        "rd",
+        "rmdir",
+        "powershell",
+        "cmd",
+        "certutil",
+        "bitsadmin",
+        "icacls",
+        "takeown",
+        "reg",
+        "schtasks",
+        "net",
+        "tasklist",
+        "wmic",
+        "msiexec",
+        "control",
+        "explorer",
+        "shutdown",
+        "restart",
     ]
+    # CORS origins for the WebUI (default: local Vite dev server)
+    cors_origins: list[str] = ["http://localhost:5173"]
+    # Admin API key for protecting sensitive endpoints
+    admin_api_key: SecretStr = SecretStr("")
     # GDPR compliance features (opt-in, default disabled)
     gdpr_enabled: bool = False
 
 
 class MedicConfig(BaseModel):
     """Configuration for Medic Agent system health monitoring."""
+
     enabled: bool = False
     enable_hash_check: bool = True
     repo_url: str = "https://github.com/zensynora/zensynora"
@@ -396,6 +453,7 @@ class MedicConfig(BaseModel):
 
 class NewTechConfig(BaseModel):
     """Configuration for New Tech Agent AI news monitoring."""
+
     enabled: bool = False
     interval_hours: int = 24
     share_consent: bool = False
@@ -408,6 +466,7 @@ class NewTechConfig(BaseModel):
 
 class SemanticCacheConfig(BaseModel):
     """Configuration for semantic LLM response caching."""
+
     enabled: bool = True
     max_size: int = 256
     ttl: int = 3600
@@ -416,6 +475,7 @@ class SemanticCacheConfig(BaseModel):
 
 class WorkerPoolConfig(BaseModel):
     """Configuration for worker pool used by tool execution."""
+
     max_workers: int = 5
     task_timeout: int = 30
     queue_size: int = 100
@@ -423,6 +483,7 @@ class WorkerPoolConfig(BaseModel):
 
 class SandboxConfig(BaseModel):
     """Configuration for skill sandboxing."""
+
     enabled: bool = True
     max_memory_mb: int = 256
     max_time_seconds: int = 30
@@ -432,6 +493,7 @@ class SandboxConfig(BaseModel):
 
 class LogRotationConfig(BaseModel):
     """Configuration for audit/application log rotation."""
+
     max_size_mb: int = 10
     max_age_days: int = 7
     max_files: int = 10
@@ -440,6 +502,7 @@ class LogRotationConfig(BaseModel):
 
 class SkillAdapterConfig(BaseModel):
     """Configuration for Skill Adapter external skill integration."""
+
     enabled: bool = True
     external_skill_sources: list[str] = ["agentskills.io"]
     allow_external_registration: bool = True
@@ -464,6 +527,7 @@ class WSL2BackendConfig(BaseModel):
 
 class BackendConfig(BaseModel):
     """Configuration for terminal backends."""
+
     default_backend: str = "local"
     docker: DockerBackendConfig = DockerBackendConfig()
     ssh: SSHBackendConfig = SSHBackendConfig()
@@ -484,15 +548,17 @@ class MCPConfig(BaseModel):
 
 class RoutingConfig(BaseModel):
     """Detailed settings for Intelligent Routing."""
+
     enabled: bool = False
     prefer_free_models: bool = True
     allowed_models: list[str] = []  # Empty means all registered
-    allowed_providers: list[str] = [] # Empty means all registered
+    allowed_providers: list[str] = []  # Empty means all registered
     auto_disable_on_single: bool = True
 
 
 class IntelligenceConfig(BaseModel):
     """Configuration for AI intelligence features (Research, Routing, Benchmarking)."""
+
     research_enabled: bool = True
     research_interval_hours: int = 6
     research_idle_minutes: int = 15
@@ -505,22 +571,22 @@ class IntelligenceConfig(BaseModel):
 
 class AppConfig(BaseModel):
     providers: ProvidersConfig = ProvidersConfig()
-    agents:    AgentsConfig    = AgentsConfig()
-    channels:  ChannelsConfig  = ChannelsConfig()
+    agents: AgentsConfig = AgentsConfig()
+    channels: ChannelsConfig = ChannelsConfig()
     knowledge: KnowledgeConfig = KnowledgeConfig()
-    swarm:     SwarmConfig     = SwarmConfig()
-    timeouts:  TimeoutConfig   = TimeoutConfig()
-    memory:    MemoryCleanupConfig = MemoryCleanupConfig()
-    security:  SecurityConfig  = SecurityConfig()
-    medic:     MedicConfig     = MedicConfig()
-    newtech:   NewTechConfig   = NewTechConfig()
+    swarm: SwarmConfig = SwarmConfig()
+    timeouts: TimeoutConfig = TimeoutConfig()
+    memory: MemoryCleanupConfig = MemoryCleanupConfig()
+    security: SecurityConfig = SecurityConfig()
+    medic: MedicConfig = MedicConfig()
+    newtech: NewTechConfig = NewTechConfig()
     semantic_cache: SemanticCacheConfig = SemanticCacheConfig()
     worker_pool: WorkerPoolConfig = WorkerPoolConfig()
     sandbox: SandboxConfig = SandboxConfig()
     log_rotation: LogRotationConfig = LogRotationConfig()
     skill_adapter: SkillAdapterConfig = SkillAdapterConfig()
-    backends:  BackendConfig   = BackendConfig()
-    mcp:       MCPConfig       = MCPConfig()
+    backends: BackendConfig = BackendConfig()
+    mcp: MCPConfig = MCPConfig()
     intelligence: IntelligenceConfig = IntelligenceConfig()
 
     def get(self, key: str, default=None):
@@ -536,38 +602,39 @@ class AppConfig(BaseModel):
 
 # ── Validation ────────────────────────────────────────────────────────────────
 
+
 def _validate_config(config: AppConfig) -> None:
     """Validate critical configuration and warn about missing required values.
-    
+
     Checks:
       - At least one LLM provider is configured (local or API key)
       - Required credentials are present for enabled channels
       - Critical environment variables are set
-    
+
     This function logs warnings but does not exit — the agent may still work
     with interactive configuration or delayed provider setup.
     """
     warnings = []
-    
+
     # ── LLM Provider Check ──────────────────────────────────────────────────
     has_local = False
     has_api_key = False
-    
+
     # Check Ollama / LM Studio / llama.cpp (local)
     if config.providers.ollama.base_url:
         has_local = True
-    if hasattr(config.providers, 'lmstudio') and config.providers.lmstudio.base_url:
+    if hasattr(config.providers, "lmstudio") and config.providers.lmstudio.base_url:
         has_local = True
-    if hasattr(config.providers, 'llamacpp') and config.providers.llamacpp.base_url:
+    if hasattr(config.providers, "llamacpp") and config.providers.llamacpp.base_url:
         has_local = True
-    
+
     # Check cloud provider API keys
-    for prov_name in ('openai', 'anthropic', 'gemini', 'groq', 'openrouter'):
+    for prov_name in ("openai", "anthropic", "gemini", "groq", "openrouter"):
         prov = getattr(config.providers, prov_name, None)
         if prov and prov.api_key and prov.api_key.get_secret_value():
             has_api_key = True
             break
-    
+
     if not has_local and not has_api_key:
         warnings.append(
             "No LLM provider configured. Set at least one of:\n"
@@ -575,7 +642,7 @@ def _validate_config(config: AppConfig) -> None:
             "  - OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, or OPENROUTER_API_KEY\n"
             "  Run `python cli.py onboard` for interactive setup."
         )
-    
+
     # ── Telegram Check ──────────────────────────────────────────────────────
     if config.channels.telegram.enabled:
         if not config.channels.telegram.token.get_secret_value():
@@ -588,7 +655,7 @@ def _validate_config(config: AppConfig) -> None:
                 "Telegram is enabled but no user IDs are in allowFrom.\n"
                 "  Add your user ID to channels.telegram.allowFrom in config.json"
             )
-    
+
     # ── WhatsApp Check ──────────────────────────────────────────────────────
     if config.channels.whatsapp.enabled:
         missing = []
@@ -603,7 +670,37 @@ def _validate_config(config: AppConfig) -> None:
                 f"WhatsApp is enabled but missing: {', '.join(missing)}.\n"
                 "  See docs/dev/plans/whatsapp_implementation_plan.md for setup."
             )
-    
+
+    # ── Security: allowed_commands validation ───────────────────────────────
+    dangerous_commands = {
+        "rm",
+        "del",
+        "erase",
+        "format",
+        "rd",
+        "rmdir",
+        "powershell",
+        "cmd",
+        "python",
+        "python3",
+        "pip",
+        "curl",
+        "wget",
+        "sh",
+        "bash",
+        "zsh",
+        "nc",
+        "netcat",
+    }
+    bad_allowed = [
+        cmd for cmd in config.security.allowed_commands if cmd.lower() in dangerous_commands
+    ]
+    if bad_allowed:
+        warnings.append(
+            f"SECURITY: Dangerous commands in allowed_commands: {', '.join(bad_allowed)}.\n"
+            f"  These can lead to remote code execution. Remove them immediately."
+        )
+
     # ── Log all warnings ────────────────────────────────────────────────────
     if warnings:
         logger.warning("=" * 60)
@@ -618,17 +715,18 @@ def _validate_config(config: AppConfig) -> None:
 
 # ── Loaders ───────────────────────────────────────────────────────────────────
 
+
 def load_config(force_reload: bool = False) -> AppConfig:
     """Load and validate config. Exits with clear message on schema errors.
-    
+
     Thread-safe: Uses a lock to prevent race conditions during config reload.
     """
     global _cached_config, _config_mtime
-    
+
     with _config_lock:
         # 6.1: Start file watcher on first load
         _start_config_watcher()
-        
+
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         WORKSPACE.mkdir(parents=True, exist_ok=True)
 
@@ -638,21 +736,21 @@ def load_config(force_reload: bool = False) -> AppConfig:
         try:
             # Check if config file has been modified
             current_mtime = CONFIG_FILE.stat().st_mtime
-            
+
             # Return cached config if not modified and not force reload
             if not force_reload and _cached_config is not None and current_mtime == _config_mtime:
                 return _cached_config
-            
+
             raw = load_encrypted_or_plain(CONFIG_FILE)
             # Apply environment variable overrides
             raw = _apply_env_overrides(raw)
-            
+
             _cached_config = AppConfig(**raw)
             _config_mtime = current_mtime
-            
+
             # Validate critical configuration
             _validate_config(_cached_config)
-            
+
             return _cached_config
         except json.JSONDecodeError as e:
             raise SystemExit(f"❌ Config error: {CONFIG_FILE} is not valid JSON — {e}")
@@ -662,10 +760,14 @@ def load_config(force_reload: bool = False) -> AppConfig:
 
 def _reveal_secrets(raw: dict) -> dict:
     """Walk a plain dict and expose SecretStr values so they serialise correctly."""
+    from pydantic import SecretStr
+
     out = {}
     for k, v in raw.items():
         if isinstance(v, dict):
             out[k] = _reveal_secrets(v)
+        elif isinstance(v, SecretStr):
+            out[k] = v.get_secret_value()
         else:
             out[k] = v
     return out
@@ -684,6 +786,7 @@ def save_config(config):
                     _inject_secrets(field_val, obj_val)
                 elif isinstance(obj_val, SecretStr):
                     raw_dict[field_name] = obj_val.get_secret_value()
+
         _inject_secrets(raw, config)
     else:
         raw = config

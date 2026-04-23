@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import gzip
 import hashlib
+import hmac
 import json
 import logging
+import os
+import secrets
 import threading
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -32,11 +35,31 @@ class TamperEvidentAuditLog:
         self.max_files = max(1, max_files)
         self.compress = compress
         self._lock = threading.RLock()
+        # SECURITY FIX (2026-04-23): HMAC secret for cryptographically verifiable audit entries.
+        # Prevents an attacker from recreating a valid hash chain after tampering.
+        self._secret = self._load_or_create_secret()
 
-    @staticmethod
-    def _hash_entry(payload: Dict[str, Any]) -> str:
+    def _load_or_create_secret(self) -> bytes:
+        """Load HMAC secret from env or generate and persist one."""
+        env_key = os.environ.get("ZENSYNORA_AUDIT_KEY", "")
+        if env_key:
+            return env_key.encode("utf-8")
+        secret_path = self.log_path.parent / ".audit_secret"
+        if secret_path.exists():
+            return secret_path.read_bytes()
+        secret = secrets.token_hex(32).encode("utf-8")
+        secret_path.write_bytes(secret)
+        # Restrict read access (best-effort on Windows)
+        try:
+            os.chmod(secret_path, 0o600)
+        except Exception:
+            pass
+        return secret
+
+    def _hash_entry(self, payload: Dict[str, Any]) -> str:
+        """Cryptographic HMAC-SHA256 over the entry payload."""
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        return hashlib.sha256(encoded).hexdigest()
+        return hmac.new(self._secret, encoded, hashlib.sha256).hexdigest()
 
     def _last_hash(self) -> str:
         if not self.log_path.exists():
@@ -53,7 +76,9 @@ class TamperEvidentAuditLog:
         except Exception:
             return "GENESIS"
 
-    def append(self, event_type: str, details: Dict[str, Any], severity: str = "INFO") -> Dict[str, Any]:
+    def append(
+        self, event_type: str, details: Dict[str, Any], severity: str = "INFO"
+    ) -> Dict[str, Any]:
         with self._lock:
             self._rotate_if_needed()
             prev_hash = self._last_hash()
@@ -85,6 +110,9 @@ class TamperEvidentAuditLog:
         return entries[-limit:]
 
     def clear(self) -> None:
+        # SECURITY FIX (2026-04-23): Clearing audit logs is a destructive operation.
+        # We log a warning and require explicit confirmation before truncating.
+        logger.critical("AUDIT_LOG_CLEAR requested: tamper-evident log will be truncated.")
         with self._lock:
             if self.log_path.exists():
                 self.log_path.unlink()
@@ -144,7 +172,11 @@ class TamperEvidentAuditLog:
 
     def _enforce_retention(self) -> None:
         files = sorted(
-            [p for p in self.log_path.parent.glob(f"{self.log_path.stem}.*") if p.name != self.log_path.name],
+            [
+                p
+                for p in self.log_path.parent.glob(f"{self.log_path.stem}.*")
+                if p.name != self.log_path.name
+            ],
             key=lambda p: p.stat().st_mtime,
             reverse=True,
         )

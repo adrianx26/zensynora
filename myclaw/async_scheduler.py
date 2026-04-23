@@ -141,6 +141,7 @@ class AsyncScheduler:
         self,
         persistence_path: Optional[Path] = None,
         poll_interval: float = 1.0,
+        max_concurrency: int = 10,
     ):
         self._jobs: Dict[str, Job] = {}
         self._task: Optional[asyncio.Task] = None
@@ -148,6 +149,9 @@ class AsyncScheduler:
         self._poll_interval = poll_interval
         self._persistence_path = persistence_path
         self._shutdown_event = asyncio.Event()
+        # SECURITY / STABILITY FIX (2026-04-23): Global concurrency limit to prevent
+        # thundering herd when many jobs are due simultaneously.
+        self._semaphore = asyncio.Semaphore(max_concurrency)
 
     # ── Public API (apscheduler-compatible) ───────────────────────────────────
 
@@ -307,25 +311,28 @@ class AsyncScheduler:
             logger.warning(f"Job '{job.id}' skipped: max_instances ({job.max_instances}) reached")
             return
 
-        job._running += 1
-        try:
-            logger.debug(f"Executing job '{job.id}'")
-            if inspect.iscoroutinefunction(job.func):
-                await job.func(*job.args, **job.kwargs)
-            else:
-                # Run sync functions in thread pool
-                loop = asyncio.get_running_loop()
-                await loop.run_in_executor(None, lambda: job.func(*job.args, **job.kwargs))
-        except Exception as exc:
-            logger.error(f"Job '{job.id}' failed: {exc}")
-        finally:
-            job._running -= 1
-            if job.trigger == TriggerType.INTERVAL:
-                job._compute_next_run()
-            elif job.trigger == TriggerType.DATE:
-                # One-shot: remove after execution
-                self._jobs.pop(job.id, None)
-                self._persist_jobs()
+        # STABILITY FIX: Acquire global concurrency semaphore to prevent
+        # thundering herd when many jobs are due simultaneously.
+        async with self._semaphore:
+            job._running += 1
+            try:
+                logger.debug(f"Executing job '{job.id}'")
+                if inspect.iscoroutinefunction(job.func):
+                    await job.func(*job.args, **job.kwargs)
+                else:
+                    # Run sync functions in thread pool
+                    loop = asyncio.get_running_loop()
+                    await loop.run_in_executor(None, lambda: job.func(*job.args, **job.kwargs))
+            except Exception as exc:
+                logger.error(f"Job '{job.id}' failed: {exc}")
+            finally:
+                job._running -= 1
+                if job.trigger == TriggerType.INTERVAL:
+                    job._compute_next_run()
+                elif job.trigger == TriggerType.DATE:
+                    # One-shot: remove after execution
+                    self._jobs.pop(job.id, None)
+                    self._persist_jobs()
 
     # ── Persistence ───────────────────────────────────────────────────────────
 
@@ -350,7 +357,9 @@ class AsyncScheduler:
                 func_name = rec.get("func_name")
                 func = func_resolver.get(func_name)
                 if func is None:
-                    logger.warning(f"Cannot restore job '{rec['id']}': function '{func_name}' not found")
+                    logger.warning(
+                        f"Cannot restore job '{rec['id']}': function '{func_name}' not found"
+                    )
                     continue
                 job = Job.from_dict(rec, func)
                 self._jobs[job.id] = job

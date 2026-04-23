@@ -13,34 +13,49 @@ from .base import AbstractBackend
 
 logger = logging.getLogger(__name__)
 
+
 class SSHBackend(AbstractBackend):
     """SSH remote execution backend using Paramiko."""
 
     def __init__(self, config: dict = None):
         super().__init__(config)
         # Handle both dict and Pydantic model
-        if hasattr(config, 'model_dump'):
+        if hasattr(config, "model_dump"):
             cfg = config.model_dump()
         else:
             cfg = config or {}
-            
+
         self.host = cfg.get("host", "localhost")
         self.user = cfg.get("user", "root")
         self.port = cfg.get("port", 22)
         self.key_path = cfg.get("key_path", "")
         self.password = cfg.get("password", "")
-        
+
         # Resolve password from SecretStr if needed
-        if hasattr(self.password, 'get_secret_value'):
+        if hasattr(self.password, "get_secret_value"):
             self.password = self.password.get_secret_value()
-            
+
         self._client: Optional[paramiko.SSHClient] = None
 
     def _get_client(self) -> paramiko.SSHClient:
         """Create and connect SSH client."""
         client = paramiko.SSHClient()
-        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-        
+        # SECURITY FIX (2026-04-23): Reject unknown host keys instead of auto-accepting.
+        # AutoAddPolicy() accepts ANY host key, making connections vulnerable to MITM.
+        # We load the user's known_hosts file and reject keys not present in it.
+        client.set_missing_host_key_policy(paramiko.RejectPolicy())
+        known_hosts = Path.home() / ".ssh" / "known_hosts"
+        if known_hosts.exists():
+            try:
+                client.load_host_keys(str(known_hosts))
+            except Exception as e:
+                logger.warning(f"Could not load known_hosts ({known_hosts}): {e}")
+        else:
+            logger.warning(
+                "No known_hosts file found. SSH connections may fail. "
+                "Run 'ssh <host>' once manually to populate known_hosts."
+            )
+
         try:
             if self.key_path:
                 key_path = Path(self.key_path).expanduser()
@@ -51,10 +66,10 @@ class SSHBackend(AbstractBackend):
                         username=self.user,
                         key_filename=str(key_path),
                         timeout=10,
-                        look_for_keys=False
+                        look_for_keys=False,
                     )
                     return client
-            
+
             # Fallback to password
             if self.password:
                 client.connect(
@@ -62,14 +77,14 @@ class SSHBackend(AbstractBackend):
                     port=self.port,
                     username=self.user,
                     password=self.password,
-                    timeout=10
+                    timeout=10,
                 )
                 return client
-                
+
             # Final attempt: default keys
             client.connect(hostname=self.host, port=self.port, username=self.user, timeout=10)
             return client
-            
+
         except Exception as e:
             logger.error(f"SSH connection failed to {self.host}: {e}")
             raise
@@ -84,14 +99,14 @@ class SSHBackend(AbstractBackend):
         try:
             client = self._get_client()
             stdin, stdout, stderr = client.exec_command(command, timeout=timeout)
-            
-            output = stdout.read().decode('utf-8', errors='replace')
-            error = stderr.read().decode('utf-8', errors='replace')
+
+            output = stdout.read().decode("utf-8", errors="replace")
+            error = stderr.read().decode("utf-8", errors="replace")
             exit_code = stdout.channel.recv_exit_status()
-            
+
             combined_output = output + error
             return combined_output.strip(), exit_code
-            
+
         except Exception as e:
             logger.error(f"SSH execution error on {self.host}: {e}")
             return f"Error: {e}", -1
