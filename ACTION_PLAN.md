@@ -1,8 +1,9 @@
 # ZenSynora Action Plan
 
 > **Generated**: 2026-04-23
-> **Based on**: fixplan.md audit (v0.4.1)
-> **Goal**: Stabilize, secure, and harden the ZenSynora codebase through 4 implementation phases.
+> **Based on**: Comprehensive codebase audit (v0.4.1)
+> **Goal**: Stabilize, secure, and harden the ZenSynora codebase
+> **Status**: Phase 1 & 2 critical fixes implemented (2026-04-23). Phase 3+ pending.
 
 ---
 
@@ -14,280 +15,357 @@
 
 ---
 
-## Phase 1: P0 — Stop Crashes & Breaches (Week 1)
+## Phase 1: P0 -- Stop Crashes and Breaches (Week 1)
 
-> **Goal**: Fix crashes, security breaches, and broken connection pools before anything else.
-> **Exit Criteria**: App runs without infinite loops, shell is sanitized, admin endpoints gated, MFA safe.
+> **Goal**: Fix crashes, security breaches, and broken connection pools.
+> **Exit Criteria**: App runs without infinite loops, shell is sanitized, admin endpoints gated.
 
-- [x] **1.1 Fix Infinite Recursion in `agent.py`**
+- [x] **1.1 Fix Infinite Recursion in agent.py**
   - **File**: `myclaw/agent.py:575-601`
-  - **Bug**: `_provider_chat()` calls itself instead of `self.provider.chat()`, causing `RecursionError` on every chat request.
-  - **Fix**: Replace `await self._provider_chat(...)` with `await self.provider.chat(...)`.
-  - **Impact**: Critical — chat is completely broken.
+  - **Bug**: `_provider_chat()` calls itself recursively instead of delegating to `self.provider.chat()`.
+  - **Fix**: Replace `await self._provider_chat(...)` with `await self.provider.chat(...)` on lines 583 and 586.
+  - **Validation**: Mock `provider.chat` raising `ConnectionError`; assert fallback without `RecursionError`.
+  - **Effort**: 15 min | **Risk**: Minimal
 
 - [x] **1.2 Fix Shell Command Injection (newline bypass)**
-  - **File**: `myclaw/tools/shell.py:65`
-  - **Bug**: `asyncio.create_subprocess_shell(cmd, ...)` passes raw command to `/bin/sh`. Regex `[;&|`$(){}\[\]\\]` does **not** block newlines (`\n`), allowing multi-line injection.
-  - **Fix**: Replace with `create_subprocess_exec(parts[0], *parts[1:], ...)` to match safe sync implementation.
-  - **Impact**: High — arbitrary command execution via crafted input.
+  - **File**: `myclaw/tools/shell.py:65`, `myclaw/backends/*.py`
+  - **Bug**: `asyncio.create_subprocess_shell(cmd, ...)` passes raw command string to `/bin/sh -c`. Newlines bypass the regex.
+  - **Fix**: Replace with `create_subprocess_exec(*parts, ...)` across all backend files. Add newline to dangerous regex.
+  - **Validation**: Assert newline-separated commands return error.
+  - **Effort**: 45 min | **Risk**: Low
 
 - [x] **1.3 Fix Error Message Disclosure**
-  - **File**: `myclaw/tools/shell.py:88, 153`
+  - **File**: `myclaw/tools/shell.py:88`, `myclaw/backends/ssh.py`, `myclaw/mcp/*.py`
   - **Bug**: `return f"Error: {e}"` leaks internal exception strings to LLM/user.
   - **Fix**: Return generic error message; log full trace server-side with `exc_info=True`.
-  - **Impact**: Medium — information disclosure aids attacker reconnaissance.
+  - **Validation**: Verify no internal paths or system info in error responses.
+  - **Effort**: 30 min | **Risk**: Minimal
 
 - [x] **1.4 Fix CORS + Credentials Misconfiguration**
   - **File**: `myclaw/web/api.py:73-79`
-  - **Bug**: `allow_origins=["*"]` with `allow_credentials=True` allows any website to make authenticated requests (CORS bypass).
-  - **Fix**: Restrict to configured origins from config; add `cors_origins` to `SecurityConfig`.
-  - **Impact**: High — session hijacking / credential theft from malicious websites.
+  - **Bug**: `allow_origins=["*"]` with `allow_credentials=True` allows any website to make authenticated requests.
+  - **Fix**: Restrict origins via `ZENSYNORA_CORS_ORIGINS` env var or config. Default to `http://localhost:5173`.
+  - **Validation**: Verify preflight from unknown origin is rejected.
+  - **Effort**: 15 min | **Risk**: Minimal
 
 - [x] **1.5 Add API-Key Auth to Admin Endpoints**
   - **File**: `myclaw/web/api.py:108-201`
   - **Bug**: `/api/admin/*`, `/api/metering/*`, `/api/mfa/*`, `/api/spaces/*` have zero authentication.
-  - **Fix**: Implement `require_admin_api_key` FastAPI dependency; add `admin_api_key: SecretStr` to `SecurityConfig`.
-  - **Impact**: High — full admin access without credentials.
+  - **Fix**: Implement `require_auth` FastAPI dependency using HTTPBearer. Add `security.api_key: SecretStr` to config.
+  - **Validation**: Integration tests asserting 401 on all admin endpoints without valid key.
+  - **Effort**: 2-4 hours | **Risk**: Medium
 
 - [x] **1.6 Fix MFA Secret Exposure**
   - **File**: `myclaw/web/api.py:154-160`
-  - **Bug**: `mfa_setup` returns raw TOTP secret in response payload.
-  - **Fix**: Return only provisioning URI and QR code. Never expose `secret` plaintext.
-  - **Impact**: Medium — TOTP secret theft enables account takeover.
+  - **Bug**: `mfa_setup` returns raw TOTP secret in response payload without authentication.
+  - **Fix**: Require auth; return only provisioning URI and QR code. Never expose `secret` plaintext.
+  - **Validation**: Verify response does not contain `secret` field.
+  - **Effort**: 30 min | **Risk**: Low
 
 - [x] **1.7 Fix Broken AsyncSQLitePool**
   - **File**: `myclaw/memory.py:91-160`
-  - **Bug**: Pool doesn't track checked-out connections. `release_connection` blindly releases semaphore, causing double-releases and DB lock errors under load.
-  - **Fix**: Rewrite with proper checkout tracking (`_checked_out` set by `id(conn)`), match semaphore lifecycle to checkout state.
-  - **Impact**: Critical — DB corruption / lock errors under concurrent load.
+  - **Bug**: Pool returns the same connection to all concurrent acquirers. No checkout tracking causes DB lock errors.
+  - **Fix**: Add `_checked_out` set per pool key. Update `release_connection` signature to require `conn` param.
+  - **Validation**: Concurrent `get_connection()` calls return distinct connection objects.
+  - **Effort**: 1 hour | **Risk**: Medium (signature change)
 
-- [x] **1.8 Harden `register_tool` AST Validation**
-  - **File**: `myclaw/tools/toolbox.py:99-149`
-  - **Bug**: AST bypass possible via `getattr(__builtins__, 'eval')`, dynamic `importlib`, or `__import__` string access.
-  - **Fix**: Block `getattr` entirely; add `importlib` to forbidden imports; block `compile`, `exec`, `eval` via any attribute pattern.
-  - **Impact**: High — sandbox escape via dynamic tool registration.
-
-- [x] **1.9 Fix MCP Server Error Disclosure**
-  - **File**: `myclaw/mcp/server.py:61-63`
-  - **Bug**: `except Exception` returns `str(e)` to MCP client, leaking internal exception details.
-  - **Fix**: Return generic error to client; log full trace server-side.
-  - **Impact**: Medium — information disclosure through MCP stdio transport.
-
-- [x] **1.10 Fix MCP Client Error Disclosure**
-  - **File**: `myclaw/mcp/client.py:100-101`
-  - **Bug**: `_proxy()` returns `f"Error executing MCP tool '{name}': {e}"` to the agent/LLM, exposing internal errors.
-  - **Fix**: Return generic error message; log full trace with `exc_info=True`.
-  - **Impact**: Medium — same information disclosure pattern as shell tool.
-
-- [x] **1.11 Fix MCP Client Unmanaged Background Tasks**
-  - **File**: `myclaw/mcp/client.py:38`
-  - **Bug**: `asyncio.create_task(self._run_server(...))` creates fire-and-forget tasks. Exceptions are silently swallowed; no reconnect logic.
-  - **Fix**: Track tasks in a set, add exception callbacks, implement reconnect with backoff.
-  - **Impact**: Medium — silent failures, resource leaks, no resilience.
+- [ ] **1.8 Harden register_tool AST Validation**
+  - **File**: `myclaw/tools/toolbox.py:99-156`
+  - **Bug**: AST bypass possible via `builtins.__import__`, `pathlib`, `getattr`, dynamic `importlib`, or variable-mode `open()`.
+  - **Fix**: Add `builtins`, `pathlib`, `ctypes`, `winreg`, `importlib` to forbidden imports. Block `getattr` entirely. Block `open()` for dynamic tools.
+  - **Validation**: Verify `builtins.__import__` and `pathlib.Path` are rejected.
+  - **Effort**: 1-2 hours | **Risk**: Low
 
 ---
 
-## Phase 2: P1 — Security Hardening & Async Migration (Week 2)
+## Phase 2: P1 -- Security Hardening and Async Migration (Week 2)
 
 > **Goal**: Patch OWASP-class vulnerabilities and replace blocking sync calls.
 > **Exit Criteria**: No OWASP-class vulns, no blocking sync calls in hot paths, SSH/SSRF hardened.
 
 - [x] **2.1 Replace Sync OpenAI Client with Async**
-  - **File**: `myclaw/provider.py:651-719`
-  - **Bug**: `self.client.chat.completions.create(...)` uses sync `openai.OpenAI` inside async methods, blocking the event loop.
-  - **Fix**: Use `openai.AsyncOpenAI`; wrap streaming generator with `async for`.
-  - **Impact**: Critical — all concurrent requests freeze during LLM calls.
+  - **File**: `myclaw/provider.py:601-735`
+  - **Bug**: Uses sync `openai.OpenAI` inside `async def chat()`. Streaming `for chunk in response:` blocks the event loop.
+  - **Fix**: Use `openai.AsyncOpenAI`; wrap streaming with `async for chunk in response`.
+  - **Impact**: OpenAI, Groq, LMStudio, llama.cpp, OpenRouter providers.
+  - **Validation**: Verify concurrent requests do not block each other.
+  - **Effort**: 2-3 hours | **Risk**: Medium
 
 - [x] **2.2 Fix SSH MITM (AutoAddPolicy)**
   - **File**: `myclaw/backends/ssh.py:42`
   - **Bug**: `paramiko.AutoAddPolicy()` accepts any host key.
-  - **Fix**: Use `RejectPolicy` + `load_host_keys("~/.ssh/known_hosts")`.
-  - **Impact**: Medium — man-in-the-middle on SSH connections.
+  - **Fix**: Use `RejectPolicy()` + `load_host_keys("~/.ssh/known_hosts")`.
+  - **Validation**: Verify connection to unknown host is rejected.
+  - **Effort**: 30 min | **Risk**: Low
 
 - [x] **2.3 Fix SSRF in Web Tools**
   - **File**: `myclaw/tools/web.py`
-  - **Bug**: `browse()` / `download()` fetch arbitrary URLs without blocking private IPs.
-  - **Fix**: Add `_is_safe_url()` guard blocking private/loopback IPs and non-HTTP schemes.
-  - **Impact**: Medium — server-side request forgery to internal services.
+  - **Bug**: `browse()` / `download_file()` fetch arbitrary URLs without blocking private IPs.
+  - **Fix**: Add `_is_safe_url()` guard blocking localhost, 169.254.169.254, RFC1918 nets, and non-HTTP schemes.
+  - **Validation**: Assert internal metadata endpoints return error.
+  - **Effort**: 45 min | **Risk**: Low
 
 - [x] **2.4 Fix Rate Limiter Race Condition**
-  - **File**: `myclaw/tools/core.py:75`
-  - **Bug**: `RateLimiter.check()` is not atomic under concurrent async calls.
-  - **Fix**: Wrap check logic in `asyncio.Lock` per key.
-  - **Impact**: Medium — rate limit can be exceeded under burst load.
+  - **File**: `myclaw/tools/core.py:55-117`
+  - **Bug**: `RateLimiter.check()` is not atomic under concurrent async calls. Dead code duplication at lines 113-116.
+  - **Fix**: Add `self._lock = threading.Lock()`; wrap check logic with `with self._lock:`. Remove duplicate code block.
+  - **Validation**: Concurrent tool execution must not exceed rate limit.
+  - **Effort**: 15 min | **Risk**: Minimal
 
 - [x] **2.5 Fix HTTPClientPool Event Loop Binding**
   - **File**: `myclaw/provider.py:282-311`
   - **Bug**: Global `httpx.AsyncClient` instance crashes when event loop changes (tests, reloads).
   - **Fix**: Store client per-loop-id or recreate on `RuntimeError`.
-  - **Impact**: Medium — crashes in tests and hot-reload scenarios.
+  - **Validation**: No crashes during hot-reload or test loop changes.
+  - **Effort**: 30 min | **Risk**: Low
 
 - [x] **2.6 Fix AsyncScheduler Concurrency Limit**
   - **File**: `myclaw/async_scheduler.py:290`
-  - **Bug**: No `max_concurrency` causes thundering herd under load.
-  - **Fix**: Add `asyncio.Semaphore(max_concurrency)` around job execution.
-  - **Impact**: Medium — unbounded resource consumption.
+  - **Bug**: `asyncio.gather(*[self._execute_job(job) for job in due_jobs])` runs all due jobs simultaneously.
+  - **Fix**: Add `asyncio.Semaphore(5)` around job execution.
+  - **Validation**: 100+ due jobs do not overwhelm the system.
+  - **Effort**: 15 min | **Risk**: Minimal
 
 - [x] **2.7 Fix Audit Log Tamper Weakness**
   - **File**: `myclaw/audit_log.py:87`
-  - **Bug**: Logs can be modified after writing.
-  - **Fix**: Add HMAC signature or use append-only log file.
-  - **Impact**: Low — integrity compromise of audit trail.
+  - **Bug**: `clear()` unlinks the log file without authorization check or audit trail.
+  - **Fix**: Add HMAC signature or use append-only log file. Require authorization for `clear()`.
+  - **Validation**: Verify log integrity after rotation and clear attempts.
+  - **Effort**: 1 hour | **Risk**: Low
 
 - [x] **2.8 Fix Config Key Storage Weakness**
   - **File**: `myclaw/config_encryption.py`
   - **Bug**: Keys may be stored in plaintext in config files.
-  - **Fix**: Enforce OS keyring or environment variables for secrets.
-  - **Impact**: Low — credential exposure in config files.
+  - **Fix**: Enforce OS keyring or `ZENSYNORA_CONFIG_KEY` environment variable for secrets.
+  - **Validation**: Verify key is not written to disk in plaintext.
+  - **Effort**: 1 hour | **Risk**: Low
 
-- [x] **2.9 Fix `allowed_commands` Config Drift**
-  - **File**: `myclaw/config.py:372`
-  - **Bug**: `allowed_commands` list is not validated at startup.
-  - **Fix**: Validate at startup; fail fast on invalid / dangerous entries.
-  - **Impact**: Medium — accidental inclusion of dangerous commands.
+- [x] **2.9 Fix allowed_commands Config Drift**
+  - **File**: `myclaw/config.py:369-372`
+  - **Bug**: `python`, `python3`, `pip` still in `SecurityConfig.allowed_commands` defaults despite Phase 1.1 removal comments.
+  - **Fix**: Remove python, python3, pip from defaults. Add startup validation.
+  - **Validation**: Assert `shell("python --version")` returns error.
+  - **Effort**: 5 min | **Risk**: Minimal
 
-- [x] **2.10 Fix `_reveal_secrets` Non-Functional**
-  - **File**: `myclaw/config.py:663`
+- [x] **2.10 Fix _reveal_secrets Non-Functional**
+  - **File**: `myclaw/config.py:663-671`
   - **Bug**: `_reveal_secrets` walks dict but never unwraps `SecretStr` values.
-  - **Fix**: Implement proper `SecretStr` unwrapping or remove dead code.
-  - **Impact**: Low — dead code / serialization bug.
+  - **Fix**: Add `elif isinstance(v, SecretStr): out[k] = v.get_secret_value()`.
+  - **Validation**: Round-trip config save/load preserves secret values.
+  - **Effort**: 10 min | **Risk**: Minimal
+
+- [x] **2.11 Fix F-string Nested Double Quotes**
+  - **File**: `myclaw/agent.py:1241`
+  - **Bug**: `f"Tool {r["tool_name"]}..."` requires Python 3.12+ PEP 701. Project supports 3.11+.
+  - **Fix**: Use single quotes: `f"Tool {r['tool_name']}..."`.
+  - **Validation**: Syntax check passes on Python 3.11.
+  - **Effort**: 1 min | **Risk**: Minimal
 
 ---
 
-## Phase 3: P2 — Performance & Dependencies (Week 3)
+## Phase 3: P2 -- Performance and Dependencies (Week 3)
 
-> **Goal**: Fix caches, token counting, and async I/O bottlenecks. Restructure dependencies for on-demand providers.
+> **Goal**: Fix caches, token counting, and async I/O bottlenecks. Restructure dependencies.
 > **Exit Criteria**: No memory leaks, cache collisions eliminated, token counting accurate, dependency bloat reduced.
 
-- [x] **3.1 Fix LRU Cache Key Skips First Arg**
-  - **File**: `myclaw/provider.py:121`
-  - **Bug**: Cache key function skips the first argument, causing collisions between different prompts.
-  - **Fix**: Include all arguments in key hash.
+- [ ] **3.1 Fix LRU Cache Key Skips First Arg**
+  - **File**: `myclaw/provider.py:105-136`
+  - **Bug**: `_make_key` skips `args[0]` assuming it is `self`, causing cache collisions.
+  - **Fix**: Hash all args including args[0], or use `hash((args, tuple(sorted(kwargs.items()))))`.
+  - **Validation**: Different prompts produce different cache keys.
+  - **Effort**: 15 min | **Risk**: Minimal
 
-- [x] **3.2 Fix Hardware Probe Blocking Init**
-  - **File**: `myclaw/agent.py:286`
+- [ ] **3.2 Fix Hardware Probe Blocking Init**
+  - **File**: `myclaw/agent.py:286-294`
   - **Bug**: `GPUtil` / `psutil` probes block startup by 100-500ms per agent.
-  - **Fix**: Move to lazy background task or cache via `run_in_executor`.
+  - **Fix**: Move to async background task via `asyncio.to_thread()` or lazy property.
+  - **Validation**: Agent instantiation completes in under 50ms.
+  - **Effort**: 30 min | **Risk**: Low
 
-- [x] **3.3 Fix Unbounded `_pending_preloads`**
+- [ ] **3.3 Fix Unbounded _pending_preloads**
   - **File**: `myclaw/agent.py:263`
-  - **Bug**: List grows indefinitely; memory leak over long runs.
-  - **Fix**: Use `deque(maxlen=100)` or TTL eviction.
+  - **Bug**: Fire-and-forget tasks stored in set grow indefinitely; memory leak over long runs.
+  - **Fix**: Cap set size at 50-100; prune completed tasks aggressively.
+  - **Validation**: Memory usage stable after 1000+ chat cycles.
+  - **Effort**: 15 min | **Risk**: Minimal
 
-- [x] **3.4 Fix Semantic Cache O(n) Scan**
+- [ ] **3.4 Fix Semantic Cache O(n) Scan**
   - **File**: `myclaw/semantic_cache.py:270`
-  - **Bug**: Linear scan causes latency spikes.
-  - **Fix**: Add vector index (FAISS / Annoy) or SQLite VSS extension.
+  - **Bug**: Linear scan over all entries causes latency spikes with 256+ entries.
+  - **Fix**: Add model-aware cache key. Consider FAISS/SQLite VSS for vector search.
+  - **Validation**: Cache lookup under 10ms with 500 entries.
+  - **Effort**: 2 hours | **Risk**: Low
 
-- [x] **3.5 Fix FTS5 Cartesian Product**
+- [ ] **3.5 Fix FTS5 Cartesian Product**
   - **File**: `myclaw/knowledge/db.py`
-  - **Bug**: Unbounded JOINs cause query slowdown.
-  - **Fix**: Ensure FTS5 queries use `MATCH` with `LIMIT`.
+  - **Bug**: Unbounded JOINs across FTS5 tables cause query slowdown.
+  - **Fix**: Use UNION of independent FTS5 subqueries with LIMIT.
+  - **Validation**: Query completes in under 100ms with 10k observations.
+  - **Effort**: 1 hour | **Risk**: Low
 
-- [x] **3.6 Fix Inaccurate Token Counting**
+- [ ] **3.6 Fix Inaccurate Token Counting**
   - **File**: `myclaw/context_window.py`
-  - **Bug**: Wrong truncation due to inaccurate token counts.
-  - **Fix**: Use `tiktoken` for OpenAI; add per-provider tokenizer mapping.
+  - **Bug**: `len(text) // 4` heuristic is wrong for most tokenizers.
+  - **Fix**: Add `tiktoken` for OpenAI models; per-provider tokenizer mapping; better fallback.
+  - **Validation**: Token count within 5% of actual for known models.
+  - **Effort**: 30 min | **Risk**: Low
 
-- [x] **3.7 Restructure Dependencies for On-Demand Providers**
+- [ ] **3.7 Fix Memory History Cache Never Expires**
+  - **File**: `myclaw/memory.py:264, 400-404`
+  - **Bug**: `get_history()` caches results with no TTL. Stale data returned after external writes.
+  - **Fix**: Add 5-second TTL to cached entries.
+  - **Validation**: External DB write reflected within 5 seconds.
+  - **Effort**: 15 min | **Risk**: Minimal
+
+- [ ] **3.8 Fix Gateway Sync Cleanup in Async Context**
+  - **File**: `myclaw/gateway.py:172-193`
+  - **Bug**: `finally` block calls `asyncio.get_event_loop()` and `asyncio.run()` after loop may be closed.
+  - **Fix**: Make `start()` async; use `await _sched.shutdown()` in `finally`.
+  - **Validation**: Graceful shutdown without RuntimeError.
+  - **Effort**: 1 hour | **Risk**: Medium
+
+- [ ] **3.9 Restructure Dependencies for On-Demand Providers**
   - **File**: `pyproject.toml`, `requirements.txt`
   - **Current**: All ~30 deps in core; `sentence-transformers` pulls 2GB PyTorch.
   - **Fix**: Move to extras:
-    - `openai`, `anthropic`, `google` — per-provider SDK extras
-    - `semantic-cache` — `sentence-transformers`
-    - `voice` — `vosk`
-    - `redis` — `redis`
-    - `metrics` — `prometheus-client`, `nvidia-ml-py` (replaces `GPUtil`)
-    - `security` — `cryptography`, `keyring`
-    - `mfa` — `pyotp`, `qrcode`
-    - `ssh` — `paramiko`
+    - `openai`, `anthropic`, `google-generativeai` -- per-provider SDK extras
+    - `semantic-cache` -- `sentence-transformers`
+    - `voice` -- `vosk`
+    - `redis` -- `redis`
+    - `metrics` -- `prometheus-client`, `nvidia-ml-py` (replaces `GPUtil`)
+    - `security` -- `cryptography`, `keyring`
+    - `mfa` -- `pyotp`, `qrcode`
+    - `ssh` -- `paramiko` (already in core, keep)
   - **Remove**: `apscheduler` (unused), `speedtest-cli` (dead), `requests` (httpx covers it), `GPUtil` (unmaintained).
   - **Pin**: `numpy<2.0` until tested; relax `python-telegram-bot` exact pin.
+  - **Validation**: `pip install zensynora` installs only core deps under 50MB.
+  - **Effort**: 1 hour | **Risk**: Medium (users must update install commands)
 
 ---
 
-## Phase 4: P2/P3 — Quality, Testing & Architecture (Week 4+)
+## Phase 4: P2/P3 -- Quality, Testing and Architecture (Week 4+)
 
-> **Goal**: Fix broken tests, standardize types, refactor globals, and begin Agent decomposition.
-> **Exit Criteria**: >80% test coverage, all tests passing, type hints consistent, no bare `except Exception:` blocks.
+> **Goal**: Fix broken tests, standardize types, refactor globals, begin Agent decomposition.
+> **Exit Criteria**: All tests passing, type hints consistent, no bare `except Exception:` blocks.
 
-- [x] **4.1 Add Missing Tests**
-  - `Agent.stream_think()` — streaming yields chunks, handles tool calls
-  - `AsyncScheduler` — startup/shutdown, concurrency limit, job execution
-  - `AsyncSQLitePool` — concurrent checkout/checkin, pool exhaustion, `close_all`
-  - `HTTPClientPool` — connection reuse, per-loop isolation
-  - `RateLimiter` — concurrent calls don't exceed limit
-  - `SemanticCache` — TTL expiration, cache hit/miss
+- [ ] **4.1 Add Missing Tests**
+  - `Agent.stream_think()` -- streaming yields chunks, handles tool calls, no RecursionError
+  - `AsyncScheduler` -- startup/shutdown, concurrency limit, job execution, persistence
+  - `AsyncSQLitePool` -- concurrent checkout/checkin, pool exhaustion, distinct connections
+  - `HTTPClientPool` -- connection reuse, per-loop isolation, no crash on loop change
+  - `StateStore` -- Redis backend basic ops, fallback to memory
+  - `RateLimiter` -- concurrent calls do not exceed limit
+  - `SemanticCache` -- TTL expiration, cache hit/miss, model isolation
+  - `SecuritySandbox` -- escape vector resistance (subprocess, file, network blocking)
+  - **Effort**: 4 hours | **Risk**: Low
 
-- [x] **4.2 Fix Broken Tests**
-  - `tests/test_memory.py` — align `AsyncSQLitePool` tests with real API (checkout tracking).
+- [ ] **4.2 Fix Broken Tests**
+  - **File**: `tests/test_memory_pool_concurrency.py`, `tests/test_memory_batching.py`
+  - **Bug**: Tests call `AsyncSQLitePool(max_connections=3)` which does not exist. `release_connection` signature mismatch.
+  - **Fix**: Update tests to match actual API or remove if testing implementation detail.
+  - **Effort**: 30 min | **Risk**: None
 
-- [x] **4.3 Standardize Type Hints**
+- [ ] **4.3 Standardize Type Hints**
   - Target 90% coverage.
-  - Use Python 3.11+ syntax: `dict`, `list`, `str | None`.
-  - Remove `typing.Dict`, `typing.List`.
+  - Use Python 3.11+ syntax: `dict[str, ...]`, `list[str]`, `str | None`.
+  - Remove `typing.Dict`, `typing.List`, `typing.Optional`.
+  - **Effort**: 2 hours | **Risk**: Minimal
 
-- [x] **4.4 Create Exception Hierarchy**
+- [ ] **4.4 Create Exception Hierarchy**
   - **New**: `myclaw/exceptions.py`
-  - `ZenSynoraError` → `ConfigError`, `ProviderError`, `SecurityError`, `ToolError`
+  - `ZenSynoraError` base with `ConfigError`, `ProviderError`, `SecurityError`, `ToolError`, `SandboxError`, `RateLimitError`.
   - Replace bare `except Exception:` with specific handlers.
+  - **Effort**: 2 hours | **Risk**: Low
 
-- [x] **4.5 Refactor Global Mutable State**
+- [ ] **4.5 Refactor Global Mutable State**
   - **File**: `myclaw/tools/core.py`
-  - Replaced `_HOOKS` global with `HookRegistry` class. Module-level `_HOOKS` remains as backwards-compatible alias.
+  - Replace `_HOOKS`, `TOOLS`, `_agent_registry` globals with registry classes or dependency injection.
+  - Maintain backward-compatible module-level aliases.
+  - **Effort**: 3 hours | **Risk**: Medium
 
-- [x] **4.6 Resolve Circular Imports**
-  - **Files**: `tools/core.py`, `sandbox.py`, `audit_log.py`
-  - Use lazy imports inside functions; extract shared interfaces.
+- [ ] **4.6 Resolve Circular Imports**
+  - **Files**: `tools/core.py`, `sandbox.py`, `worker_pool.py`, `audit_log.py`
+  - Use lazy imports inside functions; extract shared interfaces to `myclaw/interfaces.py`.
+  - **Effort**: 2 hours | **Risk**: Medium
 
-- [x] **4.7 Agent Class Decomposition (Start)**
+- [ ] **4.7 Fix State Store Singleton Race Condition**
+  - **File**: `myclaw/state_store.py:349-376`
+  - **Bug**: `_Store_LOCK = False` is boolean, not `threading.Lock()`.
+  - **Fix**: `import threading; _Store_LOCK = threading.Lock()`; use `with _Store_LOCK:`.
+  - **Effort**: 10 min | **Risk**: Minimal
+
+- [ ] **4.8 Fix Sandbox Escape Vectors**
+  - **File**: `myclaw/sandbox.py:266-314`
+  - **Bug**: `os` imported before restrictions; `socket.socket` never replaced; `SandboxedImporter` never installed in `sys.meta_path`; no Windows resource limits.
+  - **Fix**: Remove dangerous modules from `sys.modules` before user code. Block `os.system`/`os.popen`. Install importer in `sys.meta_path`. Consider Docker for true isolation.
+  - **Effort**: 2-4 hours | **Risk**: Medium
+
+- [ ] **4.9 Agent Class Decomposition (Start)**
   - **File**: `myclaw/agent.py` (1,665 lines)
-  - Created `myclaw/agent/` package with `MessageRouter`, `ContextBuilder`, `ToolExecutor`, `ResponseHandler` stubs.
-  - Phase 1 = module structure created. No behavior changes yet.
+  - Split into `myclaw/agent/` package: `MessageRouter`, `ContextBuilder`, `ToolExecutor`, `ResponseHandler`.
+  - Phase 1 = create module stubs and migrate docstrings. No behavior changes.
+  - **Effort**: 4 hours | **Risk**: High (architectural)
 
-- [x] **4.8 Documentation Sync**
-  - Update architecture docs, API references, deployment guides to reflect changes.
+- [ ] **4.10 Documentation Sync**
+  - Update README, architecture docs, API references to reflect:
+    - New auth requirements (admin_api_key)
+    - Optional dependency installation (`pip install zensynora[openai,redis]`)
+    - CORS origin configuration
+    - SSH known_hosts requirement
+  - **Effort**: 2 hours | **Risk**: Minimal
 
 ---
 
-## Change Log
+## File-by-File Implementation Guide
 
-> All implemented changes are documented here with date, file, and summary.
+| File | Issues | Changes | Effort | Tests |
+|------|--------|---------|--------|-------|
+| `myclaw/agent.py` | P0.1, P1.8, P2.2, P2.3, P3.2 | Fix recursion, f-string quotes, defer hardware probe, cap preloads | 1.5h | Add stream_think test |
+| `myclaw/provider.py` | P1.1, P2.5, P3.1 | AsyncOpenAI, loop-safe client pool, fix cache key | 3h | Concurrent request test |
+| `myclaw/config.py` | P1.9, P2.9, P2.10 | Remove python/pip from defaults, fix _reveal_secrets, validate commands | 30m | Round-trip secret test |
+| `myclaw/tools/core.py` | P1.4, P4.5, P4.7 | Add lock to rate limiter, refactor globals, fix dead code | 1h | Concurrent rate limit test |
+| `myclaw/tools/shell.py` | P0.2, P1.3 | create_subprocess_exec, generic errors, newline regex | 45m | Injection attempt test |
+| `myclaw/tools/toolbox.py` | P0.4 | Block builtins, pathlib, getattr, open | 1.5h | AST bypass attempt test |
+| `myclaw/tools/web.py` | P1.3 | _is_safe_url guard for SSRF | 45m | Internal IP block test |
+| `myclaw/web/api.py` | P0.3, P1.4, P1.5 | require_auth dependency, cors_origins config | 3h | 401 integration tests |
+| `myclaw/web/auth.py` | P0.3, P1.5 | NEW: HTTPBearer auth middleware | 1h | Token validation test |
+| `myclaw/sandbox.py` | P1.12, P4.8 | Block os.system, install meta_path importer, Windows limits | 3h | Escape vector tests |
+| `myclaw/memory.py` | P0.5, P3.7 | Checkout tracking, TTL cache, fix release signature | 1.5h | Concurrent pool test |
+| `myclaw/state_store.py` | P1.13 | threading.Lock singleton | 10m | Concurrent init test |
+| `myclaw/async_scheduler.py` | P2.6 | Semaphore concurrency limit | 15m | Job overload test |
+| `myclaw/semantic_cache.py` | P2.5, P3.4 | Model-aware keys, scan limit | 2h | TTL/hit-miss tests |
+| `myclaw/gateway.py` | P3.8 | Async start(), await shutdown | 1h | Graceful shutdown test |
+| `myclaw/backends/ssh.py` | P1.2 | RejectPolicy, known_hosts | 30m | Unknown host reject test |
+| `myclaw/audit_log.py` | P2.7 | HMAC signing, auth on clear | 1h | Tamper detection test |
+| `myclaw/config_encryption.py` | P2.8 | Env var key priority | 1h | Key storage test |
+| `myclaw/context_window.py` | P3.6 | tiktoken integration | 30m | Token accuracy test |
+| `myclaw/knowledge/db.py` | P3.5 | UNION instead of JOIN | 1h | Query performance test |
+| `pyproject.toml` | P3.9 | Optional extras, remove dead deps | 1h | Install size check |
+| `tests/` | P4.1, P4.2 | Add missing tests, fix broken ones | 4h | Full suite pass |
 
-| Date | Phase | File(s) | Change Summary |
-|------|-------|---------|----------------|
-| 2026-04-23 | 1.1 | `myclaw/agent.py` | Fixed infinite recursion in `_provider_chat()`: replaced recursive `self._provider_chat()` calls with `self.provider.chat()` delegation. |
-| 2026-04-23 | 1.2 | `myclaw/tools/shell.py`, `myclaw/config.py` | Replaced `create_subprocess_shell` with `create_subprocess_exec` to eliminate command injection. Removed `python`, `python3`, `pip`, `curl`, `wget` from `ALLOWED_COMMANDS`. |
-| 2026-04-23 | 1.3 | `myclaw/tools/shell.py` | Fixed error message disclosure: generic error returned to caller; full exception logged server-side with `exc_info=True`. |
-| 2026-04-23 | 1.4 | `myclaw/web/api.py`, `myclaw/config.py` | Fixed CORS misconfiguration: origins now loaded from `SecurityConfig.cors_origins` instead of wildcard `["*"]`. Added `cors_origins` and `admin_api_key` to `SecurityConfig`. |
-| 2026-04-23 | 1.5 | `myclaw/web/api.py`, `myclaw/web/auth.py` | Added API-key auth to admin endpoints via `require_admin_api_key` FastAPI dependency. Protected `/api/admin/*`, `/api/spaces/*`, `/api/mfa/*`, `/api/metering/*`. |
-| 2026-04-23 | 1.6 | `myclaw/mfa.py` | Fixed MFA secret exposure: removed raw `secret` from `provision_user()` response. Returns only `provisioning_uri` and `qr_code_png_base64`. |
-| 2026-04-23 | 1.7 | `myclaw/memory.py` | Fixed broken AsyncSQLitePool: replaced broken refcount logic with `_checked_out` set tracking by `id(conn)`. `release_connection()` now requires the connection object to prevent double-release and semaphore drift. |
-| 2026-04-23 | 1.8 | `myclaw/tools/toolbox.py` | Hardened `register_tool` AST validation: added `importlib` and `getattr` to forbidden lists. Blocked `open()` entirely for dynamic tools. |
-| 2026-04-23 | 1.9 | `myclaw/mcp/server.py` | Fixed MCP server error disclosure: generic error returned to MCP client; full exception logged server-side with `exc_info=True`. |
-| 2026-04-23 | 1.10 | `myclaw/mcp/client.py` | Fixed MCP client error disclosure: `_proxy()` returns generic error; full trace logged server-side. |
-| 2026-04-23 | 1.11 | `myclaw/mcp/client.py` | Fixed MCP client unmanaged tasks: added `_tasks` set tracking, exception callbacks, and exponential-backoff reconnect logic. |
-| 2026-04-23 | 2.1 | `myclaw/provider.py` | Replaced sync `openai.OpenAI` with `openai.AsyncOpenAI`. Added `await` to all chat completion calls; streaming uses `async for`. |
-| 2026-04-23 | 2.2 | `myclaw/backends/ssh.py` | Fixed SSH MITM: replaced `AutoAddPolicy` with `RejectPolicy` + `load_host_keys("~/.ssh/known_hosts")`. |
-| 2026-04-23 | 2.3 | `myclaw/tools/web.py` | Fixed SSRF: added `_is_safe_url()` guard blocking private IPs, localhost, and non-HTTP schemes in `browse()` and `download_file()`. |
-| 2026-04-23 | 2.4 | `myclaw/tools/core.py`, `myclaw/tools/shell.py` | Fixed rate limiter race condition: added `asyncio.Lock` to `RateLimiter.check()`. Updated all callers to `await _rate_limiter.check()`. |
-| 2026-04-23 | 2.5 | `myclaw/provider.py` | Fixed HTTPClientPool event loop binding: stores clients per-loop-id instead of global singleton. Prevents crashes on loop changes. |
-| 2026-04-23 | 2.6 | `myclaw/async_scheduler.py` | Fixed AsyncScheduler thundering herd: added `max_concurrency` semaphore (default 10) around job execution. |
-| 2026-04-23 | 2.7 | `myclaw/audit_log.py` | Fixed audit log tamper weakness: added HMAC-SHA256 signing with secret loaded from env or generated. `clear()` now logs a critical warning. |
-| 2026-04-23 | 2.8 | `myclaw/config_encryption.py` | Fixed config key storage: added `ZENSYNORA_CONFIG_KEY` env variable support (highest priority). Warns when falling back to key file. |
-| 2026-04-23 | 2.9 | `myclaw/config.py` | Fixed `allowed_commands` config drift: added startup validation that warns if dangerous commands are present in the allowlist. |
-| 2026-04-23 | 2.10 | `myclaw/config.py` | Fixed `_reveal_secrets`: now properly unwraps `pydantic.SecretStr` values during dict traversal. |
-| 2026-04-23 | 3.1 | `myclaw/provider.py` | Fixed LRU cache key bug: `_make_key()` now includes ALL args instead of skipping `args[0]`. Eliminates cache collisions. |
-| 2026-04-23 | 3.2 | `myclaw/agent.py` | Fixed hardware probe blocking init: deferred `get_system_metrics()` to a background daemon thread. |
-| 2026-04-23 | 3.3 | `myclaw/agent.py` | Fixed unbounded `_pending_preloads`: added `_track_preload()` helper with `_max_pending_preloads=100` limit and automatic pruning of completed tasks. |
-| 2026-04-23 | 3.4 | `myclaw/semantic_cache.py` | Fixed semantic cache O(n) scan: added `max_scan_entries=64` limit, scans newest entries first, cleans up expired entries during scan. |
-| 2026-04-23 | 3.5 | `myclaw/knowledge/db.py` | Fixed FTS5 Cartesian product: replaced LEFT JOIN chain with `UNION` of two independent FTS5 subqueries. Eliminates exponential slowdown. |
-| 2026-04-23 | 3.6 | `myclaw/context_window.py` | Fixed inaccurate token counting: added `tiktoken` support for OpenAI models, per-provider tokenizer mapping, better fallback heuristic (3 chars/token). |
-| 2026-04-23 | 3.7 | `pyproject.toml`, `requirements.txt` | Restructured dependencies: moved LLM providers and optional features to extras. Removed dead deps (`apscheduler`, `speedtest-cli`, `requests`, `GPUtil`). Pinned `numpy<2.0`. |
-| 2026-04-23 | 4.1 | `tests/test_infrastructure.py` | Added missing tests: AsyncSQLitePool, RateLimiter, HTTPClientPool, SemanticCache, AsyncScheduler. |
-| 2026-04-23 | 4.2 | `tests/test_memory.py`, `myclaw/memory.py` | Fixed broken tests: added AsyncSQLitePool tests, fixed DELETE LIMIT syntax error, fixed pool lock event-loop binding. |
-| 2026-04-23 | 4.3 | `myclaw/web/auth.py`, `myclaw/agent/` | Standardized type hints using Python 3.11+ syntax (`dict`, `list`, `str | None`) in new modules. |
-| 2026-04-23 | 4.4 | `myclaw/exceptions.py` | Created exception hierarchy: `ZenSynoraError` base with `ConfigError`, `ProviderError`, `SecurityError`, `ToolError`, etc. Backwards-compatible `MyClawError` alias. |
-| 2026-04-23 | 4.5 | `myclaw/tools/core.py` | Refactored `_HOOKS` global into `HookRegistry` class with typed methods. Module-level `_HOOKS` remains as backwards-compatible alias. |
-| 2026-04-23 | 4.7 | `myclaw/agent/` | Started Agent class decomposition: created `myclaw/agent/` package with `MessageRouter`, `ContextBuilder`, `ToolExecutor`, `ResponseHandler` stub modules. |
+---
 
+## Implementation Roadmap
+
+### Critical Path
+```
+Week 1: 1.1 (recursion) -> 1.2 (shell) -> 1.5 (auth) -> 1.7 (pool)
+Week 2: 2.1 (async client) -> 2.3 (SSRF) -> 2.4 (rate limit)
+Week 3: 3.1 (cache key) -> 3.4 (semantic cache) -> 3.9 (deps)
+Week 4: 4.1 (tests) -> 4.3 (types) -> 4.5 (globals)
+```
+
+### Rollback Procedures
+- **Phase 1**: Git revert to HEAD~1 per item. Each P0 fix is isolated.
+- **Phase 2**: Provider async migration can be toggled via `USE_ASYNC_OPENAI` env var.
+- **Phase 3**: Dependency extras are additive; core deps unchanged.
+- **Phase 4**: Agent decomposition is stub-only; no behavioral changes.
+
+### Success Criteria
+- [ ] All P0 items verified with unit tests
+- [ ] Security scan (bandit, semgrep) passes with zero high/critical findings
+- [ ] pytest suite passes with >80% coverage
+- [ ] `pip install .` completes in under 30 seconds (core only)
+- [ ] Agent responds to chat without RecursionError
+- [ ] Admin endpoints return 401 without valid API key
+- [ ] Shell tool rejects commands with newlines or shell metacharacters
