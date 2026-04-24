@@ -12,42 +12,50 @@ This document describes the comprehensive exception handling implementation adde
 
 The exception module was expanded from 8 exception classes to 35+ specific exception classes organized in a clear hierarchy:
 
-```
-MyClawError (base)
-├── ConfigurationError
-│   ├── ConfigValidationError
-│   └── ConfigNotFoundError
-├── ProviderError
-│   ├── ProviderNotFoundError
-│   ├── ProviderTimeoutError
-│   ├── ProviderConnectionError
-│   ├── ProviderAuthenticationError
-│   └── ProviderRateLimitError
-├── ToolExecutionError
-│   ├── RateLimitExceededError
-│   ├── ToolNotFoundError
-│   ├── ToolValidationError
-│   └── ToolPermissionError
-├── MemoryError
-│   ├── MemoryConnectionError
-│   ├── MemoryQueryError
-│   └── MemoryCleanupError
-├── KnowledgeBaseError
-│   ├── KnowledgeNotFoundError
-│   ├── KnowledgeParseError
-│   └── KnowledgeSyncError
-├── AgentRoutingError
-│   ├── AgentNotFoundError
-│   └── AgentNotAvailableError
-├── SwarmError
-│   ├── SwarmNotFoundError
-│   ├── SwarmTimeoutError
-│   ├── SwarmValidationError
-│   └── SwarmConcurrencyError
-└── ChannelError
-    ├── ChannelNotFoundError
-    ├── ChannelAuthenticationError
-    └── ChannelWebhookError
+```mermaid
+graph TD
+    Base["MyClawError (base)"] --> Config["ConfigurationError"]
+    Base --> Prov["ProviderError"]
+    Base --> Tool["ToolExecutionError"]
+    Base --> Mem["MemoryError"]
+    Base --> KB["KnowledgeBaseError"]
+    Base --> Route["AgentRoutingError"]
+    Base --> Swarm["SwarmError"]
+    Base --> Chan["ChannelError"]
+
+    Config --> CVE["ConfigValidationError"]
+    Config --> CNE["ConfigNotFoundError"]
+
+    Prov --> PNE["ProviderNotFoundError"]
+    Prov --> PTE["ProviderTimeoutError"]
+    Prov --> PCE["ProviderConnectionError"]
+    Prov --> PAE["ProviderAuthenticationError"]
+    Prov --> PRE["ProviderRateLimitError"]
+
+    Tool --> RLE["RateLimitExceededError"]
+    Tool --> TNE["ToolNotFoundError"]
+    Tool --> TVE["ToolValidationError"]
+    Tool --> TPE["ToolPermissionError"]
+
+    Mem --> MCE["MemoryConnectionError"]
+    Mem --> MQE["MemoryQueryError"]
+    Mem --> MCLE["MemoryCleanupError"]
+
+    KB --> KNE["KnowledgeNotFoundError"]
+    KB --> KPE["KnowledgeParseError"]
+    KB --> KSE["KnowledgeSyncError"]
+
+    Route --> ANE["AgentNotFoundError"]
+    Route --> ANAE["AgentNotAvailableError"]
+
+    Swarm --> SNE["SwarmNotFoundError"]
+    Swarm --> STE["SwarmTimeoutError"]
+    Swarm --> SVE["SwarmValidationError"]
+    Swarm --> SCE["SwarmConcurrencyError"]
+
+    Chan --> CHNE["ChannelNotFoundError"]
+    Chan --> CHAE["ChannelAuthenticationError"]
+    Chan --> CHWE["ChannelWebhookError"]
 ```
 
 ### 2. Enhanced Exception Features
