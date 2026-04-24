@@ -6,225 +6,108 @@ Agent Swarms is a powerful multi-agent coordination system for MyClaw that enabl
 
 ## 🏗️ Agent Swarm Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                         USER INTERFACE                                   │
-│                    (CLI, Telegram, API)                                  │
-└─────────────────────────────────┬───────────────────────────────────────┘
-                                  │
-                                  ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                    SWARM ORCHESTRATOR                                   │
-│                    (Central Controller)                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                  │
-│  │   Create     │  │   Execute    │  │   Monitor    │                  │
-│  │   Swarms     │  │   Tasks      │  │   Status     │                  │
-│  └──────────────┘  └──────────────┘  └──────────────┘                  │
-└─────────────────────────────────┬───────────────────────────────────────┘
-                                  │
-              ┌───────────────────┼───────────────────┐
-              │                   │                   │
-              ▼                   ▼                   ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│  PARALLEL       │  │  SEQUENTIAL     │  │  HIERARCHICAL   │
-│  STRATEGY       │  │  STRATEGY       │  │  STRATEGY       │
-│                 │  │                 │  │                 │
-│  ┌───┐ ┌───┐   │  │  ┌───┐ → ┌───┐ │  │  ┌─────┐        │
-│  │A1 │ │A2 │   │  │  │A1 │ → │A2 │ │  │  │COORD│        │
-│  └───┘ └───┘   │  │  └───┘ → └───┘ │  │  └──┬──┘        │
-│  ┌───┐ ┌───┐   │  │       → ┌───┐  │  │     │           │
-│  │A3 │ │A4 │   │  │         │A3 │  │  │  ┌──┴──┐        │
-│  └───┘ └───┘   │  │         └───┘  │  │  │W1 W2│        │
-│       ↓        │  │                 │  │  │W3 W4│        │
-│   Aggregator   │  │   Pipeline      │  │  └──┬──┘        │
-└─────────────────┘  └─────────────────┘  └─────┼───────────┘
-                                                │
-              ┌───────────────────────────────────┘
-              ▼
-┌─────────────────┐
-│  VOTING         │
-│  STRATEGY       │
-│                 │
-│  ┌───┐ ┌───┐   │
-│  │A1 │ │A2 │   │
-│  └───┘ └───┘   │
-│  ┌───┐ ┌───┐   │
-│  │A3 │ │A4 │   │
-│  └───┘ └───┘   │
-│       ↓        │
-│   Consensus    │
-└─────────────────┘
+```mermaid
+flowchart TB
+    UI["USER INTERFACE<br/>(CLI, Telegram, WhatsApp, API)"] --> Orchestrator["SWARM ORCHESTRATOR<br/>(Central Controller)"]
+
+    Orchestrator --- Ops["Create Swarms | Execute Tasks | Monitor Status"]
+
+    Orchestrator --> Strategies
+
+    subgraph Strategies ["COORDINATION STRATEGIES"]
+        direction LR
+        Parallel["PARALLEL<br/>(Simultaneous)"]
+        Sequential["SEQUENTIAL<br/>(Pipeline)"]
+        Hierarchical["HIERARCHICAL<br/>(Managed)"]
+        Voting["VOTING<br/>(Consensus)"]
+    end
+
+    Strategies --> Aggregator["AGGREGATION ENGINE<br/>(Consensus | Best Pick | Synthesis)"]
+    Aggregator --> Result["SWARM RESULT"]
 ```
 
-## 🎯 Swarm Coordinator
+## 🎯 Swarm Coordinator (Hierarchical Strategy)
 
-### What is the Swarm Coordinator?
+```mermaid
+flowchart TD
+    Coord["Coordinator (lead_dev)"] --> Plan["1. Analyze Task & Plan"]
+    Plan --> Delegate["2. Delegate to Workers"]
 
-The **Swarm Coordinator** is a special agent role in the **Hierarchical Strategy** that:
-1. **Plans** - Analyzes the task and creates an execution plan
-2. **Delegates** - Assigns subtasks to worker agents
-3. **Monitors** - Tracks worker progress
-4. **Synthesizes** - Combines worker outputs into a coherent final result
+    subgraph Workers ["Specialized Workers"]
+        W1["Security Expert"]
+        W2["Performance Reviewer"]
+        W3["Style Checker"]
+    end
 
-### When to Use a Coordinator?
-
-Use a coordinator when:
-- Tasks need to be broken into subtasks
-- Different agents should handle different aspects
-- Results need intelligent combination
-- You need a "project manager" for complex work
-
-### Example: Hierarchical Code Review
-
-```
-User assigns task: "Review this authentication module"
-
-Coordinator (lead_dev) actions:
-1. Creates plan:
-   - security_expert → Check SQL injection
-   - performance_reviewer → Check efficiency
-   - style_checker → Check code style
-
-2. Workers execute in parallel
-
-3. Coordinator synthesizes:
-   "Security: 2 issues found...
-    Performance: Acceptable...
-    Style: Minor formatting needed..."
-```
-
-### Configuration with Coordinator
-
-```
-swarm_create(
-    name="code_review_team",
-    strategy="hierarchical",
-    coordinator="lead_developer",    ← Coordinator agent
-    workers="security_expert,performance_reviewer,style_checker",
-    aggregation="synthesis"
-)
+    Delegate --> W1 & W2 & W3
+    W1 & W2 & W3 --> Synthesize["3. Synthesize Results"]
+    Synthesize --> Final["Final Coherent Report"]
 ```
 
 ## Agent Swarm Components
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                     AGENT SWARM SYSTEM                       │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌─────────────────┐    ┌─────────────────┐                 │
-│  │  Swarm Config   │    │  Swarm Task     │                 │
-│  │  ────────────   │    │  ──────────     │                 │
-│  │  • name         │    │  • description  │                 │
-│  │  • strategy     │    │  • input_data   │                 │
-│  │  • workers      │    │  • assigned_to  │                 │
-│  │  • coordinator  │    │  • status       │                 │
-│  │  • aggregation  │    └─────────────────┘                 │
-│  └─────────────────┘                                         │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │              SWARM ORCHESTRATOR                    │    │
-│  │  Manages swarm lifecycle and execution             │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                          │                                   │
-│          ┌───────────────┼───────────────┐                  │
-│          ▼               ▼               ▼                  │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐        │
-│  │   PARALLEL   │ │  SEQUENTIAL  │ │ HIERARCHICAL │        │
-│  │              │ │              │ │              │        │
-│  │ All agents   │ │ Pipeline     │ │ Coordinator  │        │
-│  │ work at once │ │ execution    │ │ manages      │        │
-│  └──────────────┘ └──────────────┘ └──────────────┘        │
-│                                              │              │
-│                                              ▼              │
-│                                    ┌──────────────┐        │
-│                                    │   VOTING     │        │
-│                                    │              │        │
-│                                    │ Consensus    │        │
-│                                    │ decision     │        │
-│                                    └──────────────┘        │
-│                                                              │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │              AGGREGATION ENGINE                      │    │
-│  │  • Consensus   • Best Pick                          │    │
-│  │  • Concatenation   • Synthesis                      │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                          │                                   │
-│                          ▼                                   │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │              SWARM RESULT                          │    │
-│  │  • final_result    • confidence_score              │    │
-│  │  • individual_results    • execution_time          │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Config ["Configuration"]
+        direction TB
+        C1["name"]
+        C2["strategy"]
+        C3["workers"]
+        C4["coordinator"]
+    end
+
+    subgraph Task ["Task Execution"]
+        direction TB
+        T1["description"]
+        T2["input_data"]
+        T3["status"]
+    end
+
+    Config & Task --> Orchestrator["SWARM ORCHESTRATOR"]
+    Orchestrator --> Engine["AGGREGATION ENGINE"]
+    Engine --> SResult["SWARM RESULT<br/>(Confidence, Time, Data)"]
 ```
 
 ## Data Flow Diagram
 
-```
-User Input
-    │
-    ▼
-┌─────────────┐
-│ CLI/Telegram│
-└──────┬──────┘
-       │
-       ▼
-┌─────────────────┐
-│ SwarmOrchestrator│
-│   create_swarm() │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│  Swarm Storage  │────▶│   SQLite DB     │
-│   (Persistent)  │     │  swarm.db       │
-└────────┬────────┘     └─────────────────┘
-         │
-         ▼
-┌─────────────────┐
-│ swarm_assign()  │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Select Strategy │
-│ • Parallel      │
-│ • Sequential    │
-│ • Hierarchical  │
-│ • Voting        │
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────┐
-│ Execute Agents  │────▶│ Agents  │
-│ (async)         │     │ Registry│
-└────────┬────────┘     └─────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Aggregate Results│
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│  SwarmResult    │────▶│  Return to User │
-│  (with metadata)│     │                 │
-└─────────────────┘     └─────────────────┘
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI as CLI/Telegram/WhatsApp
+    participant Orchestrator
+    participant Storage as SQLite (swarm.db)
+    participant Agents as Agent Registry
+    participant Engine as Aggregator
+
+    User->>UI: Task Request
+    UI->>Orchestrator: swarm_assign(swarm_id, task)
+    Orchestrator->>Storage: Load Swarm Config
+    Orchestrator->>Agents: Initialize Workers
+
+    rect rgb(200, 220, 240)
+        Note over Orchestrator, Agents: Strategy Execution (Parallel/Sequential/...)
+        Orchestrator->>Agents: Execute sub-tasks
+        Agents-->>Orchestrator: Individual results
+    end
+
+    Orchestrator->>Engine: Aggregate results
+    Engine-->>Orchestrator: Final result
+    Orchestrator->>Storage: Save execution history
+    Orchestrator-->>User: Return Swarm Result
 ```
 
 ## Swarm Lifecycle
 
-```
-┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌─────────┐
-│ PENDING │───▶│ RUNNING │───▶│COMPLETED│    │  FAILED │    │TERMINATED│
-└─────────┘    └─────────┘    └─────────┘    └─────────┘    └─────────┘
-     │              │              │               │               │
-     │              │              │               │               │
-  Created      Executing      Success         Error          User
-  by user      task with        result       occurred        stopped
-               strategy
+```mermaid
+stateDiagram-v2
+    [*] --> PENDING: Created by User
+    PENDING --> RUNNING: Execution Started
+    RUNNING --> COMPLETED: Success Result
+    RUNNING --> FAILED: Error Occurred
+    RUNNING --> TERMINATED: User Stopped
+    FAILED --> [*]
+    COMPLETED --> [*]
+    TERMINATED --> [*]
 ```
 
 ---

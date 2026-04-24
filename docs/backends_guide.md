@@ -11,30 +11,30 @@ ZenSynora supports multiple terminal backends for execution across different env
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                         AbstractBackend                              │
-│  ├─ async execute()                                                  │
-│  ├─ async upload()                                                   │
-│  ├─ async download()                                                │
-│  ├─ get_type()                                                       │
-│  └─ is_available()                                                    │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-         ┌────────────────────┼────────────────────┐
-         ▼                    ▼                    ▼
-┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-│LocalBackend │      │DockerBackend│      │ SSHBackend  │
-│             │      │             │      │             │
-│ Direct shell│      │ Container   │      │ Remote exec │
-│ exec        │      │ exec        │      │ via SCP     │
-└─────────────┘      └─────────────┘      └─────────────┘
-                                                  │
-                                          ┌────────────┐
-                                          │ WSL2Backend│
-                                          │            │
-                                          │ WSL2 Linux │
-                                          └────────────┘
+```mermaid
+classDiagram
+    class AbstractBackend {
+        <<abstract>>
+        +execute(command, timeout)
+        +upload(local_path, remote_path)
+        +download(remote_path, local_path)
+        +get_type()
+        +is_available()
+    }
+    class LocalBackend
+    class DockerBackend
+    class SSHBackend
+    class WSL2Backend
+
+    AbstractBackend <|-- LocalBackend
+    AbstractBackend <|-- DockerBackend
+    AbstractBackend <|-- SSHBackend
+    AbstractBackend <|-- WSL2Backend
+
+    class BackendDiscovery {
+        +discover_backends()
+        +get_default_backend()
+    }
 ```
 
 ## Usage
@@ -192,6 +192,7 @@ class BackendRegistry:
     def get_available() -> List[AbstractBackend]
     @classmethod
     def get_by_type(backend_type: str) -> Optional[AbstractBackend]
+    @classmethod
     @classmethod
     def clear() -> None
 ```
