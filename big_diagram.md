@@ -189,7 +189,7 @@ flowchart LR
 | `myclaw.async_scheduler` | `AsyncScheduler` | `add_job()`, `remove_job()`, `run_forever()` |
 | `myclaw.knowledge.db` | `KnowledgeDB` | `search_notes()`, `write_note()`, `get_relations()` |
 | `myclaw.swarm.orchestrator`| `SwarmOrchestrator`| `create_swarm()`, `execute_task()`, `terminate()` |
-| `myclaw.agents.medic_agent` | `MedicAgent` | `check_health()`, `verify_integrity()`, `recover_file()` |
+| `myclaw.agents.medic_agent` | `MedicAgent` | `check_system_health()`, `verify_integrity()`, `recover_file()` |
 | `myclaw.backends.discover` | `N/A` | `discover_backends()`, `get_default_backend()` |
 
 ---
