@@ -183,31 +183,18 @@ Auto-switch triggers:
 
 Consider evolving from direct function calls to an event-driven architecture:
 
-```
-┌─────────────┐     ┌──────────┐     ┌─────────────┐     ┌─────────────┐
-│   Gateway   │────▶│ Event    │────▶│   Agent     │────▶│   LLM       │
-│(Telegram/   │     │  Bus     │     │   Router    │     │  Provider   │
-│ WhatsApp/   │     │(Redis/   │     │             │     │             │
-│    CLI)     │     │  NATS)   │     │             │     │             │
-└─────────────┘     └──────────┘     └──────┬──────┘     └─────────────┘
-                                            │
-                       ┌────────────────────┼────────────────────┐
-                       ▼                    ▼                    ▼
-                ┌─────────────┐      ┌─────────────┐      ┌─────────────┐
-                │   Tool      │      │  Knowledge  │      │   Swarm     │
-                │  Executor   │      │    Base     │      │  Orchestrator│
-                └─────────────┘      └─────────────┘      └─────────────┘
-                       │                    │                    │
-                       └────────────────────┼────────────────────┘
-                                              ▼
-                                       ┌─────────────┐
-                                       │  Response   │
-                                       │ Aggregator  │
-                                       └──────┬──────┘
-                                              │
-                                       ┌──────▼──────┐
-                                       │    User     │
-                                       └─────────────┘
+```mermaid
+flowchart TD
+    Gateway["Gateway (Telegram/WhatsApp/CLI)"] --> Bus["Event Bus (Redis/NATS)"]
+    Bus --> Router["Agent Router"]
+    Router --> LLM["LLM Provider"]
+
+    Router --> Tools["Tool Executor"]
+    Router --> KB["Knowledge Base"]
+    Router --> Swarm["Swarm Orchestrator"]
+
+    Tools & KB & Swarm --> Aggregator["Response Aggregator"]
+    Aggregator --> User["User"]
 ```
 
 **Benefits:**
@@ -245,3 +232,4 @@ ZenSynora demonstrates exceptional architectural maturity for a personal AI agen
 The codebase is production-ready for individual use and requires moderate effort to scale for multi-tenant deployment.
 
 ---
+```

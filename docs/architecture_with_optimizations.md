@@ -60,11 +60,11 @@ flowchart TB
         end
 
         subgraph Databases [Databases]
-            Mem[("💾 Memory<br/>FTS5 + Sanitization")]
-            KB[("📚 Knowledge Base<br/>Batch Queries + WAL")]
-            SwarmState[("📊 Swarm State")]
-            Toolbox[("🔧 ToolBox")]
-            Jobs[("📋 Scheduled Jobs")]
+            Mem[("💾 Memory<br/>(memory.py)")]
+            KB[("📚 Knowledge Base<br/>(knowledge/)")]
+            SwarmState[("📊 Swarm State<br/>(swarm.db)")]
+            Toolbox[("🔧 ToolBox<br/>(~/.myclaw/)")]
+            Jobs[("📋 Scheduled Jobs<br/>(async_scheduler.py)")]
         end
     end
 
@@ -383,9 +383,11 @@ flowchart TD
     subgraph Core["Core Modules"]
         Agent["agent.py<br/>(+parallel tool_calls fix 2026-04-13)"]
         Memory["memory.py"]
-        Provider["provider.py<br/>(+OpenAI message sanitize + _ensure_tool_messages)"]
-        Tools["tools.py"]
+        Provider["provider.py"]
+        Tools["tools/ (package)"]
         Config["config.py"]
+        State["state_store.py"]
+        AsyncSched["async_scheduler.py"]
     end
 
     subgraph Knowledge["Knowledge"]

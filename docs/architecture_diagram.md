@@ -2,643 +2,296 @@
 
 ## System Overview
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              ZENSYNORA (MyClaw)                              │
-└─────────────────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Gateway ["GATEWAY (gateway.py)"]
+        direction LR
+        TG["Telegram Bot"]
+        WA["WhatsApp Cloud"]
+        CLI["CLI / Console Chat"]
+    end
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              GATEWAY (gateway.py)                            │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────────────┐  │
-│  │  Telegram Bot   │  │  WhatsApp Cloud │  │  CLI / Console Chat         │  │
-│  └─────────────────┘  └─────────────────┘  └─────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────────┘
-                                     │
-                    ┌────────────────┴────────────────┐
-                    │                                 │
-                    ▼                                 ▼
-┌───────────────────────────────────────┐   ┌───────────────────────────────────┐
-│         AGENT (agent.py)             │   │         AGENT SWARMS              │
-│  ┌─────────────────────────────────┐ │   │  ┌─────────────────────────────┐ │
-│  │ System Prompt + User Profile   │ │   │  │ SwarmOrchestrator          │ │
-│  ├─────────────────────────────────┤ │   │  ├─────────────────────────────┤ │
-│  │ Lifecycle Hooks                  │ │   │  │ Strategies:               │ │
-│  │  ├─ pre_llm_call                 │ │   │  │  ├─ parallel                │ │
-│  │  ├─ post_llm_call                │ │   │  │  ├─ sequential             │ │
-│  │  ├─ on_session_start            │ │   │  │  ├─ hierarchical           │ │
-│  │  └─ on_session_end              │ │   │  │  └─ voting                 │ │
-│  ├─────────────────────────────────┤ │   │  ├─────────────────────────────┤ │
-│  │ Trajectory Compression           │ │   │  │ Aggregation:              │ │
-│  │  ├─ History Summarization        │ │   │  │  ├─ consensus             │ │
-│  │  ├─ Compression Ratio Logging   │ │   │  │  ├─ best_pick             │ │
-│  │  └─ Key Decisions Focus          │ │   │  │  ├─ concatenation        │ │
-│  └─────────────────────────────────┘ │   │  │  └─ synthesis             │ │
-└───────────────────────────────────────┘   └───────────────────────────────────┘
-                    │
-                    ▼
-┌───────────────────────────────────────────────────────────────────────────────┐
-│                            TOOLS (tools.py)                                 │
-│                                                                               │
-│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────┐ │
-│  │  Core Tools     │ │  Knowledge      │ │  Scheduling     │ │  Swarm      │ │
-│  │  ├─ shell      │ │  ├─ search_kb   │ │  ├─ schedule    │ │  ├─ create  │ │
-│  │  ├─ read_file  │ │  ├─ write_kb   │ │  ├─ nlp_sched   │ │  ├─ assign  │ │
-│  │  └─ browse     │ │  └─ search_fts │ │  └─ list_jobs   │ │  └─ result  │ │
-│  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────┘ │
-│                                                                               │
-│  ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
-│  │  Skill System  │ │  Learning       │ │  ZenHub         │ │Skill Adapter   │ │Medic Agent     │ │ New Tech Agent │ │
-│  │  ├─ register    │ │  ├─ daily_refl │ │  ├─ search      │ │├─analyze_ext   │ │├─check_health  │ │├─fetch_ai_news │ │
-│  │  ├─ benchmark   │ │  ├─ insights   │ │  ├─ publish     │ │├─convert_skill │ │├─verify_integr │ │├─get_proposals │ │
-│  │  ├─ evaluate   │ │  ├─ extract    │ │  ├─ install     │ │├─list_compat   │ │├─recover_file  │ │├─add_to_roadmap│ │
-│  │  ├─ improve    │ │  └─ user_prof  │ │  └─ discover   │ │└─register_ext  │ │├─get_health_rep│ │├─enable_newtech│ │
-│  │  └─ rollback   │ │                 │ │                 │ │                │ │├─validate_mod │ │├─run_newtech   │ │
-│  │                 │ │                 │ │                 │ │                │ │├─record_task   │ │├─summarize_tech│ │
-│  │                 │ │                 │ │                 │ │                │ │├─get_analytics │ │├─generate_prop │ │
-│  │                 │ │                 │ │                 │ │                │ │├─enable_hash   │ │└─share_proposal│ │
-│  │                 │ │                 │ │                 │ │                │ │├─scan_files    │ │                │ │
-│  │                 │ │                 │ │                 │ │                │ │├─detect_errors │ │                │ │
-│  │                 │ │                 │ │                 │ │                │ │└─prevent_loop  │ │                │ │
-│  └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
-└───────────────────────────────────────────────────────────────────────────────┘
-                    │
-        ┌───────────┼───────────┐
-        ▼           ▼           ▼
-┌──────────────┐ ┌──────────┐ ┌──────────────┐
-│   MEMORY     │ │ KNOWLEDGE│ │   TOOLBOX    │
-│  (memory.py) │ │ (knowledge/)│  (~/.myclaw/)│
-│              │ │           │ │             │
-│ ┌──────────┐ │ │ ┌───────┐ │ │ ┌─────────┐ │
-│ │ SQLite   │ │ │ │ Graph │ │ │ │ Skills  │ │
-│ │ + FTS5   │ │ │ │  DB   │ │ │ └─────────┘ │
-│ └──────────┘ │ │ └───┬───┘ │ │ ┌─────────┐ │
-│              │ │     │     │ │ │ Registry │ │
-│ ┌──────────┐ │ │ ┌───┴───┐ │ │ └─────────┘ │
-│ │ Messages │ │ │ │ FTS5 │ │ │ ┌─────────┐ │
-│ │ + BM25    │ │ │ └───────┘ │ │ │  ZenHub │ │
-│ └──────────┘ │ └───────────┘ │ └─────────┘ │
-└──────────────┘ └─────────────┘ └──────────────┘
+    Gateway --> AgentRouter
+
+    subgraph AgentSystem ["AGENT SYSTEM"]
+        direction TB
+        AgentRouter{Agent Router}
+        Agent["Agent (agent.py)"]
+        Swarm["Agent Swarms (swarm/)"]
+    end
+
+    AgentSystem --> Tools
+
+    subgraph Tools ["TOOLS (myclaw/tools/)"]
+        direction TB
+        T_Core["core.py"]
+        T_Shell["shell.py"]
+        T_Files["files.py"]
+        T_Web["web.py"]
+        T_KB["kb.py"]
+        T_Sched["scheduler.py"]
+        T_Swarm["swarm.py"]
+        T_Toolbox["toolbox.py"]
+    end
+
+    Tools --> Storage
+
+    subgraph Storage ["PERSISTENCE & STORAGE"]
+        direction LR
+        Memory["MEMORY (memory.py)"]
+        Knowledge["KNOWLEDGE (knowledge/)"]
+        Toolbox["TOOLBOX (~/.myclaw/)"]
+        State["STATE STORE (state_store.py)"]
+        AsyncSched["ASYNC SCHEDULER (async_scheduler.py)"]
+    end
 ```
 
-## New Tool Categories Added
+## New Tool Categories (Evolution)
 
-```
-Phase 1 (Quick Wins)          Phase 2 (Skill System)
-─────────────────────         ─────────────────────
-• register_hook()            • get_skill_info()
-• list_hooks()               • enable_skill()
-• clear_hooks()              • disable_skill()
-• nlp_schedule()             • update_skill_metadata()
-                               • benchmark_skill()
-                               • evaluate_skill()
-                               • improve_skill()
-                               • rollback_skill()
+```mermaid
+flowchart LR
+    subgraph P1 ["Phase 1: Quick Wins"]
+        direction TB
+        T1["register_hook()<br/>list_hooks()<br/>nlp_schedule()"]
+    end
 
-Phase 3 (Memory & Learning)   Phase 4 (ZenHub Ecosystem)
-────────────────────────     ─────────────────────────
-• schedule_daily_reflection() • hub_search()
-• generate_session_insights() • hub_list()
-• extract_user_preferences()  • hub_publish()
-• update_user_profile()       • hub_install()
-• get_user_profile()          • hub_remove()
-                               • discover_external_skills()
-                               • hub_install_from_external()
+    subgraph P2 ["Phase 2: Skill System"]
+        direction TB
+        T2["benchmark_skill()<br/>evaluate_skill()<br/>improve_skill()"]
+    end
 
-Phase 5 (Skill Adapter)      Phase 6 (Medic Agent)
-─────────────────────        ─────────────────────
-• analyze_external_skill()   • check_system_health()
-• convert_skill()             • verify_file_integrity()
-• list_compatible_skills()    • recover_file(source="github"|"local")
-• register_external_skill()   • get_health_report()
-                                • validate_modification()
-                                • record_task_execution()
-                                • enable_hash_check()
-                                • prevent_infinite_loop()
-                                • create_backup()
-                                • list_backups()
-                                • check_file_virustotal()
+    subgraph P3 ["Phase 3: Memory & Learning"]
+        direction TB
+        T3["generate_session_insights()<br/>extract_user_preferences()<br/>update_user_profile()"]
+    end
 
-Phase 7 (New Tech Agent)     Phase 8 (Backends)
-───────────────────────      ────────────────
-• fetch_ai_news()            • discover_backends()
-• get_technology_proposals() • get_default_backend()
-• add_to_roadmap()           • LocalBackend.execute()
-• enable_newtech_agent()     • DockerBackend.execute()
-• run_newtech_scan()         • SSHBackend.execute()
-• summarize_tech()         • WSL2Backend.execute()
-• generate_tech_proposal()
-• share_proposal()
-• get_roadmap()```
+    subgraph P4 ["Phase 4: ZenHub Ecosystem"]
+        direction TB
+        T4["hub_search()<br/>hub_install()<br/>discover_external_skills()"]
+    end
 
-## New Agents (Phase 5 Implementation)
-
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                          AGENT SYSTEM                                      │
-└─────────────────────────────────────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────────────────────────────────────┐
-│  AGENTS PACKAGE (myclaw/agents/)                                           │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                            │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────────────┐  │
-│  │  SkillAdapter    │  │  MedicAgent      │  │  NewTechAgent            │  │
-│  │                  │  │                  │  │                          │  │
-│  │  ├─ parse_ext()  │  │  ├─ scan_system()│  │  ├─ fetch_ai_news()     │  │
-│  │  ├─ convert()     │  │  ├─ hash_check() │  │  ├─ summarize_tech()    │  │
-│  │  ├─ discover()    │  │  ├─ recover()     │  │  ├─ generate_proposal()│  │
-│  │  └─ register()    │  │  ├─ detect_loop() │  │  └─ add_to_roadmap()   │  │
-│  │                   │  │  └─ get_report()   │  │                         │  │
-│  │  Tools:          │  │  Tools:           │  │  Tools:                 │  │
-│  │  ├─ analyze_ext  │  │  ├─ check_health  │  │  ├─ fetch_ai_news       │  │
-│  │  ├─ convert_skill│  │  ├─ verify_integr │  │  ├─ get_proposals       │  │
-│  │  ├─ list_compat  │  │  ├─ recover_file  │  │  ├─ add_to_roadmap      │  │
-│  │  └─ register_ext │  │  ├─ get_health_rep │  │  ├─ enable_newtech       │  │
-│  │                   │  │  ├─ validate_mod │  │  ├─ run_newtech_scan     │  │
-│  │                   │  │  ├─ record_task   │  │  ├─ summarize_tech       │  │
-│  │                   │  │  ├─ get_analytics │  │  ├─ generate_proposal    │  │
-│  │                   │  │  ├─ enable_hash   │  │  ├─ share_proposal       │  │
-│  │                   │  │  ├─ scan_files    │  │  └─ get_roadmap          │  │
-│  │                   │  │  ├─ detect_errors │  │                          │  │
-│  │                   │  │  ├─ prevent_loop  │  │                          │  │
-│  │                   │  │  ├─ create_backup │  │  Features:               │  │
-│  │                   │  │  ├─ list_backups  │  │  ├─ Opt-in consent       │  │
-│  │                   │  │  └─ virustotal   │  │  ├─ GitHub API sharing  │  │
-│  │                   │  │                   │  │  ├─ Tech proposals      │  │
-│  │                   │  │  Features:        │  │  └─ Roadmap tracking    │  │
-│  │                   │  │  ├─ Hash integrity│  │                          │  │
-│  │                   │  │  ├─ Local backup  │  │                          │  │
-│  │                   │  │  ├─ Error recovery│  │                          │  │
-│  │                   │  │  ├─ Loop prevent  │  │                          │  │
-│  │                   │  │  ├─ GitHub fetch  │  │                          │  │
-│  │                   │  │  └─ VirusTotal   │  │                          │  │
-│  └──────────────────┘  └──────────────────┘  └──────────────────────────┘  │
-│                                                                            │
-└────────────────────────────────────────────────────────────────────────────┘
-
-┌────────────────────────────────────────────────────────────────────────────┐
-│  BACKENDS PACKAGE (myclaw/backends/)                                        │
-├────────────────────────────────────────────────────────────────────────────┤
-│                                                                            │
-│  ┌──────────────────────────────────────────────────────────────────────┐  │
-│  │                         AbstractBackend                              │  │
-│  │  ├─ async execute()                                                  │  │
-│  │  ├─ async upload()                                                   │  │
-│  │  ├─ async download()                                                │  │
-│  │  ├─ get_type()                                                       │  │
-│  │  └─ is_available()                                                    │  │
-│  └──────────────────────────────────────────────────────────────────────┘  │
-│                              │                                             │
-│         ┌────────────────────┼────────────────────┐                      │
-│         ▼                    ▼                    ▼                      │
-│  ┌─────────────┐      ┌─────────────┐      ┌─────────────┐               │
-│  │  LocalBackend│      │ DockerBackend│      │ SSHBackend   │               │
-│  │             │      │             │      │             │               │
-│  │ Direct shell│      │ Container   │      │ Remote exec │               │
-│  │ exec        │      │ exec        │      │ via SCP     │               │
-│  └─────────────┘      └─────────────┘      └─────────────┘               │
-│                                                              ┌────────────┐
-│                                                              │ WSL2Backend│
-│                                                              │            │
-│                                                              │ WSL2 Linux │
-│                                                              └────────────┘
-│  ┌─────────────────────────────────────────────────────────────────────┐  │
-│  │                         Backend Discovery                            │  │
-│  │  discover_backends()  ──► Auto-detect available backends            │  │
-│  │  get_default_backend()  ──► Select based on config or local         │  │
-│  │  BackendRegistry        ──► Centralized backend management         │  │
-│  └─────────────────────────────────────────────────────────────────────┘  │
-│                                                                            │
-└────────────────────────────────────────────────────────────────────────────┘
+    P1 --> P2 --> P3 --> P4
 ```
 
-## New Configuration Sections
+## Agent Package (myclaw/agents/)
 
-```
-config.json additions:
-{
-  "medic": {
-    "enabled": false,
-    "enable_hash_check": true,
-    "repo_url": "https://github.com/zensynora/zensynora",
-    "scan_on_startup": false,
-    "max_loop_iterations": 100,
-    "secondary_llm_provider": "",
-    "secondary_llm_model": ""
-  },
-  "newtech": {
-    "enabled": false,
-    "interval_hours": 24,
-    "share_consent": false,
-    "github_repo_for_share": "",
-    "max_news_items": 10
-  },
-  "backends": {
-    "default_backend": "local",
-    "docker": {"container": "zensynora", "image": "zensynora:latest"},
-    "ssh": {"host": "", "user": "", "port": 22, "key_path": ""},
-    "wsl2": {"distro": "Ubuntu"}
-  }
-}
-```
-Phase 1 (Quick Wins)          Phase 2 (Skill System)
-─────────────────────         ─────────────────────
-• register_hook()            • get_skill_info()
-• list_hooks()               • enable_skill()
-• clear_hooks()              • disable_skill()
-• nlp_schedule()             • update_skill_metadata()
-                              • benchmark_skill()
-                              • evaluate_skill()
-                              • improve_skill()
-                              • rollback_skill()
+```mermaid
+flowchart TB
+    subgraph Agents ["Specialized Agents"]
+        direction LR
+        SA["SkillAdapter"]
+        MA["MedicAgent"]
+        NTA["NewTechAgent"]
+    end
 
-Phase 3 (Memory & Learning)   Phase 4 (ZenHub Ecosystem)
-─────────────────────────     ─────────────────────────
-• schedule_daily_reflection() • hub_search()
-• generate_session_insights() • hub_list()
-• extract_user_preferences()  • hub_publish()
-• update_user_profile()       • hub_install()
-• get_user_profile()          • hub_remove()
-                               • discover_external_skills()
-                               • hub_install_from_external()
+    SA --- SA_Tools["analyze_ext<br/>convert_skill<br/>register_ext"]
+    MA --- MA_Tools["check_health<br/>verify_integr<br/>recover_file<br/>validate_mod"]
+    NTA --- NTA_Tools["fetch_ai_news<br/>generate_prop<br/>add_to_roadmap"]
+
+    Agents --> Registry["Registry & Discovery"]
+```
+
+## Backends Package (myclaw/backends/)
+
+```mermaid
+classDiagram
+    class AbstractBackend {
+        <<abstract>>
+        +execute(command)
+        +upload(local, remote)
+        +download(remote, local)
+        +is_available()
+    }
+    class LocalBackend
+    class DockerBackend
+    class SSHBackend
+    class WSL2Backend
+
+    AbstractBackend <|-- LocalBackend
+    AbstractBackend <|-- DockerBackend
+    AbstractBackend <|-- SSHBackend
+    AbstractBackend <|-- WSL2Backend
+
+    class BackendDiscovery {
+        +discover_backends()
+        +get_default_backend()
+    }
 ```
 
 ## Data Flow: Request Processing
 
-```
-User Message
-      │
-      ▼
-┌────────────────┐
-│ Gateway        │  Telegram/WhatsApp/CLI
-└───────┬────────┘
-        │
-        ▼
-┌────────────────────────────────────────────────────────┐
-│ Agent.think()                                           │
-│                                                         │
-│  1. on_session_start hooks ──────────────────────────► │
-│                                                         │
-│  2. Context Summarization                              │
-│     └─► (if history > threshold)                         │
-│         └─► Compress + log ratio                        │
-│                                                         │
-│  3. Knowledge Base Search (FTS5 + BM25 + recency)      │
-│     ├─► Results found ──► Add to context                │
-│     └─► No results ─────► Log gap + suggest topics     │
-│                                                         │
-│  4. pre_llm_call hooks ────────────────────────────────► │
-│                                                         │
-│  5. LLM Provider (Ollama/OpenAI/etc)                   │
-│                                                         │
-│  6. post_llm_call hooks ───────────────────────────────► │
-│                                                         │
-│  7. Tool Execution (if tool_calls)                      │
-│     └─► Each tool: audit log + rate limit check        │
-│         └─► browse() errors: structured guidance       │
-│                                                         │
-│  8. on_session_end hooks ─────────────────────────────► │
-└────────────────────────────────────────────────────────┘
-        │
-        ▼
-   Response
+```mermaid
+sequenceDiagram
+    participant User
+    participant Gateway
+    participant Agent
+    participant Hooks
+    participant KB as Knowledge Base
+    participant LLM as LLM Provider
+    participant Tools as Tool Executor
+
+    User->>Gateway: Sends Message
+    Gateway->>Agent: think(message)
+    Agent->>Hooks: on_session_start
+    Agent->>KB: search_knowledge(query)
+    KB-->>Agent: Results found
+    Agent->>Hooks: pre_llm_call
+    Agent->>LLM: generate_response(context)
+    LLM-->>Agent: tool_calls (if needed)
+
+    loop Tool Execution
+        Agent->>Tools: execute(tool_name, args)
+        Tools->>Agent: tool_output
+    end
+
+    Agent->>Hooks: post_llm_call
+    Agent->>Hooks: on_session_end
+    Agent-->>Gateway: final_response
+    Gateway-->>User: Delivers Response
 ```
 
 ## Tool Execution Pipeline
 
-```
-Tool Call Request
-        │
-        ▼
-┌───────────────────┐
-│ Rate Limiter      │  (10 calls/min per tool)
-│ (Token Bucket)    │
-└───────┬───────────┘
-        │
-        ▼
-┌───────────────────┐
-│ Security Check    │  ALLOWED_COMMANDS / BLOCKED_COMMANDS
-└───────┬───────────┘
-        │
-        ▼
-┌───────────────────┐
-│ Tool Registry     │  TOOLS dict lookup
-└───────┬───────────┘
-        │
-        ▼
-┌───────────────────┐
-│ Async Execution   │  await asyncio.to_thread() or direct
-│                   │  for coroutine functions
-└───────┬───────────┘
-        │
-        ▼
-┌───────────────────┐
-│ Audit Logger      │  ToolAuditLogger
-│                   │  (success/failure, duration)
-└───────────────────┘
+```mermaid
+flowchart TD
+    Req["Tool Call Request"] --> RL["Rate Limiter (Token Bucket)"]
+    RL --> SC["Security Check (Allowlist)"]
+    SC --> TR["Tool Registry Lookup"]
+    TR --> Exec["Async Execution"]
+    Exec --> AL["Audit Logger (duration, status)"]
 ```
 
-## Error Handling Architecture (v2.1)
+## Error Handling: Browse Tool
 
-### Browse Tool Error Handling
+```mermaid
+flowchart TD
+    Req["requests.get(url)"] --> ErrType{Error Type?}
+    ErrType -- Timeout --> Way1["Wayback Machine Suggestion"]
+    ErrType -- 404 --> Way2["Wayback + Search Suggestions"]
+    ErrType -- 403 --> KB_S["Suggest search_knowledge()"]
+    ErrType -- Conn --> Net["Check Internet/URL Verification"]
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   BROWSE ERROR HANDLING                         │
-└─────────────────────────────────────────────────────────────────┘
-
-    requests.get(url, timeout=30)
-              │
-              ▼
-    ┌─────────────────┐
-    │  Error Type     │
-    └────────┬────────┘
-             │
-    ┌────────┴────────┬──────────────┬──────────────┬──────────────┐
-    │                 │              │              │              │
-    ▼                 ▼              ▼              ▼              ▼
-┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐   ┌──────────┐
-│ Timeout  │   │ Connection│   │  HTTP 404 │   │  HTTP 403 │   │  Other   │
-│          │   │  Error    │   │          │   │          │   │          │
-├──────────┤   ├──────────┤   ├──────────┤   ├──────────┤   ├──────────┤
-│ • Wayback│   │ • Check  │   │ • Check  │   │ • Auth   │   │ • Retry  │
-│   suggest│   │   internet│   │   typos  │   │   needed │   │ • Log    │
-│ • Check  │   │ • Verify │   │ • Wayback│   │ • Try    │   │ • Report │
-│   status │   │   URL    │   │   link   │   │   search │   │          │
-│ • search_│   │ • search_│   │ • Web    │   │ • search_│   │          │
-│   knowledge│  │   knowledge│  │   search │   │   knowledge│  │          │
-└────┬─────┘   └────┬─────┘   └────┬─────┘   └────┬─────┘   └────┬─────┘
-     │              │              │              │              │
-     └──────────────┴──────────────┴──────────────┴──────────────┘
-                                   │
-                                   ▼
-                    ┌──────────────────────────┐
-                    │  Structured Response     │
-                    │  (emoji + suggestions)   │
-                    └──────────────────────────┘
+    Way1 --> Res["Structured Response"]
+    Way2 --> Res
+    KB_S --> Res
+    Net --> Res
 ```
 
-### Knowledge Gap Handling
+## Knowledge Gap Handling
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                   KNOWLEDGE GAP HANDLING                        │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    Search["search_knowledge(query)"] --> Found{Results Found?}
+    Found -- Yes --> Return["Return formatted results"]
+    Found -- No --> Cache{In Gap Cache?}
 
-    search_knowledge(query)
-              │
-              ▼
-    ┌─────────────────┐
-    │  Results?       │
-    └────────┬────────┘
-             │
-      ┌──────┴──────┐
-      │             │
-      ▼             ▼
-┌──────────┐   ┌──────────┐
-│  Yes     │   │   No     │
-│          │   │          │
-│ Return   │   │ 1. Check │
-│ formatted│   │    gap   │
-│ results  │   │    cache │
-│          │   │          │
-│          │   │ 2. If new│
-│          │   │    gap:  │
-│          │   │    - Log │
-│          │   │      to  │
-│          │   │      gap │
-│          │   │      log │
-│          │   │    - Add │
-│          │   │      to  │
-│          │   │      cache│
-│          │   │          │
-│          │   │ 3. Return│
-│          │   │    guidance│
-│          │   │    +     │
-│          │   │    suggested│
-│          │   │    topics│
-└──────────┘   └──────────┘
-
-    Gap Cache (300s timeout):
-    ┌─────────────────────────────────┐
-    │  Key: "user_id:query"           │
-    │  Value: timestamp               │
-    │                                 │
-    │  is_duplicate() checks:        │
-    │  1. Clean expired entries      │
-    │  2. Check if key exists        │
-    │  3. Store if new               │
-    └─────────────────────────────────┘
+    Cache -- Yes --> Guidance["Return guidance + suggestions"]
+    Cache -- No --> Log["Log to gap_log"]
+    Log --> AddCache["Add to Gap Cache (300s)"]
+    AddCache --> Guidance
 ```
 
-## Skill System Architecture
+## Skill Lifecycle
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     SKILL LIFECYCLE                             │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    Reg["register_tool()"] --> AST["AST Validate"]
+    AST --> Compile["Code Compile"]
+    Compile --> Load["Load & Test"]
+    Load --> Toolbox["TOOLBOX REGISTRY"]
 
-    ┌──────────────┐
-    │ register_tool()
-    └──────┬───────┘
-           │
-           ▼
-    ┌──────────────┐     ┌──────────────┐     ┌──────────────┐
-    │ AST Validate │────►│ Code Compile │────►│ Load & Test │
-    └──────────────┘     └──────────────┘     └──────┬───────┘
-                                                     │
-                    ┌──────────────┐                  │
-                    │ TOOLBOX_REG  │◄─────────────────┘
-                    │ (metadata)   │
-                    └──────┬───────┘
-                           │
-           ┌───────────────┼───────────────┐
-           │               │               │
-           ▼               ▼               ▼
-    ┌────────────┐  ┌────────────┐  ┌────────────┐
-    │ evaluate() │  │benchmark()│  │ improve()  │
-    └────────────┘  └────────────┘  └──────┬─────┘
-                                          │
-                    ┌────────────────────┼────────────────────┐
-                    │                    │                    │
-                    ▼                    ▼                    ▼
-             ┌──────────┐         ┌──────────────┐      ┌──────────┐
-             │ Safety   │         │  Auto-backup │      │ Version  │
-             │ Checks   │         │  (.bak file)  │      │ Increment│
-             └──────────┘         └──────────────┘      └──────────┘
-                                          │
-                                          ▼
-                                   ┌──────────┐
-                                   │rollback()│
-                                   └──────────┘
+    Toolbox --> Eval["evaluate()"]
+    Toolbox --> Bench["benchmark()"]
+    Toolbox --> Imp["improve()"]
+
+    Imp --> Backup["Auto-backup (.bak)"]
+    Backup --> Rollback["rollback()"]
 ```
 
 ## User Profile System
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    USER DIALECTIC PROFILE                       │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    Init["Agent Initialization"] --> LoadMD["Load user_dialectic.md"]
+    LoadMD --> Prompt["Append to System Prompt"]
 
-    ┌─────────────────────────────────────────────────┐
-    │         user_dialectic.md (profile template)     │
-    ├─────────────────────────────────────────────────┤
-    │ ## Communication Style                           │
-    │ ## Technical Profile                            │
-    │ ## Interaction Patterns                          │
-    │ ## Preferences                                   │
-    │ ## Learning History                              │
-    └─────────────────────────────────────────────────┘
-                         │
-                         ▼
-┌────────────────────────────────────────────────────────────┐
-│                    Agent Initialization                      │
-│                                                            │
-│  agent.py __init__()                                       │
-│       │                                                     │
-│       ▼                                                     │
-│  Load system prompt (default.md / custom)                  │
-│       │                                                     │
-│       ▼                                                     │
-│  Check user_dialectic.md exists?                            │
-│       │                                                     │
-│       ▼                                                     │
-│  Append dialectic profile to system_prompt                  │
-└────────────────────────────────────────────────────────────┘
+    subgraph Updates ["Runtime Updates"]
+        direction LR
+        Extract["extract_preferences()"]
+        Update["update_user_profile()"]
+        Reflect["daily_reflection()"]
+    end
 
-    ┌─────────────────────────────────────────────────┐
-    │         Runtime Profile Updates                  │
-    ├─────────────────────────────────────────────────┤
-    │ extract_user_preferences() ──► writes to KB     │
-    │ update_user_profile()       ──► writes .md file  │
-    │ schedule_daily_reflection()  ──► daily summary   │
-    └─────────────────────────────────────────────────┘
+    Updates --> KB["Knowledge Base"]
+    Updates --> ProfileMD["user_dialectic.md"]
 ```
 
 ## ZenHub Registry
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                         ZENHUB REGISTRY                         │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph FS ["File System (~/.myclaw/)"]
+        Hub["hub/"]
+        Hub --- Index["index.json"]
+        Hub --- H_Skills["skills/ (Published)"]
+        Skills["skills/ (External)"]
+    end
 
-    ~/.myclaw/
-    │
-    ├── hub/
-    │   ├── index.json          # Skill metadata index
-    │   └── skills/             # Published skill files
-    │       ├── skill1.py
-    │       ├── skill2.py
-    │       └── ...
-    │
-    └── skills/                 # External skills (auto-discover)
-        ├── skill_a.py
-        └── skill_b.py
+    subgraph Ops ["ZenHub Operations"]
+        direction TB
+        Search["hub_search()"]
+        Publish["hub_publish()"]
+        Install["hub_install()"]
+        Discover["discover_external()"]
+    end
 
-
-┌────────────────────────────────────────────────────────────┐
-│                    ZenHub Operations                        │
-├────────────────────────────────────────────────────────────┤
-│                                                            │
-│  hub_search(query)  ────► Scan index.json by name/desc/tags
-│                                                            │
-│  hub_publish(name)  ────► Copy from TOOLBOX to hub/skills
-│                                                            │
-│  hub_install(name) ────► Copy from hub to TOOLBOX          │
-│                                                            │
-│  hub_remove(name)  ────► Delete from index + file         │
-│                                                            │
-│  discover_external() ──► Scan ~/.myclaw/skills/            │
-│                                                            │
-│  hub_install_external() ──► Import from external to TOOLBOX│
-│                                                            │
-└────────────────────────────────────────────────────────────┘
+    Search --> Index
+    Publish --> H_Skills
+    Install --> Toolbox["TOOLBOX"]
+    Discover --> Skills
 ```
 
-## File Structure Summary
+## File Structure Summary (myclaw/)
 
-```
-myclaw/
-├── __init__.py
-├── agent.py           # Agent class with hooks + profile loading + tool_calls fix
-├── tools.py            # All tools
-├── memory.py           # Memory with enhanced FTS5 search
-├── provider.py        # LLM providers + OpenAI message sanitization
-├── config.py          # Configuration (with medic/newtech/backends)
-├── gateway.py         # Gateway startup
-├── agents/             # Specialized Agents (NEW)
-│   ├── __init__.py
-│   ├── skill_adapter.py   # Skill compatibility agent
-│   ├── medic_agent.py     # System health monitoring
-│   └── newtech_agent.py   # AI news monitoring
-├── backends/           # Terminal Backends (NEW)
-│   ├── __init__.py
-│   ├── base.py           # AbstractBackend base class
-│   ├── local.py          # Local shell execution
-│   ├── docker.py         # Docker container execution
-│   ├── ssh.py            # SSH remote execution
-│   ├── wsl2.py           # WSL2 execution
-│   └── discover.py       # Backend discovery
-├── swarm/             # Agent Swarms
-│   ├── orchestrator.py
-│   ├── models.py
-│   ├── storage.py
-│   └── strategies.py
-├── knowledge/         # Knowledge Base
-│   ├── db.py           # SQLite + FTS5 (KnowledgeDB class)
-│   ├── graph.py        # Entity relations
-│   ├── storage.py      # Markdown notes (write_note, read_note functions)
-│   ├── researcher.py   # GapResearcher - background web research
-│   ├── parser.py       # Note parsing
-│   └── sync.py
-├── channels/          # Communication Channels
-│   ├── telegram.py
-│   └── whatsapp.py
-├── hub/               # ZenHub Registry
-│   └── __init__.py
-├── mcp/               # Model Context Protocol
-│   ├── __init__.py
-│   ├── client.py        # MCP Client connections
-│   └── server.py        # MCP Server exposure
-├── profiles/         # Agent Profiles
-│   ├── default.md
-│   ├── user.md
-│   └── user_dialectic.md
+```mermaid
+flowchart TD
+    Root["myclaw/"]
+    Root --- Core["agent.py<br/>tools/ (pkg)<br/>memory.py<br/>config.py<br/>state_store.py"]
+    Root --- Agents["agents/ (pkg)<br/>medic, newtech, adapter"]
+    Root --- Backends["backends/ (pkg)<br/>local, docker, ssh, wsl2"]
+    Root --- Knowledge["knowledge/ (pkg)<br/>db, graph, sync, researcher"]
+    Root --- Swarm["swarm/ (pkg)<br/>orchestrator, strategies"]
+    Root --- Channels["channels/ (pkg)<br/>telegram, whatsapp"]
 ```
 
 ## Model Context Protocol (MCP)
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    MCP CLIENT & SERVER                          │
-└─────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    subgraph ExtClients ["External Clients"]
+        Cursor["Cursor"]
+        Claude["Claude Desktop"]
+    end
 
-     External Clients                   External Servers
-     (Cursor, Claude)                  (SQLite, WebSearch)
-            │                                  │
-            ▼                                  ▼
-    ┌───────────────┐                  ┌───────────────┐
-    │  MCP Server   │                  │  MCP Client   │
-    │  (server.py)  │                  │  (client.py)  │
-    └───────┬───────┘                  └───────┬───────┘
-            │                                  │
-            ▼                                  ▼
-    ┌──────────────────────────────────────────────────┐
-    │                   myclaw.tools                   │
-    └──────────────────────────────────────────────────┘
-```
+    subgraph ZenServer ["MCP Server"]
+        MS["mcp/server.py"]
+    end
 
-## Legend
+    subgraph ZenClient ["MCP Client"]
+        MC["mcp/client.py"]
+    end
 
-```
-┌─────────┐  Component/Module
-│  text   │  Process/Function
-└─────────┘
+    subgraph ExtServers ["External Servers"]
+        Sqlite["SQLite Server"]
+        WebS["WebSearch Server"]
+    end
 
-──────►   Data/Control Flow
-──▼──     Conditional/Branch
+    ExtClients <--> MS
+    MS <--> Tools["myclaw.tools"]
+    MC <--> Tools
+    MC <--> ExtServers
 ```
 
-*Generated: 2026-03-29*
-*Last Updated: 2026-04-13 (Bug fixes: parallel tool execution, OpenAI message sanitization, researcher.py imports, agent.py UnboundLocalError)*
+*Generated: 2026-04-21*
+*Last Updated: 2026-04-21 (Mermaid redesign, package structure update)*
 *Part of: ZenSynora Full Implementation*

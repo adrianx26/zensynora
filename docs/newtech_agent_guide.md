@@ -265,29 +265,14 @@ class NewTechAgent:
 
 ## Data Flow
 
-```
-AI News Sources
-      │
-      ▼
-┌─────────────────┐
-│  fetch_ai_news()│  ← Parse HTML, extract items
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│summarize_tech() │  ← Generate summary
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│generate_proposal│  ← Create implementation plan
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │         │
-    ▼         ▼
-save     share_to_github()
-         (if consent)
+```mermaid
+flowchart TD
+    Sources["AI News Sources"] --> Fetch["fetch_ai_news()"]
+    Fetch --> Summarize["summarize_tech()"]
+    Summarize --> Generate["generate_proposal()"]
+    Generate --> Decision{Action?}
+    Decision -- Save --> Registry["Internal Registry"]
+    Decision -- Share --> GitHub["share_to_github() (if consent)"]
 ```
 
 ## Troubleshooting
