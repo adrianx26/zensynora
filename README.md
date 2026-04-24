@@ -86,11 +86,11 @@ flowchart TB
         end
     end
 
-    %% Caching Layer
-    subgraph Caching [Caching & Performance]
-        Semantic("🔮 Semantic Cache")
-        LRU("📦 LRU Cache")
-        ConfigC("🔧 Config Cache")
+        subgraph Infra ["🏗️ Infrastructure (Phase 6)"]
+            StateStore["🗄️ State Store<br/>(state_store.py)"]
+            AsyncSched["⏰ Async Scheduler<br/>(async_scheduler.py)"]
+            Medic["🏥 Medic Agent<br/>(medic_agent.py)"]
+        end
     end
 
     %% Data Layer

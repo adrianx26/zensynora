@@ -145,28 +145,12 @@ function: |
 
 ## Data Flow
 
-```
-External Skill (JSON/YAML)
-         │
-         ▼
-┌─────────────────────┐
-│  parse_external()   │  ← Validates schema
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│  convert_to_zensynora() │  ← Generates Python code
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│   validate_skill() │  ← AST compile check
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│ register_converted() │  ← Save to TOOLBOX
-└─────────────────────┘
+```mermaid
+flowchart TD
+    Ext["External Skill (JSON/YAML)"] --> Parse["parse_external() (Schema Validation)"]
+    Parse --> Convert["convert_to_zensynora() (Code Generation)"]
+    Convert --> Validate["validate_skill() (AST Compile Check)"]
+    Validate --> Register["register_converted() (Save to TOOLBOX)"]
 ```
 
 ## Troubleshooting

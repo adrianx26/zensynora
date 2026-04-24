@@ -257,28 +257,14 @@ print(result)
 
 ## Data Flow
 
-```
-System Files
-      │
-      ▼
-┌─────────────────┐
-│  scan_system()  │  ← Record baseline hashes
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ calculate_hash()│  ← SHA-256 hash
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ check_integrity│  ← Compare with baseline
-└────────┬────────┘
-         │
-    ┌────┴────┐
-    │         │
-    ▼         ▼
- Valid    Issues
+```mermaid
+flowchart TD
+    Files["System Files"] --> Scan["scan_system()"]
+    Scan --> Hash["calculate_hash() (SHA-256)"]
+    Hash --> Integrity["check_integrity()"]
+    Integrity --> Valid{Valid?}
+    Valid -- Yes --> Healthy["Status: Healthy"]
+    Valid -- No --> Issues["Status: Modified/Missing"]
 ```
 
 ## API Reference
@@ -479,24 +465,24 @@ print(report)
 
 ### Architecture
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│              Medic Agent v2.0 Architecture                   │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐  │
-│  │ EvolverEngine │───→│ HealthScorer │───→│ EvolutionPlanner│ │
-│  └──────────────┘    └──────────────┘    └──────────────┘  │
-│         │                   │                   │            │
-│         ▼                   ▼                   ▼            │
-│  ┌──────────────────────────────────────────────────────┐  │
-│  │              MedicAgent (orchestrator)                │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌───────────────┐ │  │
-│  │  │ FileIntegrity│  │ LogAnalyzer │  │ ChangeManagement│ │  │
-│  │  └─────────────┘  └─────────────┘  └───────────────┘ │  │
-│  └──────────────────────────────────────────────────────┘  │
-│                                                              │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    subgraph Engine ["Medic Agent v2.0 Architecture"]
+        direction TB
+        Evolver["EvolverEngine"]
+        Scorer["HealthScorer"]
+        Planner["EvolutionPlanner"]
+    end
+
+    subgraph Core ["MedicAgent (Orchestrator)"]
+        Integrity["FileIntegrity"]
+        Analyzer["LogAnalyzer"]
+        Change["ChangeManagement"]
+    end
+
+    Evolver --> Scorer --> Planner
+    Core --> Evolver
+    Integrity & Analyzer & Change --> Core
 ```
 
 ## Additional Features
