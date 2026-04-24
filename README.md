@@ -48,7 +48,6 @@ flowchart TB
     classDef channel fill:#1a4d2e,stroke:#2d7a4a,stroke-width:2px,color:#fff
     classDef data fill:#6a3a14,stroke:#9c5822,stroke-width:2px,color:#fff
     classDef llm fill:#4a1e50,stroke:#863990,stroke-width:2px,color:#fff
-    classDef core fill:#2a507a,stroke:#4477aa,stroke-width:2px,color:#fff
     classDef intel fill:#7a5a2a,stroke:#aa7744,stroke-width:2px,color:#fff
     classDef infra fill:#3a3a3a,stroke:#666666,stroke-width:2px,color:#fff
     classDef cache fill:#8a6a12,stroke:#c9a227,stroke-width:2px,color:#fff
@@ -83,13 +82,13 @@ flowchart TB
             GapRes("🔍 Gap Researcher")
             Bench("📊 Benchmark Runner")
             Hardware("💻 Hardware Probe")
+            Caching("⚡ Semantic Cache")
         end
-    end
 
         subgraph Infra ["🏗️ Infrastructure (Phase 6)"]
             StateStore["🗄️ State Store<br/>(state_store.py)"]
             AsyncSched["⏰ Async Scheduler<br/>(async_scheduler.py)"]
-            Medic["🏥 Medic Agent<br/>(medic_agent.py)"]
+            Medic["🏥 Medic Agent<br/>(agents/medic_agent.py)"]
         end
     end
 
@@ -118,17 +117,17 @@ flowchart TB
 
     Capabilities <--> Storage
     Intel <--> Storage
+    Infra <--> Storage
 
     Agent ==> Providers
     Intel ==> Providers
 
     %% Apply Classes
     class CLI,TG,WA,WebUI,MCP channel
-    class GW,Agent,Router,ProfileCache,Tools,Sched,Swarm core
+    class GW,Agent,Router,ProfileCache,Tools,Sched,Swarm,StateStore,AsyncSched,Medic core
     class Mem,KB,Toolbox,Jobs data
     class Local,Cloud llm
-    class GapRes,Bench,Hardware intel
-    class Semantic,LRU,ConfigC cache
+    class GapRes,Bench,Hardware,Caching intel
 ```
 
 ---
