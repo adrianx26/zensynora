@@ -4,7 +4,7 @@ ToolExecutor — executes tool calls with sandboxing and audit logging.
 Extracted from Agent (Phase 4.7 decomposition).
 """
 
-from typing import Any, List, Dict
+from ._common import Any, List, Dict
 
 
 class ToolExecutor:

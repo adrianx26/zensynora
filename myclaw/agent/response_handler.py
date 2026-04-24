@@ -4,7 +4,7 @@ ResponseHandler — formats and streams responses back to the user.
 Extracted from Agent (Phase 4.7 decomposition).
 """
 
-from typing import Any, AsyncIterator
+from ._common import Any, AsyncIterator
 
 
 class ResponseHandler:

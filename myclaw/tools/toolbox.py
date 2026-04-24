@@ -3,6 +3,7 @@ Tools — TOOLBOX Skill Management
 """
 
 import asyncio
+from .async_utils import run_async
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -680,7 +681,7 @@ def benchmark_skill(skill_name: str, test_cases_json: str = "[]") -> str:
 
                 # Execute the skill
                 if inspect.iscoroutinefunction(func):
-                    result = asyncio.run(func(**args))
+                    result = run_async(func, **args)
                 else:
                     result = func(**args)
 

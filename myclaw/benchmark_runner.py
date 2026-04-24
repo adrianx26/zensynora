@@ -8,6 +8,7 @@ import time
 import json
 import re
 import logging
+from .logging import configure_logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
@@ -168,5 +169,5 @@ async def run_all_benchmarks():
     print(runner.get_comparison_table())
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    configure_logging(level=logging.INFO)
     asyncio.run(run_all_benchmarks())

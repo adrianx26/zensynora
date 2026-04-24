@@ -4,7 +4,7 @@ MessageRouter — routes incoming messages to the appropriate handler.
 Extracted from Agent (Phase 4.7 decomposition).
 """
 
-from typing import Any
+from ._common import Any
 
 
 class MessageRouter:

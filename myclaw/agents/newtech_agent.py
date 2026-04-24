@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
+from .async_utils import run_async
 
 logger = logging.getLogger(__name__)
 
@@ -563,14 +564,14 @@ def share_proposal(title: str, content: str, format: str = "gist") -> str:
     Returns:
         Share result
     """
-    import asyncio
+
     
     github_token = ""
     if config and hasattr(config, 'newtech'):
         github_token = getattr(config.newtech, 'github_token', "")
     
     agent = NewTechAgent(github_token=github_token)
-    result = asyncio.run(agent.share_to_github(content, title, format))
+    result = run_async(agent.share_to_github, content, title, format)
     
     if result.get("success"):
         return f"✅ Shared as {result.get('type')}: {title}\nURL: {result.get('url', 'N/A')}"

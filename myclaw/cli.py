@@ -73,11 +73,8 @@ def _build_registry(config) -> dict:
 @click.group()
 def cli():
     """ZenSynora (MyClaw) CLI"""
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+    from .logging import configure_logging
+    configure_logging(level=logging.INFO)
 
 @cli.command()
 def onboard():

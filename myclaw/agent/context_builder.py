@@ -4,7 +4,7 @@ ContextBuilder — assembles conversation context from memory + knowledge base.
 Extracted from Agent (Phase 4.7 decomposition).
 """
 
-from typing import Any, List, Dict
+from ._common import Any, List, Dict
 
 
 class ContextBuilder:

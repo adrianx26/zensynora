@@ -1,234 +1,251 @@
-# ZenSynora (MyClaw) 🧬
+# ZenSynora (MyClaw)
 
-**License:** AGPL-3.0 (open-source) | **Dual Licensing** available for enterprise.
-Copyright © 2026 Adrian Petrescu. All rights reserved.
+**Privacy-first personal AI agent framework.** Runs locally or in the cloud, integrates with Telegram, WhatsApp, and the Web — with persistent memory, multi-agent swarms, and a dynamic tool-building ecosystem.
 
----
+**License:** AGPL-3.0 | Dual licensing available for enterprise  
+**Version:** 0.4.1 | **Python:** 3.11+ | **Author:** Adrian Petrescu
 
-### 🛡️ Your Personal AI Agent, Everywhere.
-A high-performance, privacy-first AI agent that runs locally or in the cloud. Seamlessly integrates with **Telegram**, **WhatsApp**, and the **Web**, featuring persistent memory, multi-agent swarms, and a dynamic tool-building ecosystem.
-
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
-[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 [![CI](https://github.com/adrianx26/zensynora/actions/workflows/ci.yml/badge.svg)](https://github.com/adrianx26/zensynora/actions/workflows/ci.yml)
-[![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg)](#option-2--docker-recommended-for-production)
-[![Tests](https://img.shields.io/badge/tests-pytest-blue.svg)](CONTRIBUTING.md#testing)
-
-> **"ZenSynora doesn't just execute tasks; it evolves with you, refining its internal models of your projects and its own capabilities."**
-
----
-
-## ✨ Key Features
-
-### 🧠 Core Intelligence
-- **LLM Agnostic** — Native support for [Ollama](https://github.com/ollama/ollama), OpenAI, Anthropic, Gemini, Groq, and OpenRouter.
-- **Persistent Memory** — SQLite-backed conversation history with per-user isolation and semantic retrieval.
-- **Intelligent Routing** — Automatically upgrades to premium models for complex reasoning while using local models for simple tasks.
-
-### 🛠️ Advanced Ecosystem
-- **Natively Integrated Web UI** — Beautiful glassmorphism dashboard with real-time FastAPI WebSockets.
-- **🐝 Agent Swarms** — Coordinate multiple agents using Parallel, Sequential, Hierarchical, or Voting strategies.
-- **Full MCP Support** — Operates as both an MCP Client and Server, enabling compatibility with Cursor, Claude, and ClawHub.ai.
-- **Dynamic Tool Building** — The agent can create, test, and register new Python tools at runtime in its secure **TOOLBOX**.
-
-### 🏥 System Resilience
-- **Medic Agent** — Self-healing system health monitoring, integrity verification, and change management with approval workflows.
-- **Hardware Awareness** — Deep telemetry (CPU/GPU/NPU) with intelligence-driven optimization suggestions.
+[![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-pytest-blue.svg)](https://github.com/adrianx26/zensynora/actions/workflows/ci.yml)
+[![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg)](#-docker)
 
 ---
 
-## 🏗️ Architecture
+## What is ZenSynora?
 
-ZenSynora is built for modularity and performance, featuring a multi-layered optimization engine and a secure tool execution pipeline.
+ZenSynora is a high-performance AI agent framework built for developers and power users who want full control over their AI stack. It connects to any LLM provider (local or cloud), persists conversation history and knowledge across sessions, and can coordinate multiple specialized agents to work together on complex tasks.
 
-```mermaid
-flowchart TB
-    %% Styling
-    classDef core fill:#2a507a,stroke:#4477aa,stroke-width:2px,color:#fff
-    classDef channel fill:#1a4d2e,stroke:#2d7a4a,stroke-width:2px,color:#fff
-    classDef data fill:#6a3a14,stroke:#9c5822,stroke-width:2px,color:#fff
-    classDef llm fill:#4a1e50,stroke:#863990,stroke-width:2px,color:#fff
-    classDef core fill:#2a507a,stroke:#4477aa,stroke-width:2px,color:#fff
-    classDef intel fill:#7a5a2a,stroke:#aa7744,stroke-width:2px,color:#fff
-    classDef infra fill:#3a3a3a,stroke:#666666,stroke-width:2px,color:#fff
-    classDef cache fill:#8a6a12,stroke:#c9a227,stroke-width:2px,color:#fff
+> *"ZenSynora doesn't just execute tasks; it evolves with you, refining its models of your projects and its own capabilities."*
 
-    %% Channels
-    subgraph Interfaces [External Interfaces]
-        direction LR
-        CLI(["🖥️ CLI"])
-        TG(["📱 Telegram"])
-        WA(["💬 WhatsApp"])
-        WebUI(["🌐 Web UI"])
-        MCP(["🔌 MCP Hub"])
-    end
+---
 
-    %% Core Application
-    subgraph Platform [ZenSynora Platform]
-        GW{"Gateway Router"}
+## Key Features
 
-        subgraph CoreAgent [🧠 Core Agent & Optimization]
-            Agent("Agent Engine")
-            Router("🛤️ Intelligent Router")
-            ProfileCache("📋 Profile Cache")
-        end
+### LLM Agnostic
+Connect to any provider — **Ollama**, **OpenAI**, **Anthropic**, **Google Gemini**, **Groq**, **OpenRouter** — or mix and match. An intelligent router automatically selects the right model for each task.
 
-        subgraph Capabilities [Capabilities]
-            Tools["🛠️ Dynamic Tools"]
-            Sched("⏱️ Task Scheduler")
-            Swarm("🐝 Swarm Orchestrator")
-        end
+### Persistent Memory & Knowledge
+- **SQLite-backed memory** with per-user isolation, semantic retrieval, and BM25 ranking
+- **Knowledge base** with FTS5 full-text search, entity graph, and automatic relation mapping
+- **Gap Researcher** — a background agent that fills information gaps via web search
 
-        subgraph Intel [Intelligence Platform]
-            GapRes("🔍 Gap Researcher")
-            Bench("📊 Benchmark Runner")
-            Hardware("💻 Hardware Probe")
-        end
-    end
+### Multi-Agent Swarms
+Coordinate 136+ specialized agents across 10 categories using **Parallel**, **Sequential**, **Hierarchical**, or **Voting** strategies.
 
-        subgraph Infra ["🏗️ Infrastructure (Phase 6)"]
-            StateStore["🗄️ State Store<br/>(state_store.py)"]
-            AsyncSched["⏰ Async Scheduler<br/>(async_scheduler.py)"]
-            Medic["🏥 Medic Agent<br/>(medic_agent.py)"]
-        end
-    end
+### Dynamic Tool Ecosystem
+- Agent can **create, test, and register new Python tools at runtime**
+- Built-in tools: filesystem, shell (sandboxed), hardware telemetry, knowledge management, scheduling
+- **MCP Client & Server** — works with Cursor, Claude Desktop, ClawHub.ai
 
-    %% Data Layer
-    subgraph Storage [Persistent Storage]
-        direction LR
-        Mem[("💾 Memory")]
-        KB[("📚 Knowledge Base")]
-        Toolbox[("🔧 ToolBox")]
-        Jobs[("📋 Scheduled Jobs")]
-    end
+### Channels
+Connect to **Telegram**, **WhatsApp**, **Web UI**, and **CLI** simultaneously via a unified gateway.
 
-    %% LLM Providers
-    subgraph Providers [AI Providers]
-        direction LR
-        Local("💻 Local Models")
-        Cloud("☁️ Cloud APIs")
-    end
+### System Resilience
+- **Medic Agent** — self-healing health monitoring, integrity verification, change management with approval workflows
+- **Task Timer** — 300-second timeout with progressive status updates and automatic failure handling
 
-    %% Connections
-    Interfaces ==> GW
-    GW ==> Agent
-    Agent <--> Capabilities
-    Agent <--> Intel
-    Agent -.-> Caching
+### Security
+Command sandboxing, path validation, SSRF protection, HMAC-signed audit logs, and MFA for admin endpoints.
 
-    Capabilities <--> Storage
-    Intel <--> Storage
+---
 
-    Agent ==> Providers
-    Intel ==> Providers
+## Architecture
 
-    %% Apply Classes
-    class CLI,TG,WA,WebUI,MCP channel
-    class GW,Agent,Router,ProfileCache,Tools,Sched,Swarm core
-    class Mem,KB,Toolbox,Jobs data
-    class Local,Cloud llm
-    class GapRes,Bench,Hardware intel
-    class Semantic,LRU,ConfigC cache
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  Interfaces  │   CLI   │  Telegram  │  WhatsApp  │  Web UI    │
+└───────┬───────┴─────────┴────────────┴───────────┴─────╮───────┘
+        │                                                 │
+        └───────────────┐           ┌───────────────────┘
+                        ▼           ▼
+              ┌─────────────────────────┐
+              │     Gateway Router      │
+              └────────────┬────────────┘
+                           ▼
+         ┌──────────────────────────────┐
+         │     Agent Core               │
+         │  ┌────────┐ ┌────────────┐  │
+         │  │Profile │ │ Intelligent │  │
+         │  │ Cache  │ │   Router    │  │
+         │  │ (LRU)  │ └────────────┘  │
+         │  └────────┘                  │
+         │  ┌────────┐ ┌────────────┐  │
+         │  │ Swarms│ │   Tools     │  │
+         │  │🐝     │ │   🛠️       │  │
+         │  └────────┘ └────────────┘  │
+         └──────────────┬───────────────┘
+                        ▼
+ ┌──────────┐  ┌──────────────────┐  ┌──────────────────┐
+ │  Memory  │  │   Knowledge      │  │   Providers      │
+ │  💾      │  │   📚             │  │   🤖             │
+ │ (SQLite) │  │   (DB + Graph)   │  │ (Ollama/OpenAI/  │
+ └──────────┘  └──────────────────┘  │  Anthropic/etc.) │
+                                     └──────────────────┘
 ```
 
+Full architecture details are documented in [`docs/architecture_with_optimizations.md`](docs/architecture_with_optimizations.md).
+
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Prerequisites
 - Python 3.11+
-- [Ollama](https://github.com/ollama/ollama) (for local models) or API keys for Cloud Providers.
+- At least one LLM provider (Ollama for local, or API keys for cloud)
 
-### Option 1 — Easy Install (Recommended)
+### Install
 
 ```bash
 git clone https://github.com/adrianx26/zensynora.git
 cd zensynora
 
-# Install core with all providers and features
+# Core + all LLM providers
 pip install -e ".[all]"
 
-# Run onboarding wizard
+# Run the setup wizard
 zensynora onboard
 ```
 
-### Option 2 — Docker (Production Ready)
+### Run
+
+| Command | Description |
+|---------|-------------|
+| `zensynora agent` | Interactive CLI chat |
+| `zensynora gateway` | Start Telegram/WhatsApp bots |
+| `zensynora webui` | Launch the browser dashboard |
+| `zensynora benchmark` | Test model latency and accuracy |
+
+### Docker
 
 ```bash
 cp .env.example .env
-# Edit .env with your keys
+# Edit .env with your API keys
 docker compose up -d --build
 ```
 
 ---
 
-## 🛠️ Usage & Commands
+## Built-in Tools
 
-| Mode | Command | Description |
-|------|---------|-------------|
-| 🖥️ **Console** | `zensynora agent` | Interactive CLI chat |
-| 📱 **Gateway** | `zensynora gateway` | Start Telegram/WhatsApp bots |
-| 🌐 **Web UI** | `zensynora webui` | Launch the browser dashboard |
-| 🛠️ **Onboard** | `zensynora onboard` | Initial configuration wizard |
-| 📊 **Benchmark** | `zensynora benchmark` | Test model latency and accuracy |
+| Tool | Description |
+|------|-------------|
+| `read_file` / `write_file` / `download_file` | Filesystem operations |
+| `shell` | Securely sandboxed command execution |
+| `hardware` | CPU/GPU/NPU telemetry |
+| `search_knowledge` / `write_to_knowledge` / `sync_knowledge_base` | Knowledge base management |
+| `delegate` / `swarm_create` / `swarm_assign` | Multi-agent collaboration |
+| `schedule` / `list_schedules` / `cancel_schedule` | Task scheduling |
+| `nlp_schedule` | Natural language scheduling ("in 5 minutes", "every Monday at 9pm") |
+| `browse` | Web content fetching with Wayback Machine fallback |
 
-### 🧩 Available Tools
-- **Filesystem**: `read_file`, `write_file`, `download_file`
-- **System**: `shell` (securely sandboxed), `hardware`
-- **Knowledge**: `search_knowledge`, `write_to_knowledge`, `sync_knowledge_base`
-- **Collaboration**: `delegate`, `swarm_create`, `swarm_assign`
-- **Automation**: `schedule`, `list_schedules`, `cancel_schedule`
+See [`docs/agent_catalog.md`](docs/agent_catalog.md) for the 136+ specialized agent registry.
 
 ---
 
-## 🧠 Advanced Capabilities
+## Agent Swarms
 
-### 📚 Knowledge Base
-ZenSynora utilizes a hybrid Markdown/SQLite storage system.
-- **Search**: FTS5-powered full-text search across all notes.
-- **Graph**: Automatic relation mapping between entities.
-- **Research**: Background "Gap Researcher" fills information gaps using the Scrapling engine.
+Enable complex collaboration between specialized agents:
 
-### 🐝 Agent Swarms
-Enable complex collaboration between specialized agents.
-- **Sequential**: Pipeline workflows (e.g., Draft -> Edit -> Publish).
-- **Parallel**: Multi-perspective brainstorming.
-- **Voting**: Consensus-driven decision making.
+```python
+from myclaw.swarm import SwarmConfig, SwarmStrategy
 
----
+swarm = SwarmConfig(
+    name="api-development-team",
+    strategy=SwarmStrategy.HIERARCHICAL,
+    workers=["api-designer", "backend-developer", "code-reviewer"],
+    coordinator="fullstack-developer"
+)
+```
 
-## 🔒 Security & Safety
-Security is not an afterthought; it's the foundation of ZenSynora.
-- **Command Sandboxing** — Strict allowlist/blocklist for shell execution.
-- **Path Validation** — Prevents directory traversal attacks.
-- **SSRF Protection** — Blocks access to private IP ranges in web tools.
-- **Audit Logs** — Tamper-evident HMAC-SHA256 signed entries for every action.
-- **MFA & Auth** — TOTP Multi-factor authentication for admin endpoints.
+Strategies:
+- **Sequential** — Pipeline workflows (Draft → Edit → Publish)
+- **Parallel** — Multi-perspective brainstorming
+- **Voting** — Consensus-driven decision making
+- **Hierarchical** — Coordinator + specialized workers
 
 ---
 
-## 🗺️ Roadmap
+## Configuration
 
-- [x] **v0.4.1** — Security hardening, Async migration, and Performance overhaul.
-- [ ] **Phase 8** — Plugin system, streaming tool execution, and webhook mode.
-- [ ] **Phase 9** — Discord & Slack integration, Enterprise role-based access control.
+ZenSynora is configured via `~/.myclaw/config.yaml` or environment variables:
 
----
+```bash
+MYCLAW_DEFAULT_PROVIDER=ollama
+MYCLAW_DEFAULT_MODEL=llama3.2
+MYCLAW_TELEGRAM_TOKEN=your-token
+MYCLAW_OPENAI_API_KEY=your-key
+```
 
-## 🤝 Contributing
-Contributions are what make the open-source community an amazing place to learn, inspire, and create.
-1. Fork the Project
-2. Create your Feature Branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your Changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the Branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+See [`.env.example`](.env.example) for all 50+ configurable variables.
 
 ---
 
-## 📜 License
-Distributed under the **AGPL-3.0 License**. See `LICENSE` for more information. Dual-licensing is available for commercial use.
+## Project Structure
+
+```
+zensynora/
+├── myclaw/                    # Core Python package
+│   ├── agent.py               # Main agent logic (think, think_stream)
+│   ├── provider.py            # LLM provider abstraction
+│   ├── memory.py              # SQLite-backed conversation memory
+│   ├── config.py              # Configuration management
+│   ├── gateway.py             # Telegram/WhatsApp gateway
+│   ├── tools.py               # Built-in tool definitions
+│   ├── agents/                # Specialized agents (medic, newtech, skill_adapter)
+│   ├── agent_profiles/       # Agent personality & role definitions
+│   ├── knowledge/            # Knowledge base (db, graph, storage, sync)
+│   ├── swarm/                # Multi-agent swarm orchestration
+│   ├── channels/              # Telegram, WhatsApp implementations
+│   ├── backends/             # SSH, Docker, WSL2, hardware probes
+│   └── mcp/                   # MCP client & server
+├── webui/                     # FastAPI + React browser dashboard
+├── docs/                      # User & developer documentation
+│   └── dev/                   # Development plans & analysis
+├── eval/                      # Evaluation & benchmarking scripts
+├── tests/                     # Unit & integration tests
+├── cli.py                     # CLI entry point
+├── onboard.py                # Setup wizard
+└── pyproject.toml             # Python packaging config
+```
 
 ---
 
-**Developed by Adrian Petrescu.**
-[GitHub](https://github.com/adrianx26) | [Website](https://zensynora.com) *(Coming Soon)*
+## Roadmap
+
+| Phase | Status | Description |
+|-------|--------|-------------|
+| v0.4.1 | ✅ | Security hardening, Async migration, Performance overhaul |
+| Phase 7 | 🔄 | Plugin system, streaming tool execution, webhook mode |
+| Phase 8 | ⏳ | Discord & Slack integration, Enterprise RBAC |
+| Phase 9 | ⏳ | Multi-tenancy, Advanced analytics dashboard |
+
+See [`CHANGELOG.md`](CHANGELOG.md) for full release history.
+
+---
+
+## Contributing
+
+Contributions are welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup instructions, coding standards, testing guide, and commit conventions.
+
+```bash
+# Install dev dependencies
+pip install -e ".[dev]"
+pre-commit install
+
+# Run tests
+pytest
+
+# Lint & format
+ruff check . --fix
+ruff format .
+```
+
+---
+
+## License
+
+Distributed under **AGPL-3.0**. Dual-licensing available for commercial use. See [`LICENSE`](LICENSE).
+
+**Developed by Adrian Petrescu**  
+[GitHub](https://github.com/adrianx26) · [Website](https://zensynora.com) *(Coming Soon)*
