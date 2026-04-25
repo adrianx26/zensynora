@@ -92,7 +92,7 @@ This document outlines optimization opportunities for the Zensynora codebase bas
 **Changes Made:**
 1. Replaced direct `from .tools import TOOL_SCHEMAS` with lazy import function `_get_tool_schemas()`
 2. Added module-level cache `_TOOL_SCHEMAS_CACHE` to avoid repeated imports
-3. Function-level import prevents circular dependency between `provider.py` and `tools.py`
+3. Function-level import prevents circular dependency between `provider.py` and `tools/`
 
 #### ✅ B. Duplicate Index Creation - ALREADY IMPLEMENTED
 **File:** `myclaw/knowledge/db.py:115-128` and `123`
@@ -449,7 +449,7 @@ def get_provider(config, provider_name: str = "ollama"):
 ## 9. Documentation Improvements
 
 ### 9.1 Module Docstrings
-**Files:** `myclaw/agent.py`, `myclaw/memory.py`, `myclaw/tools.py`, `myclaw/config.py`, `myclaw/gateway.py`
+**Files:** `myclaw/agent.py`, `myclaw/memory.py`, `myclaw/tools/`, `myclaw/config.py`, `myclaw/gateway.py`
 **Status:** ✅ **IMPLEMENTED**
 
 **Added comprehensive module docstrings with:**
@@ -512,7 +512,7 @@ sentence-transformers>=2.2.2
 | `myclaw/agent.py` | Async profile loading, LRU cache, streaming optimization, module docstring |
 | `myclaw/knowledge/db.py` | Batch entity fetch, FTS5 rank optimization, WAL checkpoint, module docstring |
 | `myclaw/knowledge/graph.py` | N+1 query fix using batch method |
-| `myclaw/tools.py` | Module docstring |
+| `myclaw/tools/` | Module docstring |
 | `myclaw/config.py` | Thread-safe config loading, module docstring |
 | `myclaw/gateway.py` | Non-blocking executor shutdown, module docstring |
 | `myclaw/swarm/orchestrator.py` | Type hint fix |

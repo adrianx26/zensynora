@@ -435,7 +435,7 @@ flowchart TD
 | `test_memory_batching.py` | Batching, pool, search | 3 | 10+ |
 | `test_tool_rate_limiting.py` | Token bucket limiting | 2 | 12+ |
 | `test_agent.py` (enhanced) | Knowledge gap handling | 6 | 25+ |
-| `test_tools.py` (enhanced) | Browse error handling | 4 | 16+ |
+| `test_tools/` (enhanced) | Browse error handling | 4 | 16+ |
 | **Total** | **Critical paths** | **19** | **88+** |
 
 ## Configuration

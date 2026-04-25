@@ -9,7 +9,7 @@ zensynora/
 │   ├── memory.py
 │   ├── provider.py
 │   ├── skills.md
-│   ├── tools.py
+│   ├── tools/
 │   ├── channels/
 │   │   ├── __init__.py
 │   │   ├── telegram.py
@@ -101,7 +101,7 @@ zensynora/
 │   ├── test_knowledge.py
 │   ├── test_memory.py
 │   ├── test_security.py
-│   └── test_tools.py
+│   └── test_tools/
 ├── webui/
 ├── Scrapling/
 ├── .gitignore

@@ -8,7 +8,7 @@ Based on comparison with Hermes Agent and inspiration from OpenClaw, this plan o
 ## PHASE 1: Quick Wins (8 hours) ✅ COMPLETED
 
 ### 1.1 Plugin Lifecycle Hooks (~2 hours) ✅
-**File:** `myclaw/tools.py`
+**File:** `myclaw/tools/`
 
 Add hooks system for extensibility:
 - `HOOKS = {'pre_llm_call': [], 'post_llm_call': [], 'on_session_start': [], 'on_session_end': []}`
@@ -25,7 +25,7 @@ Improve existing summarization (line 234+):
 - Include important decisions/actions in summary
 
 ### 1.3 Natural Language Scheduling (~3 hours) ✅
-**File:** `myclaw/tools.py`
+**File:** `myclaw/tools/`
 
 Add `_parse_natural_schedule()` function supporting:
 - "at 8 AM daily"
@@ -45,13 +45,13 @@ Improve FTS5 queries in `search()` method:
 ## PHASE 2: Skill System Evolution (12 hours) ✅ COMPLETED
 
 ### 2.1 Skill Metadata Structure (~2 hours) ✅
-**File:** `myclaw/tools.py`
+**File:** `myclaw/tools/`
 
 Updated `TOOLBOX_REG` schema:
 - name, version, description, tags, author, created, last_modified, eval_score, eval_count, enabled
 
 ### 2.2 Skill Evaluation Harness (~4 hours) ✅
-**File:** `myclaw/tools.py`
+**File:** `myclaw/tools/`
 
 Added functions:
 - `get_skill_info(skill_name)` - detailed skill info
@@ -62,7 +62,7 @@ Added functions:
 - `evaluate_skill(skill_name)` - basic sanity checks
 
 ### 2.3 Skill Self-Improvement (~6 hours) ✅
-**File:** `myclaw/tools.py`
+**File:** `myclaw/tools/`
 
 - `improve_skill(name, improved_code)` - replace skill with safety checks
 - Version increment on update (patch)
@@ -75,7 +75,7 @@ Added functions:
 ## PHASE 3: Memory & Learning (7 hours) ✅ COMPLETED
 
 ### 3.1 Periodic Session Reflection (~3 hours) ✅
-**File:** `myclaw/tools.py`
+**File:** `myclaw/tools/`
 
 Added functions:
 - `schedule_daily_reflection(user_id, hour, minute)` - schedules daily analysis
@@ -85,7 +85,7 @@ Added functions:
 ### 3.2 User Dialectic Profile (~4 hours) ✅
 **New File:** `myclaw/profiles/user_dialectic.md`
 **File:** `myclaw/agent.py` (updated)
-**File:** `myclaw/tools.py` (updated)
+**File:** `myclaw/tools/` (updated)
 
 - Created `user_dialectic.md` template
 - Agent loads profile on startup and appends to system prompt
@@ -277,7 +277,7 @@ See [docs/architecture_with_optimizations.md](architecture_with_optimizations.md
 - `myclaw/memory.py` - Idle cleanup, input sanitization, docstring
 - `myclaw/agent.py` - Async loading, LRU cache, string optimization, docstring
 - `myclaw/gateway.py` - Non-blocking shutdown, docstring
-- `myclaw/tools.py` - Module docstring
+- `myclaw/tools/` - Module docstring
 - `myclaw/config.py` - Thread-safe loading, docstring
 
 **Knowledge:**

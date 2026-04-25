@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `whatsapp` field to `ChannelsConfig`
   - Environment variable overrides: `MYCLAW_WHATSAPP_PHONE_NUMBER_ID`, `MYCLAW_WHATSAPP_BUSINESS_ACCOUNT_ID`, `MYCLAW_WHATSAPP_ACCESS_TOKEN`, `MYCLAW_WHATSAPP_VERIFY_TOKEN`
 
-- **Channel-Agnostic Notification System** (`myclaw/tools.py`)
+- **Channel-Agnostic Notification System** (`myclaw/tools/`)
   - New `set_notification_callback()` function for registering async notification handlers
   - Updated `_create_job_internal()` to try notification callback before falling back to Telegram bot
   - Updated `schedule()` error message to be channel-agnostic
@@ -124,7 +124,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Backward compatible - falls back to entities-only search if observations FTS unavailable
   - Triggers added to keep observations FTS in sync with changes
 
-- **Consolidate Tool Schemas** (`myclaw/tools.py`, `myclaw/provider.py`)
+- **Consolidate Tool Schemas** (`myclaw/tools/`, `myclaw/provider.py`)
   - Moved `TOOL_SCHEMAS` definition from `provider.py` to `tools.py`
   - `provider.py` now imports `TOOL_SCHEMAS` from `tools` module
   - Single source of truth for tool schema definitions
@@ -165,7 +165,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Providers are only initialized when first requested
   - Added `clear_provider_cache()` function for testing/config changes
 
-- **Runtime Command Allowlist** (`myclaw/tools.py`)
+- **Runtime Command Allowlist** (`myclaw/tools/`)
   - Added mutable command allowlist (`_allowed_commands_set`)
   - Added `add_allowed_command()` function
   - Added `remove_allowed_command()` function
@@ -232,7 +232,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Thread-safe with `_profile_cache_lock`
   - FIFO cache eviction (max 100 entries)
 
-- **Shell Timeout Configuration** (`myclaw/tools.py`, `myclaw/config.py`)
+- **Shell Timeout Configuration** (`myclaw/tools/`, `myclaw/config.py`)
   - Added `set_config()` function in tools.py
   - Configurable via `config.timeouts.shell_seconds`
   - Default: 30 seconds

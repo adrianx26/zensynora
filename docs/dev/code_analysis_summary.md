@@ -6,7 +6,7 @@ After reviewing all 38 Python files in the codebase, here are my findings:
 
 | Component | Lines | Status |
 |-----------|-------|--------|
-| tools.py | 3,050 | ✅ Complete + parallel executor |
+| tools/ (decomposed) | 3,050+ | ✅ Complete + parallel executor |
 | provider.py | 780 | ✅ Multi-provider + semantic cache |
 | memory.py | 588 | ✅ Async SQLite (aiosqlite) |
 | agent.py | 500 | ✅ Lazy loading + parallel tools |
@@ -40,7 +40,7 @@ After reviewing all 38 Python files in the codebase, here are my findings:
   - `_get_memory()` is now async
   - All `mem.add()` and `mem.get_history()` calls use `await`
   - Updated `close()`, `__enter__`, `__exit__` to async
-- Updated `myclaw/tools.py`:
+- Updated `myclaw/tools/`:
   - `get_session_insights()` uses `run_until_complete()` for sync context
   - `extract_user_preferences()` uses `run_until_complete()` for sync context
 - Updated `tests/test_memory.py` with async test fixtures and methods
@@ -83,7 +83,7 @@ After reviewing all 38 Python files in the codebase, here are my findings:
 ### Optimization #3: Parallel Tool Execution - ✅ IMPLEMENTED
 
 **Changes Made:**
-- Created `ParallelToolExecutor` class in `myclaw/tools.py`:
+- Created `ParallelToolExecutor` class in `myclaw/tools/`:
   - Uses `asyncio.gather()` to execute independent tools concurrently
   - Semaphore-based concurrency limiting (default max 5 concurrent)
   - Configurable timeout (default 30s)

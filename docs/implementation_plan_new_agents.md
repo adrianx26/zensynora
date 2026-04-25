@@ -17,7 +17,7 @@ This plan addresses the following requirements:
 **Implementation Summary:**
 - `myclaw/agents/__init__.py` - Package initialized with SkillAdapter export
 - `myclaw/agents/skill_adapter.py` - Full SkillAdapter class with all methods
-- Tools registered in `tools.py` lines 2792-2795
+- Tools registered in `myclaw/tools/` lines 2792-2795
 - Documentation: `docs/skill_adapter_guide.md`
 - Architecture diagram updated with Skill Adapter component
 
@@ -43,7 +43,7 @@ This plan addresses the following requirements:
   - `handle_timeout()` - Timeout handling
   - `get_health_report()` - Formatted health report
 - `myclaw/agents/__init__.py` - Updated with MedicAgent export
-- Tools registered in `tools.py` lines 2797-2808
+- Tools registered in `myclaw/tools/` lines 2797-2808
 - Documentation: `docs/medic_agent_guide.md`
 
 ---
@@ -120,7 +120,7 @@ def prevent_infinite_loop() -> str  # Returns status
 
 **Implementation Summary:**
 - `myclaw/agents/newtech_agent.py` - Full NewTechAgent class
-- Tools registered in `tools.py` lines 2833-2842
+- Tools registered in `myclaw/tools/` lines 2833-2842
 - Documentation: `docs/newtech_agent_guide.md`
 
 ---
@@ -283,7 +283,7 @@ BACKEND_CONFIG = {
 |---|------|------|---------|
 | 5.1.1 | Update agent initialization | `myclaw/agent.py` | Load new agents on startup |
 | 5.1.2 | Add lifecycle hooks for medic | agent.py | Integrate with think() pipeline |
-| 5.1.3 | Update tools registry | tools.py | Register all new tools |
+| 5.1.3 | Update tools registry | myclaw/tools/ | Register all new tools |
 
 ### 5.2 Testing
 
@@ -356,7 +356,7 @@ Phase 5 (Integration)
 - `docs/backends_guide.md`
 
 **Modified Files:**
-- `myclaw/tools.py` - Register new tools
+- `myclaw/myclaw/tools/` - Register new tools
 - `myclaw/config.py` - Add new config options
 - `myclaw/agent.py` - Agent initialization
 - `myclaw/gateway.py` - Backend integration

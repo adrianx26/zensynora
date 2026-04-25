@@ -34,7 +34,7 @@ This implementation adds comprehensive knowledge base empty-result handling, str
 **New Logger:**
 - `kb_gap_logger = logging.getLogger("myclaw.knowledge.gaps")`
 
-#### `myclaw/tools.py`
+#### `myclaw/tools/`
 **New Functions:**
 - `_extract_search_terms()` - Search term suggestion helper
 
@@ -55,7 +55,7 @@ This implementation adds comprehensive knowledge base empty-result handling, str
 
 **Total:** 25 new tests
 
-#### `tests/test_tools.py` (Enhanced)
+#### `tests/test_tools/` (Enhanced)
 **New Test Classes:**
 - `TestBrowseErrorHandling` (9 tests)
 - `TestExtractSearchTerms` (5 tests)
@@ -260,8 +260,8 @@ Run the new tests:
 ```bash
 python -m pytest tests/test_agent.py::TestKnowledgeGapCache -v
 python -m pytest tests/test_agent.py::TestSearchKnowledgeContext -v
-python -m pytest tests/test_tools.py::TestBrowseErrorHandling -v
-python -m pytest tests/test_tools.py::TestSearchKnowledgeEnhancement -v
+python -m pytest tests/test_tools/::TestBrowseErrorHandling -v
+python -m pytest tests/test_tools/::TestSearchKnowledgeEnhancement -v
 ```
 
 All tests pass with deprecation warnings only (not errors).

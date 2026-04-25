@@ -117,7 +117,7 @@ from myclaw.agents.medic_agent import scan_files
 result = scan_files()
 
 # Scan specific files
-result = scan_files("myclaw/agent.py,myclaw/tools.py,myclaw/config.py")
+result = scan_files("myclaw/agent.py,myclaw/tools/,myclaw/config.py")
 ```
 
 **Output:**

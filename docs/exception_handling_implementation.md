@@ -83,7 +83,7 @@ raise ProviderAuthenticationError(
 | File | Changes |
 |------|---------|
 | `myclaw/exceptions.py` | Expanded from 8 to 35+ exception classes |
-| `myclaw/tools.py` | Updated to use `ToolValidationError`, `ToolPermissionError` |
+| `myclaw/tools/` | Updated to use `ToolValidationError`, `ToolPermissionError` |
 | `myclaw/provider.py` | Updated to use `ProviderTimeoutError`, `ProviderConnectionError`, `ProviderAuthenticationError`, `ProviderNotFoundError` |
 | `myclaw/swarm/orchestrator.py` | Updated to use `SwarmError`, `SwarmNotFoundError`, `SwarmConcurrencyError`, `AgentNotFoundError` |
 | `myclaw/swarm/models.py` | Updated to use `SwarmValidationError` |

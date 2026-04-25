@@ -43,7 +43,7 @@
 
 ---
 
-### myclaw/tools.py
+### myclaw/tools/
 
 **Main Functions:**
 - `get_tools()` — Get list of all available tools

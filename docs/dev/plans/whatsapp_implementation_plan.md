@@ -56,7 +56,7 @@ flowchart TD
 |------|---------|
 | [`myclaw/config.py`](myclaw/config.py) | Added `WhatsAppConfig` model, added `whatsapp` to `ChannelsConfig`, added env var overrides for WhatsApp credentials |
 | [`myclaw/gateway.py`](myclaw/gateway.py) | Added WhatsApp channel import and startup logic |
-| [`myclaw/tools.py`](myclaw/tools.py) | Added `set_notification_callback()` for channel-agnostic scheduled job notifications; updated `_create_job_internal` to use callback when available |
+| [`myclaw/tools/`](myclaw/tools/) | Added `set_notification_callback()` for channel-agnostic scheduled job notifications; updated `_create_job_internal` to use callback when available |
 | [`requirements.txt`](requirements.txt) | Added `fastapi>=0.100.0` and `uvicorn>=0.23.0` |
 
 ## Configuration
@@ -210,10 +210,10 @@ Same as Telegram — prefix messages with `@agentname`:
 
 ### Notification System
 
-The implementation adds a channel-agnostic notification callback to [`tools.py`](myclaw/tools.py):
+The implementation adds a channel-agnostic notification callback to [`tools.py`](myclaw/tools/):
 
-- [`set_notification_callback(callback)`](myclaw/tools.py:66) — registers an async callback function
-- [`_create_job_internal()`](myclaw/tools.py:564) — updated to try the callback first, then fall back to Telegram's `context.bot.send_message`
+- [`set_notification_callback(callback)`](myclaw/tools/:66) — registers an async callback function
+- [`_create_job_internal()`](myclaw/tools/:564) — updated to try the callback first, then fall back to Telegram's `context.bot.send_message`
 
 This ensures scheduled jobs can send results back to WhatsApp users without depending on Telegram's bot object.
 

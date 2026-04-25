@@ -428,7 +428,7 @@ class TimeoutConfig(BaseModel):
     http_seconds: int = 30
 ```
 
-#### File: `myclaw/tools.py` - Modify shell function
+#### File: `myclaw/tools/` - Modify shell function
 
 ```python
 # Add module-level config reference
@@ -518,7 +518,7 @@ def detect_changes(user_id: str = "default") -> Tuple[List[Path], List[str], Lis
 | SQLite Connection Pool | `myclaw/memory.py` | Medium |
 | Env Variable Overrides | `myclaw/config.py` | Low |
 | Profile Caching | `myclaw/agent.py` | Low |
-| Shell Timeout Config | `myclaw/config.py`, `myclaw/tools.py` | Low |
+| Shell Timeout Config | `myclaw/config.py`, `myclaw/tools/` | Low |
 | Knowledge Sync Cache | `myclaw/knowledge/sync.py` | Low |
 
 ---

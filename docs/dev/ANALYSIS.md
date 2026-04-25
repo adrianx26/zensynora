@@ -47,7 +47,7 @@ swarm_assign("swarm_xxx", "Research AI developments")
 
 ### 1. Arbitrary Shell Command Execution
 **Status**: ✅ FIXED
-**Resolution**: The agent now employs a strict command allowlist (`ALLOWED_COMMANDS`) and blocklist within `myclaw/tools.py`.
+**Resolution**: The agent now employs a strict command allowlist (`ALLOWED_COMMANDS`) and blocklist within `myclaw/tools/`.
 
 ### 2. Arbitrary File Access
 **Status**: ✅ FIXED
@@ -167,7 +167,7 @@ myclaw/
 │   ├── config.py                # Config loading with Pydantic validation
 │   ├── memory.py            # SQLite persistence
 │   ├── provider.py          # API Client abstraction with swarm schemas
-│   ├── tools.py             # Shell, files, network, tasks, rules, SWARM TOOLS
+│   ├── tools/              # Shell, files, network, tasks, rules, SWARM TOOLS
 │   ├── agent.py             # Main agent routing with swarm context
 │   ├── gateway.py               # Channel endpoints
 │   ├── skills.md                # Agent skills and toolbox definitions

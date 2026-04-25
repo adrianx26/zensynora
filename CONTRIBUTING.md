@@ -71,7 +71,7 @@ zensynora/
 │   ├── gateway.py          # Telegram/WhatsApp gateways
 │   ├── memory.py           # SQLite memory system
 │   ├── provider.py         # LLM provider abstraction
-│   ├── tools.py            # Built-in tool definitions
+│   ├── tools/               # Tool system (shell, files, web, kb, scheduler, swarm, toolbox)
 │   ├── channels/           # Messaging channel implementations
 │   ├── knowledge/          # Knowledge base (DB, graph, parser)
 │   ├── profiles/           # Agent personality profiles
@@ -145,7 +145,7 @@ isort .
 Tools are the primary way to extend ZenSynora's capabilities.
 
 ### 1. Define the Tool Function
-Create a new function in `myclaw/tools.py` (or a new file if it's a large module):
+Create a new function in `myclaw/tools/` (add to appropriate module or create new one):
 
 ```python
 from myclaw.exceptions import ToolError
@@ -191,7 +191,7 @@ TOOL_DESCRIPTIONS = {
 ```
 
 ### 3. Add Tests
-Create tests in `tests/test_tools.py` or a new test file:
+Create tests in `tests/test_tools/` directory or a new test file:
 
 ```python
 def test_my_new_tool():

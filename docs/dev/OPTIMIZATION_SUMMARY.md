@@ -37,7 +37,7 @@ A comprehensive optimization initiative was completed, implementing 21 performan
 | `myclaw/knowledge/db.py` | Batch entity query; FTS5 rank optimization; WAL checkpoint; module docstring |
 | `myclaw/knowledge/graph.py` | N+1 query fix using batch fetching |
 | `myclaw/gateway.py` | Non-blocking executor shutdown; module docstring |
-| `myclaw/tools.py` | Module docstring |
+| `myclaw/tools/` | Module docstring |
 | `myclaw/config.py` | Thread-safe config loading; module docstring |
 | `myclaw/swarm/orchestrator.py` | Type hint improvements |
 | `requirements.txt` | Reorganized with optional dependency sections |
@@ -220,7 +220,7 @@ except ImportError:
 Comprehensive docstrings added to:
 - `myclaw/agent.py` - Agent class, capabilities, usage
 - `myclaw/memory.py` - Memory system, features, usage
-- `myclaw/tools.py` - Tool system, built-in tools, usage
+- `myclaw/tools/` - Tool system, built-in tools, usage
 - `myclaw/config.py` - Configuration system, usage
 - `myclaw/gateway.py` - Application entry point, initialization
 

@@ -1,4 +1,4 @@
-# ZenSynora (MyClaw)
+# ZenSynora (ZenSynora)
 
 **Privacy-first personal AI agent framework.** Runs locally or in the cloud, integrates with Telegram, WhatsApp, and the Web — with persistent memory, multi-agent swarms, and a dynamic tool-building ecosystem.
 
@@ -52,37 +52,90 @@ Command sandboxing, path validation, SSRF protection, HMAC-signed audit logs, an
 
 ## Architecture
 
+```mermaid
+flowchart TB
+    subgraph Gateways [Channels & Gateways]
+        TG[TelegramChannel]
+        WA[WhatsAppChannel]
+        CLI[CLI Console]
+        WebUI[Web UI Dashboard]
+    end
+    subgraph Core [Core Agent Engine]
+        Agent[Agent Class]
+        Router[MessageRouter]
+        Context[ContextBuilder]
+        Executor[ToolExecutor]
+        Response[ResponseHandler]
+        Agent --> Router
+        Agent --> Context
+        Agent --> Executor
+        Agent --> Response
+    end
+    subgraph LLM [LLM Provider Layer]
+        P_Base[Provider Interface]
+        P_Ollama[OllamaProvider]
+        P_OpenAI[OpenAIProvider]
+        P_Claude[AnthropicProvider]
+        Pool[HTTPClientPool]
+    end
+    subgraph Tools [Tool Ecosystem]
+        T_Reg[Tool Registry]
+        T_Shell[shell]
+        T_Files[read/write_file]
+        T_Web[browse/download]
+        T_KB[search/read_kb]
+        T_Swarm[swarm_create/assign]
+        T_Sched[schedule/jobs]
+        T_Toolbox[register_tool]
+    end
+    subgraph Knowledge [Knowledge Base]
+        K_DB[KnowledgeDB]
+        K_Sync[KnowledgeSync]
+        K_Graph[KnowledgeGraph]
+        K_Res[GapResearcher]
+        K_Pars[NoteParser]
+    end
+    subgraph Swarm [Agent Swarms]
+        S_Orch[SwarmOrchestrator]
+        S_Strat[Strategies]
+        S_Stor[SwarmStorage]
+        S_Agg[AggregationEngine]
+    end
+    subgraph Specialized [Specialized Agents]
+        A_Medic[MedicAgent]
+        A_Evol[EvolverEngine]
+        A_Change[ChangeMgmt]
+        A_Tech[NewTechAgent]
+        A_Adap[SkillAdapter]
+    end
+    subgraph Persistence [Persistence Layer]
+        Memory[Memory]
+        State[StateStore]
+        AsyncSched[AsyncScheduler]
+        Config[Config Manager]
+    end
+    subgraph Backends [Execution Backends]
+        B_Router[BackendRouter]
+        B_Local[LocalBackend]
+        B_Docker[DockerBackend]
+        B_SSH[SSHBackend]
+        B_WSL2[WSL2Backend]
+    end
+    %% Connections
+    Gateways --> Agent
+    Agent <--> LLM
+    Agent <--> Tools
+    Agent <--> Specialized
+    Agent <--> Swarm
+    Tools --> Backends
+    Tools --> Knowledge
+    Tools --> Persistence
+    Specialized --> Persistence
+    Specialized --> Knowledge
+    Swarm --> Specialized
+    Swarm --> Persistence
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  Interfaces  │   CLI   │  Telegram  │  WhatsApp  │  Web UI    │
-└───────┬───────┴─────────┴────────────┴───────────┴─────╮───────┘
-        │                                                 │
-        └───────────────┐           ┌───────────────────┘
-                        ▼           ▼
-              ┌─────────────────────────┐
-              │     Gateway Router      │
-              └────────────┬────────────┘
-                           ▼
-         ┌──────────────────────────────┐
-         │     Agent Core               │
-         │  ┌────────┐ ┌────────────┐  │
-         │  │Profile │ │ Intelligent │  │
-         │  │ Cache  │ │   Router    │  │
-         │  │ (LRU)  │ └────────────┘  │
-         │  └────────┘                  │
-         │  ┌────────┐ ┌────────────┐  │
-         │  │ Swarms│ │   Tools     │  │
-         │  │🐝     │ │   🛠️       │  │
-         │  └────────┘ └────────────┘  │
-         └──────────────┬───────────────┘
-                        ▼
- ┌──────────┐  ┌──────────────────┐  ┌──────────────────┐
- │  Memory  │  │   Knowledge      │  │   Providers      │
- │  💾      │  │   📚             │  │   🤖             │
- │ (SQLite) │  │   (DB + Graph)   │  │ (Ollama/OpenAI/  │
- └──────────┘  └──────────────────┘  │  Anthropic/etc.) │
-                                     └──────────────────┘
-```
+
 
 Full architecture details are documented in [`docs/architecture_with_optimizations.md`](docs/architecture_with_optimizations.md).
 
@@ -191,7 +244,7 @@ zensynora/
 │   ├── memory.py              # SQLite-backed conversation memory
 │   ├── config.py              # Configuration management
 │   ├── gateway.py             # Telegram/WhatsApp gateway
-│   ├── tools.py               # Built-in tool definitions
+│   ├── tools/                 # Tool system (decomposed from tools.py)
 │   ├── agents/                # Specialized agents (medic, newtech, skill_adapter)
 │   ├── agent_profiles/       # Agent personality & role definitions
 │   ├── knowledge/            # Knowledge base (db, graph, storage, sync)

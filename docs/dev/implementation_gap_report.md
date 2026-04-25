@@ -10,7 +10,7 @@
 | `MedicConfig` + `NewTechConfig` in `AppConfig` | `config.py` L356 / L369 / L452-453 |
 | `scan_on_startup` field exists in `MedicConfig` | `config.py` L361, `medic_agent.py` L51 |
 | `recover_from_local()` + `create_local_backup()` | `medic_agent.py` L317, L617 |
-| `check_file_virustotal()` | `medic_agent.py` L816, registered in `tools.py` L3396 |
+| `check_file_virustotal()` | `medic_agent.py` L816, registered in `tools/__init__.py` |
 | `_create_gist()` / `_create_issue()` (real GitHub API calls) | `newtech_agent.py` L263 / L309 |
 | Loop prevention in `agent.think()` via `_depth > 10` | `agent.py` L936 |
 | `prevent_infinite_loop()` call in `think()` | `agent.py` L944 |
@@ -18,7 +18,7 @@
 | **Semantic Cache** (`semantic_cache.py`) | Exists as standalone module |
 | Parallel tool execution | `agent.py` L1118-1158 |
 | **Sandbox** (`sandbox.py`) with resource limits, code validation, audit log | Full implementation |
-| **Audit logging** for tools (`ToolAuditLogger` in `tools.py` L171) | Implemented |
+| **Audit logging** for tools (`ToolAuditLogger` in `tools/core.py`) | Implemented |
 | Background Knowledge Researcher (idle-only scheduler) | `gateway.py` L107-113 |
 | Connection pooling (HTTP + SQLite) | `provider.py` L252, `memory.py` L78 |
 | Context summarization / trajectory compression | `agent.py` L976-1001 |
@@ -46,7 +46,7 @@
 - **Status:** ~30% done. The skeleton exists but is not fully wired.
 
 ### 4. Sandbox integration
-- `tools.py` now initializes `SecuritySandbox` from config and validates untrusted custom skills before execution.
+- `tools/` now initializes `SecuritySandbox` from config and validates untrusted custom skills before execution.
 - Sandbox stats, audit clearing, and trusted-skill management tools are available.
 
 ### 5. Audit Logging and Rotation

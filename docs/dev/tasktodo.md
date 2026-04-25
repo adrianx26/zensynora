@@ -17,18 +17,18 @@
 ## ✅ Already Implemented (48 Optimizations)
 
 ### Phase 1: Quick Wins (4/4 completed)
-- Plugin Lifecycle Hooks (`myclaw/tools.py`, `myclaw/agent.py`)
+- Plugin Lifecycle Hooks (`myclaw/tools/`, `myclaw/agent.py`)
 - Trajectory Compression Enhancement (`myclaw/agent.py`)
-- Natural Language Scheduling (`myclaw/tools.py`)
+- Natural Language Scheduling (`myclaw/tools/`)
 - Enhanced Cross-Session Recall (`myclaw/memory.py`)
 
 ### Phase 2: Skill System Evolution (3/3 completed)
-- Full Skill Metadata with version, tags, eval_score (`myclaw/tools.py`)
-- Skill Evaluation Harness (`myclaw/tools.py`)
-- Skill Self-Improvement with rollback (`myclaw/tools.py`)
+- Full Skill Metadata with version, tags, eval_score (`myclaw/tools/`)
+- Skill Evaluation Harness (`myclaw/tools/`)
+- Skill Self-Improvement with rollback (`myclaw/tools/`)
 
 ### Phase 3: Memory & Learning (2/2 completed)
-- Periodic Session Reflection (`myclaw/tools.py`)
+- Periodic Session Reflection (`myclaw/tools/`)
 - User Dialectic Profile (`myclaw/profiles/user_dialectic.md`)
 
 ### Phase 4: ZenHub Ecosystem (2/2 completed)
@@ -54,7 +54,7 @@
 ### Configuration
 - Environment Variable Overrides (`myclaw/config.py`)
 - Config Caching (`myclaw/config.py`)
-- Shell Timeout Config (`myclaw/config.py`, `myclaw/tools.py`)
+- Shell Timeout Config (`myclaw/config.py`, `myclaw/tools/`)
 - Optional Memory Cleanup (`myclaw/config.py`)
 - Configurable Context Summarization Threshold (`myclaw/agent.py`, `myclaw/config.py`)
 
@@ -77,8 +77,8 @@
 - Persistent Active Execution Tracking (`myclaw/swarm/orchestrator.py`, `myclaw/swarm/models.py`)
 
 ### Tools & Security
-- Tool Execution Rate Limiting (`myclaw/tools.py`)
-- Async Subprocess for Shell (`myclaw/tools.py`)
+- Tool Execution Rate Limiting (`myclaw/tools/`)
+- Async Subprocess for Shell (`myclaw/tools/`)
 
 ### Channels
 - Webhook Mode for Production (Telegram) (`myclaw/channels/telegram.py`)
