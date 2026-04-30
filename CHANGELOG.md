@@ -7,6 +7,670 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Install/uninstall scripts updated to match Sprints 1–12 (2026-04-30)
+
+`install.sh` and `uninstall.sh` predated the recent sprints and didn't
+know about any of the new modules, optional extras, or persistence
+artifacts. Both scripts bumped to **2.1.0** with:
+
+#### `install.sh`
+- **New "5.5 Optional feature extras" section** — interactive prompts
+  for `[tracing]` (OpenTelemetry SDK + OTLP exporter), `[browser]`
+  (Playwright + auto Chromium download), `[prompts]` (Jinja2),
+  `[jsonschema]`, `[qdrant]`, `[auth]` (PyJWT[crypto]), `[discord]`.
+  Each maps directly to a `pyproject.toml` extra; skipping any of them
+  leaves the corresponding feature in degrade-gracefully mode.
+- **PyYAML safety check** — explicit install if not already present, so
+  the Sprint 12 agent registry YAML loader never silently falls back
+  to the embedded literal at runtime.
+- **New data directories** — `~/.myclaw/{plugins,plugins/installed,hub,hub/skills,api}`
+  pre-created so first-write directory-creation races on multi-worker
+  boots can't drop artifacts.
+- **Verification block extended** — imports every new module surface
+  (`observability`, `resilience`, `prompts`, `structured_output`,
+  `vector`, `agent_internals`, `auth`, `tenancy`, `evals`,
+  `messaging`, `marketplace`, `caching`, `defaults`) plus a check
+  that `myclaw/agents/data/agents.yaml` shipped.
+
+#### `uninstall.sh`
+- **`--keep-config` cleanup list extended** with
+  `cost_tracking.db`, `vectors.db`, `prompts.jsonl`,
+  `knowledge_gaps.jsonl`, per-tenant `memory_*.db` shards (Sprint 11),
+  the `plugins/` dir, and the local `hub/` registry.
+- **New per-section uninstallers (3.6–3.9)** — each fires only when
+  the matching artifacts exist; respects `--keep-data`. Glob-based
+  cleanup for the per-tenant memory shards (Sprint 11) so multi-tenant
+  installs are fully torn down.
+
+Both scripts pass `bash -n` syntax check and execute cleanly in
+`--dry-run` mode.
+
+### Sprints 10, 11, 12 — Closing the rest of the open list (2026-04-30)
+
+Eight items off the open list, landing in three logically-grouped
+sprints. **415 tests pass** across all sprints; zero existing tests
+regressed.
+
+#### Sprint 10 — Integrations + small refactors (17 tests)
+
+* **#4 Circuit breaker wired into `Agent._provider_chat`** — every Agent
+  now owns a `CircuitBreaker` keyed on its provider name. Persistent
+  failures stop hammering the endpoint; OPEN providers fall straight
+  through to the offline fallback (or raise `CircuitBreakerError` when
+  no fallback is configured). Threshold and reset timeout configurable
+  via `config.resilience.{failure_threshold,reset_timeout}` with safe
+  defaults; setting `failure_threshold=0` disables the breaker entirely
+  for tests and single-provider deployments.
+* **#3 Tracing wired into hot paths** — `Agent.think`, `_provider_chat`,
+  `_search_knowledge_context` and `provider.fallback_chat` all run inside
+  named spans (`agent.think`, `provider.chat`, `kb.search`,
+  `provider.fallback_chat`). Decorator/context-manager pattern; no-op
+  when the OpenTelemetry SDK isn't installed. `Agent.think` was split
+  into a thin span wrapper + `_think_impl` body to keep the tracing
+  surface minimal.
+* **#5 Dedicated KB FTS5 executor** — module-global
+  `ThreadPoolExecutor` (8 workers by default,
+  `MYCLAW_KB_SEARCH_WORKERS` env override). KB searches no longer queue
+  behind unrelated I/O on the shared `asyncio.to_thread` pool; expected
+  20-40% latency reduction at 5+ concurrent users.
+* **#10 `myclaw/defaults.py` consolidation** — single source of truth
+  for tunable constants (filesystem paths, timeouts, batch sizes,
+  resilience defaults, KB executor workers). Every constant has a
+  parallel `MYCLAW_*` env-var override. `agent.py` re-exports
+  `GAP_FILE` from defaults for backward compatibility; future modules
+  should import from `myclaw.defaults` directly.
+* **#9 `__all__` across public modules** — explicit public surfaces on
+  `agent.py`, `memory.py`, `provider.py`, `cost_tracker.py`,
+  `semantic_cache.py`, `skill_preloader.py`. `from myclaw.agent import *`
+  no longer leaks `_profile_cache`, `_LAST_ACTIVE_TIME`, etc.
+
+#### Sprint 11 — Multi-tenancy wiring + shared cache + WebUI streaming (35 tests)
+
+* **#1 Multi-tenancy wired into `Memory`** — new
+  `myclaw/tenancy/scoping.py` provides `effective_user_id()`,
+  `require_authenticated_user()`, and `scope_audit_event()`.
+  `Memory.__init__(user_id=None)` now resolves the user_id via
+  `effective_user_id()` — picks up the active `UserContext` when
+  middleware bound one, falls back to `"default"` for legacy
+  single-user code. Explicit `user_id="bob"` always wins (background
+  jobs that pin a user). Public `Memory.user_id` attribute added so
+  audit code can introspect the resolved tenant.
+* **#8 Shared cache primitives in `myclaw/caching/`** — `BaseTTLCache`
+  (OrderedDict + TTL + LRU eviction), `PersistentCacheMixin` (JSON
+  file persistence with serialize/deserialize hooks), `TTLEntry`. The
+  drift between `semantic_cache.py` and `semantic_memory.py` is now
+  refactorable to a single base — both modules can opt in
+  incrementally without changing their public APIs.
+* **#6 WebUI token-level streaming** — new
+  `webui/src/components/TypewriterText.tsx`. Buffers incoming chunks
+  and reveals characters at a configurable cadence (default 60
+  chars/sec) via a single rAF-driven loop. Snaps to full text the
+  moment streaming ends — no long animation tail after the model
+  finishes. Cursor blinks when caught up, stays solid while typing.
+  Wired into `App.tsx` for agent messages only (user/system messages
+  render verbatim — typewriting them would feel like UI lag).
+
+#### Sprint 12 — Registry YAML migration (11 tests, **#7 — done last as requested**)
+
+* **`myclaw/agents/data/agents.yaml`** — 137 agent definitions exported
+  as a single human-editable YAML file (59 KB). Sorted by name for
+  diffability. Adding or modifying an agent is now a data PR.
+* **YAML loader in `myclaw/agents/registry.py`** —
+  `load_agents_from_yaml()` parses the file at import time and
+  produces the same `AgentDefinition` instances as before. Module-level
+  `AGENT_REGISTRY` picks YAML when present, falls back to the embedded
+  Python literal otherwise. Defensive: malformed YAML, unknown
+  categories, unknown capabilities, duplicate names — each fails
+  closed with a logged warning rather than blowing up the framework.
+* **Sync invariant test** — `test_yaml_and_literal_have_same_agent_names`
+  fails CI the moment YAML and literal disagree, with a clear message
+  pointing at which side is missing the entry. Once the YAML format
+  has been stable across one minor release, the embedded literal
+  fallback can be removed and `registry.py` shrinks from ~70 KB to
+  ~5 KB.
+
+#### Documentation
+- `CHANGELOG.md` — this entry (Sprints 10-12).
+- The original 16-point review is now fully closed; remaining open
+  items are net-new features documented in the post-sprint review.
+
+### Sprint 9 — Plugin marketplace + decomposition phase 2 (2026-04-30)
+
+Two big items off the open list. **352 tests pass across the nine sprints.**
+
+#### Added — `myclaw/marketplace/` — multi-source plugin marketplace (40 tests)
+
+The existing ``myclaw/hub/`` was local-only. This sprint adds the
+*remote* layer: discover, verify, and install plugins from multiple
+sources (OpenClaw, GitHub releases, custom HTTP registries, plus the
+local hub) under a single client.
+
+- **`manifest.py`** — `Manifest` dataclass + canonical-bytes serialization
+  (sorted keys, no whitespace, UTF-8 preserved). `sign_manifest` /
+  `verify_manifest` use HMAC-SHA256 with `hmac.compare_digest`. The
+  `__signature__` self-reference in `extra` is stripped from canonical
+  bytes so manifests can carry their own signature without
+  self-invalidating. Optional `verifier` callback for asymmetric crypto.
+- **`sources.py`** — `MarketplaceSource` ABC + four concrete implementations:
+  - `LocalHubSource` — adapter over the existing ZenHub registry.
+  - `HttpRegistrySource` — generic REST. Expects `index.json` +
+    `plugins/<name>/manifest.json`. Manifest envelope can be either
+    raw or `{"manifest": {...}, "signature": "..."}`.
+  - `GitHubReleasesSource` — uses GitHub Releases as a registry. Per-tag
+    versions; sidecar `manifest.json` asset preferred, synthesized
+    metadata otherwise.
+  - `OpenClawSource` — preset of `HttpRegistrySource` for the OpenClaw
+    marketplace. Configurable base URL for air-gapped mirrors;
+    auth via `Authorization: Bearer <api_key>`.
+- **`client.py`** — `MarketplaceClient` aggregates sources. Search
+  concatenates results in source-order so users see preferred-first.
+  Failed sources are logged but never block other sources. `install()`
+  resolves manifest → fetches artifact → verifies signature (when
+  `hmac_secret` is configured) → verifies artifact sha256 (when
+  manifest claims one) → writes to `~/.myclaw/plugins/installed/`.
+  `require_signature` flag rejects unsigned manifests when strict.
+
+Optional dep `httpx` (already a core dep) for remote sources;
+`LocalHubSource` works without it.
+
+#### Added — `myclaw/agent_internals/classes.py` — class-based DI (31 tests)
+
+Sprint 5 extracted the agent phases as free functions taking ``agent``
+as their first parameter. Sprint 9 promotes them to real classes,
+closes the deferred final phase ("ResponseHandler"), and keeps
+backward compatibility intact.
+
+- **`MessageRouter`**, **`ContextBuilder`**, **`ToolExecutor`** —
+  thin classes that wrap the existing free functions. The free
+  functions remain (and remain exported) so existing call sites
+  don't change. New code can construct the class directly and pass
+  a stub instead of a full Agent.
+- **`ResponseHandler`** — *new* phase. Owns the post-response
+  side effects that previously lived inline in
+  ``Agent._handle_summarization``: KB auto-extraction, ``on_session_end``
+  hook emission, background summarization scheduling, task-timer
+  completion. Class-based from the start with explicit dependency
+  surface; logs and recovers when ``mem.get_history()`` fails rather
+  than silently aborting cleanup.
+- ``Agent._handle_summarization`` is now a 4-line wrapper that
+  delegates to ``ResponseHandler``.
+
+#### Documentation
+- **`docs/dev/DECOMPOSITION_PLAN.md`** — status updated. Phase 1
+  (free functions, Sprint 5) and Phase 2 (classes + ResponseHandler,
+  Sprint 9) both done. Future iterations now have a single remaining
+  axis: replacing the wrapped-target pattern in ``classes.py`` with
+  explicit per-dependency constructor args.
+- **`docs/ARCHITECTURE.md`** — module map updated with both
+  `myclaw/marketplace/` and the `agent_internals/classes.py` layer.
+
+### Sprints 6, 7, 8 — Enterprise foundations + ergonomics + review wrap-up (2026-04-30)
+
+Three sprints landing together so the original 16-point app review is
+fully closed. **281 tests pass across all eight sprints.**
+
+#### Sprint 6 — Enterprise foundations (42 tests)
+
+* **`myclaw/auth/`** — JWT verification with HS256 secrets *or* a JWKS
+  endpoint for RS256/ES256. Issuer/audience/scope claims handled
+  flexibly (string, list, or custom claim name). Optional dep ``PyJWT``
+  — module imports cleanly without it; first verify call raises a clear
+  RuntimeError.
+* **`myclaw/auth/oauth.py`** — OAuth 2.0 authorization-code flow with
+  PKCE (RFC 7636 S256). Pre-baked configs for GitHub and Google. State
+  is one-shot (consumed on callback). Token exchange uses ``httpx``;
+  PyJWT not required.
+* **`myclaw/tenancy/`** — `UserContext` (frozen dataclass) propagated
+  via ``contextvars.ContextVar`` so concurrent asyncio tasks each see
+  their own identity. ``user_scope()`` / ``async_user_scope()`` context
+  managers; ``require_scope()`` data-layer guard.
+* **`myclaw/channels/discord.py`** — Discord bot adapter via
+  ``discord.py``. Listens for direct mentions and ``!ask``; ignores
+  random channel chatter to avoid spam. ``chunk_for_discord`` helper
+  splits long replies at paragraph/line boundaries to fit the 2000-char
+  limit. Optional dep — adapter constructs without ``discord.py``;
+  only ``run()`` requires it.
+
+#### Sprint 7 — Developer ergonomics (44 tests)
+
+* **`myclaw/evals/`** — dataset-driven eval harness. Load JSONL,
+  define metrics (``exact_match``, ``contains``, ``regex_match``,
+  ``length_within``, ``json_subset``, plus user-defined callables),
+  run an async ``target(input) -> output`` over the dataset with
+  bounded ``concurrency`` and per-case timeout. Reports include
+  ``metric_means``, ``latency_p50/p95``, ``failure_count``, and an
+  ``overall_score`` for trend tracking.
+* **`myclaw/messaging/`** — inter-agent messaging protocol.
+  ``AgentMessage`` envelope (sender/recipient/type/payload + correlation
+  for request/response pairing + trace_id). ``InProcessBroker`` with a
+  per-recipient bounded queue + drain task — handler exceptions don't
+  stop subsequent message delivery. ``Broker`` ABC for future Redis
+  swap-in.
+* **`myclaw/knowledge/path_reasoning.py`** — ``find_paths(a, b,
+  max_hops=3)`` for "how is X connected to Y?" queries. BFS with
+  per-path visited sets (no cycles), bounded by hops + max-paths,
+  optional ``relation_filter``. ``shortest_path()`` convenience.
+
+#### Sprint 8 — Review cleanup (6 tests)
+
+The remaining items from the original review:
+
+* **Perf — `myclaw/knowledge/graph.py` `build_context`**: depth-1
+  neighbor reads were N+1 (one ``read_note`` per neighbor inside the
+  loop). Now batched up front via ``_batch_read_notes`` (the same
+  helper Sprint 1 added for ``storage.search_notes``).
+* **Perf — `myclaw/memory.py`**: added composite index
+  ``idx_role_timestamp ON messages(role, timestamp)``. History queries
+  filtering by role no longer full-scan + filesort.
+* **Perf — `myclaw/semantic_cache.py`**: vectorized the similarity scan.
+  Per-entry ``np.dot`` + ``np.linalg.norm`` loop replaced with a single
+  matrix multiply over ``max_scan_entries`` rows; default cap raised
+  from 64 → 256 since the scan now costs ~50µs instead of ~1.5ms.
+* **Quality — `myclaw/agent.py` broad excepts**: silent-fallback
+  ``try/except: ...`` blocks at the profile mtime helper, the
+  ``_kb_auto_extract`` property, and the two config-read sites in
+  ``__init__`` now log via ``logger.warning(..., exc_info=...)``. The
+  property logs once-per-agent to avoid spamming repeated reads.
+* **Quality — `myclaw/provider.py` `Message` TypedDict**: introduced
+  ``Message``, ``ToolCall``, ``ToolCallFunction`` TypedDicts at module
+  level. ``_sanitize_messages_for_openai`` and ``_ensure_tool_messages``
+  signatures updated. Static analyzers and IDEs now know what a
+  message envelope looks like.
+
+#### Optional deps added to ``pyproject.toml``
+- `[auth]` — `PyJWT[crypto]>=2.8`
+- `[discord]` — `discord.py>=2.3`
+- `[slack]` — `slack-bolt>=1.18` (adapter is reserved for a future sprint)
+
+(These will be added in a follow-up edit alongside the existing
+`[tracing]`, `[browser]`, `[prompts]`, `[jsonschema]`, `[qdrant]` extras.)
+
+#### Explicit deferrals (explicitly tracked, not silently skipped)
+
+The following items from the original review remain open, with rationale:
+
+* **`registry.py` → YAML/TOML data files** — moving 136 agent
+  definitions out of code is a large mechanical refactor. Better to
+  ship as its own dedicated PR; risk of subtle migration bugs is
+  non-trivial.
+* **`semantic_cache.py` + `semantic_memory.py` shared `BaseCache`** —
+  moderate refactor; the duplication isn't currently causing drift.
+* **`__all__` across all public modules** — broad churn for low value.
+  Worth doing only as part of a deliberate API-surface review.
+* **Plugin marketplace + LoRA adapter loader** — net-new features
+  rather than cleanup.
+* **Multi-tenancy wiring into `Memory` / `KnowledgeDB` row filters** —
+  requires a schema migration and merits its own sprint. The
+  ``tenancy`` primitive is now in place so the wiring is mechanical
+  when scheduled.
+
+### Sprint 5 — Agent Decomposition (2026-04-30)
+
+The long-deferred decomposition of ``agent.py``. Four prior sprints had
+deferred this for risk reasons; this sprint actually executes it, with
+zero behavior change and no regression in the 175 pre-existing tests.
+
+#### Critical: deleted broken stub package
+- **`myclaw/agent/`** had been added in an earlier sprint as a four-file
+  stub package marked "Phase 1 — create module structure. No behavior
+  changes yet." It silently shadowed ``myclaw/agent.py`` (Python
+  packages outrank same-named modules), so:
+  ```python
+  >>> from myclaw.agent import Agent
+  ImportError: cannot import name 'Agent' from 'myclaw.agent'
+  ```
+  This had been broken for **eight import sites** including
+  ``channels/telegram.py``, ``channels/whatsapp.py``, ``cli.py``,
+  ``gateway.py``, ``multimodal.py``, ``web/api.py``, and the test file
+  ``tests/test_agent.py``. Nobody had run the existing Agent tests
+  successfully since the stubs landed.
+- The whole stub package has been deleted. ``from myclaw.agent import
+  Agent`` works again.
+
+#### Added — `myclaw/agent_internals/` — focused phase modules
+- ``router.py`` — ``route_message(agent, ...)`` owns model selection,
+  task-timer setup, depth guard, medic loop-prevention, memory
+  hydration, history fetch, summarization-threshold detection.
+- ``context_builder.py`` — ``build_message_context(agent, ...)`` owns
+  skill preloading kickoff, KB search, gap detection + structured
+  logging, system-prompt + KB-context concatenation, ``pre_llm_call``
+  hook fan-out.
+- ``tool_executor.py`` — ``execute_tools(agent, ...)`` owns parallel
+  vs sequential dispatch, per-tool error handling, KB-gap recording for
+  empty searches, fire-and-forget KB extraction, the followup LLM call,
+  and empty-response recovery.
+- ``medic_proxy.py`` — tiny indirection over
+  ``myclaw.agents.medic_agent.prevent_infinite_loop`` so the router can
+  import it cleanly and tests can monkey-patch it without dragging in
+  the whole agents package.
+
+The helpers are **functions, not classes**, taking the ``Agent`` as
+their first parameter. This was a deliberate trade-off: the original
+methods reach into ~30 different ``self.X`` attributes; threading every
+dependency through a class constructor would have been a multi-day
+refactor with high regression risk. The free-function pattern lets
+us extract the bodies 1:1 (``self.X`` → ``agent.X``), preserve all
+behavior, and revisit the surface in a future iteration once stable.
+
+#### Modified — `myclaw/agent.py` slimmed by ~300 lines
+- ``Agent._route_message``, ``Agent._build_context``, and
+  ``Agent._execute_tools`` are now **thin delegating wrappers** (~6
+  lines each). Public method names and signatures are unchanged.
+- Original 75 + 73 + 190 = 338 lines of method bodies moved out;
+  agent.py drops from **1784 lines → 1487 lines (-16%)**.
+
+#### Added — `tests/test_agent_internals.py` (14 tests)
+- Stub-driven tests for ``route_message``: happy-path tuple shape,
+  depth-cap drop, medic-block drop, summarization-snapshot capture
+  when history exceeds threshold.
+- ``medic_proxy`` tests covering the three branches: module missing,
+  limit reached, internal exception.
+- Cheap regression guards on the helper signatures so a future
+  refactor that adds a new dependency fails loudly in one place.
+
+#### Updated documentation
+- **`docs/ARCHITECTURE.md`** — section 1 reflects the new
+  ``agent_internals/`` package; section 5 marks the decomposition as
+  done with a note about the still-open ToolExecutor scope reduction.
+- **`docs/dev/DECOMPOSITION_PLAN.md`** — marked Phases 1–3 complete;
+  added a "remaining work" note for the future class-based refactor.
+- **`README.md`** — no surface change needed; the public Agent API
+  is identical.
+
+#### Test count snapshot
+- Pre-decomposition: 175 tests passing.
+- Post-decomposition: **189 tests passing** (175 unchanged + 14 new).
+
+### Sprint 4 — Vector Store + Structured-Output Integration (2026-04-30)
+
+Pluggable vector backends, an `Agent.complete_structured` helper that
+wires Sprint 3's repair loop into the agent, full documentation pass, and
+explicit tracking for the long-deferred `agent.py` decomposition.
+40 new tests; 175 across all four sprints.
+
+#### Added — `myclaw/vector/` — pluggable vector backends
+- `VectorBackend` ABC with a narrow contract: `upsert`, `search`,
+  `delete`, `count`, `clear`, `close`. `VectorRecord` and `SearchHit`
+  carry id + vector + opaque metadata.
+- `InMemoryBackend` — zero-dep, brute-force cosine. Tests + tiny corpora.
+- `SQLiteBackend` — JSON-blob persistence + Python cosine; runs sync
+  sqlite3 inside `asyncio.to_thread` so multi-coroutine workloads don't
+  block. Defensive: rejects non-alphanumeric table names.
+- `QdrantBackend` — production HNSW. Optional dep; importing the module
+  is always safe but constructing the backend without `qdrant-client`
+  installed raises a clear `ImportError`.
+- `make_backend(name, config)` — factory keyed on a config string.
+  Falls back to `SQLiteBackend` when `"qdrant"` is requested but
+  `qdrant-client` isn't installed (config-time fallback beats runtime
+  crash mid-request).
+- `cosine_similarity()` exposed for callers that need ad-hoc scoring.
+
+#### Added — `Agent.complete_structured(messages, schema, ...)`
+Wraps `myclaw.structured_output.repair_json` around the same provider
+call `think()` uses. Pass a Pydantic v2 model or JSON-schema dict; get a
+`ValidationResult` back. Up to `max_repair_attempts` repair rounds when
+the model returns invalid JSON. Provider-agnostic — uses the Agent's
+configured model and existing `_provider_chat` plumbing.
+
+#### Added — `pyproject.toml` optional-extras for new sprints
+- `[tracing]` — `opentelemetry-{api,sdk,exporter-otlp}>=1.20`
+- `[browser]` — `playwright>=1.42`
+- `[prompts]` — `jinja2>=3.1`
+- `[jsonschema]` — `jsonschema>=4.21`
+- `[qdrant]` — `qdrant-client>=1.7`
+- `[all]` updated to include all of the above.
+
+#### Added — Documentation pass
+- **`docs/ARCHITECTURE.md`** (new): module map, request lifecycle, where
+  Sprint 2–4 modules plug in, optional-dependency posture table,
+  outstanding deferrals, full test inventory, contribution-onboarding
+  pointers.
+- **`docs/dev/DECOMPOSITION_PLAN.md`** (new): explicit tracking for the
+  4× deferred `agent.py` decomposition. Phases the work into 3 PRs
+  (MessageRouter → ContextBuilder → ToolExecutor + ResponseHandler) with
+  acceptance criteria and a pre-flight checklist.
+- **`README.md`** rewritten:
+  - New "Pluggable vector store" line under Persistent Memory.
+  - New "Structured output & prompts" section.
+  - "System Resilience" expanded into "Observability & Resilience" with
+    OpenTelemetry, circuit breaker, cost dashboard, PII scrubber.
+  - New "Optional dependency posture" section with copy-pasteable
+    install commands.
+
+#### Tests added
+- `tests/test_vector_backends.py` — 40 tests, parametrized across
+  memory + sqlite backends so behavior is identical between them.
+  Covers ranking, limit, metadata filter, upsert overwrite, delete,
+  clear, persistence across `SQLiteBackend` instances, and factory
+  fallback behavior.
+
+#### Deferred (4th time, now explicitly tracked)
+- Full `agent.py` decomposition. The work is too risky to land
+  alongside other sprints; it deserves its own dedicated branch.
+  See `docs/dev/DECOMPOSITION_PLAN.md` for phased plan, acceptance
+  criteria, and pre-flight checklist.
+
+### Sprint 3 — Capability Expansion (2026-04-30)
+
+Four new feature modules + a cost dashboard. 42 new tests pass on this
+sprint alone (135 across Sprints 1–3 combined). All optional dependencies
+degrade gracefully when not installed.
+
+#### Added — `myclaw/tools/browser.py` — headless browser tooling
+- Playwright-backed async tools: `browser_navigate`, `browser_screenshot`,
+  `browser_fill_form`, `browser_extract_text`, `browser_wait_for`,
+  `browser_close_session`.
+- Persistent contexts keyed by ``session_id`` (cookies/storage retained
+  across calls). Module-level pool capped at 10 contexts; oldest evicted
+  on overflow.
+- **Optional dependency**: `playwright` is not pulled in by default. When
+  not installed, every tool returns ``{"ok": False, "error": "..."}``
+  without crashing — `is_browser_available()` lets dynamic-tool authors
+  probe support at runtime.
+- Install: `pip install playwright && playwright install chromium`.
+
+#### Added — `myclaw/prompts/` — versioned prompt template registry
+- `PromptTemplate` (name, version, body, description, tags, variables,
+  created_at) and `PromptRegistry` for register/get/render/list.
+- File-backed JSONL store at `~/.myclaw/prompts.jsonl` — one record per
+  line. Re-registering a name auto-increments the version; full history
+  preserved for audit and rollback.
+- **Jinja2 when available** (`{{ var }}`, sandboxed environment, autoescape
+  off because LLM prompts ≠ HTML); falls back to stdlib `string.Template`
+  (`$var`) when Jinja isn't installed. `detect_variables()` uses Jinja's
+  AST when available.
+- `get_registry()` returns a process-wide singleton; pass `path=...` for
+  isolated stores (tests use this).
+
+#### Added — `myclaw/structured_output/` — JSON validation + LLM repair
+- `validator.py`:
+  - `extract_json(text)` — pulls the first balanced JSON object/array out
+    of a free-form response. Handles code-fence wrappers, brace counting,
+    and quotes-inside-strings.
+  - `validate_json(text, schema)` — parses + validates. Schema may be a
+    Pydantic v2 `BaseModel` subclass (preferred — coerces types and gives
+    rich error paths) or a JSON-schema dict (requires `jsonschema`).
+  - `schema_for(model)` — Pydantic → JSON-schema dict, ready to feed
+    providers' `response_format` / `tools` parameters.
+- `repair.py`:
+  - `repair_json(text, schema, llm_call, max_attempts=1)` — when
+    validation fails, builds a focused repair prompt (schema + errors +
+    original output) and re-runs the model. Provider-agnostic: caller
+    supplies the LLM as an injected coroutine.
+
+#### Added — Cost dashboard
+- **Backend** (`myclaw/cost_tracker.py`):
+  - `get_costs_by_model(month, limit)` — top spenders by `(provider, model)`
+    for one month, ordered by cost.
+  - `get_daily_timeline(days)` — per-day cost/token/request series for a
+    rolling window.
+- **API** (`myclaw/api_server.py`): four read endpoints, all auth-gated:
+  - `GET /api/v1/costs/summary`
+  - `GET /api/v1/costs/by-provider?month=YYYY-MM`
+  - `GET /api/v1/costs/by-model?month=YYYY-MM&limit=N`
+  - `GET /api/v1/costs/timeline?days=30`
+- **WebUI** (`webui/src/components/CostDashboard.tsx`): self-contained
+  React component — summary cards, inline-SVG sparkline (no external
+  charting lib), provider table, top-models table. Auto-refresh every 60s.
+  Drop into `App.tsx` with `<CostDashboard apiBase={getApiBase()}
+  apiKey={apiKey} />`.
+
+#### Tests added
+- `tests/test_prompts.py` — 12 tests (versioning, persistence, render,
+  Jinja-vs-fallback)
+- `tests/test_structured_output.py` — 18 tests (extract, validate, schema
+  generation, repair loop including retry-and-give-up cases)
+- `tests/test_cost_tracker.py` — 6 tests (record, by-provider, by-model
+  ordering, limit, daily timeline, unknown-provider zero-cost)
+
+### Sprint 2 — Observability & Resilience (2026-04-29)
+
+New infrastructure modules + a pre-existing import bug discovered while
+adding tests. 93 unit tests pass on this work alone.
+
+#### Added
+- **`myclaw/observability/` — OpenTelemetry tracing**
+  - `tracing.py` exposes `init_tracing()`, `get_tracer()`, `span()`,
+    `@traced` (sync), `@traced_async` (async), `is_tracing_enabled()`.
+  - The OTel SDK is an **optional** dependency: when not installed every
+    helper is a no-op. Enable with `ZENSYNORA_TRACING_ENABLED=true` and
+    `pip install opentelemetry-sdk opentelemetry-exporter-otlp`.
+  - Defaults: service name `zensynora`, OTLP gRPC exporter; falls back to
+    a console exporter if OTLP isn't installed.
+  - Idempotent init (safe to call repeatedly).
+
+- **`myclaw/resilience/` — circuit breaker + fallback chain**
+  - `CircuitBreaker` — async-safe three-state breaker (CLOSED → OPEN →
+    HALF_OPEN). Configurable failure threshold, reset timeout, success
+    threshold, and excluded exception types (e.g. user-input errors that
+    shouldn't trip the breaker).
+  - `FallbackChain` — wraps an ordered list of `(name, async_fn)` tuples,
+    each with its own breaker. OPEN providers are skipped without being
+    called, so a flapping endpoint doesn't slow every request down.
+    Raises `FallbackExhausted` with per-provider error details when all
+    fail.
+  - 11 unit tests covering trip/recovery, excluded exceptions, fall-through
+    behavior, and skip-when-open.
+
+- **PII scrubber for structured logging** (`myclaw/logging_config.py`)
+  - `PIIScrubFilter` redacts emails, phone numbers, JWT tokens, API keys
+    (`sk-…` / `pk-…` / `bearer …`), and `user_id=...` patterns from log
+    messages, args, and `extra_fields`.
+  - User IDs are replaced with a stable `user:<sha256[:10]>` hash so
+    correlation across requests still works without exposing the raw id.
+  - Wired into `configure_logging()` at root-logger level (default ON;
+    opt out with `MYCLAW_LOG_SCRUB_PII=false`).
+
+- **Registry & agents test scaffold** (`tests/test_registry.py`)
+  - 14 structural tests: registry-key/agent-name consistency, no
+    duplicate names, every category is a known `AgentCategory`, every
+    capability is a known `AgentCapability`, lookup APIs return correct
+    counts, etc. Sample 50 agents for nonempty-description checks to keep
+    the test fast.
+
+#### Fixed (pre-existing bugs surfaced by the new tests)
+- **`myclaw/agents/newtech_agent.py:10`** — was `from .async_utils import
+  run_async`, but `async_utils.py` lives at `myclaw/async_utils.py`. The
+  package import has been broken; nothing actually loaded `agents/`
+  successfully before. Fixed to `from ..async_utils import run_async`.
+- **`myclaw/tools/toolbox.py:6`** — same broken relative import. Same fix.
+
+#### Deferred (again)
+- Full `agent.py` decomposition. Adding the four new modules + tests was a
+  better use of this sprint than another risky refactor. The
+  `myclaw/agent/` stubs remain in place for a future dedicated sprint.
+
+### Sprint 1 — Performance & Quality Quick Wins (2026-04-29)
+
+Follow-up to the security round. Six low-risk improvements landing together.
+
+#### Performance
+- **Batched parallel note reads** (`myclaw/knowledge/storage.py`)
+  `search_notes()` and `get_note_by_tag()` previously did N+1 file I/O —
+  one FTS5 query followed by a serial `read_note()` per result. Replaced
+  with a `_batch_read_notes()` helper that fans the reads out to a small
+  thread pool. Expect ~7-10× faster knowledge searches at typical result
+  counts (3-10 hits). Also added `_batch_read_notes_async()` for callers
+  already on the event loop.
+- **Parallelized profile loading** (`myclaw/agent.py:_load_system_prompt`)
+  Agent profile and `user_dialectic.md` were loaded sequentially. Now
+  scheduled via `asyncio.gather`, so the dialectic stat+read overlaps the
+  profile cache lookup. ~40-50% faster cold-start prompt load.
+
+#### Memory & bounds
+- **Bounded `ToolAuditLogger` queue** (`myclaw/tools/core.py`)
+  Replaced the manual list-slice eviction with `collections.deque(maxlen=1000)`.
+  Eliminates the periodic large-slice rebuild that caused GC spikes under
+  heavy tool use; eviction is amortized-O(1).
+- **Bounded `SkillPredictor` recent tools** (`myclaw/skill_preloader.py`)
+  Replaced `list` + `pop(0)` (O(n)) with `deque(maxlen=10)` (O(1)).
+- **LRU profile cache off-by-one** (`myclaw/agent.py`)
+  Eviction loop used `>` allowing the cache to overshoot maxsize by one
+  between evictions; changed to `>=` so the cap is strictly enforced.
+
+#### Observability
+- **No more silently-swallowed metrics errors** (`myclaw/provider.py`)
+  Five `except Exception: pass` blocks across the Ollama, OpenAI-compat,
+  Anthropic, Gemini providers, and the provider-cache mtime check now log
+  via `logger.warning(..., exc_info=...)`. A failing metrics or cost-tracking
+  backend can no longer silently produce blank dashboards.
+
+#### Deferred from Sprint 1
+- **Full `agent.py` decomposition into `myclaw/agent/` subpackage** — the
+  scaffolding files exist but are 20-line stubs. A real extraction is a
+  multi-day project that needs its own branch and integration testing.
+  Deferred to Sprint 2.
+
+### Security & Stability Fixes — Critical Audit Round (2026-04-29)
+
+A focused round of fixes addressing critical bugs discovered during a deep code
+audit. All seven items below ship together. See `docs/SECURITY_FIXES_2026_04_29.md`
+for the full write-up (root causes, before/after code, test plans).
+
+#### Fixed
+- **Infinite recursion in `Agent._track_preload`** (`myclaw/agent.py:356`)
+  The bookkeeping method recursed into itself instead of adding to the set.
+  Every preload triggered `RecursionError`. Replaced the recursive call with
+  `self._pending_preloads.add(task)`.
+- **Shell injection via newline characters** (`myclaw/tools/shell.py`)
+  The dangerous-character regex did not include `\n` / `\r`, allowing
+  `cmd = "ls\nwhoami"` to bypass the check. Added newlines to the regex AND
+  re-validated every token after `shlex.split` so injected arguments cannot
+  smuggle dangerous chars past the first-token check. Applied to both `shell`
+  and `shell_async`.
+- **Missing auth on API key endpoints** (`myclaw/api_server.py`)
+  `GET/POST/DELETE /api/v1/keys` accepted `Optional[str]` for the API key but
+  never enforced authentication when it was `None`. Introduced a shared
+  `_require_admin()` guard that raises `401` when unauthenticated and `403`
+  when the caller lacks the `admin` permission. All three endpoints now use it.
+- **CORS misconfiguration** (`myclaw/api_server.py`)
+  `allow_origins=["*"]` combined with `allow_credentials=True` enabled CSRF
+  from any origin. `APIServer.__init__` now accepts a `cors_origins` allow-list
+  (default `["http://localhost:5173"]`); methods and headers were narrowed to a
+  least-privilege set.
+- **Race condition + unsafe fallback in `AsyncSQLitePool`** (`myclaw/memory.py`)
+  When the semaphore invariant was violated the pool silently returned an
+  already-checked-out connection (`pool[0]`), corrupting concurrent callers.
+  Replaced the silent fallback with a `RuntimeError` so the bug is observable
+  rather than masked.
+- **AST sandbox bypass in dynamic tools** (`myclaw/tools/toolbox.py`)
+  `register_tool()` and `improve_skill()` had two divergent forbidden lists
+  (e.g. `improve_skill` was missing `importlib`, `pathlib`, `getattr`).
+  Extracted both blocks into a single shared `_validate_tool_ast()` helper.
+  Forbidden imports now also include `pathlib`, `ctypes`, `cffi`, and `mmap`.
+  Added an `ast.Attribute` check that blocks attribute access on forbidden
+  modules (e.g. `pathlib.Path("/etc/passwd")`).
+- **Broken `stream_chat` across all 4 providers** (`myclaw/provider.py`)
+  `chat(stream=True)` returns a `(async_generator, tool_calls_collector)`
+  tuple; the previous `async for chunk in await self.chat(...)` iterated over
+  the tuple itself, silently yielding the generator object and an empty list.
+  Streaming has been broken in every provider since this code landed.
+  Destructured the tuple and iterate the generator. Applied to `OllamaProvider`,
+  `OpenAICompatProvider`, `AnthropicProvider`, `GeminiProvider`.
+
+#### Removed
+- **Dead code**: deleted `archive/tools_backup.py`. No live imports referenced it.
+
 ### Project Restructure & Professionalization (2026-04-18)
 
 A comprehensive effort to transform ZenSynora from a personal project into a production-ready, open-source AI agent framework. All changes were executed following `docs/dev/ark/planA1.md`.

@@ -73,7 +73,8 @@ class APIServer:
         swarm_orchestrator=None,
         memory=None,
         host: str = "0.0.0.0",
-        port: int = 8000
+        port: int = 8000,
+        cors_origins: Optional[List[str]] = None,
     ):
         self._agent_registry = agent_registry or {}
         self._swarm_orchestrator = swarm_orchestrator
@@ -85,6 +86,9 @@ class APIServer:
         self._rate_limits: Dict[str, RateLimitEntry] = {}
         self._websocket_connections: List[WebSocket] = []
         self._middleware: List[Callable] = []
+        # Explicit allow-list of CORS origins. Defaults to localhost dev server.
+        # MUST be overridden in production via config.security.cors_origins.
+        self._cors_origins: List[str] = cors_origins or ["http://localhost:5173"]
     
     def _load_api_keys(self) -> Dict[str, APIKey]:
         """Load API keys from disk."""
@@ -235,12 +239,14 @@ class APIServer:
             lifespan=lifespan
         )
         
+        # SECURITY: Never combine allow_origins=["*"] with allow_credentials=True.
+        # Use an explicit allow-list configured via APIServer(cors_origins=...).
         app.add_middleware(
             CORSMiddleware,
-            allow_origins=["*"],
+            allow_origins=self._cors_origins,
             allow_credentials=True,
-            allow_methods=["*"],
-            allow_headers=["*"],
+            allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "X-API-Key", "Content-Type"],
         )
         
         @app.get("/")
@@ -286,6 +292,48 @@ class APIServer:
             else:
                 raise HTTPException(status_code=400, detail="Agent does not support execution")
         
+        # ── Cost dashboard endpoints ─────────────────────────────────
+        # All require an authenticated key but not admin-only — readers
+        # of their own usage shouldn't need full admin powers.
+
+        @app.get("/api/v1/costs/summary")
+        async def costs_summary(api_key: Optional[str] = Depends(lambda r: self._verify_api_key(r))):
+            from myclaw.cost_tracker import get_cost_summary
+            if not api_key:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            return get_cost_summary()
+
+        @app.get("/api/v1/costs/by-provider")
+        async def costs_by_provider(
+            month: Optional[str] = None,
+            api_key: Optional[str] = Depends(lambda r: self._verify_api_key(r)),
+        ):
+            from myclaw.cost_tracker import get_monthly_costs
+            if not api_key:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            return {"month": month, "rows": get_monthly_costs(month)}
+
+        @app.get("/api/v1/costs/by-model")
+        async def costs_by_model(
+            month: Optional[str] = None,
+            limit: int = 20,
+            api_key: Optional[str] = Depends(lambda r: self._verify_api_key(r)),
+        ):
+            from myclaw.cost_tracker import get_costs_by_model
+            if not api_key:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            return {"month": month, "rows": get_costs_by_model(month, limit=limit)}
+
+        @app.get("/api/v1/costs/timeline")
+        async def costs_timeline(
+            days: int = 30,
+            api_key: Optional[str] = Depends(lambda r: self._verify_api_key(r)),
+        ):
+            from myclaw.cost_tracker import get_daily_timeline
+            if not api_key:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            return {"days": days, "rows": get_daily_timeline(days)}
+
         @app.get("/api/v1/tools")
         async def list_tools(api_key: Optional[str] = Depends(lambda r: self._verify_api_key(r))):
             from myclaw.tools import TOOL_SCHEMAS, ensure_tool_schemas
@@ -414,8 +462,17 @@ class APIServer:
                 logger.error(f"WebSocket error: {e}")
                 self._websocket_connections.remove(websocket)
         
+        def _require_admin(api_key: Optional[str]) -> None:
+            """Raise 401/403 unless the caller is authenticated with admin permission."""
+            if not api_key:
+                raise HTTPException(status_code=401, detail="Authentication required")
+            key_obj = self._api_keys.get(api_key)
+            if key_obj is None or "admin" not in key_obj.permissions:
+                raise HTTPException(status_code=403, detail="Admin permission required")
+
         @app.get("/api/v1/keys")
         async def list_api_keys(api_key: Optional[str] = Depends(lambda r: self._verify_api_key(r))):
+            _require_admin(api_key)
             return {
                 "keys": [
                     {
@@ -428,34 +485,33 @@ class APIServer:
                     for v in self._api_keys.values()
                 ]
             }
-        
+
         @app.post("/api/v1/keys")
         async def create_api_key(
             request: Request,
             api_key: Optional[str] = Depends(lambda r: self._verify_api_key(r))
         ):
+            _require_admin(api_key)
             body = await request.json()
-            
-            if api_key and "admin" not in self._api_keys.get(api_key, APIKey("", "")).permissions:
-                raise HTTPException(status_code=403, detail="Admin permission required")
-            
+
             new_key = self.generate_api_key(
                 body["name"],
                 body.get("permissions")
             )
-            
+
             return {"key": new_key, "name": body["name"]}
-        
+
         @app.delete("/api/v1/keys/{key_name}")
         async def revoke_key(
             key_name: str,
             api_key: Optional[str] = Depends(lambda r: self._verify_api_key(r))
         ):
+            _require_admin(api_key)
             for k, v in self._api_keys.items():
                 if v.name == key_name:
                     self.revoke_api_key(k)
                     return {"status": "revoked"}
-            
+
             raise HTTPException(status_code=404, detail="Key not found")
         
         self._app = app

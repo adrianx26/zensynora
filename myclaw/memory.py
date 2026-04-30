@@ -154,10 +154,15 @@ class AsyncSQLitePool:
                     checked.add(id(conn))
                     return conn
 
-                # Fallback: should not reach here if semaphore is correct
-                conn = pool[0]
-                checked.add(id(conn))
-                return conn
+                # Invariant violation: the semaphore guarantees that when we get
+                # here at least one connection must be free or creatable. Returning
+                # an already-checked-out connection (the previous behavior) silently
+                # corrupts callers. Raise instead so the bug is observable.
+                raise RuntimeError(
+                    f"AsyncSQLitePool invariant violated for {key}: "
+                    f"semaphore acquired but no free connection available "
+                    f"(pool={len(pool)}, checked_out={len(checked)})"
+                )
         except Exception:
             # Release semaphore on error so other waiters can proceed
             cls._semaphores[key].release()
@@ -293,11 +298,19 @@ class Memory:
 
     def __init__(
         self,
-        user_id: str = "default",
+        user_id: Optional[str] = None,
         auto_cleanup_days: int = DEFAULT_CLEANUP_DAYS,
         auto_cleanup_enabled: bool = True,
     ):
-        db_path = Path.home() / ".myclaw" / f"memory_{user_id}.db"
+        # Sprint 11: derive the effective user_id from tenancy context when
+        # the caller didn't pass one. ``effective_user_id`` returns
+        # ``"default"`` when nothing is bound, preserving the historical
+        # single-user behavior; multi-tenant deployments get per-tenant
+        # isolation for free as long as their middleware binds a UserContext.
+        from .tenancy import effective_user_id
+        resolved_user_id = effective_user_id(user_id)
+        self.user_id = resolved_user_id
+        db_path = Path.home() / ".myclaw" / f"memory_{resolved_user_id}.db"
         self.db = db_path
         self.db.parent.mkdir(parents=True, exist_ok=True)
         self.auto_cleanup_days = auto_cleanup_days
@@ -327,6 +340,13 @@ class Memory:
             timestamp TEXT
         )""")
         await self.conn.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp)")
+        # Composite index for queries that filter by role then sort by time
+        # (common shape: "last N messages from `user`/`assistant`/`tool`").
+        # Without this the planner falls back to a full table scan and a
+        # filesort. Matters once a single user has thousands of messages.
+        await self.conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_role_timestamp ON messages(role, timestamp)"
+        )
         await self.conn.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(
             content,
             content=messages,
@@ -665,3 +685,11 @@ class Memory:
         except Exception as e:
             logger.error(f"Error searching: {e}")
             return []
+
+
+# ── Public API surface ───────────────────────────────────────────────
+# Listing __all__ explicitly so `from this_module import *` doesn't leak
+# internal helpers (e.g. _profile_cache, _LAST_ACTIVE_TIME). Names that
+# aren't here are still importable by direct attribute access — they
+# just don't participate in star imports.
+__all__ = ['Memory', 'AsyncSQLitePool']

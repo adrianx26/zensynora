@@ -17,7 +17,7 @@ import threading
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from ..worker_pool import WorkerPoolManager
 from ..sandbox import SecuritySandbox, SecurityPolicy
@@ -195,8 +195,11 @@ class ToolAuditLogger:
     """Structured audit logger for tool executions."""
 
     def __init__(self):
-        self._logs: List[Dict] = []
+        # Bounded deque: O(1) FIFO eviction. The previous list grew to 1000
+        # entries before a single slice rebuilt it, causing periodic GC spikes
+        # under heavy tool use; a deque with maxlen evicts amortized-O(1).
         self._max_logs = 1000
+        self._logs: "deque[Dict]" = deque(maxlen=self._max_logs)
         self._persistent = TamperEvidentAuditLog(
             log_path=Path.home() / ".myclaw" / "audit" / "tools_audit.log.jsonl"
         )
@@ -218,15 +221,12 @@ class ToolAuditLogger:
             "success": success,
             "error": error,
         }
-        self._logs.append(entry)
+        self._logs.append(entry)  # deque auto-evicts oldest at maxlen
         self._persistent.append(
             event_type=f"tool:{tool_name}",
             details=entry,
             severity="INFO" if success else "WARNING",
         )
-        # Keep only recent logs in memory
-        if len(self._logs) > self._max_logs:
-            self._logs = self._logs[-self._max_logs :]
 
         # Log to standard logger
         if success:

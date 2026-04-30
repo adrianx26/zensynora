@@ -312,11 +312,11 @@ def build_context(
     
     # Get related entities
     related = get_related_entities(permalink, user_id, depth)
-    
+
     if related:
         lines.append("## Related Knowledge")
         lines.append("")
-        
+
         # Group by depth
         by_depth = {}
         for r in related:
@@ -324,18 +324,29 @@ def build_context(
             if d not in by_depth:
                 by_depth[d] = []
             by_depth[d].append(r)
-        
+
+        # PERF: batch-read all depth-1 notes up front. The previous loop
+        # called read_note() once per neighbor (1 + N + N²-shaped I/O on
+        # dense graphs); we collect the permalinks first and parallel-read
+        # them through the same helper used by storage.search_notes.
+        depth1_notes_by_permalink: Dict[str, "Note"] = {}
+        if include_observations and 1 in by_depth:
+            from .storage import _batch_read_notes
+            depth1_perms = [r['permalink'] for r in by_depth[1]]
+            depth1_notes = _batch_read_notes(depth1_perms, user_id)
+            depth1_notes_by_permalink = {n.permalink: n for n in depth1_notes}
+
         for d in sorted(by_depth.keys()):
             lines.append(f"### Depth {d}")
             for r in by_depth[d]:
                 lines.append(f"- {r['relation_type']} → **{r['name']}** ({r['permalink']})")
-                
-                # Optionally include observations for related entities
+
+                # Observations for depth-1 neighbors only.
                 if include_observations and d == 1:
-                    rel_note = read_note(r['permalink'], user_id)
+                    rel_note = depth1_notes_by_permalink.get(r['permalink'])
                     if rel_note and rel_note.observations:
                         for obs in rel_note.observations[:2]:  # Limit to 2
                             lines.append(f"  - [{obs.category}] {obs.content}")
             lines.append("")
-    
+
     return "\n".join(lines)

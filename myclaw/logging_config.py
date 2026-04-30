@@ -12,13 +12,89 @@ Example:
     [2026-03-19T10:30:46.456Z] [ERROR] [PROVIDER] Request failed error=timeout [provider=ollama]
 """
 
+import hashlib
 import logging
+import re
 import sys
 import os
 from datetime import datetime, timezone
-from typing import Optional, Any, Dict
+from typing import Iterable, Optional, Any, Dict
 from functools import wraps
 import json
+
+
+# ── PII scrubbing ─────────────────────────────────────────────────────────
+#
+# Regex patterns are intentionally conservative; false positives are scrubbed
+# (an "user_id" in a sentence is harmless once redacted), but false negatives
+# would leak PII to log aggregators.
+
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+# Loose API-key/token shape: long base62-ish run prefixed with sk-/pk-/api_/etc.
+_API_KEY_RE = re.compile(
+    r"\b(?:sk|pk|api_key|token|bearer)[-_=: ]+[A-Za-z0-9_\-]{20,}\b",
+    re.IGNORECASE,
+)
+# Phone numbers (simple international shape, 10+ digits with optional +/-/space).
+_PHONE_RE = re.compile(r"\+?\d[\d\-\s]{9,}\d")
+# user_id="..." or user='...' style
+_USER_ID_RE = re.compile(r"user(?:_id)?\s*[:=]\s*['\"]?([^\s'\"\]\)>,]+)", re.IGNORECASE)
+# JWT-ish tokens
+_JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\b")
+
+
+def _hash_user_id(value: str) -> str:
+    """Stable short hash for log correlation without exposing the raw id."""
+    h = hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()
+    return f"user:{h[:10]}"
+
+
+def scrub_pii(text: str) -> str:
+    """Best-effort PII scrubber for log strings.
+
+    Order matters: scrub user_id first (so emails inside don't leak before
+    the user_id pattern catches it), then JWT, API key, email, phone.
+    """
+    if not text:
+        return text
+    text = _USER_ID_RE.sub(lambda m: f"user_id={_hash_user_id(m.group(1))}", text)
+    text = _JWT_RE.sub("<jwt:redacted>", text)
+    text = _API_KEY_RE.sub("<apikey:redacted>", text)
+    text = _EMAIL_RE.sub("<email:redacted>", text)
+    text = _PHONE_RE.sub("<phone:redacted>", text)
+    return text
+
+
+class PIIScrubFilter(logging.Filter):
+    """Logging filter that scrubs PII from messages and string args.
+
+    Install on the root MyClaw logger via ``configure_logging`` (default-on).
+    Disable with ``MYCLAW_LOG_SCRUB_PII=false`` or by removing the filter.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: D401
+        try:
+            if isinstance(record.msg, str):
+                record.msg = scrub_pii(record.msg)
+            if record.args:
+                if isinstance(record.args, dict):
+                    record.args = {
+                        k: scrub_pii(v) if isinstance(v, str) else v
+                        for k, v in record.args.items()
+                    }
+                elif isinstance(record.args, tuple):
+                    record.args = tuple(
+                        scrub_pii(a) if isinstance(a, str) else a for a in record.args
+                    )
+            extra = getattr(record, "extra_fields", None)
+            if isinstance(extra, dict):
+                record.extra_fields = {
+                    k: (scrub_pii(v) if isinstance(v, str) else v) for k, v in extra.items()
+                }
+        except Exception:
+            # Never let the scrubber break logging itself.
+            pass
+        return True
 
 
 # Log level colors for console output
@@ -220,11 +296,17 @@ def configure_logging(
     # Clear existing handlers
     root_logger.handlers.clear()
     
+    # PII scrubber: enabled by default, opt-out via env. Attach to the logger
+    # itself (not individual handlers) so it runs once before any handler.
+    scrub_pii_enabled = os.environ.get("MYCLAW_LOG_SCRUB_PII", "true").lower() != "false"
+    if scrub_pii_enabled and not any(isinstance(f, PIIScrubFilter) for f in root_logger.filters):
+        root_logger.addFilter(PIIScrubFilter())
+
     # Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setFormatter(StructuredFormatter(use_json=use_json, use_color=use_color))
     root_logger.addHandler(console_handler)
-    
+
     # File handler if specified
     if log_file:
         file_handler = logging.FileHandler(log_file)
@@ -305,4 +387,6 @@ __all__ = [
     'audit_log',
     'log_performance',
     'StructuredFormatter',
+    'PIIScrubFilter',
+    'scrub_pii',
 ]

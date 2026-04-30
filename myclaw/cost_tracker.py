@@ -15,7 +15,7 @@ import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +170,75 @@ def get_monthly_costs(month: Optional[str] = None) -> List[Dict[str, any]]:
         return []
 
 
+def get_costs_by_model(month: Optional[str] = None, limit: int = 20) -> List[Dict[str, Any]]:
+    """Aggregate spend by (provider, model) for one month.
+
+    Args:
+        month: ``YYYY-MM`` (defaults to current UTC month).
+        limit: Cap on rows returned.
+
+    Returns the top ``limit`` rows by total cost, descending.
+    """
+    if month is None:
+        month = datetime.utcnow().strftime("%Y-%m")
+    try:
+        conn = _get_db()
+        rows = conn.execute(
+            """
+            SELECT
+                provider,
+                model,
+                SUM(cost_usd) AS total_cost,
+                SUM(prompt_tokens) AS total_prompt,
+                SUM(completion_tokens) AS total_completion,
+                COUNT(*) AS request_count
+            FROM usage_records
+            WHERE month_key = ?
+            GROUP BY provider, model
+            ORDER BY total_cost DESC
+            LIMIT ?
+            """,
+            (month, limit),
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        logger.error(f"Failed to get costs by model: {e}")
+        return []
+
+
+def get_daily_timeline(days: int = 30) -> List[Dict[str, Any]]:
+    """Daily cost series for the last ``days`` days, oldest-first.
+
+    Days with zero spend are omitted (the chart layer can fill gaps if it
+    cares; most charting libs handle sparse series natively).
+    """
+    if days < 1:
+        days = 1
+    try:
+        conn = _get_db()
+        # SQLite: substr(timestamp, 1, 10) → "YYYY-MM-DD"
+        rows = conn.execute(
+            """
+            SELECT
+                substr(timestamp, 1, 10) AS day,
+                SUM(cost_usd) AS total_cost,
+                SUM(prompt_tokens + completion_tokens) AS total_tokens,
+                COUNT(*) AS request_count
+            FROM usage_records
+            WHERE datetime(timestamp) >= datetime('now', ?)
+            GROUP BY day
+            ORDER BY day ASC
+            """,
+            (f"-{int(days)} days",),
+        ).fetchall()
+        conn.close()
+        return [dict(r) for r in rows]
+    except Exception as e:
+        logger.error(f"Failed to get daily timeline: {e}")
+        return []
+
+
 def get_cost_summary() -> Dict[str, any]:
     """Get overall cost summary."""
     try:
@@ -190,3 +259,11 @@ def get_cost_summary() -> Dict[str, any]:
     except Exception as e:
         logger.error(f"Failed to get cost summary: {e}")
         return {"total_cost_usd": 0.0, "total_prompt_tokens": 0, "total_completion_tokens": 0, "tracked_months": []}
+
+
+# ── Public API surface ───────────────────────────────────────────────
+# Listing __all__ explicitly so `from this_module import *` doesn't leak
+# internal helpers (e.g. _profile_cache, _LAST_ACTIVE_TIME). Names that
+# aren't here are still importable by direct attribute access — they
+# just don't participate in star imports.
+__all__ = ['record_usage', 'get_monthly_costs', 'get_costs_by_model', 'get_daily_timeline', 'get_cost_summary']

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './index.css';
+import TypewriterText from './components/TypewriterText';
 
 interface Agent {
   name: string;
@@ -407,7 +408,20 @@ function App() {
                   {msg.sender === 'user' ? 'U' : msg.sender === 'system' ? '⚙️' : '🤖'}
                 </div>
                 <div className="message-content">
-                  {msg.text}
+                  {/*
+                    Agent responses use the TypewriterText component for
+                    smooth char-by-char reveal. User/system messages are
+                    rendered verbatim — typewriting them would feel like
+                    a UI lag for the operator's own input.
+                  */}
+                  {msg.sender === 'agent' ? (
+                    <TypewriterText
+                      text={msg.text}
+                      active={!!msg.isStreaming}
+                    />
+                  ) : (
+                    msg.text
+                  )}
                   {msg.isStreaming && (
                     <span className="typing-indicator">
                       <span className="dot"></span>

@@ -31,6 +31,7 @@ Usage:
 import json
 import logging
 import asyncio
+import os
 import re
 import threading
 import inspect
@@ -53,8 +54,54 @@ from rich.console import Console
 logger = logging.getLogger(__name__)
 kb_gap_logger = logging.getLogger("myclaw.knowledge.gaps")
 
-GAP_FILE = Path.home() / ".myclaw" / "knowledge_gaps.jsonl"
+# Re-export the canonical default from `defaults.py`. Existing code that
+# imports `GAP_FILE` from `myclaw.agent` keeps working; new code should
+# prefer `from myclaw.defaults import GAP_FILE` to avoid the indirection.
+from .defaults import GAP_FILE  # noqa: E402
+
 _LAST_ACTIVE_TIME = time.time()
+
+
+# ── Dedicated KB-search executor ──────────────────────────────────────────
+# Sprint 10 #5: KB FTS5 queries used to share the default ``asyncio.to_thread``
+# pool. Under concurrent load they queued behind unrelated I/O. This pool is
+# sized for KB latency profiles (mostly disk-bound) and is module-global so
+# multiple Agent instances share it.
+
+from concurrent.futures import ThreadPoolExecutor as _KBExecutor
+
+_kb_search_executor: Optional[_KBExecutor] = None
+_kb_search_executor_lock = threading.Lock()
+# Source of truth lives in `defaults.py`; alias kept for backward compatibility.
+from .defaults import KB_SEARCH_EXECUTOR_WORKERS as _KB_SEARCH_EXECUTOR_WORKERS  # noqa: E402
+
+
+def _get_kb_search_executor() -> _KBExecutor:
+    """Lazily create the shared KB-search executor.
+
+    The default of 8 workers balances throughput against the SQLite
+    write-lock contention you'd see if every reader monopolized a thread.
+    Override with ``MYCLAW_KB_SEARCH_WORKERS`` for benchmarking.
+    """
+    global _kb_search_executor
+    if _kb_search_executor is not None:
+        return _kb_search_executor
+    with _kb_search_executor_lock:
+        if _kb_search_executor is None:
+            _kb_search_executor = _KBExecutor(
+                max_workers=_KB_SEARCH_EXECUTOR_WORKERS,
+                thread_name_prefix="myclaw-kb",
+            )
+    return _kb_search_executor
+
+
+def shutdown_kb_search_executor() -> None:
+    """Shut down the KB-search executor. Mostly for tests + clean reloads."""
+    global _kb_search_executor
+    with _kb_search_executor_lock:
+        if _kb_search_executor is not None:
+            _kb_search_executor.shutdown(wait=False, cancel_futures=True)
+            _kb_search_executor = None
 
 
 def get_last_active_time() -> float:
@@ -151,7 +198,11 @@ def _get_profile_cache_key(name: str, profile_path: Path) -> str:
     try:
         mtime = profile_path.stat().st_mtime
         return f"{name}:{mtime}"
-    except Exception:
+    except Exception as e:
+        # Permissions / missing path / network FS hiccup. We still return
+        # a usable key (cache stays consistent within the process), but
+        # log so it's not silently weird.
+        logger.debug(f"Profile mtime stat failed for {profile_path}: {e}")
         return f"{name}:0"
 
 
@@ -174,8 +225,10 @@ def _load_profile_cached(name: str, profile_path: Path) -> str:
     with _profile_cache_lock:
         _profile_cache[cache_key] = content
 
-        # LRU eviction: remove oldest items when over capacity
-        while len(_profile_cache) > _profile_cache_maxsize:
+        # LRU eviction: remove oldest items when at or over capacity.
+        # Using >= keeps the cache strictly bounded; the previous > allowed
+        # one-over-limit growth between evictions.
+        while len(_profile_cache) >= _profile_cache_maxsize:
             _profile_cache.popitem(last=False)
 
     return content
@@ -225,7 +278,17 @@ class Agent:
         """Read-once helper: is automatic KB extraction enabled in config?"""
         try:
             return bool(self.config.knowledge.auto_extract)
-        except Exception:
+        except Exception as e:
+            # Defaults to False on any config-read failure. We log only
+            # once per agent to avoid spamming the logs on repeated reads.
+            if not getattr(self, "_kb_auto_extract_warned", False):
+                logger.warning(
+                    "config.knowledge.auto_extract unreadable; defaulting to False",
+                    exc_info=e,
+                )
+                # Mark via a normal attribute — properties can't shortcut
+                # __setattr__ without breaking the descriptor protocol.
+                object.__setattr__(self, "_kb_auto_extract_warned", True)
             return False
 
     def __init__(
@@ -246,14 +309,22 @@ class Agent:
 
         try:
             default_provider = config.agents.defaults.provider or "ollama"
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "config.agents.defaults.provider unreadable; defaulting to 'ollama'",
+                exc_info=e,
+            )
             default_provider = "ollama"
         self._provider_name = provider_name or default_provider
 
         # ── Resolve model ─────────────────────────────────────────────────────
         try:
             cfg_model = config.agents.defaults.model
-        except Exception:
+        except Exception as e:
+            logger.warning(
+                "config.agents.defaults.model unreadable; defaulting to 'llama3.2'",
+                exc_info=e,
+            )
             cfg_model = "llama3.2"
         self.model = model or cfg_model
 
@@ -280,6 +351,28 @@ class Agent:
         # Offline mode: enable fallback to local providers on connection failure
         self._offline_mode = getattr(getattr(config, "intelligence", None), "offline_mode", True)
         self._fallback_wrapper: Optional[Any] = None
+
+        # ── Circuit breaker around the primary provider call ─────────────────
+        # Wraps ``self.provider.chat`` so persistent failures don't keep
+        # hammering a flapping endpoint. Once OPEN, requests fall straight
+        # through to the offline fallback (or raise to the caller when no
+        # fallback is configured). Tunable via config.resilience.* with safe
+        # defaults; the breaker is disabled entirely when failure_threshold
+        # is set to 0 — useful for tests and single-provider deployments
+        # that prefer the historical behavior.
+        from .resilience import CircuitBreaker
+        _resil = getattr(config, "resilience", None)
+        _ft = int(getattr(_resil, "failure_threshold", 5)) if _resil else 5
+        _rt = float(getattr(_resil, "reset_timeout", 60.0)) if _resil else 60.0
+        self._provider_breaker: Optional[CircuitBreaker] = (
+            CircuitBreaker(
+                name=f"provider:{self._provider_name}",
+                failure_threshold=_ft,
+                reset_timeout=_rt,
+            )
+            if _ft > 0
+            else None
+        )
 
         # Initialize knowledge gap cache for deduplication
         self._gap_cache = KnowledgeGapCache(timeout_seconds=300.0)
@@ -353,7 +446,7 @@ class Agent:
                     self._pending_preloads.pop()
                 except KeyError:
                     break
-        self._track_preload(task)
+        self._pending_preloads.add(task)
 
     # ── Context-gap tracking ─────────────────────────────────────────────────
     # Tracks topics per user for which the KB returned no results, so they can
@@ -528,30 +621,44 @@ class Agent:
             logger.debug(f"[KB-AUTO] Extraction skipped: {exc}")
 
     async def _load_system_prompt(self) -> str:
-        """Lazy load system prompt with async file I/O."""
+        """Lazy load system prompt with async file I/O.
+
+        Loads the agent profile and the optional user-dialectic profile in
+        parallel. Both are filesystem reads, so overlapping them roughly
+        halves the prompt-load latency on cold cache.
+        """
         if self._system_prompt_loaded:
             return self._system_prompt
 
-        # Try local workspace profiles first
-        profile_path = self._local_profiles_dir / f"{self.name}.md"
-        if profile_path.exists():
-            prompt = await _load_profile_cached_async(self.name, profile_path)
+        # Determine which profile path to use (local workspace wins).
+        local_profile = self._local_profiles_dir / f"{self.name}.md"
+        if local_profile.exists():
+            profile_path: Optional[Path] = local_profile
         else:
-            # Fall back to user home profiles
             self._user_profiles_dir.mkdir(parents=True, exist_ok=True)
-            profile_path = self._user_profiles_dir / f"{self.name}.md"
-            if profile_path.exists():
-                prompt = await _load_profile_cached_async(self.name, profile_path)
-            else:
-                prompt = self._custom_system_prompt or SYSTEM_PROMPT
+            home_profile = self._user_profiles_dir / f"{self.name}.md"
+            profile_path = home_profile if home_profile.exists() else None
 
-        # Load user dialectic profile if it exists (for personalization)
         dialectic_path = self._local_profiles_dir / "user_dialectic.md"
-        if dialectic_path.exists():
-            dialectic_content = await asyncio.to_thread(dialectic_path.read_text, encoding="utf-8")
-            dialectic_content = dialectic_content.strip()
-            if dialectic_content and dialectic_content != prompt:
-                prompt = f"{prompt}\n\n## User Profile\n{dialectic_content}"
+        dialectic_exists = dialectic_path.exists()
+
+        async def _load_main() -> str:
+            if profile_path is not None:
+                return await _load_profile_cached_async(self.name, profile_path)
+            return self._custom_system_prompt or SYSTEM_PROMPT
+
+        async def _load_dialectic() -> str:
+            if not dialectic_exists:
+                return ""
+            content = await asyncio.to_thread(dialectic_path.read_text, encoding="utf-8")
+            return content.strip()
+
+        # Overlap the two reads. asyncio.gather schedules them concurrently
+        # so the dialectic file's stat+read overlaps the profile load.
+        prompt, dialectic_content = await asyncio.gather(_load_main(), _load_dialectic())
+
+        if dialectic_content and dialectic_content != prompt:
+            prompt = f"{prompt}\n\n## User Profile\n{dialectic_content}"
 
         self._system_prompt = prompt
         self._system_prompt_loaded = True
@@ -615,33 +722,67 @@ class Agent:
         return self._provider
 
     async def _provider_chat(self, messages, model, stream: bool = False):
-        """Call provider.chat() with optional offline fallback.
+        """Call provider.chat() with circuit breaker + optional offline fallback.
 
-        When offline_mode is enabled and the primary provider fails with a
-        connection error, automatically retry with local providers
-        (Ollama → LM Studio → llama.cpp).
+        Pipeline:
+
+        1. **Tracing span** (``provider.chat``) when OTel is active —
+           no-op otherwise.
+        2. **Circuit breaker** wraps the primary call. After
+           ``failure_threshold`` consecutive failures the breaker opens and
+           subsequent requests skip the primary call entirely (failing fast
+           into the fallback path) for ``reset_timeout`` seconds.
+        3. **Offline fallback** kicks in when the primary fails (or is
+           short-circuited) AND ``offline_mode`` is enabled. Routes through
+           ``offline.FallbackChatWrapper`` which tries local providers in
+           sequence (Ollama → LM Studio → llama.cpp).
+
+        Errors that aren't connection-shaped propagate immediately when
+        offline_mode is off, matching the historical behavior.
         """
-        if not self._offline_mode:
-            return await self.provider.chat(messages, model, stream=stream)
+        from .observability import span
+        from .resilience import CircuitBreakerError
 
+        async def _primary():
+            with span("provider.chat", provider=self._provider_name, model=model):
+                return await self.provider.chat(messages, model, stream=stream)
+
+        # Fast path: no breaker, no fallback — direct call.
+        if self._provider_breaker is None and not self._offline_mode:
+            return await _primary()
+
+        # Try the primary call (through the breaker if configured).
         try:
-            return await self.provider.chat(messages, model, stream=stream)
+            if self._provider_breaker is not None:
+                return await self._provider_breaker.call(_primary)
+            return await _primary()
+        except CircuitBreakerError as e:
+            # Breaker is OPEN — skip the primary call but still try the
+            # fallback (the local providers may be reachable even when the
+            # remote one is flapping).
+            if not self._offline_mode:
+                raise
+            logger.info("Provider circuit %s open; using offline fallback", self._provider_name)
         except (ConnectionError, TimeoutError, OSError) as e:
+            if not self._offline_mode:
+                raise
             logger.warning(f"Primary provider failed: {e}. Trying offline fallback...")
         except Exception as e:
+            if not self._offline_mode:
+                raise
             err_str = str(e).lower()
             if any(kw in err_str for kw in ("connection", "timeout", "unreachable", "refused")):
                 logger.warning(f"Primary provider failed: {e}. Trying offline fallback...")
             else:
                 raise
 
-        # Initialize fallback wrapper on first need
+        # Initialize fallback wrapper on first need.
         if self._fallback_wrapper is None:
             from .offline import FallbackChatWrapper
-
             self._fallback_wrapper = FallbackChatWrapper(self.provider, self.config)
 
-        return await self._fallback_wrapper.chat(messages, model, stream=stream)
+        with span("provider.fallback_chat", provider=self._provider_name, model=model):
+            return await self._fallback_wrapper.chat(messages, model, stream=stream)
 
     def _extract_suggested_topics(self, message: str) -> List[str]:
         """Extract suggested topics from a message for knowledge gap guidance.
@@ -855,12 +996,29 @@ class Agent:
     ) -> Union[str, KnowledgeSearchResult]:
         """Async wrapper for knowledge context search.
 
-        Runs the synchronous FTS5 search in a thread pool to avoid blocking
-        the event loop, which is critical when the knowledge base grows large.
+        Runs the synchronous FTS5 search on a **dedicated** thread pool
+        (``_kb_search_executor``) so it doesn't compete with the default
+        ``asyncio.to_thread`` pool used by everything else (file I/O,
+        profile loads, blocking provider calls). At 5+ concurrent users
+        the shared default pool was the bottleneck — KB queries waited
+        behind unrelated I/O.
+
+        The executor is module-global, lazily created, and survives the
+        Agent lifecycle. Tests can monkey-patch ``_get_kb_search_executor``
+        if they need a different concurrency model.
         """
-        return await asyncio.to_thread(
-            self._search_knowledge_context_sync, message, user_id, max_results, return_structured
-        )
+        loop = asyncio.get_running_loop()
+        executor = _get_kb_search_executor()
+        from .observability import span as _span
+        with _span("kb.search", user=user_id, max_results=max_results):
+            return await loop.run_in_executor(
+                executor,
+                self._search_knowledge_context_sync,
+                message,
+                user_id,
+                max_results,
+                return_structured,
+            )
 
     async def close(self):
         for mem in self._memories.values():
@@ -1070,157 +1228,28 @@ class Agent:
     # -- Sub-method: Route message ------------------------------------------------
 
     async def _route_message(self, user_message: str, user_id: str, _depth: int) -> tuple:
-        """Set up request routing, task timer, and guardrails.
+        """Delegate to ``agent_internals.router.route_message``.
 
-        Returns:
-            (request_model, mem, history, _full_history_for_bg) or None if early-exit.
+        See :mod:`myclaw.agent_internals.router` for the implementation.
+        Kept here as a thin wrapper so the public method name on ``Agent``
+        is unchanged and existing tests / callers keep working.
         """
-        global _LAST_ACTIVE_TIME
-        _LAST_ACTIVE_TIME = time.time()
-
-        # Intelligent Routing: Determine model for THIS request only
-        request_model = self.model
-        if self._router:
-            routed_model = self._router.get_routing_decision(user_message, self.model)
-            if routed_model:
-                request_model = routed_model
-
-        import uuid
-
-        # Generate unique task ID for this request
-        self._current_task_id = f"task_{user_id}_{uuid.uuid4().hex[:8]}_{int(time.time())}"
-
-        # Start task timer for tracking timeouts
-        await self._task_timer.start_task_timer(
-            task_id=self._current_task_id,
-            user_question=user_message,
-            on_status_update=self._handle_task_status_update,
-            steps_total=5,  # Approximate: memory, knowledge, LLM, tools, response
-        )
-
-        # Agent Pipeline Integration: Loop prevention
-        if _depth > 10:
-            logger.warning(
-                f"Max delegation depth reached ({_depth}). Preventing potential infinite loop."
-            )
-            await self._task_timer.complete_task(
-                self._current_task_id, success=False, error_message="Max delegation depth reached"
-            )
-            return None
-
-        # Medic Agent: Check loop prevention before processing
-        try:
-            from myclaw.agents.medic_agent import prevent_infinite_loop
-
-            loop_status = prevent_infinite_loop()
-            if "limit reached" in loop_status.lower():
-                logger.warning("Execution limit reached by loop prevention")
-                await self._task_timer.complete_task(
-                    self._current_task_id,
-                    success=False,
-                    error_message="Loop prevention limit reached",
-                )
-                return None
-        except Exception:
-            pass
-
-        # Check if task has been cancelled due to timeout
-        if self._current_task_id and not self._task_timer.is_task_active(self._current_task_id):
-            logger.warning(f"Task {self._current_task_id} was cancelled or timed out")
-            return None
-
-        mem = await self._get_memory(user_id)
-        await mem.add("user", user_message)
-
-        # Update timer with current step
-        await self._task_timer.update_step(self._current_task_id, "memory_loading", 1, 5)
-
-        trigger_hook("on_session_start", user_id, self.name)
-
-        history = await mem.get_history()
-
-        # Feature: Context Summarization moved off hot path
-        threshold = getattr(self.config.agents, "summarization_threshold", 10)
-        _should_summarize_after = len(history) > threshold
-        _full_history_for_bg = history.copy() if _should_summarize_after else None
-
-        return request_model, mem, history, _full_history_for_bg
+        from .agent_internals import route_message
+        return await route_message(self, user_message, user_id, _depth)
 
     # -- Sub-method: Build context ------------------------------------------------
 
     async def _build_context(
         self, user_message: str, user_id: str, mem: Memory, history: list, request_model: str
     ) -> tuple:
-        """Build the message context: knowledge search + system prompt + hooks.
+        """Delegate to ``agent_internals.context_builder.build_message_context``.
 
-        Returns:
-            (messages, had_kb_results, kb_gap_hint)
+        See :mod:`myclaw.agent_internals.context_builder` for the implementation.
         """
-        # Optimization #4: Proactive skill pre-loading
-        task = asyncio.create_task(self._skill_preloader.predict_and_preload(history, user_message))
-        self._track_preload(task)
-
-        # Search knowledge base for relevant context
-        knowledge_context = await self._search_knowledge_context(user_message, user_id)
-        had_kb_results = bool(knowledge_context)
-
-        # If KB gap exists and no context, hint the agent about KB creation and log the gap
-        kb_gap_hint = ""
-        if not had_kb_results and self._kb_gaps.get(user_id):
-            last_gap = next(iter(self._kb_gaps[user_id]))
-            kb_gap_hint = (
-                f"\n\n[Note: The knowledge base has no entries related to '{last_gap[:60]}'. "
-                "Consider using write_to_knowledge() to store useful information for future queries.]"
-            )
-
-            # Emit structured log entry for knowledge gap (with deduplication)
-            if not self._gap_cache.is_duplicate(last_gap, user_id):
-                gap_data = {
-                    "event": "knowledge_gap_detected",
-                    "query": last_gap,
-                    "description": "No knowledge base entries found for query",
-                    "user_id": user_id,
-                    "session_context": "System will preserve context to avoid redundant empty searches in this session",
-                    "timestamp": datetime.utcnow().isoformat(),
-                    "recommendation": "Use write_to_knowledge() to create a new entry for future queries",
-                }
-                kb_gap_logger.info(gap_data)
-
-                # Write to researchers JSONL file
-                try:
-                    GAP_FILE.parent.mkdir(parents=True, exist_ok=True)
-                    with open(GAP_FILE, "a", encoding="utf-8") as f:
-                        f.write(json.dumps(gap_data) + "\n")
-                except Exception as e:
-                    logger.error(f"Failed to record gap to file: {e}")
-
-        # Check if task has been cancelled due to timeout
-        if self._current_task_id and not self._task_timer.is_task_active(self._current_task_id):
-            logger.warning(f"Task {self._current_task_id} was cancelled or timed out")
-            return None
-
-        # Update timer - building system prompt
-        if self._current_task_id:
-            await self._task_timer.update_step(self._current_task_id, "building_prompt", 2, 5)
-
-        # Build system prompt with knowledge context (async load to avoid blocking)
-        system_prompt = await self._load_system_prompt()
-        system_content = system_prompt
-        if knowledge_context:
-            system_content = f"{system_prompt}\n\n{knowledge_context}"
-        if kb_gap_hint:
-            system_content = f"{system_content}{kb_gap_hint}"
-
-        messages = [{"role": "system", "content": system_content}] + history
-
-        # Trigger pre_llm_call hooks - allow hooks to modify messages
-        hook_results = trigger_hook("pre_llm_call", messages, request_model)
-        for result in hook_results:
-            if result and isinstance(result, list):
-                messages = result  # Use modified messages from hook
-                logger.debug("pre_llm_call hook modified messages")
-
-        return messages, had_kb_results, kb_gap_hint
+        from .agent_internals import build_message_context
+        return await build_message_context(
+            self, user_message, user_id, mem, history, request_model
+        )
 
     # -- Sub-method: Execute tools ------------------------------------------------
 
@@ -1234,186 +1263,18 @@ class Agent:
         _depth: int,
         had_kb_results: bool,
     ) -> str:
-        """Execute tool calls (parallel + sequential) and return final response.
+        """Delegate to ``agent_internals.tool_executor.execute_tools``.
 
-        Returns:
-            Final response string, or error message on failure.
+        See :mod:`myclaw.agent_internals.tool_executor` for the implementation.
+        Kept as a wrapper so the existing call site in ``think()`` (and any
+        external callers) need no change.
         """
-        # Save assistant response with tool_calls to memory (as plain text for now)
-        await mem.add("assistant", "")
+        from .agent_internals import execute_tools
+        return await execute_tools(
+            self, tool_calls, messages, user_message, user_id, mem, _depth, had_kb_results
+        )
 
-        # Update timer - executing tools
-        if self._current_task_id:
-            await self._task_timer.update_step(self._current_task_id, "executing_tools", 4, 5)
-
-        # Collect results per tool_call_id
-        tool_results_by_id: Dict[str, str] = {}
-
-        # Determine parallel vs sequential execution
-        independent_tools = [
-            tc for tc in tool_calls if is_tool_independent(tc.get("function", {}).get("name", ""))
-        ]
-        dependent_tools = [
-            tc
-            for tc in tool_calls
-            if not is_tool_independent(tc.get("function", {}).get("name", ""))
-        ]
-
-        if len(independent_tools) > 1:
-            # Use parallel execution for independent tools
-            logger.info(f"Executing {len(independent_tools)} tools in parallel")
-            executor = get_parallel_executor()
-            exec_results = await executor.execute_tools(independent_tools, user_id)
-
-            # Map results back to tool_call_ids
-            for tc, r in zip(independent_tools, exec_results):
-                tool_call_id = tc.get("id", "call_default")
-                if r["success"]:
-                    tool_output = r["result"]
-                    if r["tool_name"] == "browse" and self._detect_browse_failure(tool_output):
-                        url_match = re.search(r"https?://\S+", tool_output)
-                        url = url_match.group(0) if url_match else ""
-                        tool_output += self._browse_alternative_hint(url, user_message)
-                    content = f"Tool {r['tool_name']} returned: {tool_output}"
-                else:
-                    content = f"Tool {r['tool_name']} error: {r['error']}"
-                tool_results_by_id[tool_call_id] = content
-                await mem.add("tool", content)
-                # KB extraction for substantial parallel tool results (fire-and-forget)
-                if (
-                    r["success"]
-                    and self._kb_auto_extract
-                    and self._should_save_tool_result(r["tool_name"], r.get("result", ""))
-                ):
-                    _t = asyncio.create_task(
-                        self._save_tool_result_to_kb(
-                            r["tool_name"],
-                            tc.get("function", {}).get("arguments", {}),
-                            r["result"],
-                            user_message,
-                            user_id,
-                        )
-                    )
-                    self._track_preload(_t)
-        elif independent_tools:
-            # Single independent tool - execute sequentially below along with dependent ones
-            dependent_tools = tool_calls
-
-        # Execute dependent (and single independent) tools sequentially
-        for tc in dependent_tools:
-            tool_name = tc.get("function", {}).get("name", "")
-            args = tc.get("function", {}).get("arguments", {})
-            tool_call_id = tc.get("id", "call_default")
-
-            if tool_name not in TOOLS:
-                content = f"Unknown tool: {tool_name}"
-                tool_results_by_id[tool_call_id] = content
-                await mem.add("tool", content)
-                logger.warning(f"Unknown tool called: {tool_name}")
-                continue
-
-            if tool_name == "delegate":
-                args["_depth"] = _depth + 1
-
-            start_time = time.time()
-            logger.info(f"[AUDIT] Tool execution started: {tool_name} with args: {args}")
-
-            try:
-                func = TOOLS[tool_name]["func"]
-                if inspect.iscoroutinefunction(func):
-                    result = await func(**args)
-                else:
-                    result = await asyncio.to_thread(func, **args)
-
-                tool_output = str(result)
-
-                # Error Handling Enhancement 1: browse failure -> suggest alternatives
-                if tool_name == "browse" and self._detect_browse_failure(tool_output):
-                    url = args.get("url", "")
-                    tool_output += self._browse_alternative_hint(url, user_message)
-                    logger.info(f"Browse failure detected for {url}; alternative hint appended.")
-
-                # Error Handling Enhancement 2: empty KB search -> nudge KB creation
-                if tool_name == "search_knowledge":
-                    if "No results found" in tool_output or "Error" in tool_output:
-                        query = args.get("query", user_message[:60])
-                        self._record_kb_gap(user_id, query)
-                        tool_output += (
-                            f"\n\n[Tip: No knowledge base entries matched '{query}'. "
-                            "Use write_to_knowledge() to persist useful information for future use.]"
-                        )
-
-                content = f"Tool {tool_name} returned: {tool_output}"
-                tool_results_by_id[tool_call_id] = content
-                await mem.add("tool", content)
-                duration = time.time() - start_time
-                logger.info(
-                    f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)"
-                )
-                # KB extraction for substantial sequential tool results (fire-and-forget)
-                if self._kb_auto_extract and self._should_save_tool_result(tool_name, tool_output):
-                    _t = asyncio.create_task(
-                        self._save_tool_result_to_kb(
-                            tool_name, args, tool_output, user_message, user_id
-                        )
-                    )
-                    self._track_preload(_t)
-            except Exception as e:
-                logger.error(f"Tool execution error ({tool_name}): {e}")
-                logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
-                content = f"Tool error: {e}"
-                tool_results_by_id[tool_call_id] = content
-                await mem.add("tool", content)
-
-        # Build proper followup messages with assistant + individual tool messages for OpenAI compatibility
-        openai_tool_calls = []
-        for tc in tool_calls:
-            openai_tool_calls.append(
-                {
-                    "id": tc.get("id", "call_default"),
-                    "type": tc.get("type", "function"),
-                    "function": {
-                        "name": tc["function"]["name"],
-                        "arguments": tc["function"].get("arguments_str", ""),
-                    },
-                }
-            )
-
-        followup = messages + [
-            {"role": "assistant", "content": "", "tool_calls": openai_tool_calls}
-        ]
-
-        # Append one tool message per tool_call_id in the same order as tool_calls
-        for tc in tool_calls:
-            tool_call_id = tc.get("id", "call_default")
-            content = tool_results_by_id.get(tool_call_id, "Tool was not executed.")
-            followup.append({"role": "tool", "tool_call_id": tool_call_id, "content": content})
-
-        # Trigger pre_llm_call hooks for followup
-        hook_results = trigger_hook("pre_llm_call", followup, self.model)
-        for result in hook_results:
-            if result and isinstance(result, list):
-                followup = result
-
-        try:
-            import httpx as _httpx  # local alias to avoid shadowing outer scope
-
-            final_response, _ = await self._provider_chat(followup, self.model)
-
-            # Trigger post_llm_call hooks for followup
-            trigger_hook("post_llm_call", final_response, None)
-
-            # Empty-response recovery after tool-use followup
-            if self._is_empty_response(final_response):
-                final_response = await self._recover_empty_response(
-                    followup, user_message, user_id, had_kb_results
-                )
-
-            await mem.add("assistant", final_response)
-            return final_response
-        except Exception as e:
-            logger.error(f"LLM second call error: {e}")
-            return f"Tool executed but error getting response: {e}"
+    # ── _execute_tools body moved to agent_internals/tool_executor.py ──
 
     # -- Sub-method: Handle summarization & cleanup -------------------------------
 
@@ -1425,33 +1286,62 @@ class Agent:
         mem: Memory,
         _full_history_for_bg: Optional[list],
     ) -> None:
-        """Background KB extraction, session end hooks, and context summarization.
+        """Delegate to ``agent_internals.ResponseHandler``.
 
-        This is called after the response has been sent to the user.
-        All operations are fire-and-forget and never block the response.
+        Sprint 9 split this 30-line method into a real class with explicit
+        dependencies. The wrapper stays so existing call sites in
+        ``think()`` / ``stream_think()`` need no change.
         """
-        # Background KB auto-extraction (fire-and-forget, never blocks response)
-        if self._kb_auto_extract and self._should_extract_knowledge(user_message, response):
-            _kb_task = asyncio.create_task(
-                self._extract_and_save_knowledge(user_message, response, user_id)
-            )
-            self._track_preload(_kb_task)
+        from .agent_internals import ResponseHandler
+        await ResponseHandler(self).handle(
+            user_message, response, user_id, mem, _full_history_for_bg
+        )
 
-        # Trigger on_session_end hook
-        message_count = len(await mem.get_history()) if hasattr(mem, "get_history") else 0
-        trigger_hook("on_session_end", user_id, self.name, message_count)
+    # -- Structured-output helper (Sprint 4 integration) -------------------------
 
-        # Background context summarization (fire-and-forget, off hot path)
-        if _full_history_for_bg:
-            _summarize_task = asyncio.create_task(
-                self._background_summarize_context(_full_history_for_bg, user_id, mem)
-            )
-            self._track_preload(_summarize_task)
+    async def complete_structured(
+        self,
+        messages: list,
+        schema: Any,
+        model: Optional[str] = None,
+        max_repair_attempts: int = 1,
+    ) -> Any:
+        """Get a schema-validated structured response from the LLM.
 
-        # Complete task timer successfully
-        if self._current_task_id:
-            await self._task_timer.complete_task(self._current_task_id, success=True)
-            self._current_task_id = None
+        Wraps :func:`myclaw.structured_output.repair_json` around the same
+        provider call ``think()`` uses. When the model returns invalid
+        JSON, a focused repair prompt with the schema and validation
+        errors is sent back as a follow-up call. Up to ``max_repair_attempts``
+        rounds are attempted before giving up.
+
+        Args:
+            messages: OpenAI-style ``[{"role": ..., "content": ...}, ...]`` list.
+            schema: Either a Pydantic v2 ``BaseModel`` subclass (preferred —
+                richer type coercion and error paths) or a JSON-schema dict.
+            model: Optional override; otherwise uses the agent's configured model.
+            max_repair_attempts: Repair rounds. Each costs one LLM call.
+
+        Returns:
+            A :class:`~myclaw.structured_output.ValidationResult`. Check
+            ``result.ok``; on success ``result.data`` is the parsed object
+            (a Pydantic instance when a model was passed in).
+        """
+        from .structured_output import repair_json
+
+        target_model = model or self.model
+
+        async def _llm_call(msgs: list) -> str:
+            response, _tool_calls = await self._provider_chat(msgs, target_model)
+            return response or ""
+
+        # Initial completion.
+        first_response, _ = await self._provider_chat(messages, target_model)
+        return await repair_json(
+            text=first_response or "",
+            schema=schema,
+            llm_call=_llm_call,
+            max_attempts=max_repair_attempts,
+        )
 
     # -- Main think() orchestrator ------------------------------------------------
 
@@ -1464,7 +1354,18 @@ class Agent:
             3. LLM call            -- primary reasoning
             4. _execute_tools()    -- tool execution (if any)
             5. _handle_summarization() -- background cleanup
+
+        Wrapped in an ``agent.think`` span so distributed traces can show
+        the full request fan-out into provider/tool/KB child spans. The
+        span is a no-op when OpenTelemetry is not installed/enabled.
         """
+        from .observability import span as _span
+        with _span("agent.think", agent=self.name, user=user_id, depth=_depth):
+            return await self._think_impl(user_message, user_id, _depth)
+
+    async def _think_impl(
+        self, user_message: str, user_id: str = "default", _depth: int = 0
+    ) -> str:
         # 1. Route message
         route_result = await self._route_message(user_message, user_id, _depth)
         if route_result is None:
@@ -1720,3 +1621,11 @@ class Agent:
         trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
 
         yield "[TOOL_CALLS_NONE]"  # Signal no tools were invoked
+
+
+# ── Public API surface ───────────────────────────────────────────────
+# Listing __all__ explicitly so `from this_module import *` doesn't leak
+# internal helpers (e.g. _profile_cache, _LAST_ACTIVE_TIME). Names that
+# aren't here are still importable by direct attribute access — they
+# just don't participate in star imports.
+__all__ = ['Agent', 'KnowledgeSearchResult', 'KnowledgeGapCache', 'GAP_FILE', 'SYSTEM_PROMPT', 'get_last_active_time', 'shutdown_kb_search_executor']

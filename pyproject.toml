@@ -79,6 +79,30 @@ security = ["cryptography>=42.0.0", "keyring>=25.0.0"]
 mfa = ["pyotp>=2.9.0", "qrcode>=7.4"]
 ssh = ["paramiko>=3.4.0"]
 
+# Sprint 2 — distributed tracing
+tracing = [
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp>=1.20",
+]
+
+# Sprint 3 — headless browser tooling (Playwright)
+browser = ["playwright>=1.42"]
+
+# Sprint 3 — Jinja2 prompt templates (falls back to string.Template if absent)
+prompts = ["jinja2>=3.1"]
+
+# Sprint 3 — JSON-schema validation (alternative to passing Pydantic models)
+jsonschema = ["jsonschema>=4.21"]
+
+# Sprint 4 — vector database plugins
+qdrant = ["qdrant-client>=1.7"]
+
+# Sprint 6 — JWT verification + Discord channel
+auth = ["PyJWT[crypto]>=2.8"]
+discord = ["discord.py>=2.3"]
+slack = ["slack-bolt>=1.18"]
+
 # Install everything
 all = [
     "openai>=1.0",
@@ -93,6 +117,16 @@ all = [
     "pyotp>=2.9.0",
     "qrcode>=7.4",
     "paramiko>=3.4.0",
+    "opentelemetry-api>=1.20",
+    "opentelemetry-sdk>=1.20",
+    "opentelemetry-exporter-otlp>=1.20",
+    "playwright>=1.42",
+    "jinja2>=3.1",
+    "jsonschema>=4.21",
+    "qdrant-client>=1.7",
+    "PyJWT[crypto]>=2.8",
+    "discord.py>=2.3",
+    "slack-bolt>=1.18",
 ]
 
 dev = [

@@ -182,3 +182,22 @@
     border-right-color: var(--border);
   }
 }
+
+/* ── TypewriterText component (Sprint 11) ────────────────────────────── */
+/* Cursor for the streaming reveal. Blinks when caught up to the end of
+   the buffer, stays solid while characters are still being typed in. */
+.typewriter-cursor {
+  display: inline-block;
+  margin-left: 1px;
+  opacity: 0.85;
+  animation: typewriter-blink 1s steps(2, start) infinite;
+}
+.typewriter-cursor.typing {
+  /* While characters are still being revealed, keep the cursor solid
+     so it visually anchors the reveal frontier. */
+  animation: none;
+  opacity: 1.0;
+}
+@keyframes typewriter-blink {
+  to { visibility: hidden; }
+}

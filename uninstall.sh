@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # ═════════════════════════════════════════════════════════════════════════════
 #  ZenSynora (MyClaw) — Universal Uninstall Script
-#  Version: 2.0.0
+#  Version: 2.1.0  (matches install.sh 2.1.0 — covers Sprints 1–12:
+#                   marketplace, vector store, prompt registry, cost
+#                   dashboard, plugins, hub, audit logs, tenancy)
 #
 #  Usage:
 #    chmod +x uninstall.sh && ./uninstall.sh
@@ -360,6 +362,19 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
                        "$MYCLAW_DIR/audit" \
                        "$MYCLAW_DIR/medic" \
                        "$MYCLAW_DIR/logs"
+            # ── Sprint 3-9 additions ──────────────────────────────────────
+            # New persistent artifacts that didn't exist before the recent
+            # sprints. The cost-tracking DB is data, not config; same for
+            # the per-user memory shards (memory_<user>.db). The plugins
+            # install dir holds downloaded artifacts — re-fetchable.
+            run rm -f  "$MYCLAW_DIR/cost_tracking.db"      # Sprint 3 cost tracker
+            run rm -f  "$MYCLAW_DIR/vectors.db"            # Sprint 4 default vector store
+            run rm -f  "$MYCLAW_DIR/prompts.jsonl"         # Sprint 3 prompt registry
+            run rm -f  "$MYCLAW_DIR/knowledge_gaps.jsonl"  # Sprint 1+ KB gap log
+            run rm -f  "$MYCLAW_DIR/scheduler_jobs.jsonl"  # Sprint X scheduler
+            run rm -f  "$MYCLAW_DIR/"memory_*.db           # Sprint 11: per-tenant memory shards
+            run rm -rf "$MYCLAW_DIR/plugins"               # Sprint 9 marketplace install dir
+            run rm -rf "$MYCLAW_DIR/hub"                   # Sprint 9 local hub registry
             success "Data cleared, config preserved."
         else
             if prompt_yes "  Remove all MyClaw data in $MYCLAW_DIR?"; then
@@ -380,6 +395,51 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
         run rm -f "$SCHEDULER_PERSIST"
         success "Scheduler persistence file removed."
     fi
+
+    # ── 3.6 Marketplace install artifacts (Sprint 9) ─────────────────────────
+    # Downloaded plugin payloads under ~/.myclaw/plugins/installed/. Safe
+    # to remove on uninstall; reinstall will re-fetch from the configured
+    # source (OpenClaw / GitHub releases / local hub).
+    if [[ -d "$MYCLAW_DIR/plugins" ]]; then
+        header "3.6 Plugin marketplace artifacts"
+        if [[ "$KEEP_DATA" == "false" ]] && prompt_yes "  Remove downloaded plugin artifacts ($MYCLAW_DIR/plugins)?"; then
+            run rm -rf "$MYCLAW_DIR/plugins"
+            success "Plugin install directory removed."
+        else
+            skip "Plugin artifacts kept."
+        fi
+    fi
+
+    # ── 3.7 Per-tenant memory shards (Sprint 11) ─────────────────────────────
+    # Multi-tenancy creates one memory_<user>.db per UserContext; the
+    # original memory.db cleanup above only catches the legacy single-user
+    # path. Glob explicitly so we don't miss them.
+    if compgen -G "$MYCLAW_DIR/memory_*.db" > /dev/null; then
+        header "3.7 Per-tenant memory shards"
+        if [[ "$KEEP_DATA" == "false" ]] && prompt_yes "  Remove all per-tenant memory_*.db shards?"; then
+            run rm -f "$MYCLAW_DIR"/memory_*.db
+            success "Per-tenant memory shards removed."
+        else
+            skip "Per-tenant memory shards kept."
+        fi
+    fi
+
+    # ── 3.8 Cost-tracking DB (Sprint 3) ──────────────────────────────────────
+    if [[ -f "$MYCLAW_DIR/cost_tracking.db" ]]; then
+        header "3.8 Cost-tracking database"
+        if [[ "$KEEP_DATA" == "false" ]] && prompt_yes "  Remove cost_tracking.db (Sprint 3 dashboard data)?"; then
+            run rm -f "$MYCLAW_DIR/cost_tracking.db"
+            success "Cost-tracking DB removed."
+        fi
+    fi
+
+    # ── 3.9 Vector store + prompt registry (Sprints 3, 4) ────────────────────
+    for f in vectors.db prompts.jsonl knowledge_gaps.jsonl; do
+        if [[ -f "$MYCLAW_DIR/$f" ]]; then
+            run rm -f "$MYCLAW_DIR/$f"
+            info "Removed $f"
+        fi
+    done
 
     # ── 4. WEB UI ARTIFACTS ──────────────────────────────────────────────────
     header "4. Cleaning Web UI artifacts"

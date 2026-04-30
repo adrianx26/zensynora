@@ -7,7 +7,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 from datetime import datetime
-from .async_utils import run_async
+from ..async_utils import run_async
 
 logger = logging.getLogger(__name__)
 

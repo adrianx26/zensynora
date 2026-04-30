@@ -9,8 +9,8 @@ likely to be needed based on user message history and conversation context.
 import logging
 import asyncio
 import re
-from typing import Dict, List, Optional, Set
-from collections import defaultdict
+from typing import Deque, Dict, List, Optional, Set
+from collections import defaultdict, deque
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
@@ -36,7 +36,8 @@ class SkillPredictor:
     def __init__(self):
         self._skill_usage_history: Dict[str, List[datetime]] = defaultdict(list)
         self._context_patterns: Dict[str, re.Pattern] = {}
-        self._recent_tools: List[str] = []
+        # Bounded deque: O(1) FIFO eviction at maxlen, no manual pop(0).
+        self._recent_tools: Deque[str] = deque(maxlen=10)
         self._consecutive_patterns: int = 0
         self._last_prediction_time: Optional[datetime] = None
     
@@ -65,7 +66,9 @@ class SkillPredictor:
                     predicted_skills.add(skill_name)
                     break
         
-        for tool in self._recent_tools[-3:]:
+        # deque doesn't support negative-index slicing; convert the tail.
+        recent_tail = list(self._recent_tools)[-3:]
+        for tool in recent_tail:
             if tool in SKILL_PATTERNS:
                 predicted_skills.add(tool)
         
@@ -75,12 +78,11 @@ class SkillPredictor:
     def record_tool_usage(self, tool_name: str):
         """Record that a tool was used for future prediction."""
         self._skill_usage_history[tool_name].append(datetime.now())
+        # deque(maxlen=10) auto-evicts the oldest entry on append.
         self._recent_tools.append(tool_name)
-        if len(self._recent_tools) > 10:
-            self._recent_tools.pop(0)
-        
+
         if len(self._recent_tools) >= 3:
-            recent = self._recent_tools[-3:]
+            recent = list(self._recent_tools)[-3:]
             if len(set(recent)) == 1:
                 self._consecutive_patterns += 1
             else:
@@ -336,3 +338,11 @@ def preload_skills_for_context(messages: List[Dict], current_message: str) -> Li
     return asyncio.get_event_loop().run_until_complete(
         preloader.predict_and_preload(messages, current_message)
     )
+
+
+# ── Public API surface ───────────────────────────────────────────────
+# Listing __all__ explicitly so `from this_module import *` doesn't leak
+# internal helpers (e.g. _profile_cache, _LAST_ACTIVE_TIME). Names that
+# aren't here are still importable by direct attribute access — they
+# just don't participate in star imports.
+__all__ = ['SkillPredictor', 'get_skill_preloader', 'start_preloader', 'stop_preloader']

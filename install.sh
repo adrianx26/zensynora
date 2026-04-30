@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # ═════════════════════════════════════════════════════════════════════════════
 #  ZenSynora (MyClaw) — Universal Install Script
-#  Version: 2.0.0
+#  Version: 2.1.0  (covers Sprints 1–12: marketplace, multi-tenancy,
+#                   tracing, vector store, prompt registry, eval harness,
+#                   structured-output, browser tools, cost dashboard,
+#                   class-based agent decomposition, agent registry YAML)
 #
 #  Supported Platforms: Linux (native/WSL2), macOS 13+, Windows (WSL2 recommended)
 #  Deployment Modes: Docker (recommended) | Traditional (venv-based)
@@ -559,6 +562,64 @@ if [[ "$SKIP_OPTIONAL" == "false" ]]; then
     fi
 fi
 
+# ── 5.5 OPTIONAL FEATURE EXTRAS (Sprints 2–9) ────────────────────────────────
+# These map to pyproject.toml optional-dependencies. Each is a no-op when
+# not installed (modules import fine, helpers degrade to errors/no-ops),
+# but the operator usually wants them on for production.
+if [[ "$SKIP_OPTIONAL" == "false" ]]; then
+    header "5.5 Optional feature extras"
+
+    # OpenTelemetry tracing — Sprint 2 module + Sprint 10 wiring
+    if prompt_yes "  Install OpenTelemetry tracing SDK ([tracing])?"; then
+        run "$VENV_DIR/bin/pip" install --quiet \
+            "opentelemetry-api>=1.20" "opentelemetry-sdk>=1.20" "opentelemetry-exporter-otlp>=1.20"
+        success "Tracing extras installed. Enable with ZENSYNORA_TRACING_ENABLED=true."
+    fi
+
+    # Playwright browser tools — Sprint 3
+    if prompt_yes "  Install Playwright headless browser tools ([browser])?"; then
+        run "$VENV_DIR/bin/pip" install --quiet "playwright>=1.42"
+        info "Installing Playwright Chromium (large download, can take a minute)…"
+        run "$VENV_DIR/bin/playwright" install chromium || warn "Playwright Chromium install non-zero"
+        success "Browser tools ready."
+    fi
+
+    # Jinja2 prompt templates — Sprint 3
+    if prompt_yes "  Install Jinja2 for prompt templates ([prompts])?"; then
+        run "$VENV_DIR/bin/pip" install --quiet "jinja2>=3.1"
+    fi
+
+    # JSON-schema validation — Sprint 3 alternative to Pydantic
+    if prompt_yes "  Install jsonschema for structured-output validation ([jsonschema])?"; then
+        run "$VENV_DIR/bin/pip" install --quiet "jsonschema>=4.21"
+    fi
+
+    # Qdrant vector backend — Sprint 4
+    if prompt_yes "  Install Qdrant client for the vector store ([qdrant])?"; then
+        run "$VENV_DIR/bin/pip" install --quiet "qdrant-client>=1.7"
+        info "Run a Qdrant server with: docker run -p 6333:6333 qdrant/qdrant"
+    fi
+
+    # JWT verification + OAuth — Sprint 6
+    if prompt_yes "  Install PyJWT for OAuth/JWT auth ([auth])?"; then
+        run "$VENV_DIR/bin/pip" install --quiet "PyJWT[crypto]>=2.8"
+    fi
+
+    # Discord channel — Sprint 6
+    if prompt_yes "  Install discord.py for the Discord channel ([discord])?"; then
+        run "$VENV_DIR/bin/pip" install --quiet "discord.py>=2.3"
+    fi
+
+    # PyYAML — Sprint 12 agent registry YAML loader
+    # PyYAML is technically already a core dep (pyproject lists it) but
+    # double-check so a cached install without it doesn't silently fall
+    # back to the embedded literal at runtime.
+    if ! "$VENV_DIR/bin/python" -c "import yaml" 2>/dev/null; then
+        info "Installing PyYAML (required for the agent registry data file)…"
+        run "$VENV_DIR/bin/pip" install --quiet "pyyaml>=6.0"
+    fi
+fi
+
 # ── 6. OPTIONAL: Ollama ──────────────────────────────────────────────────────
 if [[ "$SKIP_OPTIONAL" == "false" ]]; then
     header "6. Ollama (local LLMs)"
@@ -634,6 +695,14 @@ make_dir "$HOME/.myclaw/sandbox"
 make_dir "$HOME/.myclaw/audit"
 make_dir "$HOME/.myclaw/medic"
 make_dir "$HOME/.myclaw/logs"
+# ── New directories introduced by Sprints 3-9 ───────────────────────────────
+# Pre-creating them avoids the first-write directory-creation race when
+# multiple workers boot simultaneously (e.g., systemd + cron).
+make_dir "$HOME/.myclaw/plugins"            # Sprint 9: marketplace install root
+make_dir "$HOME/.myclaw/plugins/installed"  # Sprint 9: per-artifact storage
+make_dir "$HOME/.myclaw/hub"                # Sprint 9: local hub registry
+make_dir "$HOME/.myclaw/hub/skills"
+make_dir "$HOME/.myclaw/api"                # API-key store (api_server.py)
 
 # ── 8. OPTIONAL: systemd service ─────────────────────────────────────────────
 if [[ "$SKIP_OPTIONAL" == "false" && "$PLATFORM" != "macos" && "$PLATFORM" != "windows" ]]; then
@@ -713,12 +782,47 @@ if [[ "$DRY_RUN" == "false" ]]; then
     check_import "apscheduler"
     check_import "scrapling"
 
-    # Check ZenSynora internal modules
+    # Check ZenSynora internal modules — original surface
     if ! "$VENV_DIR/bin/python" -c "import myclaw.state_store, myclaw.async_scheduler" 2>/dev/null; then
         warn "Internal modules state_store / async_scheduler import FAILED"
         FAILED=$((FAILED + 1))
     else
-        success "Internal modules OK"
+        success "Internal modules (state_store, async_scheduler) OK"
+    fi
+
+    # ── New module surface from Sprints 2-12 ─────────────────────────────────
+    # Each is import-only; optional-dep features stay no-ops without the
+    # underlying SDK, so the import test always succeeds.
+    check_sprint_module() {
+        local name="$1"
+        local module="$2"
+        if "$VENV_DIR/bin/python" -c "import $module" 2>/dev/null; then
+            success "Module $name (Sprint module) OK"
+        else
+            warn "Module $name FAILED to import"
+            FAILED=$((FAILED + 1))
+        fi
+    }
+
+    check_sprint_module "observability"          "myclaw.observability"     # Sprint 2: tracing
+    check_sprint_module "resilience"             "myclaw.resilience"        # Sprint 2: circuit breaker
+    check_sprint_module "prompts"                "myclaw.prompts"           # Sprint 3: prompt registry
+    check_sprint_module "structured_output"      "myclaw.structured_output" # Sprint 3: validate + repair
+    check_sprint_module "vector backends"        "myclaw.vector"            # Sprint 4: vector store
+    check_sprint_module "agent_internals"        "myclaw.agent_internals"   # Sprint 5+9: decomposition
+    check_sprint_module "auth (JWT + OAuth)"     "myclaw.auth"              # Sprint 6
+    check_sprint_module "tenancy (UserContext)"  "myclaw.tenancy"           # Sprint 6+11
+    check_sprint_module "evals harness"          "myclaw.evals"             # Sprint 7
+    check_sprint_module "messaging broker"       "myclaw.messaging"         # Sprint 7
+    check_sprint_module "marketplace"            "myclaw.marketplace"       # Sprint 9
+    check_sprint_module "caching primitives"     "myclaw.caching"           # Sprint 11
+    check_sprint_module "defaults"               "myclaw.defaults"          # Sprint 10
+
+    # Verify the agent registry YAML file shipped (Sprint 12)
+    if [[ -f "$SCRIPT_DIR/myclaw/agents/data/agents.yaml" ]]; then
+        success "Agent registry YAML present"
+    else
+        warn "Agent registry YAML NOT FOUND — registry will fall back to embedded literal"
     fi
 
     # Check CLI entry point
