@@ -48,7 +48,8 @@ async def shell_async(cmd: str, timeout: int = 30) -> str:
             return "Error: Rate limit exceeded for shell tool (10 calls/minute)"
 
         # Security: Validate command doesn't contain dangerous characters
-        dangerous = re.compile(r"[;&|`$(){}\[\]\\]")
+        # (includes \n and \r to block newline-injection bypasses)
+        dangerous = re.compile(r"[\n\r;&|`$(){}\[\]\\]")
         if dangerous.search(cmd):
             logger.warning(f"Blocked command with dangerous characters: {cmd}")
             _tool_audit_logger.log("shell_async", "", 0, False, "Dangerous characters detected")
@@ -57,6 +58,12 @@ async def shell_async(cmd: str, timeout: int = 30) -> str:
         parts = shlex.split(cmd)
         if not parts:
             return "Error: Empty command"
+        # Re-validate every token after splitting; any dangerous char in args is rejected
+        for part in parts[1:]:
+            if dangerous.search(part):
+                logger.warning(f"Blocked dangerous character in command argument: {cmd}")
+                _tool_audit_logger.log("shell_async", "", 0, False, "Dangerous characters in argument")
+                return "Error: Command contains dangerous characters"
         first_cmd = parts[0].lower()
         if first_cmd in BLOCKED_COMMANDS:
             logger.warning(f"Blocked command attempted: {first_cmd}")
@@ -126,7 +133,8 @@ def shell(cmd: str) -> str:
             return "Error: Rate limit exceeded for shell tool (10 calls/minute)"
 
         # Security: Validate command doesn't contain dangerous characters
-        dangerous = re.compile(r"[;&|`$(){}\[\]\\]")
+        # (includes \n and \r to block newline-injection bypasses)
+        dangerous = re.compile(r"[\n\r;&|`$(){}\[\]\\]")
         if dangerous.search(cmd):
             logger.warning(f"Blocked command with dangerous characters: {cmd}")
             _tool_audit_logger.log("shell", "", 0, False, "Dangerous characters detected")
@@ -135,6 +143,12 @@ def shell(cmd: str) -> str:
         parts = shlex.split(cmd)
         if not parts:
             return "Error: Empty command"
+        # Re-validate every token after splitting; any dangerous char in args is rejected
+        for part in parts[1:]:
+            if dangerous.search(part):
+                logger.warning(f"Blocked dangerous character in command argument: {cmd}")
+                _tool_audit_logger.log("shell", "", 0, False, "Dangerous characters in argument")
+                return "Error: Command contains dangerous characters"
         first_cmd = parts[0].lower()
         if first_cmd in BLOCKED_COMMANDS:
             logger.warning(f"Blocked command attempted: {first_cmd}")

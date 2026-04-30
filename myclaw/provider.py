@@ -29,8 +29,50 @@ import hashlib
 import threading
 from abc import ABC, abstractmethod
 from functools import wraps, lru_cache
-from typing import List, Dict, Tuple, Optional, AsyncIterator
+from typing import List, Dict, Tuple, Optional, AsyncIterator, TypedDict
 from collections import OrderedDict
+
+
+# ── Message envelope types ──────────────────────────────────────────────────────
+#
+# Until now, every helper that touched ``messages`` used `List[Dict]` —
+# which is what the OpenAI and Anthropic SDKs hand us, but it told the
+# type checker nothing. These TypedDicts give static analyzers (and
+# readers) a single canonical reference for the shapes we actually
+# expect on the wire. Runtime behavior is unchanged.
+
+class ToolCallFunction(TypedDict, total=False):
+    """Inner function block of an OpenAI-style tool call."""
+    name: str
+    # `arguments` may be a JSON string OR an already-parsed dict; we accept
+    # both because providers vary. Callers that need parsing should call
+    # ``json.loads`` defensively.
+    arguments: Any
+    # ``arguments_str`` is set by some legacy paths to preserve the raw
+    # string after we've also normalized into ``arguments``.
+    arguments_str: str
+
+
+class ToolCall(TypedDict, total=False):
+    """OpenAI-style tool call entry inside an assistant message."""
+    id: str
+    type: str  # "function"
+    function: ToolCallFunction
+
+
+class Message(TypedDict, total=False):
+    """OpenAI-compatible chat message envelope.
+
+    ``total=False`` because not every role uses every field — system and
+    user messages typically have only ``role``+``content``, assistant
+    messages may carry ``tool_calls``, tool messages carry
+    ``tool_call_id``.
+    """
+    role: str           # "system" | "user" | "assistant" | "tool"
+    content: str
+    tool_calls: List[ToolCall]
+    tool_call_id: str   # for role="tool" replies
+    name: str           # legacy function name (function-calling v1)
 
 import httpx
 import requests
@@ -399,7 +441,7 @@ def _openai_tool_calls_to_dict(tool_calls) -> Optional[List[Dict]]:
     return result or None
 
 
-def _sanitize_messages_for_openai(messages: List[Dict]) -> List[Dict]:
+def _sanitize_messages_for_openai(messages: List[Message]) -> List[Message]:
     """Sanitize messages to ensure OpenAI API compatibility.
 
     Specifically handles orphaned 'tool' messages that don't follow an assistant
@@ -429,7 +471,7 @@ def _sanitize_messages_for_openai(messages: List[Dict]) -> List[Dict]:
     return sanitized
 
 
-def _ensure_tool_messages(messages: List[Dict]) -> List[Dict]:
+def _ensure_tool_messages(messages: List[Message]) -> List[Message]:
     """Ensure every assistant message with tool_calls is followed by matching tool messages.
 
     If an assistant message with tool_calls is not followed by tool messages responding
@@ -612,13 +654,15 @@ class OllamaProvider(BaseLLMProvider):
             tool_calls = msg.get("tool_calls") or None
             result = (msg.get("content", ""), tool_calls)
 
-            # Record metrics
+            # Record metrics. Failures here must never break a successful LLM
+            # response, but they should be visible in logs (a silent metrics
+            # outage means our dashboards lie).
             try:
                 from .metrics import get_metrics
 
                 get_metrics().record_llm_request(provider="ollama", model=model, status="success")
-            except Exception:
-                pass
+            except Exception as metrics_err:
+                logger.warning("Metrics recording failed (ollama)", exc_info=metrics_err)
 
             # Cache the response
             cache = _get_configured_semantic_cache()
@@ -637,7 +681,11 @@ class OllamaProvider(BaseLLMProvider):
         self, messages: List[Dict], model: str = "llama3.2"
     ) -> AsyncIterator[str]:
         """Stream chat response from Ollama."""
-        async for chunk in await self.chat(messages, model, stream=True):
+        # chat(stream=True) returns (async_generator, tool_calls_collector); unpack
+        # the generator and iterate it. Iterating the tuple itself silently yields
+        # the generator object and an empty list, breaking streaming entirely.
+        iterator, _ = await self.chat(messages, model, stream=True)
+        async for chunk in iterator:
             yield chunk
 
 
@@ -768,10 +816,10 @@ class OpenAICompatProvider(BaseLLMProvider):
                 from .cost_tracker import record_usage
 
                 record_usage("openai_compat", model, pt, ct)
-            except Exception:
-                pass
-        except Exception:
-            pass
+            except Exception as cost_err:
+                logger.warning("Cost tracking failed (openai_compat)", exc_info=cost_err)
+        except Exception as metrics_err:
+            logger.warning("Metrics recording failed (openai_compat)", exc_info=metrics_err)
 
         # Cache the response
         cache = _get_configured_semantic_cache()
@@ -784,7 +832,11 @@ class OpenAICompatProvider(BaseLLMProvider):
         self, messages: List[Dict], model: str = "gpt-4o-mini"
     ) -> AsyncIterator[str]:
         """Stream chat response from OpenAI-compatible providers."""
-        async for chunk in await self.chat(messages, model, stream=True):
+        # chat(stream=True) returns (async_generator, tool_calls_collector); unpack
+        # the generator and iterate it. Iterating the tuple itself silently yields
+        # the generator object and an empty list, breaking streaming entirely.
+        iterator, _ = await self.chat(messages, model, stream=True)
+        async for chunk in iterator:
             yield chunk
 
 
@@ -1002,8 +1054,8 @@ class AnthropicProvider(BaseLLMProvider):
             from .metrics import get_metrics
 
             get_metrics().record_llm_request(provider="anthropic", model=model, status="success")
-        except Exception:
-            pass
+        except Exception as metrics_err:
+            logger.warning("Metrics recording failed (anthropic)", exc_info=metrics_err)
 
         # Cache the response
         cache = _get_configured_semantic_cache()
@@ -1016,7 +1068,11 @@ class AnthropicProvider(BaseLLMProvider):
         self, messages: List[Dict], model: str = "claude-3-5-sonnet-20241022"
     ) -> AsyncIterator[str]:
         """Stream chat response from Anthropic."""
-        async for chunk in await self.chat(messages, model, stream=True):
+        # chat(stream=True) returns (async_generator, tool_calls_collector); unpack
+        # the generator and iterate it. Iterating the tuple itself silently yields
+        # the generator object and an empty list, breaking streaming entirely.
+        iterator, _ = await self.chat(messages, model, stream=True)
+        async for chunk in iterator:
             yield chunk
 
 
@@ -1154,8 +1210,8 @@ class GeminiProvider(BaseLLMProvider):
             from .metrics import get_metrics
 
             get_metrics().record_llm_request(provider="gemini", model=model, status="success")
-        except Exception:
-            pass
+        except Exception as metrics_err:
+            logger.warning("Metrics recording failed (gemini)", exc_info=metrics_err)
 
         # Cache the response
         cache = _get_configured_semantic_cache()
@@ -1168,7 +1224,11 @@ class GeminiProvider(BaseLLMProvider):
         self, messages: List[Dict], model: str = "gemini-1.5-flash"
     ) -> AsyncIterator[str]:
         """Stream chat response from Gemini."""
-        async for chunk in await self.chat(messages, model, stream=True):
+        # chat(stream=True) returns (async_generator, tool_calls_collector); unpack
+        # the generator and iterate it. Iterating the tuple itself silently yields
+        # the generator object and an empty list, breaking streaming entirely.
+        iterator, _ = await self.chat(messages, model, stream=True)
+        async for chunk in iterator:
             yield chunk
 
 
@@ -1209,14 +1269,16 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
     name = (provider_name or "ollama").lower().strip()
     _configure_semantic_cache(config)
 
-    # Check config file mtime for cache invalidation
+    # Check config file mtime for cache invalidation. A stat failure here is
+    # non-fatal (we just skip cache invalidation), but log it so a permission
+    # or path issue is visible.
     config_mtime = 0.0
     try:
         config_path = getattr(config, "_config_path", None)
         if config_path:
             config_mtime = Path(config_path).stat().st_mtime
-    except Exception:
-        pass
+    except Exception as stat_err:
+        logger.debug("Could not stat config path for mtime check", exc_info=stat_err)
 
     # Thread-safe provider cache access with TTL check
     with _provider_lock:
@@ -1261,3 +1323,11 @@ def clear_provider_cache():
 # ── Legacy alias (keeps old import `from .provider import LLMProvider` working) ─
 
 LLMProvider = OllamaProvider
+
+
+# ── Public API surface ───────────────────────────────────────────────
+# Listing __all__ explicitly so `from this_module import *` doesn't leak
+# internal helpers (e.g. _profile_cache, _LAST_ACTIVE_TIME). Names that
+# aren't here are still importable by direct attribute access — they
+# just don't participate in star imports.
+__all__ = ['LLMProvider', 'Message', 'ToolCall', 'ToolCallFunction', 'get_provider', 'SUPPORTED_PROVIDERS']

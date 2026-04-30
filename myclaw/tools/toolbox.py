@@ -3,7 +3,7 @@ Tools — TOOLBOX Skill Management
 """
 
 import asyncio
-from .async_utils import run_async
+from ..async_utils import run_async
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -39,6 +39,105 @@ from pathlib import Path
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
+
+# ── Dynamic-tool AST sandbox (shared by register_tool & improve_skill) ───────
+#
+# Single source of truth for which imports/calls are forbidden in agent-authored
+# tool code. Both code paths must use _validate_tool_ast() so the policy cannot
+# drift.
+
+_FORBIDDEN_IMPORTS = frozenset({
+    "os",
+    "sys",
+    "subprocess",
+    "shutil",
+    "socket",
+    "urllib",
+    "http",
+    "pty",
+    "commands",
+    "importlib",
+    "pathlib",   # Path("/etc/passwd").read_text() bypasses file sandboxing
+    "ctypes",    # native code execution / sandbox escape
+    "cffi",      # foreign function interface
+    "mmap",      # direct memory access
+})
+
+_FORBIDDEN_CALLS = frozenset({
+    "eval", "exec", "__import__", "globals", "locals", "compile", "getattr",
+})
+
+# Calls that are not forbidden outright but blocked in dynamic tools — file
+# access must go through injected, audited helpers instead.
+_RESTRICTED_CALLS = frozenset({"open"})
+
+
+def _validate_tool_ast(code: str) -> Optional[str]:
+    """Validate dynamic tool code via AST analysis.
+
+    Returns an error string if the code is unsafe, or None if it passes.
+    Used by both register_tool() and improve_skill() to enforce a single,
+    consistent security policy.
+    """
+    import ast
+
+    def _is_builtin_access(node: ast.AST) -> bool:
+        """Detect __builtins__['eval'] or getattr(__builtins__, 'eval') patterns."""
+        if isinstance(node, ast.Subscript):
+            if isinstance(node.value, ast.Attribute):
+                if (
+                    isinstance(node.value.value, ast.Name)
+                    and node.value.value.id == "__builtins__"
+                ):
+                    return True
+            if isinstance(node.value, ast.Name) and node.value.id == "__builtins__":
+                return True
+        if isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name) and node.func.id == "getattr":
+                if len(node.args) >= 2:
+                    first = node.args[0]
+                    if isinstance(first, ast.Name) and first.id == "__builtins__":
+                        return True
+                    if (
+                        isinstance(first, ast.Attribute)
+                        and isinstance(first.value, ast.Name)
+                        and first.value.id == "__builtins__"
+                    ):
+                        return True
+        return False
+
+    try:
+        tree = ast.parse(code)
+    except SyntaxError as e:
+        return f"Syntax error in tool code: {e}"
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name.split(".")[0] in _FORBIDDEN_IMPORTS:
+                    return f"Error: Importing '{alias.name}' is forbidden for security reasons."
+        elif isinstance(node, ast.ImportFrom):
+            if node.module and node.module.split(".")[0] in _FORBIDDEN_IMPORTS:
+                return f"Error: Importing from '{node.module}' is forbidden for security reasons."
+        elif isinstance(node, ast.Call):
+            if isinstance(node.func, ast.Name):
+                if node.func.id in _FORBIDDEN_CALLS:
+                    return f"Error: Calling '{node.func.id}' is forbidden for security reasons."
+                if node.func.id in _RESTRICTED_CALLS:
+                    return "Error: open() is forbidden in dynamic tools. Use injected file helpers instead."
+            if _is_builtin_access(node):
+                return "Error: Accessing __builtins__ dynamically is forbidden for security reasons."
+        elif isinstance(node, ast.Subscript):
+            if _is_builtin_access(node):
+                return "Error: Accessing __builtins__ dynamically is forbidden for security reasons."
+        elif isinstance(node, ast.Attribute):
+            # Block module.attr access for forbidden modules (catches
+            # `import json as p; p = pathlib` style aliasing only partially,
+            # but handles the common `pathlib.Path(...)` case).
+            if isinstance(node.value, ast.Name) and node.value.id in _FORBIDDEN_IMPORTS:
+                return f"Error: Accessing '{node.value.id}' module attributes is forbidden for security reasons."
+    return None
+
 
 # ── Feature 4: Agent Builds Its Own Tools ────────────────────────────────────
 
@@ -131,84 +230,12 @@ def register_tool(name: str, code: str, documentation: str = "") -> str:
     except SyntaxError as e:
         return f"Syntax error in tool code: {e}"
 
-    # AST validation to prevent dangerous operations (Phase 1.2 hardened)
-    import ast
-
-    try:
-        tree = ast.parse(code)
-        # SECURITY FIX (2026-04-23): Hardened AST whitelist.
-        # - Added importlib to prevent dynamic imports.
-        # - Added getattr to prevent attribute-based bypasses (e.g. getattr(__builtins__, 'eval')).
-        # - open() is blocked entirely for dynamic tools; use injected file helpers instead.
-        forbidden_imports = {
-            "os",
-            "sys",
-            "subprocess",
-            "shutil",
-            "socket",
-            "urllib",
-            "http",
-            "pty",
-            "commands",
-            "importlib",
-        }
-        forbidden_calls = {"eval", "exec", "__import__", "globals", "locals", "compile", "getattr"}
-        # Block open() entirely — dynamic tools should not access the filesystem directly.
-        restricted_calls = {"open"}
-
-        def _is_builtin_access(node: ast.AST) -> bool:
-            """Detect __builtins__.__dict__['eval'] or getattr(__builtins__, 'eval')."""
-            if isinstance(node, ast.Subscript):
-                # __builtins__.__dict__['eval'] or __builtins__['eval']
-                if isinstance(node.value, ast.Attribute):
-                    if (
-                        isinstance(node.value.value, ast.Name)
-                        and node.value.value.id == "__builtins__"
-                    ):
-                        return True
-                if isinstance(node.value, ast.Name) and node.value.id == "__builtins__":
-                    return True
-            if isinstance(node, ast.Call):
-                # getattr(__builtins__, 'eval') or getattr(__builtins__.__dict__, 'eval')
-                if isinstance(node.func, ast.Name) and node.func.id == "getattr":
-                    if len(node.args) >= 2:
-                        first = node.args[0]
-                        if isinstance(first, ast.Name) and first.id == "__builtins__":
-                            return True
-                        if (
-                            isinstance(first, ast.Attribute)
-                            and isinstance(first.value, ast.Name)
-                            and first.value.id == "__builtins__"
-                        ):
-                            return True
-            return False
-
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                for alias in node.names:
-                    if alias.name.split(".")[0] in forbidden_imports:
-                        return f"Error: Importing '{alias.name}' is forbidden for security reasons."
-            elif isinstance(node, ast.ImportFrom):
-                if node.module and node.module.split(".")[0] in forbidden_imports:
-                    return (
-                        f"Error: Importing from '{node.module}' is forbidden for security reasons."
-                    )
-            elif isinstance(node, ast.Call):
-                # Direct call: eval(), exec(), etc.
-                if isinstance(node.func, ast.Name) and node.func.id in forbidden_calls:
-                    return f"Error: Calling '{node.func.id}' is forbidden for security reasons."
-                # SECURITY: open() is forbidden entirely in dynamically registered tools.
-                # File access should be performed through injected, audited helpers.
-                if isinstance(node.func, ast.Name) and node.func.id in restricted_calls:
-                    return "Error: open() is forbidden in dynamic tools. Use injected file helpers instead."
-                # Detect __builtins__ bypasses
-                if _is_builtin_access(node):
-                    return "Error: Accessing __builtins__ dynamically is forbidden for security reasons."
-            elif isinstance(node, ast.Subscript):
-                if _is_builtin_access(node):
-                    return "Error: Accessing __builtins__ dynamically is forbidden for security reasons."
-    except Exception as e:
-        return f"AST validation error: {e}"
+    # AST validation to prevent dangerous operations.
+    # Uses the shared _validate_tool_ast helper (single policy across register_tool
+    # and improve_skill).
+    ast_error = _validate_tool_ast(code)
+    if ast_error:
+        return ast_error
 
     # Validate that the code has a docstring and error handling
     if '"""' not in code and "'''" not in code:
@@ -905,37 +932,10 @@ def improve_skill(skill_name: str, improved_code: str, documentation: str = "") 
         except SyntaxError as e:
             return f"Syntax error in improved code: {e}"
 
-        # AST validation for security
-        import ast
-
-        try:
-            tree = ast.parse(improved_code)
-            forbidden_imports = {
-                "os",
-                "sys",
-                "subprocess",
-                "shutil",
-                "socket",
-                "urllib",
-                "http",
-                "pty",
-                "commands",
-            }
-            forbidden_calls = {"eval", "exec", "open", "__import__", "globals", "locals", "compile"}
-
-            for node in ast.walk(tree):
-                if isinstance(node, ast.Import):
-                    for alias in node.names:
-                        if alias.name.split(".")[0] in forbidden_imports:
-                            return f"Error: Importing '{alias.name}' is forbidden for security reasons."
-                elif isinstance(node, ast.ImportFrom):
-                    if node.module and node.module.split(".")[0] in forbidden_imports:
-                        return f"Error: Importing from '{node.module}' is forbidden for security reasons."
-                elif isinstance(node, ast.Call):
-                    if isinstance(node.func, ast.Name) and node.func.id in forbidden_calls:
-                        return f"Error: Calling '{node.func.id}' is forbidden for security reasons."
-        except Exception as e:
-            return f"AST validation error: {e}"
+        # AST validation for security — same policy as register_tool().
+        ast_error = _validate_tool_ast(improved_code)
+        if ast_error:
+            return ast_error
 
         # Validate code requirements
         if '"""' not in improved_code and "'''" not in improved_code:

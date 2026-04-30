@@ -55,7 +55,7 @@ class SemanticCache:
         similarity_threshold: float = 0.92,
         embedding_model: str = "all-MiniLM-L6-v2",
         cache_dir: Optional[Path] = None,
-        max_scan_entries: int = 64,
+        max_scan_entries: int = 256,
     ):
         self.max_size = max_size
         self.ttl = ttl
@@ -272,25 +272,47 @@ class SemanticCache:
                 best_match = None
                 best_similarity = 0.0
 
-                # PERF FIX (2026-04-23): Scan only recent entries (LRU tail) up to
-                # max_scan_entries to avoid O(n) latency spikes with large caches.
-                # Also clean up expired entries on the fly.
+                # PERF (2026-04-30): vectorized similarity scan.
+                #
+                # Original: per-entry Python loop calling np.dot/np.linalg.norm
+                # twice per comparison. With max_scan_entries raised to 256
+                # this would be ~1.5ms/scan; batched matrix multiply is ~50µs
+                # for the same shape on modern CPUs.
+                #
+                # We still walk the LRU tail (newest first) for the eviction
+                # of expired entries; only the similarity computation itself
+                # is batched.
                 entries_to_remove = []
-                scan_count = 0
+                scan_keys = []
+                scan_vectors = []
                 # OrderedDict: oldest first, newest last. Reverse to check newest first.
                 for key, entry in reversed(list(self._cache.items())):
-                    if scan_count >= self.max_scan_entries:
+                    if len(scan_keys) >= self.max_scan_entries:
                         break
-                    scan_count += 1
                     if self._is_expired(entry):
                         entries_to_remove.append(key)
                         continue
+                    scan_keys.append(key)
+                    scan_vectors.append(entry.query_embedding)
 
-                    similarity = self._compute_similarity(query_embedding, entry.query_embedding)
+                if scan_vectors:
+                    # Build a (N, D) matrix and compute cosine similarity in one shot.
+                    matrix = np.asarray(scan_vectors)
+                    q_norm = np.linalg.norm(query_embedding)
+                    row_norms = np.linalg.norm(matrix, axis=1)
+                    # Avoid divide-by-zero — entries with degenerate embeddings
+                    # contribute zero similarity.
+                    denom = q_norm * row_norms
+                    safe_denom = np.where(denom == 0.0, 1.0, denom)
+                    sims = matrix.dot(query_embedding) / safe_denom
+                    sims = np.where(denom == 0.0, 0.0, sims)
 
-                    if similarity > best_similarity and similarity >= self.similarity_threshold:
-                        best_similarity = similarity
-                        best_match = key
+                    # argmax wins — but we still need the threshold filter.
+                    best_idx = int(np.argmax(sims))
+                    best_sim_value = float(sims[best_idx])
+                    if best_sim_value >= self.similarity_threshold:
+                        best_match = scan_keys[best_idx]
+                        best_similarity = best_sim_value
 
                 for key in entries_to_remove:
                     self._cache.pop(key, None)
@@ -438,3 +460,11 @@ def clear_semantic_cache():
     if _semantic_cache is not None:
         _semantic_cache.clear()
         _semantic_cache = None
+
+
+# ── Public API surface ───────────────────────────────────────────────
+# Listing __all__ explicitly so `from this_module import *` doesn't leak
+# internal helpers (e.g. _profile_cache, _LAST_ACTIVE_TIME). Names that
+# aren't here are still importable by direct attribute access — they
+# just don't participate in star imports.
+__all__ = ['SemanticCache', 'CacheEntry', 'get_semantic_cache']

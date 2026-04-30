@@ -133,10 +133,120 @@ def _load_profile(profile_name: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# AGENT REGISTRY - 136+ Specialized Agents
+# YAML data-file loader (Sprint 12)
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Adding a new specialized agent should be a *data PR*, not a code PR.
+# This loader reads ``myclaw/agents/data/agents.yaml`` — the canonical
+# source of truth — and produces ``AgentDefinition`` instances.
+#
+# The embedded Python-literal registry below ALSO remains, on purpose:
+#
+# 1. It serves as the fallback when the YAML file is missing or
+#    malformed, so a corrupted data file can't make the framework
+#    unbootable mid-deploy.
+# 2. It documents the canonical record shape (mypy + IDE autocomplete
+#    work better against the literal than against arbitrary YAML).
+# 3. The two stay synchronized via ``tests/test_registry_yaml.py``,
+#    which fails CI if the YAML and the literal disagree.
+#
+# When the literal is finally removed, this module shrinks from ~70KB
+# to ~5KB. That cleanup is intentionally deferred until the YAML format
+# has been stable across at least one minor release.
+
+AGENT_DATA_FILE = Path(__file__).parent / "data" / "agents.yaml"
+
+
+def _parse_yaml_record(record: Dict) -> Optional[AgentDefinition]:
+    """Convert one YAML record into an :class:`AgentDefinition`.
+
+    Returns ``None`` and logs a warning when the record is malformed —
+    individual bad rows don't take down the whole registry.
+    """
+    try:
+        cat_str = record["category"]
+        category = AgentCategory(cat_str)
+    except (KeyError, ValueError):
+        logger.warning(
+            "Skipping agent record with unknown/missing category: %r",
+            record.get("name", "<unnamed>"),
+        )
+        return None
+
+    capabilities: Set[AgentCapability] = set()
+    for cap_str in record.get("capabilities", []):
+        try:
+            capabilities.add(AgentCapability(cap_str))
+        except ValueError:
+            logger.warning(
+                "Agent %r references unknown capability %r — skipping that capability",
+                record.get("name"), cap_str,
+            )
+
+    try:
+        return AgentDefinition(
+            name=record["name"],
+            description=record["description"],
+            category=category,
+            capabilities=capabilities,
+            profile_name=record["profile_name"],
+            model_routing=record.get("model_routing", "gpt-5.3-codex-spark"),
+            reasoning_effort=record.get("reasoning_effort", "medium"),
+            sandbox_mode=record.get("sandbox_mode", "read-only"),
+            tags=set(record.get("tags", [])),
+            instructions=record.get("instructions", ""),
+            checkboxes=list(record.get("checkboxes", [])),
+        )
+    except KeyError as e:
+        logger.warning(
+            "Agent record missing required field %s: %r", e, record.get("name", "<unnamed>"),
+        )
+        return None
+
+
+def load_agents_from_yaml(path: Optional[Path] = None) -> Dict[str, AgentDefinition]:
+    """Load the agent catalog from a YAML file.
+
+    Returns ``{}`` when the file is missing, malformed, or PyYAML isn't
+    installed — the caller should fall back to the embedded literal in
+    that case so the framework still boots.
+    """
+    target = path or AGENT_DATA_FILE
+    if not target.exists():
+        return {}
+    try:
+        import yaml  # PyYAML is a core dep already
+    except ImportError:
+        logger.warning("PyYAML not installed; skipping agents.yaml load")
+        return {}
+    try:
+        records = yaml.safe_load(target.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.warning("Failed to parse %s: %s", target, e)
+        return {}
+    if not isinstance(records, list):
+        logger.warning("%s: top-level value must be a list; got %s", target, type(records))
+        return {}
+
+    out: Dict[str, AgentDefinition] = {}
+    for r in records:
+        if not isinstance(r, dict):
+            continue
+        agent = _parse_yaml_record(r)
+        if agent is None:
+            continue
+        if agent.name in out:
+            logger.warning("Duplicate agent name in YAML: %r — keeping first", agent.name)
+            continue
+        out[agent.name] = agent
+    return out
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# AGENT REGISTRY - 136+ Specialized Agents (embedded fallback)
 # ─────────────────────────────────────────────────────────────────────────────
 
-AGENT_REGISTRY: Dict[str, AgentDefinition] = {
+_LITERAL_AGENT_REGISTRY: Dict[str, AgentDefinition] = {
 
     # ══════════════════════════════════════════════════════════════════════════
     # 01. CORE DEVELOPMENT - 12 agents
@@ -1540,6 +1650,25 @@ AGENT_REGISTRY: Dict[str, AgentDefinition] = {
         tags={"trends", "forecasting", "analysis", "future", "predictions", "emerging"},
     ),
 }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Resolve the canonical AGENT_REGISTRY at import time.
+# YAML wins when present and parseable; otherwise the embedded literal is used.
+# This keeps existing callers (``from myclaw.agents.registry import AGENT_REGISTRY``)
+# working unchanged regardless of which source provided the data.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_yaml_loaded = load_agents_from_yaml()
+if _yaml_loaded:
+    AGENT_REGISTRY: Dict[str, AgentDefinition] = _yaml_loaded
+    logger.info("Loaded %d agents from %s", len(AGENT_REGISTRY), AGENT_DATA_FILE)
+else:
+    AGENT_REGISTRY = _LITERAL_AGENT_REGISTRY
+    logger.info(
+        "Loaded %d agents from embedded literal (YAML at %s missing/invalid)",
+        len(AGENT_REGISTRY), AGENT_DATA_FILE,
+    )
 
 
 def get_agent(name: str) -> Optional[AgentDefinition]:

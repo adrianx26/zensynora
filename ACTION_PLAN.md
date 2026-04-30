@@ -3,7 +3,31 @@
 > **Generated**: 2026-04-23
 > **Based on**: Comprehensive codebase audit (v0.4.1)
 > **Goal**: Stabilize, secure, and harden the ZenSynora codebase
-> **Status**: Phase 1 & 2 critical fixes implemented (2026-04-23). Phase 3+ pending.
+> **Status**: Phase 1 & 2 critical fixes implemented (2026-04-23).
+>            Second-round audit fixes shipped (2026-04-29) — see
+>            `docs/SECURITY_FIXES_2026_04_29.md`. Phase 3+ pending.
+
+---
+
+## 2026-04-29 Audit Round (resolved)
+
+A follow-up audit found that some 2026-04-23 fixes had been applied in
+`myclaw/web/api.py` but **not** in `myclaw/api_server.py`, plus several
+new defects. All resolved in this round:
+
+- [x] Infinite recursion in `Agent._track_preload` (`myclaw/agent.py:356`)
+- [x] Newline-injection bypass in `myclaw/tools/shell.py` (regex + token re-validation)
+- [x] Missing auth on `/api/v1/keys` GET/POST/DELETE (`myclaw/api_server.py`)
+- [x] CORS `allow_origins=["*"]` + credentials (`myclaw/api_server.py`)
+- [x] Unsafe fallback in `AsyncSQLitePool.get_connection` (`myclaw/memory.py`)
+- [x] Two divergent AST sandbox policies in `myclaw/tools/toolbox.py` — unified
+      into a single `_validate_tool_ast()` helper; added `pathlib`, `ctypes`,
+      `cffi`, `mmap` to the forbidden set
+- [x] Broken `stream_chat` in all four providers (`myclaw/provider.py`)
+- [x] Removed dead code `archive/tools_backup.py`
+
+Verified-already-fixed items (no action taken): SSH `RejectPolicy`,
+`AsyncOpenAI` migration, MFA secret redaction.
 
 ---
 
