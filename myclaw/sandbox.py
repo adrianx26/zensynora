@@ -265,6 +265,7 @@ class SecuritySandbox:
     
     def _create_sandbox_wrapper(self, code: str) -> str:
         """Create sandboxed wrapper code."""
+        blocked_repr = "{" + ", ".join(repr(m) for m in self._policy.blocked_modules) + "}"
         return f'''"""Sandboxed execution wrapper."""
 
 import sys
@@ -277,7 +278,7 @@ os.chdir("{SANDBOX_DIR}")
 # Block dangerous imports
 class SandboxedImporter:
     def find_module(self, name, path=None):
-        blocked = {repr(m) for m in self._policy.blocked_modules}
+        blocked = {blocked_repr}
         if name in blocked:
             raise ImportError(f"Module {{name}} is blocked in sandbox")
         return None
@@ -286,7 +287,7 @@ class SandboxedImporter:
 import builtins
 _original_import = builtins.__import__
 def _sandboxed_import(name, *args, **kwargs):
-    blocked = {repr(m) for m in self._policy.blocked_modules}
+    blocked = {blocked_repr}
     if name in blocked:
         raise ImportError(f"Module {{name}} is blocked in sandbox")
     return _original_import(name, *args, **kwargs)
