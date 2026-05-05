@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ZenSynora Comprehensive System Diagram</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+<div class="page">
+<a class="back-link" href="index.html">← All diagrams</a>
+<div class="header">
+  <span class="dot"></span>
+  <h1 class="title">ZenSynora Comprehensive System Diagram</h1>
+</div>
+<p class="subtitle">4 diagram(s) extracted from <code>big_diagram.md</code></p>
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
+  <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
+  <div class="legend-item"><span class="legend-swatch backend"></span>Backend Service</div>
+  <div class="legend-item"><span class="legend-swatch database"></span>Database / Storage</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">🗺️ Master Component Map</h2>
+  
+  <div class="mermaid">flowchart TB
+    subgraph Gateways [&quot;Channels &amp; Gateways (myclaw/channels/)&quot;]
+        TG[&quot;TelegramChannel&lt;br/&gt;(telegram.py)&quot;]
+        WA[&quot;WhatsAppChannel&lt;br/&gt;(whatsapp.py)&quot;]
+        CLI[&quot;CLI Console&lt;br/&gt;(cli.py)&quot;]
+        WebUI[&quot;Web UI Dashboard&lt;br/&gt;(webui/)&quot;]
+    end
+
+    subgraph Core [&quot;Core Agent Engine (myclaw/)&quot;]
+        Agent[&quot;Agent Class&lt;br/&gt;(agent.py)&quot;]
+        Router[&quot;MessageRouter&lt;br/&gt;(agent/message_router.py)&quot;]
+        Context[&quot;ContextBuilder&lt;br/&gt;(agent/context_builder.py)&quot;]
+        Executor[&quot;ToolExecutor&lt;br/&gt;(agent/tool_executor.py)&quot;]
+        Response[&quot;ResponseHandler&lt;br/&gt;(agent/response_handler.py)&quot;]
+
+        Agent --- Router
+        Agent --- Context
+        Agent --- Executor
+        Agent --- Response
+    end
+
+    subgraph LLM [&quot;LLM Provider Layer (myclaw/provider.py)&quot;]
+        P_Base[&quot;Provider Interface&quot;]
+        P_Ollama[&quot;OllamaProvider&quot;]
+        P_OpenAI[&quot;OpenAIProvider&quot;]
+        P_Claude[&quot;AnthropicProvider&quot;]
+        Pool[&quot;HTTPClientPool&quot;]
+    end
+
+    subgraph Tools [&quot;Tool Ecosystem (myclaw/tools/)&quot;]
+        T_Reg[&quot;Tool Registry&lt;br/&gt;(core.py)&quot;]
+        T_Shell[&quot;shell(cmd)&lt;br/&gt;(shell.py)&quot;]
+        T_Files[&quot;read/write_file()&lt;br/&gt;(files.py)&quot;]
+        T_Web[&quot;browse/download()&lt;br/&gt;(web.py)&quot;]
+        T_KB[&quot;search/read_kb()&lt;br/&gt;(kb.py)&quot;]
+        T_Swarm[&quot;swarm_create/assign()&lt;br/&gt;(swarm.py)&quot;]
+        T_Sched[&quot;schedule/jobs()&lt;br/&gt;(scheduler.py)&quot;]
+        T_Toolbox[&quot;register_tool()&lt;br/&gt;(toolbox.py)&quot;]
+    end
+
+    subgraph Knowledge [&quot;Knowledge Base (myclaw/knowledge/)&quot;]
+        K_DB[&quot;KnowledgeDB&lt;br/&gt;(db.py)&quot;]
+        K_Sync[&quot;KnowledgeSync&lt;br/&gt;(sync.py)&quot;]
+        K_Graph[&quot;KnowledgeGraph&lt;br/&gt;(graph.py)&quot;]
+        K_Res[&quot;GapResearcher&lt;br/&gt;(researcher.py)&quot;]
+        K_Pars[&quot;NoteParser&lt;br/&gt;(parser.py)&quot;]
+    end
+
+    subgraph Swarm [&quot;Agent Swarms (myclaw/swarm/)&quot;]
+        S_Orch[&quot;SwarmOrchestrator&lt;br/&gt;(orchestrator.py)&quot;]
+        S_Strat[&quot;Strategies&lt;br/&gt;(strategies.py)&quot;]
+        S_Stor[&quot;SwarmStorage&lt;br/&gt;(storage.py)&quot;]
+        S_Agg[&quot;AggregationEngine&quot;]
+    end
+
+    subgraph Specialized [&quot;Specialized Agents (myclaw/agents/)&quot;]
+        A_Medic[&quot;MedicAgent&lt;br/&gt;(medic_agent.py)&quot;]
+        A_Evol[&quot;EvolverEngine&lt;br/&gt;(medic_evolver.py)&quot;]
+        A_Change[&quot;ChangeMgmt&lt;br/&gt;(medic_change_mgmt.py)&quot;]
+        A_Tech[&quot;NewTechAgent&lt;br/&gt;(newtech_agent.py)&quot;]
+        A_Adap[&quot;SkillAdapter&lt;br/&gt;(skill_adapter.py)&quot;]
+    end
+
+    subgraph Persistence [&quot;Persistence Layer (myclaw/)&quot;]
+        Memory[&quot;Memory (SQLite/FTS5)&lt;br/&gt;(memory.py)&quot;]
+        State[&quot;StateStore (Redis/IM)&lt;br/&gt;(state_store.py)&quot;]
+        AsyncSched[&quot;AsyncScheduler&lt;br/&gt;(async_scheduler.py)&quot;]
+        Config[&quot;Config Manager&lt;br/&gt;(config.py)&quot;]
+    end
+
+    subgraph Backends [&quot;Execution Backends (myclaw/backends/)&quot;]
+        B_Router[&quot;BackendRouter&quot;]
+        B_Local[&quot;LocalBackend&quot;]
+        B_Docker[&quot;DockerBackend&quot;]
+        B_SSH[&quot;SSHBackend&quot;]
+        B_WSL2[&quot;WSL2Backend&quot;]
+    end
+
+    %% Connections
+    Gateways --&gt; Agent
+    Agent &lt;--&gt; LLM
+    Agent &lt;--&gt; Tools
+    Agent &lt;--&gt; Specialized
+    Agent &lt;--&gt; Swarm
+
+    Tools --&gt; Backends
+    Tools --&gt; Knowledge
+    Tools --&gt; Persistence
+
+    Specialized --&gt; Persistence
+    Specialized --&gt; Knowledge
+
+    Swarm --&gt; Specialized
+    Swarm --&gt; Persistence</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">1. User Query Processing (`Agent.think`)</h2>
+  
+  <div class="mermaid">sequenceDiagram
+    participant U as User
+    participant G as Gateway
+    participant A as Agent
+    participant M as Memory
+    participant K as Knowledge
+    participant L as LLM
+    participant T as Tools
+
+    U-&gt;&gt;G: Send Message
+    G-&gt;&gt;A: think(text, user_id)
+    A-&gt;&gt;M: get_history(user_id)
+    M--&gt;&gt;A: Recent messages
+    A-&gt;&gt;K: search_knowledge(query)
+    K--&gt;&gt;A: Relevant context
+    A-&gt;&gt;L: chat(context + history)
+
+    alt Needs Tools
+        L--&gt;&gt;A: tool_calls
+        loop each tool
+            A-&gt;&gt;T: execute_tool(name, args)
+            T--&gt;&gt;A: result
+        end
+        A-&gt;&gt;L: chat(tool_results)
+    end
+
+    L--&gt;&gt;A: final_response
+    A-&gt;&gt;M: add_message(final_response)
+    A--&gt;&gt;G: response
+    G--&gt;&gt;U: message</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">2. Specialized Medic Self-Healing Loop</h2>
+  
+  <div class="mermaid">flowchart TD
+    Start[&quot;Startup / Interval&quot;] --&gt; Scan[&quot;Medic: scan_system()&quot;]
+    Scan --&gt; Check[&quot;Verify Integrity (Hashes)&quot;]
+    Check -- Issues Found --&gt; Recover[&quot;Recover from GitHub/Backup&quot;]
+
+    Start --&gt; Logs[&quot;LogAnalyzer: analyze_logs()&quot;]
+    Logs --&gt; Evolver[&quot;EvolverEngine: Detect Patterns&quot;]
+    Evolver --&gt; Scorer[&quot;Calculate Health Score&quot;]
+    Scorer -- Low Score --&gt; Plan[&quot;Generate Evolution Plan&quot;]
+    Plan --&gt; Change[&quot;ChangeMgmt: Propose Update&quot;]
+    Change -- Approved --&gt; Apply[&quot;Apply Modification&quot;]
+    Apply --&gt; Verify[&quot;Verify Syntax/Stability&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">3. Agent Swarm Execution</h2>
+  
+  <div class="mermaid">flowchart LR
+    Task[&quot;Swarm Task&quot;] --&gt; Orchestrator
+
+    subgraph Strategy [&quot;Strategy Selection&quot;]
+        Orchestrator --&gt; Parallel
+        Orchestrator --&gt; Sequential
+        Orchestrator --&gt; Hierarchical
+    end
+
+    subgraph Execution [&quot;Worker Pool&quot;]
+        Parallel --&gt; W1[&quot;Worker 1&quot;]
+        Parallel --&gt; W2[&quot;Worker 2&quot;]
+        Hierarchical --&gt; Coord[&quot;Coordinator&quot;]
+        Coord --&gt; W3[&quot;Worker 3&quot;]
+    end
+
+    W1 &amp; W2 &amp; W3 --&gt; Aggregator[&quot;Aggregation Engine&quot;]
+    Aggregator --&gt; Result[&quot;Final Synthesis&quot;]</div>
+</div>
+
+<div class="footer">
+  ZenSynora (MyClaw) <span class="sep">•</span> Architecture Diagrams <span class="sep">•</span> Generated from big_diagram.md
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+  securityLevel: 'loose',
+  themeVariables: {
+    background: '#0a0e14',
+    primaryColor: '#131924',
+    primaryTextColor: '#cbd5e1',
+    primaryBorderColor: '#5eead4',
+    lineColor: '#475569',
+    secondaryColor: '#0f141d',
+    tertiaryColor: '#0a0e14',
+    clusterBkg: 'rgba(15, 20, 29, 0.5)',
+    clusterBorder: '#2a3543',
+    edgeLabelBackground: '#0f141d',
+    nodeBorder: '#5eead4',
+    mainBkg: '#131924',
+    titleColor: '#2dd4bf',
+    actorBorder: '#7dd3fc',
+    actorBkg: '#131924',
+    actorTextColor: '#cbd5e1',
+    actorLineColor: '#2a3543',
+    signalColor: '#cbd5e1',
+    signalTextColor: '#cbd5e1',
+    labelBoxBkgColor: '#131924',
+    labelBoxBorderColor: '#5eead4',
+    labelTextColor: '#cbd5e1',
+    loopTextColor: '#cbd5e1',
+    noteBorderColor: '#c084fc',
+    noteBkgColor: '#131924',
+    noteTextColor: '#cbd5e1',
+    activationBkgColor: '#0f141d',
+    activationBorderColor: '#86efac'
+  },
+  flowchart: { curve: 'basis', padding: 16, htmlLabels: true },
+  sequence: { useMaxWidth: true, mirrorActors: false }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ZenSynora (MyClaw) Code Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+<div class="page">
+<a class="back-link" href="index.html">← All diagrams</a>
+<div class="header">
+  <span class="dot"></span>
+  <h1 class="title">ZenSynora (MyClaw) Code Review</h1>
+</div>
+<p class="subtitle">1 diagram(s) extracted from <code>docs/dev/plans/kimi.md</code></p>
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
+  <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
+  <div class="legend-item"><span class="legend-swatch backend"></span>Backend Service</div>
+  <div class="legend-item"><span class="legend-swatch database"></span>Database / Storage</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">🧠 Architecture Recommendation: Event-Driven Refactor</h2>
+  <p class="diagram-desc">Consider evolving from direct function calls to an event-driven architecture:</p>
+  <div class="mermaid">flowchart TD
+    Gateway[&quot;Gateway (Telegram/WhatsApp/CLI)&quot;] --&gt; Bus[&quot;Event Bus (Redis/NATS)&quot;]
+    Bus --&gt; Router[&quot;Agent Router&quot;]
+    Router --&gt; LLM[&quot;LLM Provider&quot;]
+
+    Router --&gt; Tools[&quot;Tool Executor&quot;]
+    Router --&gt; KB[&quot;Knowledge Base&quot;]
+    Router --&gt; Swarm[&quot;Swarm Orchestrator&quot;]
+
+    Tools &amp; KB &amp; Swarm --&gt; Aggregator[&quot;Response Aggregator&quot;]
+    Aggregator --&gt; User[&quot;User&quot;]</div>
+</div>
+
+<div class="footer">
+  ZenSynora (MyClaw) <span class="sep">•</span> Architecture Diagrams <span class="sep">•</span> Generated from docs/dev/plans/kimi.md
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+  securityLevel: 'loose',
+  themeVariables: {
+    background: '#0a0e14',
+    primaryColor: '#131924',
+    primaryTextColor: '#cbd5e1',
+    primaryBorderColor: '#5eead4',
+    lineColor: '#475569',
+    secondaryColor: '#0f141d',
+    tertiaryColor: '#0a0e14',
+    clusterBkg: 'rgba(15, 20, 29, 0.5)',
+    clusterBorder: '#2a3543',
+    edgeLabelBackground: '#0f141d',
+    nodeBorder: '#5eead4',
+    mainBkg: '#131924',
+    titleColor: '#2dd4bf',
+    actorBorder: '#7dd3fc',
+    actorBkg: '#131924',
+    actorTextColor: '#cbd5e1',
+    actorLineColor: '#2a3543',
+    signalColor: '#cbd5e1',
+    signalTextColor: '#cbd5e1',
+    labelBoxBkgColor: '#131924',
+    labelBoxBorderColor: '#5eead4',
+    labelTextColor: '#cbd5e1',
+    loopTextColor: '#cbd5e1',
+    noteBorderColor: '#c084fc',
+    noteBkgColor: '#131924',
+    noteTextColor: '#cbd5e1',
+    activationBkgColor: '#0f141d',
+    activationBorderColor: '#86efac'
+  },
+  flowchart: { curve: 'basis', padding: 16, htmlLabels: true },
+  sequence: { useMaxWidth: true, mirrorActors: false }
+});
+</script>
+</body>
+</html>
