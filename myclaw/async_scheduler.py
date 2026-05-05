@@ -36,7 +36,23 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Dict, List, Optional, Union
 
+from .scheduler_features import (
+    Checkpoint,
+    ComplexityAnalyzer,
+    ComplexityScore,
+    JobContext,
+    OutputValidator,
+    RetryPolicy,
+    TaskBudget,
+    ValidationError,
+)
+
 logger = logging.getLogger(__name__)
+
+
+def _exc_matches(exc: BaseException, types: tuple) -> bool:
+    """Return True if *exc* is an instance of any class in *types*."""
+    return isinstance(exc, types) if types else False
 
 
 class TriggerType(Enum):
@@ -63,6 +79,12 @@ class Job:
         # Common
         data: Optional[Any] = None,
         max_instances: int = 1,
+        # Reliability extensions (Phase 6.3) — all optional / additive
+        retry_policy: Optional[RetryPolicy] = None,
+        budget: Optional[TaskBudget] = None,
+        validator: Optional[OutputValidator] = None,
+        checkpoint_enabled: bool = False,
+        complexity: Optional[ComplexityScore] = None,
     ):
         self.id = job_id
         self.func = func
@@ -73,6 +95,12 @@ class Job:
         self.max_instances = max_instances
         self.enabled = True
         self._running = 0
+        # Reliability extensions
+        self.retry_policy = retry_policy
+        self.budget = budget
+        self.validator = validator
+        self.checkpoint_enabled = checkpoint_enabled
+        self.complexity = complexity
 
         # Interval config
         self.interval_seconds = seconds + minutes * 60 + hours * 3600
@@ -162,6 +190,12 @@ class AsyncScheduler:
         args: Optional[tuple] = None,
         kwargs: Optional[Dict[str, Any]] = None,
         id: Optional[str] = None,  # noqa: A002
+        *,
+        retry_policy: Optional[RetryPolicy] = None,
+        budget: Optional[TaskBudget] = None,
+        validator: Optional[OutputValidator] = None,
+        checkpoint_enabled: bool = False,
+        complexity: Optional[ComplexityScore] = None,
         **trigger_kwargs,
     ) -> Job:
         """Add a job to the scheduler.
@@ -172,12 +206,25 @@ class AsyncScheduler:
             args: Positional arguments for ``func``.
             kwargs: Keyword arguments for ``func``.
             id: Unique job identifier (auto-generated if omitted).
+            retry_policy: Optional :class:`RetryPolicy` for failed/invalid runs.
+            budget: Optional :class:`TaskBudget` enforcing wall-clock timeout.
+            validator: Optional :class:`OutputValidator`; failures trigger retry.
+            checkpoint_enabled: If True, a :class:`Checkpoint` is created and
+                injected into a ``ctx`` kwarg of *func* (if *func* accepts one).
+            complexity: Optional pre-computed :class:`ComplexityScore`.
             **trigger_kwargs:
                 For ``interval``: ``seconds``, ``minutes``, ``hours``
                 For ``date``: ``run_date`` (datetime object)
         """
         job_id = id or f"job_{uuid.uuid4().hex[:8]}"
         ttype = TriggerType(trigger)
+        common = dict(
+            retry_policy=retry_policy,
+            budget=budget,
+            validator=validator,
+            checkpoint_enabled=checkpoint_enabled,
+            complexity=complexity,
+        )
 
         if ttype == TriggerType.INTERVAL:
             seconds = trigger_kwargs.get("seconds", 0)
@@ -193,6 +240,7 @@ class AsyncScheduler:
                 minutes=minutes,
                 hours=hours,
                 data=trigger_kwargs.get("data"),
+                **common,
             )
         elif ttype == TriggerType.DATE:
             run_date = trigger_kwargs.get("run_date")
@@ -206,6 +254,7 @@ class AsyncScheduler:
                 kwargs=kwargs,
                 run_date=run_date,
                 data=trigger_kwargs.get("data"),
+                **common,
             )
         else:
             raise ValueError(f"Unsupported trigger: {trigger}")
@@ -306,7 +355,14 @@ class AsyncScheduler:
                 pass
 
     async def _execute_job(self, job: Job) -> None:
-        """Execute a single job and reschedule if interval."""
+        """Execute a single job and reschedule if interval.
+
+        Honors (when configured on the job):
+            - ``budget`` — wall-clock timeout via ``asyncio.wait_for``
+            - ``validator`` — post-run output check; failure triggers retry
+            - ``retry_policy`` — retries with backoff; ``fallback`` after exhaustion
+            - ``checkpoint_enabled`` — creates ``Checkpoint`` and injects ``ctx``
+        """
         if job._running >= job.max_instances:
             logger.warning(f"Job '{job.id}' skipped: max_instances ({job.max_instances}) reached")
             return
@@ -316,15 +372,7 @@ class AsyncScheduler:
         async with self._semaphore:
             job._running += 1
             try:
-                logger.debug(f"Executing job '{job.id}'")
-                if inspect.iscoroutinefunction(job.func):
-                    await job.func(*job.args, **job.kwargs)
-                else:
-                    # Run sync functions in thread pool
-                    loop = asyncio.get_running_loop()
-                    await loop.run_in_executor(None, lambda: job.func(*job.args, **job.kwargs))
-            except Exception as exc:
-                logger.error(f"Job '{job.id}' failed: {exc}")
+                await self._run_with_reliability(job)
             finally:
                 job._running -= 1
                 if job.trigger == TriggerType.INTERVAL:
@@ -333,6 +381,128 @@ class AsyncScheduler:
                     # One-shot: remove after execution
                     self._jobs.pop(job.id, None)
                     self._persist_jobs()
+
+    async def _run_with_reliability(self, job: Job) -> Any:
+        """Run a job with retry, budget, validation, and context injection."""
+        policy = job.retry_policy or RetryPolicy(max_attempts=1)
+        budget = job.budget
+        ckpt = Checkpoint(job.id) if job.checkpoint_enabled else None
+        ctx = JobContext(job_id=job.id, scheduler=self, checkpoint=ckpt, budget=budget or TaskBudget())
+
+        # Inject ctx into kwargs only if the function declares it
+        sig_params: set[str] = set()
+        try:
+            sig_params = set(inspect.signature(job.func).parameters.keys())
+        except (TypeError, ValueError):
+            pass
+        ctx_kw: Optional[str] = None
+        for name in ("ctx", "context", "job_ctx"):
+            if name in sig_params:
+                ctx_kw = name
+                break
+
+        last_exc: Optional[BaseException] = None
+        for attempt in range(1, policy.max_attempts + 1):
+            try:
+                logger.debug(f"Executing job '{job.id}' (attempt {attempt}/{policy.max_attempts})")
+                if ckpt is not None:
+                    ckpt.save(step=f"attempt_{attempt}_start", status="in_progress")
+
+                kwargs = dict(job.kwargs)
+                if ctx_kw is not None:
+                    kwargs[ctx_kw] = ctx
+
+                # Build the awaitable (coroutine or threaded sync call)
+                if inspect.iscoroutinefunction(job.func):
+                    awaitable = job.func(*job.args, **kwargs)
+                else:
+                    loop = asyncio.get_running_loop()
+                    awaitable = loop.run_in_executor(None, lambda: job.func(*job.args, **kwargs))
+
+                # Apply wall-clock timeout from budget if set
+                if budget is not None and budget.duration_s > 0:
+                    result = await asyncio.wait_for(awaitable, timeout=budget.duration_s)
+                else:
+                    result = await awaitable
+
+                # Output validation
+                if job.validator is not None:
+                    err = job.validator(result)
+                    if err:
+                        raise ValidationError(f"output validation failed: {err}")
+
+                if ckpt is not None:
+                    ckpt.save(
+                        step="completed",
+                        data={"result_preview": str(result)[:200] if result is not None else None},
+                        status="completed",
+                    )
+                logger.debug(f"Job '{job.id}' succeeded on attempt {attempt}")
+                return result
+
+            except asyncio.TimeoutError as exc:
+                last_exc = exc
+                logger.warning(
+                    f"Job '{job.id}' attempt {attempt}/{policy.max_attempts} TIMED OUT "
+                    f"after {budget.duration_s if budget else '?'}s"
+                )
+                if ckpt is not None:
+                    ckpt.save(step=f"attempt_{attempt}_timeout", status="failed",
+                              data={"error": "timeout", "budget_s": budget.duration_s if budget else None})
+                if not _exc_matches(exc, policy.retry_on):
+                    break
+            except policy.retry_on as exc:
+                last_exc = exc
+                logger.warning(
+                    f"Job '{job.id}' attempt {attempt}/{policy.max_attempts} failed: "
+                    f"{type(exc).__name__}: {exc}"
+                )
+                if ckpt is not None:
+                    ckpt.save(step=f"attempt_{attempt}_failed", status="failed",
+                              data={"error": str(exc), "error_type": type(exc).__name__})
+            except Exception as exc:
+                # Not in retry_on — fail immediately
+                last_exc = exc
+                logger.error(f"Job '{job.id}' failed with non-retryable error: {exc}")
+                if ckpt is not None:
+                    ckpt.save(step="non_retryable_error", status="failed",
+                              data={"error": str(exc), "error_type": type(exc).__name__})
+                break
+
+            # Backoff before next attempt
+            if attempt < policy.max_attempts:
+                delay = policy.compute_delay(attempt)
+                logger.info(f"Job '{job.id}' retrying in {delay:.2f}s")
+                await asyncio.sleep(delay)
+
+        # All retries exhausted (or non-retryable). Try fallback.
+        if policy.fallback is not None:
+            try:
+                logger.info(f"Job '{job.id}' invoking fallback after failure")
+                if inspect.iscoroutinefunction(policy.fallback):
+                    fb_result = await policy.fallback(job, last_exc, ctx)
+                else:
+                    loop = asyncio.get_running_loop()
+                    fb_result = await loop.run_in_executor(
+                        None, lambda: policy.fallback(job, last_exc, ctx)
+                    )
+                if ckpt is not None:
+                    ckpt.save(step="fallback_completed", status="completed_fallback",
+                              data={"fallback_result_preview": str(fb_result)[:200]})
+                return fb_result
+            except Exception as exc:
+                logger.error(f"Job '{job.id}' fallback also failed: {exc}")
+                if ckpt is not None:
+                    ckpt.save(step="fallback_failed", status="failed",
+                              data={"fallback_error": str(exc)})
+
+        if ckpt is not None:
+            ckpt.save(step="exhausted", status="failed",
+                      data={"final_error": str(last_exc) if last_exc else "unknown"})
+        logger.error(
+            f"Job '{job.id}' permanently failed after {policy.max_attempts} attempt(s): {last_exc}"
+        )
+        return None
 
     # ── Persistence ───────────────────────────────────────────────────────────
 

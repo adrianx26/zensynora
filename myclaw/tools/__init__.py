@@ -67,6 +67,9 @@ from .scheduler import (
     resume_schedule, cancel_schedule, list_schedules,
     nlp_schedule, _parse_natural_schedule,
     _create_job_internal,
+    # Phase 6.3 reliability tools
+    auto_schedule, estimate_complexity,
+    get_checkpoint, list_checkpoints, clear_checkpoint,
 )
 from .session import (
     generate_session_insights, extract_user_preferences,

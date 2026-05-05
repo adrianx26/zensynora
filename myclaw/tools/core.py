@@ -539,6 +539,8 @@ def is_tool_independent(tool_name: str) -> bool:
         "schedule",
         "cancel_schedule",
         "edit_schedule",
+        "auto_schedule",
+        "clear_checkpoint",
     }
 
     return tool_name not in dependent_tools

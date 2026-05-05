@@ -314,6 +314,135 @@ def _parse_natural_schedule(natural_time: str) -> dict:
     return result  # Return unchanged if couldn't parse
 
 
+# ── Phase 6.3: Reliability Tools (complexity / auto-split / checkpoints) ────
+
+
+def estimate_complexity(task: str) -> str:
+    """Pre-flight static analysis of a task description.
+
+    Returns a JSON object with the complexity score (0..1), estimated tool
+    calls, estimated duration in seconds, detected steps, and a list of
+    flags ("complex", "slow-ops", "multi-step", "explicit-list",
+    "decomposition-recommended").
+    """
+    from ..scheduler_features import ComplexityAnalyzer
+
+    c = ComplexityAnalyzer.analyze(task)
+    return json.dumps(
+        {
+            "score": c.score,
+            "estimated_tool_calls": c.estimated_tool_calls,
+            "estimated_duration_seconds": c.estimated_duration_s,
+            "detected_steps": c.detected_steps,
+            "flags": c.flags,
+            "decomposition_recommended": c.decompose,
+        },
+        indent=2,
+    )
+
+
+def auto_schedule(
+    task: str,
+    delay: int = 0,
+    every: int = 0,
+    user_id: str = "default",
+    auto_split: bool = True,
+    stagger_seconds: int = 2,
+) -> str:
+    """Schedule a task with automatic complexity evaluation.
+
+    If the analyzer marks the task as complex AND ``auto_split`` is True,
+    the task is decomposed (numbered list / bullets / multi-step keywords)
+    and each sub-task is scheduled separately, staggered by
+    ``stagger_seconds``. Otherwise it falls through to a normal schedule().
+
+    Returns a multi-line summary including the score and what was scheduled.
+    """
+    from ..scheduler_features import ComplexityAnalyzer, decompose_task
+
+    if _job_queue is None and _notification_callback is None:
+        return "Error: Scheduler not available (no channel gateway running)."
+    if delay <= 0 and every <= 0:
+        return "Error: Specify 'delay' (one-shot) or 'every' (recurring) in seconds."
+
+    c = ComplexityAnalyzer.analyze(task)
+    flags_str = ", ".join(c.flags) or "simple"
+    lines = [
+        f"📊 Complexity: {c.score:.2f} ({flags_str})",
+        f"   Estimated: {c.estimated_tool_calls} tool calls · ~{c.estimated_duration_s:.0f}s · {c.detected_steps} step(s)",
+    ]
+
+    if auto_split and c.decompose:
+        subtasks = decompose_task(task)
+        if len(subtasks) >= 2:
+            base_id = f"auto_{user_id}_{int(time.time())}"
+            lines.append(f"🪓 Auto-split into {len(subtasks)} sub-task(s):")
+            for i, sub in enumerate(subtasks):
+                sub_id = f"{base_id}_sub{i}"
+                preview = sub if len(sub) <= 70 else sub[:67] + "..."
+                lines.append(f"   • {sub_id}: {preview}")
+                _create_job_internal(sub, delay + i * stagger_seconds, every, user_id, sub_id)
+            return "\n".join(lines)
+
+    job_id = f"auto_{user_id}_{int(time.time())}"
+    lines.append("→ Scheduled as single task:")
+    lines.append("  " + _create_job_internal(task, delay, every, user_id, job_id))
+    return "\n".join(lines)
+
+
+def get_checkpoint(job_id: str) -> str:
+    """Fetch the latest checkpoint for a job (if checkpointing was enabled).
+
+    Reads ``~/.myclaw/checkpoints/<job_id>.json``. Returns the JSON content,
+    or a 'no checkpoint found' message.
+    """
+    from ..scheduler_features import Checkpoint
+
+    state = Checkpoint(job_id).load()
+    if state is None:
+        return f"No checkpoint found for '{job_id}'."
+    return json.dumps(state, indent=2, default=str)
+
+
+def list_checkpoints() -> str:
+    """List all jobs that have a persisted checkpoint."""
+    from pathlib import Path
+
+    base = Path.home() / ".myclaw" / "checkpoints"
+    if not base.exists():
+        return "No checkpoints directory yet."
+    entries = []
+    for p in sorted(base.glob("*.json")):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            entries.append({
+                "task_id": data.get("task_id", p.stem),
+                "status": data.get("status", "?"),
+                "last_step": data.get("last_step", "?"),
+                "last_update": data.get("last_update", "?"),
+                "progress": data.get("progress"),
+            })
+        except Exception:
+            entries.append({"task_id": p.stem, "status": "unreadable"})
+    if not entries:
+        return "No checkpoints recorded."
+    return json.dumps(entries, indent=2, default=str)
+
+
+def clear_checkpoint(job_id: str) -> str:
+    """Delete the checkpoint file for a job (if it exists)."""
+    from ..scheduler_features import Checkpoint
+
+    cp = Checkpoint(job_id)
+    if cp.path.exists():
+        cp.clear()
+        return f"Checkpoint for '{job_id}' cleared."
+    return f"No checkpoint to clear for '{job_id}'."
+
+
+# ── End Phase 6.3 reliability tools ─────────────────────────────────────────
+
+
 def nlp_schedule(task: str, natural_time: str, user_id: str = "default") -> str:
     """Schedule a task using natural language time expressions.
 
