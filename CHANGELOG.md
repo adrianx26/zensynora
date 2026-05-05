@@ -7,6 +7,96 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Phase 6.3 — Scheduler reliability layer (2026-05-06)
+
+`AsyncScheduler` previously caught exceptions, logged them, and moved on —
+no validation, no retries, no per-task budgets. Six capabilities added as a
+single additive layer; existing callers and existing job functions keep
+working unchanged.
+
+#### New module: `myclaw/scheduler_features.py`
+
+- **`RetryPolicy`** — `max_attempts`, `backoff` (`fixed | linear | exponential`),
+  `base_delay`, `max_delay`, `retry_on`, `fallback`. Backoff is capped at
+  `max_delay`. Fallback may be sync or async; receives `(job, exc, ctx)`.
+- **`OutputValidator` protocol + built-ins** — `NotEmpty`, `Regex`,
+  `MaxLength`, `JSONSchema` (no `jsonschema` dep), `Custom` (predicate),
+  `Chain` (short-circuiting AND). Validation failures raise
+  `ValidationError`, which integrates with `RetryPolicy`.
+- **`ComplexityAnalyzer.analyze(task)`** → `ComplexityScore` with
+  `score` (0..1), `estimated_tool_calls`, `estimated_duration_s`,
+  `detected_steps`, `flags` (`complex`, `slow-ops`, `multi-step`,
+  `explicit-list`, `long-running`, `decomposition-recommended`).
+  Heuristics: slow-op keywords, multi-step keywords, numbered/bullet lists,
+  raw length, mentions of known tool names.
+- **`decompose_task(task)`** — splits a complex task description into
+  sub-tasks. Strategy in priority order: numbered list → bullet list →
+  multi-step keywords (`then`, `and then`, `next`, `followed by`, `;`) →
+  fallback to single task.
+- **`Checkpoint(task_id)`** — JSON checkpoint at
+  `~/.myclaw/checkpoints/<task_id>.json`. Path-traversal-safe ID
+  sanitisation. `save(step, data, total_steps, status)` /
+  `load()` / `clear()`.
+- **`TaskBudget`** — wall-clock and tool-call budget.
+  `TaskBudget.from_complexity(score, multiplier=1.5, floor_s=60, ceiling_s=1800)`
+  derives a budget directly from a `ComplexityScore`.
+- **`JobContext`** — runtime handle injected into job functions that opt
+  in via a `ctx`/`context`/`job_ctx` kwarg. Methods:
+  `progress(step, n, total, **data)`, `elapsed()`, `remaining_budget()`,
+  `is_over_soft_budget()` (default 70 %), `is_over_budget()`,
+  `record_tool_call()`, `tool_calls`, `spawn_subtask(func, *, delay_s, sub_id)`,
+  `spawned`.
+
+#### `myclaw/async_scheduler.py`
+
+- **`Job`** carries five new optional fields: `retry_policy`, `budget`,
+  `validator`, `checkpoint_enabled`, `complexity`.
+- **`AsyncScheduler.add_job(...)`** accepts the same five as kw-only args.
+- **`_execute_job` → `_run_with_reliability`**: the core executor now does
+  attempt loop + backoff + `asyncio.wait_for` (when a budget is set) +
+  post-run validator + ctx injection (only when the function declares it) +
+  fallback on exhaustion + checkpoint trail at every transition. Original
+  no-extension behaviour is preserved when none of the new kwargs are passed.
+
+#### `myclaw/tools/scheduler.py` — five new agent-callable tools
+
+- `auto_schedule(task, delay, every, user_id, auto_split=True, stagger_seconds=2)`
+  — runs `ComplexityAnalyzer`; if complex AND `auto_split`, decomposes and
+  schedules each sub-task with a stagger.
+- `estimate_complexity(task)` — JSON pre-flight analysis.
+- `get_checkpoint(job_id)` — read the checkpoint JSON.
+- `list_checkpoints()` — index of all jobs that have a checkpoint.
+- `clear_checkpoint(job_id)` — delete the checkpoint file.
+
+`auto_schedule` and `clear_checkpoint` are flagged non-parallel-safe in
+`tools/core.py:is_tool_independent`.
+
+#### Tests
+
+`tests/test_scheduler_features.py` — 37 tests (all passing under both
+`asyncio` and `trio` backends): retry-policy math, every validator,
+complexity heuristics, decomposition strategies, checkpoint round-trip +
+unsafe-id sanitisation, scheduler integration (retry-then-succeed,
+fallback-after-exhaustion, validator-driven retry, budget timeout, ctx
+injection + checkpoint persistence, sub-task spawn, backwards-compat with
+plain functions).
+
+#### Docs
+
+- New: [`docs/scheduler_features_guide.md`](docs/scheduler_features_guide.md)
+  — full usage walk-through with code examples per capability.
+
+#### Compatibility
+
+- All new fields and kwargs default to `None`/`False`. Calls that don't
+  opt in get the previous behaviour exactly.
+- Job functions without a `ctx`/`context`/`job_ctx` parameter receive
+  no injected context — verified by
+  `test_scheduler_existing_funcs_without_ctx_kwarg_still_work`.
+- `Job.to_dict()` / `Job.from_dict()` are unchanged; the new fields are
+  not yet persisted to JSONL (intentional — `RetryPolicy.fallback` and
+  `OutputValidator` are callables that don't round-trip through JSON).
+
 ### Install/uninstall scripts updated to match Sprints 1–12 (2026-04-30)
 
 `install.sh` and `uninstall.sh` predated the recent sprints and didn't

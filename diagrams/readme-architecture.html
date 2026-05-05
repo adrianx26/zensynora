@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ZenSynora Architecture — README</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/theme.css" />
+<style>
+  .diagram-svg-wrap {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 32px 24px;
+    margin-bottom: 28px;
+    position: relative;
+    overflow: hidden;
+  }
+  .diagram-svg-wrap::before {
+    content: '';
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(var(--grid-strong) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid-strong) 1px, transparent 1px);
+    background-size: 24px 24px;
+    opacity: 0.6;
+    pointer-events: none;
+  }
+  .diagram-svg-wrap svg { display: block; width: 100%; height: auto; position: relative; }
+  /* SVG node styles */
+  .cluster-rect { fill: rgba(15, 20, 29, 0.4); stroke-dasharray: 4 3; stroke-width: 1; }
+  .cluster-label { font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+  .node-rect { fill: var(--bg-card); stroke-width: 1.5; rx: 6; ry: 6; }
+  .node-title { font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+  .node-sub { font-family: var(--font-mono); font-size: 10px; fill: var(--text-muted); }
+  .edge { fill: none; stroke: var(--text-dim); stroke-width: 1.4; }
+  .edge-dashed { fill: none; stroke: var(--text-dim); stroke-width: 1.2; stroke-dasharray: 4 3; }
+  .edge-label { font-family: var(--font-mono); font-size: 9px; fill: var(--text-muted); }
+
+  /* semantic color classes — see assets/palette.md */
+  .c-analysis   { stroke: var(--analysis); }
+  .c-evaluation { stroke: var(--evaluation); }
+  .c-decision   { stroke: var(--decision); }
+  .c-risk       { stroke: var(--risk); }
+  .c-recommend  { stroke: var(--recommend); }
+  .c-neutral    { stroke: var(--neutral); }
+  .t-analysis   { fill: var(--analysis); }
+  .t-evaluation { fill: var(--evaluation); }
+  .t-decision   { fill: var(--decision); }
+  .t-risk       { fill: var(--risk); }
+  .t-recommend  { fill: var(--recommend); }
+  .t-neutral    { fill: var(--neutral); }
+  /* legacy aliases */
+  .c-frontend { stroke: var(--evaluation); } .t-frontend { fill: var(--evaluation); }
+  .c-backend  { stroke: var(--analysis); }   .t-backend  { fill: var(--analysis); }
+  .c-database { stroke: var(--decision); }   .t-database { fill: var(--decision); }
+  .c-external { stroke: var(--recommend); }  .t-external { fill: var(--recommend); }
+</style>
+</head>
+<body>
+<div class="page">
+
+<a class="back-link" href="index.html">← All diagrams</a>
+
+<div class="header">
+  <span class="dot"></span>
+  <h1 class="title">ZenSynora Architecture</h1>
+</div>
+<p class="subtitle">Multi-tenant agent platform — channels, auth, core engine, providers, storage, tools, marketplace, observability</p>
+
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch analysis"></span>Analysis · Processing</div>
+  <div class="legend-item"><span class="legend-swatch evaluation"></span>Evaluation · Gateway</div>
+  <div class="legend-item"><span class="legend-swatch decision"></span>Decision · Storage</div>
+  <div class="legend-item"><span class="legend-swatch risk"></span>Risk · Resilience</div>
+  <div class="legend-item"><span class="legend-swatch recommend"></span>Recommendation · External</div>
+  <div class="legend-item"><span class="legend-swatch neutral"></span>Neutral · Output</div>
+</div>
+
+<div class="diagram-svg-wrap">
+<svg viewBox="0 0 1280 1040" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#475569" />
+    </marker>
+    <marker id="arrow-d" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#475569" />
+    </marker>
+  </defs>
+
+  <!-- ============ ROW 1: Gateways + Auth ============ -->
+  <g>
+    <rect class="cluster-rect c-frontend" x="30" y="20" width="700" height="130" rx="8" />
+    <text class="cluster-label t-frontend" x="48" y="42">Channels &amp; Gateways</text>
+    <!-- Telegram -->
+    <rect class="node-rect c-frontend" x="48" y="60" width="120" height="70" />
+    <text class="node-title t-frontend" x="108" y="92" text-anchor="middle">Telegram</text>
+    <text class="node-sub" x="108" y="108" text-anchor="middle">Bot API</text>
+    <!-- WhatsApp -->
+    <rect class="node-rect c-frontend" x="180" y="60" width="120" height="70" />
+    <text class="node-title t-frontend" x="240" y="92" text-anchor="middle">WhatsApp</text>
+    <text class="node-sub" x="240" y="108" text-anchor="middle">Cloud API</text>
+    <!-- Discord -->
+    <rect class="node-rect c-frontend" x="312" y="60" width="120" height="70" />
+    <text class="node-title t-frontend" x="372" y="92" text-anchor="middle">Discord</text>
+    <text class="node-sub" x="372" y="108" text-anchor="middle">discord.py</text>
+    <!-- CLI -->
+    <rect class="node-rect c-frontend" x="444" y="60" width="120" height="70" />
+    <text class="node-title t-frontend" x="504" y="92" text-anchor="middle">CLI</text>
+    <text class="node-sub" x="504" y="108" text-anchor="middle">Console</text>
+    <!-- WebUI -->
+    <rect class="node-rect c-frontend" x="576" y="60" width="140" height="70" />
+    <text class="node-title t-frontend" x="646" y="86" text-anchor="middle">Web UI</text>
+    <text class="node-sub" x="646" y="102" text-anchor="middle">Typewriter</text>
+    <text class="node-sub" x="646" y="116" text-anchor="middle">CostDashboard</text>
+  </g>
+
+  <g>
+    <rect class="cluster-rect c-frontend" x="760" y="20" width="490" height="130" rx="8" />
+    <text class="cluster-label t-frontend" x="778" y="42">Auth &amp; Tenancy</text>
+    <rect class="node-rect c-frontend" x="778" y="60" width="140" height="70" />
+    <text class="node-title t-frontend" x="848" y="92" text-anchor="middle">JWT</text>
+    <text class="node-sub" x="848" y="108" text-anchor="middle">Authenticator</text>
+
+    <rect class="node-rect c-frontend" x="930" y="60" width="140" height="70" />
+    <text class="node-title t-frontend" x="1000" y="92" text-anchor="middle">OAuth2</text>
+    <text class="node-sub" x="1000" y="108" text-anchor="middle">Callback</text>
+
+    <rect class="node-rect c-frontend" x="1082" y="60" width="155" height="70" />
+    <text class="node-title t-frontend" x="1159" y="86" text-anchor="middle">UserContext</text>
+    <text class="node-sub" x="1159" y="102" text-anchor="middle">contextvars</text>
+    <text class="node-sub" x="1159" y="116" text-anchor="middle">per-tenant</text>
+  </g>
+
+  <!-- ============ ROW 2: Core Agent Engine ============ -->
+  <g>
+    <rect class="cluster-rect c-backend" x="180" y="200" width="920" height="140" rx="8" />
+    <text class="cluster-label t-backend" x="198" y="222">Core Agent Engine</text>
+
+    <!-- Agent (highlighted) -->
+    <rect class="node-rect c-backend" x="200" y="244" width="140" height="80"
+          style="fill:rgba(134,239,172,0.08); stroke-width:2"/>
+    <text class="node-title t-backend" x="270" y="282" text-anchor="middle">Agent</text>
+    <text class="node-sub" x="270" y="298" text-anchor="middle">orchestrator</text>
+
+    <rect class="node-rect c-backend" x="380" y="252" width="160" height="64" />
+    <text class="node-title t-backend" x="460" y="280" text-anchor="middle">MessageRouter</text>
+    <text class="node-sub" x="460" y="296" text-anchor="middle">channel routing</text>
+
+    <rect class="node-rect c-backend" x="560" y="252" width="160" height="64" />
+    <text class="node-title t-backend" x="640" y="280" text-anchor="middle">ContextBuilder</text>
+    <text class="node-sub" x="640" y="296" text-anchor="middle">prompt assembly</text>
+
+    <rect class="node-rect c-backend" x="740" y="252" width="160" height="64" />
+    <text class="node-title t-backend" x="820" y="280" text-anchor="middle">ToolExecutor</text>
+    <text class="node-sub" x="820" y="296" text-anchor="middle">async dispatch</text>
+
+    <rect class="node-rect c-backend" x="920" y="252" width="160" height="64" />
+    <text class="node-title t-backend" x="1000" y="280" text-anchor="middle">ResponseHandler</text>
+    <text class="node-sub" x="1000" y="296" text-anchor="middle">streaming</text>
+  </g>
+
+  <!-- ============ ROW 3: Resilience, LLM, Tools, Marketplace ============ -->
+  <g>
+    <rect class="cluster-rect c-risk" x="30" y="380" width="220" height="190" rx="8" />
+    <text class="cluster-label t-risk" x="48" y="402">Resilience</text>
+    <rect class="node-rect c-risk" x="48" y="420" width="180" height="60" />
+    <text class="node-title t-risk" x="138" y="446" text-anchor="middle">CircuitBreaker</text>
+    <text class="node-sub" x="138" y="462" text-anchor="middle">per-provider</text>
+    <rect class="node-rect c-risk" x="48" y="490" width="180" height="60" />
+    <text class="node-title t-risk" x="138" y="516" text-anchor="middle">FallbackChain</text>
+    <text class="node-sub" x="138" y="532" text-anchor="middle">cascading</text>
+  </g>
+
+  <g>
+    <rect class="cluster-rect c-backend" x="280" y="380" width="340" height="190" rx="8" />
+    <text class="cluster-label t-backend" x="298" y="402">LLM Providers</text>
+    <rect class="node-rect c-backend" x="298" y="420" width="304" height="60" />
+    <text class="node-title t-backend" x="450" y="442" text-anchor="middle">Provider Stack</text>
+    <text class="node-sub" x="450" y="460" text-anchor="middle">Ollama · OpenAI · Anthropic · Gemini · Groq</text>
+    <rect class="node-rect c-backend" x="298" y="490" width="304" height="60" />
+    <text class="node-title t-backend" x="450" y="516" text-anchor="middle">SemanticCache</text>
+    <text class="node-sub" x="450" y="532" text-anchor="middle">embedding-based hit dedup</text>
+  </g>
+
+  <g>
+    <rect class="cluster-rect c-backend" x="650" y="380" width="280" height="320" rx="8" />
+    <text class="cluster-label t-backend" x="668" y="402">Tools &amp; Capabilities</text>
+    <rect class="node-rect c-backend" x="668" y="420" width="244" height="46" />
+    <text class="node-title t-backend" x="790" y="448" text-anchor="middle">Tool Registry</text>
+    <rect class="node-rect c-backend" x="668" y="476" width="244" height="46" />
+    <text class="node-title t-backend" x="790" y="504" text-anchor="middle">browser_*</text>
+    <rect class="node-rect c-backend" x="668" y="532" width="244" height="46" />
+    <text class="node-title t-backend" x="790" y="560" text-anchor="middle">register_tool sandbox</text>
+    <rect class="node-rect c-backend" x="668" y="588" width="244" height="46" />
+    <text class="node-title t-backend" x="790" y="616" text-anchor="middle">PromptRegistry</text>
+    <rect class="node-rect c-backend" x="668" y="644" width="244" height="46" />
+    <text class="node-title t-backend" x="790" y="672" text-anchor="middle">repair_json</text>
+  </g>
+
+  <g>
+    <rect class="cluster-rect c-recommend" x="960" y="380" width="290" height="320" rx="8" />
+    <text class="cluster-label t-recommend" x="978" y="402">Marketplace</text>
+    <rect class="node-rect c-recommend" x="978" y="420" width="254" height="46" />
+    <text class="node-title t-recommend" x="1105" y="448" text-anchor="middle">OpenClawSource</text>
+    <rect class="node-rect c-recommend" x="978" y="476" width="254" height="46" />
+    <text class="node-title t-recommend" x="1105" y="504" text-anchor="middle">GitHubReleasesSource</text>
+    <rect class="node-rect c-recommend" x="978" y="532" width="254" height="46" />
+    <text class="node-title t-recommend" x="1105" y="560" text-anchor="middle">HttpRegistrySource</text>
+    <rect class="node-rect c-recommend" x="978" y="588" width="254" height="46" />
+    <text class="node-title t-recommend" x="1105" y="616" text-anchor="middle">LocalHubSource</text>
+    <rect class="node-rect c-recommend" x="978" y="644" width="254" height="46"
+          style="fill:rgba(251,191,36,0.10); stroke-width:2"/>
+    <text class="node-title t-recommend" x="1105" y="668" text-anchor="middle">MarketplaceClient</text>
+    <text class="node-sub" x="1105" y="684" text-anchor="middle">+ HMAC verify</text>
+  </g>
+
+  <!-- ============ ROW 4: Storage + Observability ============ -->
+  <g>
+    <rect class="cluster-rect c-database" x="30" y="730" width="590" height="240" rx="8" />
+    <text class="cluster-label t-database" x="48" y="752">Storage</text>
+    <rect class="node-rect c-database" x="48" y="770" width="270" height="64" />
+    <text class="node-title t-database" x="183" y="796" text-anchor="middle">Memory</text>
+    <text class="node-sub" x="183" y="814" text-anchor="middle">per-tenant conversation log</text>
+    <rect class="node-rect c-database" x="334" y="770" width="270" height="64" />
+    <text class="node-title t-database" x="469" y="796" text-anchor="middle">KnowledgeDB</text>
+    <text class="node-sub" x="469" y="814" text-anchor="middle">FTS5 · dedicated executor</text>
+    <rect class="node-rect c-database" x="48" y="846" width="270" height="64" />
+    <text class="node-title t-database" x="183" y="872" text-anchor="middle">Vector Store</text>
+    <text class="node-sub" x="183" y="890" text-anchor="middle">memory · sqlite · qdrant</text>
+    <rect class="node-rect c-database" x="334" y="846" width="270" height="64" />
+    <text class="node-title t-database" x="469" y="872" text-anchor="middle">BaseTTLCache</text>
+    <text class="node-sub" x="469" y="890" text-anchor="middle">in-process TTL cache</text>
+  </g>
+
+  <g>
+    <rect class="cluster-rect c-neutral" x="650" y="730" width="600" height="240" rx="8" />
+    <text class="cluster-label t-neutral" x="668" y="752">Observability</text>
+    <rect class="node-rect c-neutral" x="668" y="770" width="180" height="80" />
+    <text class="node-title t-neutral" x="758" y="800" text-anchor="middle">OpenTelemetry</text>
+    <text class="node-sub" x="758" y="816" text-anchor="middle">spans · traces</text>
+
+    <rect class="node-rect c-neutral" x="868" y="770" width="180" height="80" />
+    <text class="node-title t-neutral" x="958" y="800" text-anchor="middle">PII Scrubber</text>
+    <text class="node-sub" x="958" y="816" text-anchor="middle">log redaction</text>
+
+    <rect class="node-rect c-neutral" x="1068" y="770" width="170" height="80" />
+    <text class="node-title t-neutral" x="1153" y="800" text-anchor="middle">CostTracker</text>
+    <text class="node-sub" x="1153" y="816" text-anchor="middle">per-call accounting</text>
+
+    <rect class="node-rect c-neutral" x="668" y="868" width="570" height="80"
+          style="fill:rgba(100,116,139,0.06)"/>
+    <text class="node-title t-neutral" x="953" y="898" text-anchor="middle">Unified telemetry pipeline</text>
+    <text class="node-sub" x="953" y="916" text-anchor="middle">spans → exporter · sensitive fields scrubbed · cost attached as attributes</text>
+  </g>
+
+  <!-- ============ EDGES ============ -->
+  <!-- Gateways -> Auth (top horizontal) -->
+  <path class="edge" d="M 730,85 L 760,85" marker-end="url(#arrow)"/>
+
+  <!-- UserContext (Auth) -> Agent  (auth bottom -> core top) -->
+  <path class="edge" d="M 1159,130 L 1159,170 L 270,170 L 270,244" marker-end="url(#arrow)"/>
+
+  <!-- Agent -> CircuitBreaker -->
+  <path class="edge" d="M 200,290 L 138,290 L 138,420" marker-end="url(#arrow)"/>
+  <!-- CB -> FC -->
+  <path class="edge" d="M 138,480 L 138,490" marker-end="url(#arrow)"/>
+  <!-- FC -> Provider Stack -->
+  <path class="edge" d="M 228,520 L 298,450" marker-end="url(#arrow)"/>
+  <!-- Provider -> SemanticCache -->
+  <path class="edge" d="M 450,480 L 450,490" marker-end="url(#arrow)"/>
+
+  <!-- Agent -> Tools -->
+  <path class="edge" d="M 340,290 L 668,443" marker-end="url(#arrow)"/>
+  <!-- Tools -> Marketplace -->
+  <path class="edge" d="M 912,535 L 978,535" marker-end="url(#arrow)"/>
+
+  <!-- Agent -> Storage (KnowledgeDB) -->
+  <path class="edge" d="M 270,324 L 270,700 L 469,700 L 469,770" marker-end="url(#arrow)"/>
+  <!-- Agent -> Memory (also via storage) -->
+  <path class="edge" d="M 220,324 L 220,710 L 183,710 L 183,770" marker-end="url(#arrow)"/>
+
+  <!-- Agent -> Observability (OpenTelemetry) -->
+  <path class="edge" d="M 340,310 L 758,770" marker-end="url(#arrow)"/>
+
+  <!-- Memory -.uses.-> UserContext (dashed) -->
+  <path class="edge-dashed" d="M 183,770 C 80,600 80,200 1100,140" marker-end="url(#arrow-d)"/>
+  <text class="edge-label" x="60" y="430" transform="rotate(-90 60,430)">uses</text>
+
+  <!-- Agent connectors to Router/Context/Executor/Response (intra-cluster) -->
+  <path class="edge" d="M 340,284 L 380,284" marker-end="url(#arrow)"/>
+  <path class="edge" d="M 340,284 L 560,284" stroke-opacity="0" />
+  <path class="edge" d="M 540,284 L 560,284" marker-end="url(#arrow)"/>
+  <path class="edge" d="M 720,284 L 740,284" marker-end="url(#arrow)"/>
+  <path class="edge" d="M 900,284 L 920,284" marker-end="url(#arrow)"/>
+</svg>
+</div>
+
+<div class="cards-grid">
+  <div class="info-card">
+    <h3>Channels &amp; Auth</h3>
+    <ul>
+      <li>5 channel adapters: Telegram, WhatsApp, Discord, CLI, Web UI</li>
+      <li>JWTAuthenticator + OAuth2Callback</li>
+      <li>UserContext via contextvars (per-request tenant scoping)</li>
+    </ul>
+  </div>
+  <div class="info-card">
+    <h3>Core Engine</h3>
+    <ul>
+      <li>Agent orchestrates Router, Context, Executor, Response</li>
+      <li>Async tool dispatch with streaming output</li>
+      <li>Per-tenant memory and knowledge isolation</li>
+    </ul>
+  </div>
+  <div class="info-card">
+    <h3>Resilience &amp; LLM</h3>
+    <ul>
+      <li>CircuitBreaker per provider</li>
+      <li>FallbackChain across Ollama / OpenAI / Anthropic / Gemini / Groq</li>
+      <li>SemanticCache for repeated-query dedup</li>
+    </ul>
+  </div>
+  <div class="info-card">
+    <h3>Storage</h3>
+    <ul>
+      <li>Memory: per-tenant conversation log</li>
+      <li>KnowledgeDB: FTS5 + dedicated executor</li>
+      <li>Vector store: memory / sqlite / qdrant</li>
+      <li>BaseTTLCache for in-process caching</li>
+    </ul>
+  </div>
+  <div class="info-card">
+    <h3>Tools &amp; Marketplace</h3>
+    <ul>
+      <li>Tool Registry, browser_*, register_tool sandbox</li>
+      <li>PromptRegistry, repair_json</li>
+      <li>Marketplace sources: OpenClaw, GitHub, HTTP, Local</li>
+      <li>MarketplaceClient with HMAC signature verify</li>
+    </ul>
+  </div>
+  <div class="info-card">
+    <h3>Observability</h3>
+    <ul>
+      <li>OpenTelemetry spans (graceful no-op if missing)</li>
+      <li>PII scrubber on log/trace pipelines</li>
+      <li>CostTracker — per-call provider accounting</li>
+    </ul>
+  </div>
+</div>
+
+<div class="footer">
+  ZenSynora (MyClaw) <span class="sep">•</span> README Architecture <span class="sep">•</span> Hand-laid SVG · matches diagrams/ theme
+</div>
+
+</div>
+</body>
+</html>

@@ -1,4 +1,5 @@
 :root {
+  /* Surfaces */
   --bg: #0a0e14;
   --bg-elevated: #0f141d;
   --bg-card: #131924;
@@ -6,17 +7,27 @@
   --grid-strong: rgba(125, 211, 252, 0.08);
   --border: #1e2733;
   --border-strong: #2a3543;
+  /* Text */
   --text: #cbd5e1;
-  --text-muted: #64748b;
-  --text-dim: #475569;
-  --accent: #2dd4bf;
-  --accent-soft: rgba(45, 212, 191, 0.15);
-  --external: #7dd3fc;
-  --frontend: #5eead4;
-  --backend: #86efac;
-  --database: #c084fc;
-  --warning: #fbbf24;
-  --danger: #f87171;
+  --text-muted: #94a3b8;
+  --text-dim: #64748b;
+  /* Semantic categories — see assets/palette.md */
+  --analysis:    #10b981;  --analysis-soft:    rgba(16,185,129,0.10);
+  --evaluation:  #22d3ee;  --evaluation-soft:  rgba(34,211,238,0.10);
+  --decision:    #a855f7;  --decision-soft:    rgba(168,85,247,0.10);
+  --risk:        #f87171;  --risk-soft:        rgba(248,113,113,0.10);
+  --recommend:   #fbbf24;  --recommend-soft:   rgba(251,191,36,0.10);
+  --neutral:     #64748b;  --neutral-soft:     rgba(100,116,139,0.10);
+  /* Accent (title dot, links) */
+  --accent: #22d3ee;
+  --accent-soft: rgba(34, 211, 238, 0.15);
+  /* Legacy aliases (kept for existing markup) */
+  --external: var(--recommend);
+  --frontend: var(--evaluation);
+  --backend:  var(--analysis);
+  --database: var(--decision);
+  --warning:  var(--recommend);
+  --danger:   var(--risk);
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', 'Courier New', monospace;
 }
 
@@ -112,10 +123,16 @@ h1.title {
   border: 1px solid;
 }
 
-.legend-swatch.external { border-color: var(--external); background: rgba(125, 211, 252, 0.1); }
-.legend-swatch.frontend { border-color: var(--frontend); background: rgba(94, 234, 212, 0.1); }
-.legend-swatch.backend { border-color: var(--backend); background: rgba(134, 239, 172, 0.1); }
-.legend-swatch.database { border-color: var(--database); background: rgba(192, 132, 252, 0.1); }
+.legend-swatch.external,
+.legend-swatch.recommend { border-color: var(--recommend); background: var(--recommend-soft); }
+.legend-swatch.frontend,
+.legend-swatch.evaluation { border-color: var(--evaluation); background: var(--evaluation-soft); }
+.legend-swatch.backend,
+.legend-swatch.analysis { border-color: var(--analysis); background: var(--analysis-soft); }
+.legend-swatch.database,
+.legend-swatch.decision { border-color: var(--decision); background: var(--decision-soft); }
+.legend-swatch.risk { border-color: var(--risk); background: var(--risk-soft); }
+.legend-swatch.neutral { border-color: var(--neutral); background: var(--neutral-soft); }
 
 .diagram-card {
   background: var(--bg-elevated);
