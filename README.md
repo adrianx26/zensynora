@@ -45,6 +45,7 @@ A high-performance AI agent framework for developers who want full control over 
 | Shared cache primitives (`BaseTTLCache` + `PersistentCacheMixin`) | [`myclaw/caching/`](myclaw/caching/) | 11 |
 | WebUI token-level streaming | [`webui/.../TypewriterText.tsx`](webui/src/components/TypewriterText.tsx) | 11 |
 | Agent registry → YAML data file (137 agents) | [`myclaw/agents/data/agents.yaml`](myclaw/agents/data/agents.yaml) | 12 |
+| Scheduler reliability layer — output validation, retry+fallback, complexity-driven decomposition, sub-task spawn, checkpoints, time budgets | [`myclaw/scheduler_features.py`](myclaw/scheduler_features.py) + [`docs/scheduler_features_guide.md`](docs/scheduler_features_guide.md) | 6.3 |
 
 The full per-sprint changelog lives in [`CHANGELOG.md`](CHANGELOG.md). The condensed narrative is in [`docs/SPRINTS_SUMMARY.md`](docs/SPRINTS_SUMMARY.md).
 
@@ -328,6 +329,62 @@ report = await ev.run(cases)
 print(f"Score: {report.overall_score:.3f}, p95={report.latency_p95_ms:.0f}ms")
 ```
 
+### Reliable scheduled jobs
+
+Opt-in retry, validation, budget, checkpointing, and sub-task spawn — all on the same `add_job()` call (see [`docs/scheduler_features_guide.md`](docs/scheduler_features_guide.md) for the full walkthrough):
+
+```python
+from myclaw.async_scheduler import AsyncScheduler
+from myclaw.scheduler_features import (
+    ComplexityAnalyzer, RetryPolicy, TaskBudget,
+    Chain, NotEmpty, JSONSchema, JobContext,
+)
+
+c = ComplexityAnalyzer.analyze("1. fetch CVEs  2. correlate  3. write report")
+
+scheduler.add_job(
+    run_security_audit, "interval", hours=6, id="sec-audit",
+    complexity=c,
+    budget=TaskBudget.from_complexity(c),       # 7. smart time budget
+    retry_policy=RetryPolicy(                    # 2. retry + fallback
+        max_attempts=3, backoff="exponential", base_delay=5.0,
+    ),
+    validator=Chain((                            # 1. output validation
+        NotEmpty(), JSONSchema(required_keys=("cves", "matches")),
+    )),
+    checkpoint_enabled=True,                     # 6. checkpoints + progress
+)
+
+# Inside the job:
+async def run_security_audit(ctx: JobContext = None):
+    ctx.progress("fetching", 1, 3)
+    cves = await fetch_cves()
+    ctx.progress("correlating", 2, 3, cve_count=len(cves))
+    if ctx.is_over_soft_budget():
+        return {"cves": cves, "matches": [], "partial": True}
+    matches = correlate(cves)
+    ctx.spawn_subtask(send_alerts, matches, sub_id="alerter")  # 5. sub-task spawn
+    ctx.progress("done", 3, 3)
+    return {"cves": cves, "matches": matches}
+```
+
+Or let the agent handle decomposition automatically:
+
+```python
+from myclaw.tools import auto_schedule
+
+auto_schedule(
+    "1. fetch CVEs\n2. correlate with installed packages\n3. write report",
+    delay=60, user_id="ops",
+)
+# 📊 Complexity: 0.71 (complex, multi-step, explicit-list, decomposition-recommended)
+#    Estimated: 6 tool calls · ~52s · 3 step(s)
+# 🪓 Auto-split into 3 sub-task(s):
+#    • auto_ops_…_sub0: fetch CVEs
+#    • auto_ops_…_sub1: correlate with installed packages
+#    • auto_ops_…_sub2: write report
+```
+
 ---
 
 ## Built-in tools
@@ -341,6 +398,8 @@ print(f"Score: {report.overall_score:.3f}, p95={report.latency_p95_ms:.0f}ms")
 | `delegate` / `swarm_create` / `swarm_assign` | Multi-agent collaboration |
 | `schedule` / `list_schedules` / `cancel_schedule` | Task scheduling |
 | `nlp_schedule` | Natural-language scheduling ("in 5 minutes", "every Monday at 9pm") |
+| `auto_schedule` / `estimate_complexity` | Pre-flight complexity scoring + automatic decomposition into sub-tasks |
+| `get_checkpoint` / `list_checkpoints` / `clear_checkpoint` | Inspect persisted progress for jobs that opted into `checkpoint_enabled` |
 | `browse` | Static web fetch with Wayback Machine fallback |
 | `browser_navigate` / `browser_screenshot` / `browser_fill_form` / `browser_extract_text` / `browser_wait_for` | Headless browser (Playwright) |
 
