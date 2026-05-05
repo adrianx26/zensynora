@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Future Updates Proposal: MyClaw Architecture Evolution</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+<div class="page">
+<a class="back-link" href="index.html">← All diagrams</a>
+<div class="header">
+  <span class="dot"></span>
+  <h1 class="title">Future Updates Proposal: MyClaw Architecture Evolution</h1>
+</div>
+<p class="subtitle">4 diagram(s) extracted from <code>docs/dev/plans/future_updates_proposal.md</code></p>
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
+  <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
+  <div class="legend-item"><span class="legend-swatch backend"></span>Backend Service</div>
+  <div class="legend-item"><span class="legend-swatch database"></span>Database / Storage</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Proposed Architecture</h2>
+  
+  <div class="mermaid">flowchart TD
+    subgraph Gateways [&quot;Gateways (Public-facing)&quot;]
+        TG[&quot;Telegram&quot;]
+        WA[&quot;WhatsApp&quot;]
+        CLI[&quot;CLI&quot;]
+        Web[&quot;WebUI/API&quot;]
+    end
+
+    subgraph Bus [&quot;Event Bus (Redis/NATS)&quot;]
+        Queue[&quot;Message Queue&quot;]
+        State[&quot;Distributed State&quot;]
+    end
+
+    subgraph Workers [&quot;Agent Workers (Stateless/Scaled)&quot;]
+        direction TB
+        Router[&quot;Message Router&quot;]
+        Reasoning[&quot;Reasoning Engine&quot;]
+        Executor[&quot;Tool Executor&quot;]
+    end
+
+    Gateways --&gt; Bus
+    Bus &lt;--&gt; Workers
+    Workers --&gt; DB[(&quot;PostgreSQL / Vector DB&quot;)]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">2. Proactive &quot;Self-Healing&quot; Knowledge Loop</h2>
+  <p class="diagram-desc">Integration of the `GapResearcher` with the `MedicAgent` to create a system that automatically identifies and fills knowledge gaps.</p>
+  <div class="mermaid">flowchart LR
+    User[&quot;User Query&quot;] --&gt; Search[&quot;KB Search&quot;]
+    Search -- Miss --&gt; GapLog[&quot;Gap Logger&quot;]
+
+    subgraph Background [&quot;Background Processing&quot;]
+        GapLog --&gt; Researcher[&quot;Gap Researcher (Scrapling)&quot;]
+        Researcher --&gt; Medic[&quot;Medic (Integrity Check)&quot;]
+        Medic --&gt; Sync[&quot;KB Sync&quot;]
+    end
+
+    Sync --&gt; Search</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">3. Advanced Reasoning Trajectories</h2>
+  <p class="diagram-desc">Implementing &quot;Tree of Thought&quot; or &quot;Chain of Note&quot; reasoning directly into the `Agent.think()` process.</p>
+  <div class="mermaid">flowchart TD
+    Start[&quot;User Prompt&quot;] --&gt; Decompose[&quot;Task Decomposition&quot;]
+
+    subgraph Reasoning [&quot;Reasoning Cycle&quot;]
+        P1[&quot;Proposal 1&quot;]
+        P2[&quot;Proposal 2&quot;]
+        P3[&quot;Proposal 3&quot;]
+
+        Evaluate[&quot;Evaluation (Self-Correction)&quot;]
+    end
+
+    Decompose --&gt; P1 &amp; P2 &amp; P3
+    P1 &amp; P2 &amp; P3 --&gt; Evaluate
+    Evaluate -- Reject --&gt; Decompose
+    Evaluate -- Accept --&gt; Final[&quot;Final Response&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">5. Plugin Marketplace (ZenHub)</h2>
+  <p class="diagram-desc">A standardized interface for distributing and installing &quot;Skills&quot; (Toolbox tools) and &quot;Agent Profiles&quot;.</p>
+  <div class="mermaid">flowchart LR
+    Hub[&quot;ZenHub Registry&quot;] --&gt; Discover[&quot;discovery_tool()&quot;]
+    Discover --&gt; Install[&quot;hub_install()&quot;]
+    Install --&gt; Toolbox[&quot;Agent Toolbox&quot;]
+    Toolbox --&gt; Execute[&quot;Runtime Execution&quot;]</div>
+</div>
+
+<div class="footer">
+  ZenSynora (MyClaw) <span class="sep">•</span> Architecture Diagrams <span class="sep">•</span> Generated from docs/dev/plans/future_updates_proposal.md
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+  securityLevel: 'loose',
+  themeVariables: {
+    background: '#0a0e14',
+    primaryColor: '#131924',
+    primaryTextColor: '#cbd5e1',
+    primaryBorderColor: '#5eead4',
+    lineColor: '#475569',
+    secondaryColor: '#0f141d',
+    tertiaryColor: '#0a0e14',
+    clusterBkg: 'rgba(15, 20, 29, 0.5)',
+    clusterBorder: '#2a3543',
+    edgeLabelBackground: '#0f141d',
+    nodeBorder: '#5eead4',
+    mainBkg: '#131924',
+    titleColor: '#2dd4bf',
+    actorBorder: '#7dd3fc',
+    actorBkg: '#131924',
+    actorTextColor: '#cbd5e1',
+    actorLineColor: '#2a3543',
+    signalColor: '#cbd5e1',
+    signalTextColor: '#cbd5e1',
+    labelBoxBkgColor: '#131924',
+    labelBoxBorderColor: '#5eead4',
+    labelTextColor: '#cbd5e1',
+    loopTextColor: '#cbd5e1',
+    noteBorderColor: '#c084fc',
+    noteBkgColor: '#131924',
+    noteTextColor: '#cbd5e1',
+    activationBkgColor: '#0f141d',
+    activationBorderColor: '#86efac'
+  },
+  flowchart: { curve: 'basis', padding: 16, htmlLabels: true },
+  sequence: { useMaxWidth: true, mirrorActors: false }
+});
+</script>
+</body>
+</html>

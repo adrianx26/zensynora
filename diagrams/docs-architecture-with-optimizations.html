@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>MyClaw/Zensynora Architecture (With Optimizations)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+<div class="page">
+<a class="back-link" href="index.html">← All diagrams</a>
+<div class="header">
+  <span class="dot"></span>
+  <h1 class="title">MyClaw/Zensynora Architecture (With Optimizations)</h1>
+</div>
+<p class="subtitle">8 diagram(s) extracted from <code>docs/architecture_with_optimizations.md</code></p>
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
+  <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
+  <div class="legend-item"><span class="legend-swatch backend"></span>Backend Service</div>
+  <div class="legend-item"><span class="legend-swatch database"></span>Database / Storage</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">System Architecture Diagram</h2>
+  
+  <div class="mermaid">flowchart TB
+    %% Styling
+    classDef core fill:#2a507a,stroke:#4477aa,stroke-width:3px,color:#fff
+    classDef optimized fill:#1a6d1a,stroke:#2d9a4a,stroke-width:3px,color:#fff
+    classDef channel fill:#1a4d2e,stroke:#2d7a4a,stroke-width:2px,color:#fff
+    classDef data fill:#6a3a14,stroke:#9c5822,stroke-width:2px,color:#fff
+    classDef llm fill:#4a1e50,stroke:#863990,stroke-width:2px,color:#fff
+    classDef cache fill:#8a6a12,stroke:#c9a227,stroke-width:2px,color:#fff
+
+    %% Channels
+    subgraph Interfaces [External Interfaces]
+        direction LR
+        CLI([&quot;🖥️ CLI&quot;])
+        TG([&quot;📱 Telegram Bot&quot;])
+        WA([&quot;💬 WhatsApp API&quot;])
+    end
+
+    %% Core Application
+    subgraph MyClaw [MyClaw Platform]
+        GW{&quot;Gateway Router&quot;}
+
+        subgraph AgentOptimized [🧠 Core Agent - Optimized]
+            AgentCore(&quot;Agent Core&quot;)
+            ProfileCache(&quot;📋 Profile Cache&lt;br/&gt;LRU Eviction&quot;)
+            AsyncLoader(&quot;⚡ Async Profile Loader&lt;br/&gt;Non-blocking I/O&quot;)
+            StringOpt(&quot;📝 String Builder Opt&lt;br/&gt;O(n) concat&quot;)
+        end
+
+        subgraph Capabilities [Agent Capabilities]
+            direction LR
+            Tools(&quot;🛠️ Dynamic Tools&quot;)
+            Profiles(&quot;📝 Profiles System&quot;)
+            Sched(&quot;⏱️ Task Scheduler&quot;)
+            RateLimiter(&quot;🚦 Rate Limiter&lt;br/&gt;Token Bucket&quot;)
+        end
+
+        subgraph AdvancedSystems [Multi-Agent System]
+            direction TB
+            Swarm(&quot;🐝 Swarm Orchestrator&quot;)
+            Spec(&quot;🤖 Specialized Agents&quot;)
+            AggEngine(&quot;📊 Aggregation Engine&lt;br/&gt;Consensus/Best/Synthesis&quot;)
+        end
+    end
+
+    %% Data Layer - Optimized
+    subgraph Storage [Persistent SQLite Storage - Optimized]
+        direction LR
+
+        subgraph MemoryPool [Connection Pool]
+            AsyncPool(&quot;AsyncSQLitePool&quot;)
+            SyncPool(&quot;SQLitePool&lt;br/&gt;Idle Timeout: 5min&quot;)
+            Cleanup(&quot;🧹 Idle Cleanup&lt;br/&gt;Auto-close stale&quot;)
+        end
+
+        subgraph Databases [Databases]
+            Mem[(&quot;💾 Memory&lt;br/&gt;(memory.py)&quot;)]
+            KB[(&quot;📚 Knowledge Base&lt;br/&gt;(knowledge/)&quot;)]
+            SwarmState[(&quot;📊 Swarm State&lt;br/&gt;(swarm.db)&quot;)]
+            Toolbox[(&quot;🔧 ToolBox&lt;br/&gt;(~/.myclaw/)&quot;)]
+            Jobs[(&quot;📋 Scheduled Jobs&lt;br/&gt;(async_scheduler.py)&quot;)]
+        end
+    end
+
+    %% Caching Layer - New
+    subgraph Caching [Caching Layer - Optimized]
+        direction TB
+        SemanticCache(&quot;🔮 Semantic Cache&lt;br/&gt;Thread-safe + Cleanup&quot;)
+        LRUCache(&quot;📦 LRU Cache with TTL&lt;br/&gt;hash() keys + Stats&quot;)
+        ProviderCache(&quot;⚡ Provider Cache&lt;br/&gt;Thread-safe init&quot;)
+        ConfigCache(&quot;🔧 Config Cache&lt;br/&gt;Thread-safe reload&quot;)
+        GapCache(&quot;🕳️ Gap Cache&lt;br/&gt;Per-session dedup&quot;)
+    end
+
+    %% LLM Providers
+    subgraph Providers [AI Providers]
+        direction LR
+        Local(&quot;💻 Local&lt;br/&gt;Ollama/LMStudio&quot;)
+        Cloud(&quot;☁️ Cloud&lt;br/&gt;OpenAI/Anthropic/Gemini&quot;)
+    end
+
+    %% Connections
+    CLI --&gt; GW
+    TG --&gt; GW
+    WA --&gt; GW
+
+    GW ==&gt; AgentCore
+
+    AgentCore &lt;--&gt; ProfileCache
+    AgentCore &lt;--&gt; AsyncLoader
+    AgentCore &lt;--&gt; StringOpt
+    AgentCore &lt;--&gt; Tools
+    AgentCore &lt;--&gt; Profiles
+    AgentCore &lt;--&gt; AdvancedSystems
+    AgentCore &lt;--&gt; Sched
+
+    Tools &lt;--&gt; RateLimiter
+
+    Swarm &lt;--&gt; AggEngine
+
+    %% Storage connections
+    AsyncPool --&gt; Databases
+    SyncPool --&gt; Databases
+    Cleanup -.-&gt; SyncPool
+
+    %% Caching connections
+    AgentCore -.-&gt; SemanticCache
+    AgentCore -.-&gt; LRUCache
+    AgentCore -.-&gt; ProviderCache
+    AgentCore -.-&gt; GapCache
+    GW -.-&gt; ConfigCache
+
+    AgentCore &lt;--&gt; Providers
+
+    %% Apply styles
+    class AgentOptimized optimized
+    class MemoryPool optimized
+    class Caching cache
+    class RateLimiter optimized
+    class AggEngine optimized
+    class AsyncLoader optimized
+    class StringOpt optimized
+    class ProfileCache optimized</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">1. Agent Request Flow</h2>
+  
+  <div class="mermaid">sequenceDiagram
+    participant User
+    participant Gateway
+    participant Agent
+    participant ProfileCache as Profile Cache&lt;br/&gt;(LRU)
+    participant LRU as LRU Cache&lt;br/&gt;(Optimized)
+    participant Semantic as Semantic Cache
+    participant Provider
+
+    User-&gt;&gt;Gateway: Send message
+    Gateway-&gt;&gt;Agent: Route request
+
+    Agent-&gt;&gt;ProfileCache: Load profile
+    ProfileCache--&gt;&gt;Agent: Cached profile&lt;br/&gt;(LRU eviction)
+
+    Agent-&gt;&gt;Semantic: Check semantic cache
+    Semantic--&gt;&gt;Agent: Cached response?&lt;br/&gt;(Cleanup on exit)
+
+    alt Cache miss
+        Agent-&gt;&gt;LRU: Check LRU cache
+        LRU--&gt;&gt;Agent: Cached?&lt;br/&gt;(hash() keys)
+
+        alt LRU miss
+            Agent-&gt;&gt;Provider: LLM request
+            Provider--&gt;&gt;Agent: Response
+            Agent-&gt;&gt;LRU: Store result&lt;br/&gt;(RLock safe)
+        end
+    end
+
+    Agent--&gt;&gt;User: Return response</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">2. Knowledge Graph Query Flow</h2>
+  
+  <div class="mermaid">sequenceDiagram
+    participant User
+    participant Agent
+    participant Graph
+    participant DB as Knowledge DB&lt;br/&gt;(Optimized)
+    participant Cache as Connection Pool&lt;br/&gt;(Idle timeout)
+
+    User-&gt;&gt;Agent: Query knowledge
+    Agent-&gt;&gt;Graph: Get related entities
+
+    Graph-&gt;&gt;DB: get_relations_from()
+    DB-&gt;&gt;Cache: Get connection&lt;br/&gt;(Track last_used)
+    Cache--&gt;&gt;DB: Connection
+
+    DB--&gt;&gt;Graph: Relation list
+
+    Graph-&gt;&gt;DB: get_entities_by_permalinks()&lt;br/&gt;(Batch - O(1))
+    DB--&gt;&gt;Graph: Entity details
+
+    Graph--&gt;&gt;Agent: Related entities
+    Agent--&gt;&gt;User: Results</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">3. Database Connection Lifecycle</h2>
+  
+  <div class="mermaid">sequenceDiagram
+    participant App
+    participant Pool as SQLitePool&lt;br/&gt;(Idle Timeout = 300s)
+    participant Conn as Connection
+
+    App-&gt;&gt;Pool: get_connection()
+    Pool-&gt;&gt;Pool: Check pool
+
+    alt Connection exists
+        Pool-&gt;&gt;Pool: _last_used[key] = now()
+        Pool--&gt;&gt;App: Return existing
+    else New connection
+        Pool-&gt;&gt;Conn: Create connection
+        Pool-&gt;&gt;Pool: _last_used[key] = now()
+        Pool--&gt;&gt;App: Return new
+    end
+
+    App-&gt;&gt;Pool: release_connection()
+    Pool-&gt;&gt;Pool: refcount--
+    Pool-&gt;&gt;Pool: if refcount &lt;= 0:&lt;br/&gt;_last_used[key] = now()
+
+    Note over Pool: Periodic cleanup_idle()
+    Pool-&gt;&gt;Pool: Find idle &gt; 300s&lt;br/&gt;and refcount &lt;= 0
+    Pool-&gt;&gt;Conn: Close idle connections</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">4. Knowledge Gap Handling Flow</h2>
+  
+  <div class="mermaid">sequenceDiagram
+    participant User
+    participant Agent
+    participant KBSearch as Knowledge Search
+    participant GapCache as Gap Cache&lt;br/&gt;(300s timeout)
+    participant GapLogger as Gap Logger
+    participant KB as Knowledge Base
+
+    User-&gt;&gt;Agent: Send query
+    Agent-&gt;&gt;KBSearch: _search_knowledge_context()
+
+    KBSearch-&gt;&gt;KB: search_notes(query)
+    KB--&gt;&gt;KBSearch: No results
+
+    KBSearch-&gt;&gt;GapCache: is_duplicate(query, user_id)
+
+    alt Not duplicate
+        GapCache--&gt;&gt;KBSearch: False (new gap)
+        KBSearch-&gt;&gt;GapCache: Store key with timestamp
+        KBSearch-&gt;&gt;GapLogger: Log structured gap event
+        GapLogger--&gt;&gt;KBSearch: Gap logged
+        KBSearch--&gt;&gt;Agent: KnowledgeSearchResult&lt;br/&gt;(has_results=false, suggested_topics)
+    else Duplicate (within 300s)
+        GapCache--&gt;&gt;KBSearch: True (duplicate)
+        KBSearch--&gt;&gt;Agent: KnowledgeSearchResult&lt;br/&gt;(gap_logged=false)
+    end
+
+    Agent--&gt;&gt;User: Response with guidance&lt;br/&gt;(&quot;No results found... try write_to_knowledge()&quot;)</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">5. Browse Error Handling Flow</h2>
+  
+  <div class="mermaid">sequenceDiagram
+    participant User
+    participant Tools as Tools Module
+    participant Requests as requests.get()
+    participant Wayback as Wayback Machine
+
+    User-&gt;&gt;Tools: browse(url)
+    Tools-&gt;&gt;Requests: GET request
+
+    alt Timeout
+        Requests--&gt;&gt;Tools: TimeoutException
+        Tools--&gt;&gt;User: ⏱️ Timeout Error&lt;br/&gt;• Try Wayback: web.archive.org/web/{url}&lt;br/&gt;• Check connection&lt;br/&gt;• search_knowledge() alternative
+    else Connection Error
+        Requests--&gt;&gt;Tools: ConnectionError
+        Tools--&gt;&gt;User: 🔌 Connection Error&lt;br/&gt;• Check internet&lt;br/&gt;• Verify URL&lt;br/&gt;• search_knowledge() alternative
+    else 404 Not Found
+        Requests--&gt;&gt;Tools: HTTPError(404)
+        Tools--&gt;&gt;User: ❌ Page Not Found&lt;br/&gt;• Check for typos&lt;br/&gt;• Try Wayback Machine&lt;br/&gt;• Web search alternative
+    else 403 Forbidden
+        Requests--&gt;&gt;Tools: HTTPError(403)
+        Tools--&gt;&gt;User: 🚫 Access Denied&lt;br/&gt;• May need authentication&lt;br/&gt;• Try search_knowledge()&lt;br/&gt;• Public source alternative
+    else Success
+        Requests--&gt;&gt;Tools: Response(200)
+        Tools-&gt;&gt;Tools: Strip HTML
+        Tools--&gt;&gt;User: Plain text content
+    end</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Thread Safety Map</h2>
+  
+  <div class="mermaid">flowchart LR
+    subgraph Locks[&quot;🔒 Thread Safety Mechanisms&quot;]
+        direction TB
+        L1[&quot;Provider Cache&lt;br/&gt;threading.Lock()&quot;]
+        L2[&quot;Config Cache&lt;br/&gt;_config_lock&quot;]
+        L3[&quot;LRU Cache&lt;br/&gt;threading.RLock()&quot;]
+        L4[&quot;Profile Cache&lt;br/&gt;_profile_cache_lock&quot;]
+        L5[&quot;SQLitePool&lt;br/&gt;_pool_lock + per-DB locks&quot;]
+    end
+
+    subgraph Data[&quot;📊 Protected Data&quot;]
+        D1[&quot;_provider_cache&quot;]
+        D2[&quot;_cached_config&quot;]
+        D3[&quot;_cache (LRU)&quot;]
+        D4[&quot;_profile_cache&quot;]
+        D5[&quot;_pools, _refcounts&quot;]
+    end
+
+    L1 --&gt; D1
+    L2 --&gt; D2
+    L3 --&gt; D3
+    L4 --&gt; D4
+    L5 --&gt; D5</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Module Dependencies</h2>
+  
+  <div class="mermaid">flowchart TD
+    subgraph Core[&quot;Core Modules&quot;]
+        Agent[&quot;agent.py&lt;br/&gt;(+parallel tool_calls fix 2026-04-13)&quot;]
+        Memory[&quot;memory.py&quot;]
+        Provider[&quot;provider.py&quot;]
+        Tools[&quot;tools/ (package)&quot;]
+        Config[&quot;config.py&quot;]
+        State[&quot;state_store.py&quot;]
+        AsyncSched[&quot;async_scheduler.py&quot;]
+    end
+
+    subgraph Knowledge[&quot;Knowledge&quot;]
+        DB[&quot;db.py&lt;br/&gt;(+batch, +checkpoint, KnowledgeDB)&quot;]
+        Graph[&quot;graph.py&lt;br/&gt;(+batch fetch)&quot;]
+        Parser[&quot;parser.py&quot;]
+        Storage[&quot;storage.py&lt;br/&gt;(write_note, read_note)&quot;]
+        Researcher[&quot;researcher.py&lt;br/&gt;(GapResearcher, fixed 2026-04-13)&quot;]
+    end
+
+    subgraph Swarm[&quot;Swarm System&quot;]
+        Orchestrator[&quot;orchestrator.py&lt;br/&gt;(+type hints)&quot;]
+        Models[&quot;models.py&quot;]
+        Strategies[&quot;strategies.py&quot;]
+        Storage[&quot;storage.py&quot;]
+    end
+
+    Agent --&gt; Memory
+    Agent --&gt; Provider
+    Agent --&gt; Tools
+    Agent --&gt; Knowledge
+
+    Provider --&gt; Tools
+    Provider -.-&gt;|&quot;lazy import&quot;| Tools
+
+    Memory --&gt; DB
+    Graph --&gt; DB
+
+    Agent --&gt; Swarm
+    Orchestrator --&gt; Models
+    Orchestrator --&gt; Strategies
+
+    Gateway --&gt; Agent
+    Gateway --&gt; Config</div>
+</div>
+
+<div class="footer">
+  ZenSynora (MyClaw) <span class="sep">•</span> Architecture Diagrams <span class="sep">•</span> Generated from docs/architecture_with_optimizations.md
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+  securityLevel: 'loose',
+  themeVariables: {
+    background: '#0a0e14',
+    primaryColor: '#131924',
+    primaryTextColor: '#cbd5e1',
+    primaryBorderColor: '#5eead4',
+    lineColor: '#475569',
+    secondaryColor: '#0f141d',
+    tertiaryColor: '#0a0e14',
+    clusterBkg: 'rgba(15, 20, 29, 0.5)',
+    clusterBorder: '#2a3543',
+    edgeLabelBackground: '#0f141d',
+    nodeBorder: '#5eead4',
+    mainBkg: '#131924',
+    titleColor: '#2dd4bf',
+    actorBorder: '#7dd3fc',
+    actorBkg: '#131924',
+    actorTextColor: '#cbd5e1',
+    actorLineColor: '#2a3543',
+    signalColor: '#cbd5e1',
+    signalTextColor: '#cbd5e1',
+    labelBoxBkgColor: '#131924',
+    labelBoxBorderColor: '#5eead4',
+    labelTextColor: '#cbd5e1',
+    loopTextColor: '#cbd5e1',
+    noteBorderColor: '#c084fc',
+    noteBkgColor: '#131924',
+    noteTextColor: '#cbd5e1',
+    activationBkgColor: '#0f141d',
+    activationBorderColor: '#86efac'
+  },
+  flowchart: { curve: 'basis', padding: 16, htmlLabels: true },
+  sequence: { useMaxWidth: true, mirrorActors: false }
+});
+</script>
+</body>
+</html>

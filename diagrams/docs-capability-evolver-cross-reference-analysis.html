@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Comprehensive Analysis: capability-evolver x medic_agent Cross-Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+<div class="page">
+<a class="back-link" href="index.html">← All diagrams</a>
+<div class="header">
+  <span class="dot"></span>
+  <h1 class="title">Comprehensive Analysis: capability-evolver x medic_agent Cross-Reference</h1>
+</div>
+<p class="subtitle">5 diagram(s) extracted from <code>docs/capability_evolver_cross_reference_analysis.md</code></p>
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
+  <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
+  <div class="legend-item"><span class="legend-swatch backend"></span>Backend Service</div>
+  <div class="legend-item"><span class="legend-swatch database"></span>Database / Storage</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">2.1 Core Design Philosophy</h2>
+  
+  <div class="mermaid">mindmap
+  root((capability-evolver))
+    Deterministic
+      Same logs produce same results
+    Reproducible
+      Audit-friendly
+      No hallucination
+    Fast
+      Sub-100ms
+      No API calls
+    Structured
+      JSON-native
+      Typed I/O
+    Composable
+      Action-based API</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">2.3 Multi-Pass Analysis Engine</h2>
+  
+  <div class="mermaid">flowchart TD
+    Logs[&quot;LogEntry[]&quot;] --&gt; P1[&quot;Pass 1: Pattern Detection&quot;]
+    subgraph P1_Details [&quot;Aggregation &amp; Classification&quot;]
+        A1[&quot;Error Aggregation&quot;]
+        A2[&quot;Severity Classification&quot;]
+        A3[&quot;Inefficiency Detection&quot;]
+    end
+
+    P1 --&gt; P2[&quot;Pass 2: Health Scoring&quot;]
+    subgraph P2_Details [&quot;Calculation&quot;]
+        H1[&quot;Error Rate Penalty&quot;]
+        H2[&quot;Warn Rate Penalty&quot;]
+        H3[&quot;Final Score (0-100)&quot;]
+    end
+
+    P2 --&gt; P3[&quot;Pass 3: Recommendation Gen&quot;]
+    subgraph P3_Details [&quot;Output&quot;]
+        R1[&quot;Context-aware Suggestions&quot;]
+        R2[&quot;Strategy-specific Tips&quot;]
+        R3[&quot;Hot File Identification&quot;]
+    end
+
+    P3 --&gt; Result[&quot;AnalysisResult&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">2.4 Evolution Strategy Framework</h2>
+  
+  <div class="mermaid">graph LR
+    Score{Health Score}
+    Score -- &quot;&lt; 40&quot; --&gt; Repair[&quot;repair-only (Crisis)&quot;]
+    Score -- &quot;40-70&quot; --&gt; Harden[&quot;harden (Reliability)&quot;]
+    Score -- &quot;&gt; 70&quot; --&gt; Balanced[&quot;balanced (Features)&quot;]
+
+    Manual[&quot;Manual Overrides&quot;] --&gt; Innovate[&quot;innovate (Health &gt; 70)&quot;]
+    Manual --&gt; Balanced
+    Manual --&gt; Harden
+    Manual --&gt; Repair</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">3.1 Architecture Overview</h2>
+  
+  <div class="mermaid">flowchart TB
+    subgraph MedicAgent [&quot;MedicAgent Class (medic_agent.py)&quot;]
+        Integrity[&quot;File Integrity (SHA-256)&quot;]
+        Syntax[&quot;Syntax Check (AST)&quot;]
+        Recovery[&quot;Recovery (GitHub/Local)&quot;]
+        Analytics[&quot;Task Analytics&quot;]
+        Loop[&quot;Loop Prevention&quot;]
+    end
+
+    subgraph ChangeMgmt [&quot;Change Management (medic_change_mgmt.py)&quot;]
+        Workflow[&quot;Approval Workflow&quot;]
+        LegacyAnalyzer[&quot;Regex Log Analyzer&quot;]
+        Scheduler[&quot;Scheduled Review&quot;]
+    end
+
+    MedicAgent &lt;--&gt; ChangeMgmt</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">5.1 Refactor: Introduce `EvolverEngine` Class</h2>
+  <p class="diagram-desc">Create a new core class that encapsulates capability-evolver&#x27;s analysis patterns:</p>
+  <div class="mermaid">flowchart TB
+    subgraph New_v2 [&quot;Proposed medic_agent v2.0&quot;]
+        direction TB
+        Evolver[&quot;EvolverEngine&quot;]
+        Scorer[&quot;HealthScorer&quot;]
+        Planner[&quot;EvolutionPlanner&quot;]
+    end
+
+    subgraph Orchestrator [&quot;MedicAgent (Orchestrator)&quot;]
+        Integrity[&quot;FileIntegrity&quot;]
+        LogAnalyzer[&quot;LogAnalyzer&quot;]
+        ChangeMgmt[&quot;ChangeManagement&quot;]
+    end
+
+    Evolver --&gt; Scorer --&gt; Planner
+    Orchestrator --&gt; New_v2
+    Integrity &amp; LogAnalyzer &amp; ChangeMgmt --&gt; Orchestrator</div>
+</div>
+
+<div class="footer">
+  ZenSynora (MyClaw) <span class="sep">•</span> Architecture Diagrams <span class="sep">•</span> Generated from docs/capability_evolver_cross_reference_analysis.md
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+  securityLevel: 'loose',
+  themeVariables: {
+    background: '#0a0e14',
+    primaryColor: '#131924',
+    primaryTextColor: '#cbd5e1',
+    primaryBorderColor: '#5eead4',
+    lineColor: '#475569',
+    secondaryColor: '#0f141d',
+    tertiaryColor: '#0a0e14',
+    clusterBkg: 'rgba(15, 20, 29, 0.5)',
+    clusterBorder: '#2a3543',
+    edgeLabelBackground: '#0f141d',
+    nodeBorder: '#5eead4',
+    mainBkg: '#131924',
+    titleColor: '#2dd4bf',
+    actorBorder: '#7dd3fc',
+    actorBkg: '#131924',
+    actorTextColor: '#cbd5e1',
+    actorLineColor: '#2a3543',
+    signalColor: '#cbd5e1',
+    signalTextColor: '#cbd5e1',
+    labelBoxBkgColor: '#131924',
+    labelBoxBorderColor: '#5eead4',
+    labelTextColor: '#cbd5e1',
+    loopTextColor: '#cbd5e1',
+    noteBorderColor: '#c084fc',
+    noteBkgColor: '#131924',
+    noteTextColor: '#cbd5e1',
+    activationBkgColor: '#0f141d',
+    activationBorderColor: '#86efac'
+  },
+  flowchart: { curve: 'basis', padding: 16, htmlLabels: true },
+  sequence: { useMaxWidth: true, mirrorActors: false }
+});
+</script>
+</body>
+</html>

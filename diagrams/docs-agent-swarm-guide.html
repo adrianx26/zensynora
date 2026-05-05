@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Agent Swarm Guide</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+<div class="page">
+<a class="back-link" href="index.html">← All diagrams</a>
+<div class="header">
+  <span class="dot"></span>
+  <h1 class="title">Agent Swarm Guide</h1>
+</div>
+<p class="subtitle">5 diagram(s) extracted from <code>docs/agent_swarm_guide.md</code></p>
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
+  <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
+  <div class="legend-item"><span class="legend-swatch backend"></span>Backend Service</div>
+  <div class="legend-item"><span class="legend-swatch database"></span>Database / Storage</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">🏗️ Agent Swarm Architecture</h2>
+  
+  <div class="mermaid">flowchart TB
+    UI[&quot;USER INTERFACE&lt;br/&gt;(CLI, Telegram, WhatsApp, API)&quot;] --&gt; Orchestrator[&quot;SWARM ORCHESTRATOR&lt;br/&gt;(Central Controller)&quot;]
+
+    Orchestrator --- Ops[&quot;Create Swarms | Execute Tasks | Monitor Status&quot;]
+
+    Orchestrator --&gt; Strategies
+
+    subgraph Strategies [&quot;COORDINATION STRATEGIES&quot;]
+        direction LR
+        Parallel[&quot;PARALLEL&lt;br/&gt;(Simultaneous)&quot;]
+        Sequential[&quot;SEQUENTIAL&lt;br/&gt;(Pipeline)&quot;]
+        Hierarchical[&quot;HIERARCHICAL&lt;br/&gt;(Managed)&quot;]
+        Voting[&quot;VOTING&lt;br/&gt;(Consensus)&quot;]
+    end
+
+    Strategies --&gt; Aggregator[&quot;AGGREGATION ENGINE&lt;br/&gt;(Consensus | Best Pick | Synthesis)&quot;]
+    Aggregator --&gt; Result[&quot;SWARM RESULT&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">🎯 Swarm Coordinator (Hierarchical Strategy)</h2>
+  
+  <div class="mermaid">flowchart TD
+    Coord[&quot;Coordinator (lead_dev)&quot;] --&gt; Plan[&quot;1. Analyze Task &amp; Plan&quot;]
+    Plan --&gt; Delegate[&quot;2. Delegate to Workers&quot;]
+
+    subgraph Workers [&quot;Specialized Workers&quot;]
+        W1[&quot;Security Expert&quot;]
+        W2[&quot;Performance Reviewer&quot;]
+        W3[&quot;Style Checker&quot;]
+    end
+
+    Delegate --&gt; W1 &amp; W2 &amp; W3
+    W1 &amp; W2 &amp; W3 --&gt; Synthesize[&quot;3. Synthesize Results&quot;]
+    Synthesize --&gt; Final[&quot;Final Coherent Report&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Agent Swarm Components</h2>
+  
+  <div class="mermaid">flowchart LR
+    subgraph Config [&quot;Configuration&quot;]
+        direction TB
+        C1[&quot;name&quot;]
+        C2[&quot;strategy&quot;]
+        C3[&quot;workers&quot;]
+        C4[&quot;coordinator&quot;]
+    end
+
+    subgraph Task [&quot;Task Execution&quot;]
+        direction TB
+        T1[&quot;description&quot;]
+        T2[&quot;input_data&quot;]
+        T3[&quot;status&quot;]
+    end
+
+    Config &amp; Task --&gt; Orchestrator[&quot;SWARM ORCHESTRATOR&quot;]
+    Orchestrator --&gt; Engine[&quot;AGGREGATION ENGINE&quot;]
+    Engine --&gt; SResult[&quot;SWARM RESULT&lt;br/&gt;(Confidence, Time, Data)&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Data Flow Diagram</h2>
+  
+  <div class="mermaid">sequenceDiagram
+    participant User
+    participant UI as CLI/Telegram/WhatsApp
+    participant Orchestrator
+    participant Storage as SQLite (swarm.db)
+    participant Agents as Agent Registry
+    participant Engine as Aggregator
+
+    User-&gt;&gt;UI: Task Request
+    UI-&gt;&gt;Orchestrator: swarm_assign(swarm_id, task)
+    Orchestrator-&gt;&gt;Storage: Load Swarm Config
+    Orchestrator-&gt;&gt;Agents: Initialize Workers
+
+    rect rgb(200, 220, 240)
+        Note over Orchestrator, Agents: Strategy Execution (Parallel/Sequential/...)
+        Orchestrator-&gt;&gt;Agents: Execute sub-tasks
+        Agents--&gt;&gt;Orchestrator: Individual results
+    end
+
+    Orchestrator-&gt;&gt;Engine: Aggregate results
+    Engine--&gt;&gt;Orchestrator: Final result
+    Orchestrator-&gt;&gt;Storage: Save execution history
+    Orchestrator--&gt;&gt;User: Return Swarm Result</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Swarm Lifecycle</h2>
+  
+  <div class="mermaid">stateDiagram-v2
+    [*] --&gt; PENDING: Created by User
+    PENDING --&gt; RUNNING: Execution Started
+    RUNNING --&gt; COMPLETED: Success Result
+    RUNNING --&gt; FAILED: Error Occurred
+    RUNNING --&gt; TERMINATED: User Stopped
+    FAILED --&gt; [*]
+    COMPLETED --&gt; [*]
+    TERMINATED --&gt; [*]</div>
+</div>
+
+<div class="footer">
+  ZenSynora (MyClaw) <span class="sep">•</span> Architecture Diagrams <span class="sep">•</span> Generated from docs/agent_swarm_guide.md
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+  securityLevel: 'loose',
+  themeVariables: {
+    background: '#0a0e14',
+    primaryColor: '#131924',
+    primaryTextColor: '#cbd5e1',
+    primaryBorderColor: '#5eead4',
+    lineColor: '#475569',
+    secondaryColor: '#0f141d',
+    tertiaryColor: '#0a0e14',
+    clusterBkg: 'rgba(15, 20, 29, 0.5)',
+    clusterBorder: '#2a3543',
+    edgeLabelBackground: '#0f141d',
+    nodeBorder: '#5eead4',
+    mainBkg: '#131924',
+    titleColor: '#2dd4bf',
+    actorBorder: '#7dd3fc',
+    actorBkg: '#131924',
+    actorTextColor: '#cbd5e1',
+    actorLineColor: '#2a3543',
+    signalColor: '#cbd5e1',
+    signalTextColor: '#cbd5e1',
+    labelBoxBkgColor: '#131924',
+    labelBoxBorderColor: '#5eead4',
+    labelTextColor: '#cbd5e1',
+    loopTextColor: '#cbd5e1',
+    noteBorderColor: '#c084fc',
+    noteBkgColor: '#131924',
+    noteTextColor: '#cbd5e1',
+    activationBkgColor: '#0f141d',
+    activationBorderColor: '#86efac'
+  },
+  flowchart: { curve: 'basis', padding: 16, htmlLabels: true },
+  sequence: { useMaxWidth: true, mirrorActors: false }
+});
+</script>
+</body>
+</html>

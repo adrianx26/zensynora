@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>ZenSynora Architecture Diagram</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="assets/theme.css" />
+</head>
+<body>
+<div class="page">
+<a class="back-link" href="index.html">← All diagrams</a>
+<div class="header">
+  <span class="dot"></span>
+  <h1 class="title">ZenSynora Architecture Diagram</h1>
+</div>
+<p class="subtitle">13 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
+<div class="legend">
+  <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
+  <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
+  <div class="legend-item"><span class="legend-swatch backend"></span>Backend Service</div>
+  <div class="legend-item"><span class="legend-swatch database"></span>Database / Storage</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">System Overview</h2>
+  
+  <div class="mermaid">flowchart TB
+    subgraph Gateway [&quot;GATEWAY (gateway.py)&quot;]
+        direction LR
+        TG[&quot;Telegram Bot&quot;]
+        WA[&quot;WhatsApp Cloud&quot;]
+        CLI[&quot;CLI / Console Chat&quot;]
+    end
+
+    Gateway --&gt; AgentRouter
+
+    subgraph AgentSystem [&quot;AGENT SYSTEM&quot;]
+        direction TB
+        AgentRouter{Agent Router}
+        Agent[&quot;Agent (agent.py)&quot;]
+        Swarm[&quot;Agent Swarms (swarm/)&quot;]
+    end
+
+    AgentSystem --&gt; Tools
+
+    subgraph Tools [&quot;TOOLS (myclaw/tools/)&quot;]
+        direction TB
+        T_Core[&quot;core.py&quot;]
+        T_Shell[&quot;shell.py&quot;]
+        T_Files[&quot;files.py&quot;]
+        T_Web[&quot;web.py&quot;]
+        T_KB[&quot;kb.py&quot;]
+        T_Sched[&quot;scheduler.py&quot;]
+        T_Swarm[&quot;swarm.py&quot;]
+        T_Toolbox[&quot;toolbox.py&quot;]
+    end
+
+    Tools --&gt; Storage
+
+    subgraph Storage [&quot;PERSISTENCE &amp; STORAGE&quot;]
+        direction LR
+        Memory[&quot;MEMORY (memory.py)&quot;]
+        Knowledge[&quot;KNOWLEDGE (knowledge/)&quot;]
+        Toolbox[&quot;TOOLBOX (~/.myclaw/)&quot;]
+        State[&quot;STATE STORE (state_store.py)&quot;]
+        AsyncSched[&quot;ASYNC SCHEDULER (async_scheduler.py)&quot;]
+    end</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">New Tool Categories (Evolution)</h2>
+  
+  <div class="mermaid">flowchart LR
+    subgraph P1 [&quot;Phase 1: Quick Wins&quot;]
+        direction TB
+        T1[&quot;register_hook()&lt;br/&gt;list_hooks()&lt;br/&gt;nlp_schedule()&quot;]
+    end
+
+    subgraph P2 [&quot;Phase 2: Skill System&quot;]
+        direction TB
+        T2[&quot;benchmark_skill()&lt;br/&gt;evaluate_skill()&lt;br/&gt;improve_skill()&quot;]
+    end
+
+    subgraph P3 [&quot;Phase 3: Memory &amp; Learning&quot;]
+        direction TB
+        T3[&quot;generate_session_insights()&lt;br/&gt;extract_user_preferences()&lt;br/&gt;update_user_profile()&quot;]
+    end
+
+    subgraph P4 [&quot;Phase 4: ZenHub Ecosystem&quot;]
+        direction TB
+        T4[&quot;hub_search()&lt;br/&gt;hub_install()&lt;br/&gt;discover_external_skills()&quot;]
+    end
+
+    P1 --&gt; P2 --&gt; P3 --&gt; P4</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Agent Package (myclaw/agents/)</h2>
+  
+  <div class="mermaid">flowchart TB
+    subgraph Agents [&quot;Specialized Agents&quot;]
+        direction LR
+        SA[&quot;SkillAdapter&quot;]
+        MA[&quot;MedicAgent&quot;]
+        NTA[&quot;NewTechAgent&quot;]
+    end
+
+    SA --- SA_Tools[&quot;analyze_ext&lt;br/&gt;convert_skill&lt;br/&gt;register_ext&quot;]
+    MA --- MA_Tools[&quot;check_health&lt;br/&gt;verify_integr&lt;br/&gt;recover_file&lt;br/&gt;validate_mod&quot;]
+    NTA --- NTA_Tools[&quot;fetch_ai_news&lt;br/&gt;generate_prop&lt;br/&gt;add_to_roadmap&quot;]
+
+    Agents --&gt; Registry[&quot;Registry &amp; Discovery&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Backends Package (myclaw/backends/)</h2>
+  
+  <div class="mermaid">classDiagram
+    class AbstractBackend {
+        &lt;&lt;abstract&gt;&gt;
+        +execute(command)
+        +upload(local, remote)
+        +download(remote, local)
+        +is_available()
+    }
+    class LocalBackend
+    class DockerBackend
+    class SSHBackend
+    class WSL2Backend
+
+    AbstractBackend &lt;|-- LocalBackend
+    AbstractBackend &lt;|-- DockerBackend
+    AbstractBackend &lt;|-- SSHBackend
+    AbstractBackend &lt;|-- WSL2Backend
+
+    class BackendDiscovery {
+        +discover_backends()
+        +get_default_backend()
+    }</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Data Flow: Request Processing</h2>
+  
+  <div class="mermaid">sequenceDiagram
+    participant User
+    participant Gateway
+    participant Agent
+    participant Hooks
+    participant KB as Knowledge Base
+    participant LLM as LLM Provider
+    participant Tools as Tool Executor
+
+    User-&gt;&gt;Gateway: Sends Message
+    Gateway-&gt;&gt;Agent: think(message)
+    Agent-&gt;&gt;Hooks: on_session_start
+    Agent-&gt;&gt;KB: search_knowledge(query)
+    KB--&gt;&gt;Agent: Results found
+    Agent-&gt;&gt;Hooks: pre_llm_call
+    Agent-&gt;&gt;LLM: generate_response(context)
+    LLM--&gt;&gt;Agent: tool_calls (if needed)
+
+    loop Tool Execution
+        Agent-&gt;&gt;Tools: execute(tool_name, args)
+        Tools-&gt;&gt;Agent: tool_output
+    end
+
+    Agent-&gt;&gt;Hooks: post_llm_call
+    Agent-&gt;&gt;Hooks: on_session_end
+    Agent--&gt;&gt;Gateway: final_response
+    Gateway--&gt;&gt;User: Delivers Response</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Tool Execution Pipeline</h2>
+  
+  <div class="mermaid">flowchart TD
+    Req[&quot;Tool Call Request&quot;] --&gt; RL[&quot;Rate Limiter (Token Bucket)&quot;]
+    RL --&gt; SC[&quot;Security Check (Allowlist)&quot;]
+    SC --&gt; TR[&quot;Tool Registry Lookup&quot;]
+    TR --&gt; Exec[&quot;Async Execution&quot;]
+    Exec --&gt; AL[&quot;Audit Logger (duration, status)&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Error Handling: Browse Tool</h2>
+  
+  <div class="mermaid">flowchart TD
+    Req[&quot;requests.get(url)&quot;] --&gt; ErrType{Error Type?}
+    ErrType -- Timeout --&gt; Way1[&quot;Wayback Machine Suggestion&quot;]
+    ErrType -- 404 --&gt; Way2[&quot;Wayback + Search Suggestions&quot;]
+    ErrType -- 403 --&gt; KB_S[&quot;Suggest search_knowledge()&quot;]
+    ErrType -- Conn --&gt; Net[&quot;Check Internet/URL Verification&quot;]
+
+    Way1 --&gt; Res[&quot;Structured Response&quot;]
+    Way2 --&gt; Res
+    KB_S --&gt; Res
+    Net --&gt; Res</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Knowledge Gap Handling</h2>
+  
+  <div class="mermaid">flowchart TD
+    Search[&quot;search_knowledge(query)&quot;] --&gt; Found{Results Found?}
+    Found -- Yes --&gt; Return[&quot;Return formatted results&quot;]
+    Found -- No --&gt; Cache{In Gap Cache?}
+
+    Cache -- Yes --&gt; Guidance[&quot;Return guidance + suggestions&quot;]
+    Cache -- No --&gt; Log[&quot;Log to gap_log&quot;]
+    Log --&gt; AddCache[&quot;Add to Gap Cache (300s)&quot;]
+    AddCache --&gt; Guidance</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Skill Lifecycle</h2>
+  
+  <div class="mermaid">flowchart LR
+    Reg[&quot;register_tool()&quot;] --&gt; AST[&quot;AST Validate&quot;]
+    AST --&gt; Compile[&quot;Code Compile&quot;]
+    Compile --&gt; Load[&quot;Load &amp; Test&quot;]
+    Load --&gt; Toolbox[&quot;TOOLBOX REGISTRY&quot;]
+
+    Toolbox --&gt; Eval[&quot;evaluate()&quot;]
+    Toolbox --&gt; Bench[&quot;benchmark()&quot;]
+    Toolbox --&gt; Imp[&quot;improve()&quot;]
+
+    Imp --&gt; Backup[&quot;Auto-backup (.bak)&quot;]
+    Backup --&gt; Rollback[&quot;rollback()&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">User Profile System</h2>
+  
+  <div class="mermaid">flowchart TB
+    Init[&quot;Agent Initialization&quot;] --&gt; LoadMD[&quot;Load user_dialectic.md&quot;]
+    LoadMD --&gt; Prompt[&quot;Append to System Prompt&quot;]
+
+    subgraph Updates [&quot;Runtime Updates&quot;]
+        direction LR
+        Extract[&quot;extract_preferences()&quot;]
+        Update[&quot;update_user_profile()&quot;]
+        Reflect[&quot;daily_reflection()&quot;]
+    end
+
+    Updates --&gt; KB[&quot;Knowledge Base&quot;]
+    Updates --&gt; ProfileMD[&quot;user_dialectic.md&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">ZenHub Registry</h2>
+  
+  <div class="mermaid">flowchart TD
+    subgraph FS [&quot;File System (~/.myclaw/)&quot;]
+        Hub[&quot;hub/&quot;]
+        Hub --- Index[&quot;index.json&quot;]
+        Hub --- H_Skills[&quot;skills/ (Published)&quot;]
+        Skills[&quot;skills/ (External)&quot;]
+    end
+
+    subgraph Ops [&quot;ZenHub Operations&quot;]
+        direction TB
+        Search[&quot;hub_search()&quot;]
+        Publish[&quot;hub_publish()&quot;]
+        Install[&quot;hub_install()&quot;]
+        Discover[&quot;discover_external()&quot;]
+    end
+
+    Search --&gt; Index
+    Publish --&gt; H_Skills
+    Install --&gt; Toolbox[&quot;TOOLBOX&quot;]
+    Discover --&gt; Skills</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">File Structure Summary (myclaw/)</h2>
+  
+  <div class="mermaid">flowchart TD
+    Root[&quot;myclaw/&quot;]
+    Root --- Core[&quot;agent.py&lt;br/&gt;tools/ (pkg)&lt;br/&gt;memory.py&lt;br/&gt;config.py&lt;br/&gt;state_store.py&quot;]
+    Root --- Agents[&quot;agents/ (pkg)&lt;br/&gt;medic, newtech, adapter&quot;]
+    Root --- Backends[&quot;backends/ (pkg)&lt;br/&gt;local, docker, ssh, wsl2&quot;]
+    Root --- Knowledge[&quot;knowledge/ (pkg)&lt;br/&gt;db, graph, sync, researcher&quot;]
+    Root --- Swarm[&quot;swarm/ (pkg)&lt;br/&gt;orchestrator, strategies&quot;]
+    Root --- Channels[&quot;channels/ (pkg)&lt;br/&gt;telegram, whatsapp&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Model Context Protocol (MCP)</h2>
+  
+  <div class="mermaid">flowchart LR
+    subgraph ExtClients [&quot;External Clients&quot;]
+        Cursor[&quot;Cursor&quot;]
+        Claude[&quot;Claude Desktop&quot;]
+    end
+
+    subgraph ZenServer [&quot;MCP Server&quot;]
+        MS[&quot;mcp/server.py&quot;]
+    end
+
+    subgraph ZenClient [&quot;MCP Client&quot;]
+        MC[&quot;mcp/client.py&quot;]
+    end
+
+    subgraph ExtServers [&quot;External Servers&quot;]
+        Sqlite[&quot;SQLite Server&quot;]
+        WebS[&quot;WebSearch Server&quot;]
+    end
+
+    ExtClients &lt;--&gt; MS
+    MS &lt;--&gt; Tools[&quot;myclaw.tools&quot;]
+    MC &lt;--&gt; Tools
+    MC &lt;--&gt; ExtServers</div>
+</div>
+
+<div class="footer">
+  ZenSynora (MyClaw) <span class="sep">•</span> Architecture Diagrams <span class="sep">•</span> Generated from docs/architecture_diagram.md
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({
+  startOnLoad: true,
+  theme: 'base',
+  fontFamily: "'JetBrains Mono', 'Consolas', monospace",
+  securityLevel: 'loose',
+  themeVariables: {
+    background: '#0a0e14',
+    primaryColor: '#131924',
+    primaryTextColor: '#cbd5e1',
+    primaryBorderColor: '#5eead4',
+    lineColor: '#475569',
+    secondaryColor: '#0f141d',
+    tertiaryColor: '#0a0e14',
+    clusterBkg: 'rgba(15, 20, 29, 0.5)',
+    clusterBorder: '#2a3543',
+    edgeLabelBackground: '#0f141d',
+    nodeBorder: '#5eead4',
+    mainBkg: '#131924',
+    titleColor: '#2dd4bf',
+    actorBorder: '#7dd3fc',
+    actorBkg: '#131924',
+    actorTextColor: '#cbd5e1',
+    actorLineColor: '#2a3543',
+    signalColor: '#cbd5e1',
+    signalTextColor: '#cbd5e1',
+    labelBoxBkgColor: '#131924',
+    labelBoxBorderColor: '#5eead4',
+    labelTextColor: '#cbd5e1',
+    loopTextColor: '#cbd5e1',
+    noteBorderColor: '#c084fc',
+    noteBkgColor: '#131924',
+    noteTextColor: '#cbd5e1',
+    activationBkgColor: '#0f141d',
+    activationBorderColor: '#86efac'
+  },
+  flowchart: { curve: 'basis', padding: 16, htmlLabels: true },
+  sequence: { useMaxWidth: true, mirrorActors: false }
+});
+</script>
+</body>
+</html>
