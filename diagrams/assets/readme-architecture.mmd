@@ -1,0 +1,96 @@
+﻿%%{init: {'theme': 'base', 'themeVariables': { 'background': '#0a0e14', 'primaryColor': '#131924', 'primaryTextColor': '#cbd5e1', 'primaryBorderColor': '#22d3ee', 'lineColor': '#64748b', 'secondaryColor': '#0f141d', 'tertiaryColor': '#0a0e14', 'clusterBkg': 'rgba(15,20,29,0.5)', 'clusterBorder': '#2a3543', 'edgeLabelBackground': '#0f141d', 'nodeBorder': '#22d3ee', 'mainBkg': '#131924', 'titleColor': '#22d3ee' }}}%%
+flowchart TB
+    classDef gateway fill:#131924,stroke:#22d3ee,color:#cbd5e1,stroke-width:1.5px
+    classDef auth fill:#131924,stroke:#22d3ee,color:#cbd5e1,stroke-width:1.5px
+    classDef core fill:#131924,stroke:#86efac,color:#cbd5e1,stroke-width:1.5px
+    classDef resilience fill:#131924,stroke:#f87171,color:#cbd5e1,stroke-width:1.5px
+    classDef llm fill:#131924,stroke:#60a5fa,color:#cbd5e1,stroke-width:1.5px
+    classDef storage fill:#131924,stroke:#a855f7,color:#cbd5e1,stroke-width:1.5px
+    classDef tools fill:#131924,stroke:#60a5fa,color:#cbd5e1,stroke-width:1.5px
+    classDef marketplace fill:#131924,stroke:#fbbf24,color:#cbd5e1,stroke-width:1.5px
+    classDef observability fill:#131924,stroke:#94a3b8,color:#cbd5e1,stroke-width:1.5px
+    classDef highlight fill:#0f1d14,stroke:#86efac,color:#cbd5e1,stroke-width:2px
+
+    subgraph Gateways [Channels & Gateways]
+        TG[Telegram]
+        WA[WhatsApp]
+        DC[Discord]
+        CLI[CLI]
+        WebUI[Web UI<br/>+ TypewriterText<br/>+ CostDashboard]
+    end
+
+    subgraph Auth [Auth & Tenancy]
+        JWT[JWTAuthenticator]
+        OA[OAuth2Callback]
+        UC[UserContext<br/>contextvars]
+    end
+
+    subgraph Core [Core Agent Engine]
+        Agent[Agent]
+        Router[MessageRouter]
+        Context[ContextBuilder]
+        Executor[ToolExecutor]
+        Response[ResponseHandler]
+        Agent --> Router & Context & Executor & Response
+    end
+
+    subgraph Resilience [Resilience]
+        CB[CircuitBreaker]
+        FC[FallbackChain]
+    end
+
+    subgraph LLM [LLM Providers]
+        Prov[Ollama / OpenAI / Anthropic / Gemini / Groq]
+        SC[SemanticCache]
+    end
+
+    subgraph Storage [Storage]
+        Mem[Memory<br/>per-tenant]
+        KB[KnowledgeDB<br/>FTS5 + dedicated executor]
+        Vec[Vector store<br/>memory/sqlite/qdrant]
+        Cache[BaseTTLCache]
+    end
+
+    subgraph Tools [Tools & Capabilities]
+        Reg[Tool Registry]
+        Browser[browser_*]
+        Toolbox[register_tool sandbox]
+        Prompts[PromptRegistry]
+        Repair[repair_json]
+    end
+
+    subgraph Mkt [Marketplace]
+        OC[OpenClawSource]
+        GH[GitHubReleasesSource]
+        HTTP[HttpRegistrySource]
+        LH[LocalHubSource]
+        MC[MarketplaceClient<br/>+ HMAC verify]
+    end
+
+    subgraph Obs [Observability]
+        Tr[OpenTelemetry spans]
+        PII[PII scrubber]
+        Cost[CostTracker]
+    end
+
+    Gateways --> Auth
+    Auth --> UC
+    UC --> Agent
+    Agent --> CB --> FC --> Prov
+    Prov --> SC
+    Agent --> Storage
+    Agent --> Tools
+    Tools --> Mkt
+    Agent --> Obs
+    Mem -.uses.-> UC
+
+    class TG,WA,DC,CLI,WebUI gateway
+    class JWT,OA,UC auth
+    class Agent,Router,Context,Executor,Response core
+    class Agent highlight
+    class CB,FC resilience
+    class Prov,SC llm
+    class Mem,KB,Vec,Cache storage
+    class Reg,Browser,Toolbox,Prompts,Repair tools
+    class OC,GH,HTTP,LH,MC marketplace
+    class Tr,PII,Cost observability

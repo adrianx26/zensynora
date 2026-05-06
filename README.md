@@ -131,81 +131,11 @@ pip install zensynora[all]          # Everything above
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    subgraph Gateways [Channels & Gateways]
-        TG[Telegram]
-        WA[WhatsApp]
-        DC[Discord]
-        CLI[CLI]
-        WebUI[Web UI<br/>+ TypewriterText<br/>+ CostDashboard]
-    end
 
-    subgraph Auth [Auth & Tenancy]
-        JWT[JWTAuthenticator]
-        OA[OAuth2Callback]
-        UC[UserContext<br/>contextvars]
-    end
 
-    subgraph Core [Core Agent Engine]
-        Agent[Agent]
-        Router[MessageRouter]
-        Context[ContextBuilder]
-        Executor[ToolExecutor]
-        Response[ResponseHandler]
-        Agent --> Router & Context & Executor & Response
-    end
-
-    subgraph Resilience [Resilience]
-        CB[CircuitBreaker]
-        FC[FallbackChain]
-    end
-
-    subgraph LLM [LLM Providers]
-        Prov[Ollama / OpenAI / Anthropic / Gemini / Groq]
-        SC[SemanticCache]
-    end
-
-    subgraph Storage [Storage]
-        Mem[Memory<br/>per-tenant]
-        KB[KnowledgeDB<br/>FTS5 + dedicated executor]
-        Vec[Vector store<br/>memory/sqlite/qdrant]
-        Cache[BaseTTLCache]
-    end
-
-    subgraph Tools [Tools & Capabilities]
-        Reg[Tool Registry]
-        Browser[browser_*]
-        Toolbox[register_tool sandbox]
-        Prompts[PromptRegistry]
-        Repair[repair_json]
-    end
-
-    subgraph Mkt [Marketplace]
-        OC[OpenClawSource]
-        GH[GitHubReleasesSource]
-        HTTP[HttpRegistrySource]
-        LH[LocalHubSource]
-        MC[MarketplaceClient<br/>+ HMAC verify]
-    end
-
-    subgraph Obs [Observability]
-        Tr[OpenTelemetry spans]
-        PII[PII scrubber]
-        Cost[CostTracker]
-    end
-
-    Gateways --> Auth
-    Auth --> UC
-    UC --> Agent
-    Agent --> CB --> FC --> Prov
-    Prov --> SC
-    Agent --> Storage
-    Agent --> Tools
-    Tools --> Mkt
-    Agent --> Obs
-    Mem -.uses.-> UC
-```
+<p align="center">
+  <img src="diagrams/assets/readme-architecture.svg" alt="ZenSynora Architecture" width="100%" />
+</p>
 
 Detailed module map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Visual flow: [`docs/architecture_diagram.md`](docs/architecture_diagram.md).
 
