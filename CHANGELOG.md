@@ -96,6 +96,32 @@ plain functions).
 - `Job.to_dict()` / `Job.from_dict()` are unchanged; the new fields are
   not yet persisted to JSONL (intentional — `RetryPolicy.fallback` and
   `OutputValidator` are callables that don't round-trip through JSON).
+### Optimization audit — Changeset 1 (2026-05-17)
+
+Based on `OPTIMIZATION_RECOMMENDATIONS.md`:
+
+- **Dependency pinning:** All core and dev dependencies now have upper bounds in `pyproject.toml` (`fastapi>=0.115.0,<1.0`, `pydantic>=2.7,<3.0`, etc.). `bandit` and `safety` added to dev extras.
+- **URL safety (`myclaw/web_search.py`):** Replaced f-string URL construction with `urllib.parse.urlencode` + `urllib.parse.urljoin` on trusted base URLs. Prevents URL injection.
+- **Async connection pooling (`myclaw/aiohttp_session.py`):** New shared `aiohttp.ClientSession` singleton with TCP keep-alive. Auto-closed at exit.
+- **Security linters (`.pre-commit-config.yaml`):** Added `bandit` (1.7.10) for Python SAST and `safety` (3.2.14) for dependency vulnerability scanning.
+- **Encryption key validation (`myclaw/config_encryption.py`):** Added `_validate_key_format()` with Fernet key regex (`^[A-Za-z0-9_\-]{43}=$`) and entropy heuristic. Env var keys and file keys validated on load.
+- **Centralised bootstrapper (`myclaw/__init__.py`):** Added `init_app()` — configures structured logging, installs signal handlers (SIGINT/SIGTERM), and registers atexit cleanup for aiohttp sessions, HTTP pools, SQLite pools, and state store.
+- **`myclaw/cli.py`:** Replaced 44-line `_setup_shutdown_handlers()` with `init_app()` call.
+- **Context window enhancement (`myclaw/context_window.py`):** Consolidated duplicated model-limit logic into `_MODEL_LIMITS` dictionary (28 models: OpenAI o1/o3/gpt-4, Claude 2/3/3.5, Gemini 1.x/2.x, Llama, Mistral, DeepSeek, Qwen). Extracted `_get_limit_for_model()`.
+- **Test stability (`tests/test_swarm_integration.py`):** Added `pytest.mark.xfail(sys.platform == "win32")` with rationale for Windows `ProactorEventLoop` issues.
+
+### Optimization audit — Changeset 2 (2026-05-18)
+
+Based on `docs/review01.md` implementation plan:
+
+- **Deprecated `myclaw/logging.py`:** Now emits `DeprecationWarning` and delegates to `logging_config.py`. `init_app()` fixed to use the structured logger directly (was accidentally calling the deprecated simple one).
+- **Timing-safe API key comparison (`myclaw/web/auth.py`):** Replaced `x_api_key != expected` with `secrets.compare_digest()` for constant-time comparison.
+- **Deterministic concurrency tests (`tests/test_memory_pool_concurrency.py`):** Replaced `asyncio.sleep(0.05)` + wall-clock assertions with `asyncio.Event` + `asyncio.Barrier` for exact pool-capacity verification.
+- **Safe XML parsing (`myclaw/web_search.py`):** Added `_safe_parse_xml()` using `defusedxml.ElementTree` if installed, falling back to standard `ElementTree`. Prevents billion-laughs attacks in `search_news()`.
+- **Web search rate limiting (`myclaw/web_search.py`):** Added per-function `_rate_limit_check()` token-bucket limiter: `search_web` (30/min), `search_wikipedia` (60/min), `search_news` (20/min), `get_webpage_content` (30/min).
+- **Coverage enforcement (`pyproject.toml`):** Added `--cov=myclaw --cov-report=term --cov-fail-under=60` to pytest config.
+- **Named constants (`myclaw/defaults.py` + `myclaw/agent_internals/router.py`):** Added `MAX_DELEGATION_DEPTH`, `TASK_TIMER_STEPS_TOTAL`, `DEFAULT_SUMMARIZATION_THRESHOLD` with `MYCLAW_*` env-var overrides. Replaced magic numbers in router.
+- **Documentation:** Created `docs/review01.md` (comprehensive 10-section application review). Updated `OPTIMIZATION_RECOMMENDATIONS.md`, `planx1.md`, `function_list.md`, `docs/ARCHITECTURE.md`, `docs/SECURITY_FIXES_2026_04_29.md`, and `README.md` with resolution status and new module references.
 
 ### Install/uninstall scripts updated to match Sprints 1–12 (2026-04-30)
 

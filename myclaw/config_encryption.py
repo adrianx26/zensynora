@@ -32,6 +32,7 @@ import base64
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -42,6 +43,12 @@ CONFIG_FILE = CONFIG_DIR / "config.json"
 KEY_FILE = CONFIG_DIR / ".config_key"
 
 _ENCRYPTION_MARKER = "__encrypted__"
+
+# A Fernet key is 32 raw bytes, base64-encoded (urlsafe) → 44 characters.
+# The key may optionally be prefixed by "base64:" (some tools produce this).
+_FERNET_KEY_RE = re.compile(r"^(?:base64:)?([A-Za-z0-9_\-]{43}=)$")
+# Minimum entropy for a Fernet key — reject keys that are obviously weak.
+_MIN_KEY_ENTROPY = 64  # bits-equivalent threshold shrunk to length heuristic
 
 
 try:
@@ -82,6 +89,29 @@ def _generate_key() -> str:
     return Fernet.generate_key().decode("utf-8")
 
 
+def _validate_key_format(key: str) -> None:
+    """Validate that a Fernet key is well-formed.
+
+    A valid Fernet key is a URL-safe base64 encoding of 32 bytes,
+    resulting in exactly 44 characters (43 alphanumeric + '=' padding).
+
+    Raises:
+        ValueError: If the key does not match the expected Fernet format.
+    """
+    if not _FERNET_KEY_RE.match(key):
+        raise ValueError(
+            "Invalid encryption key format. A Fernet key must be 43 URL-safe "
+            "base64 characters followed by '='. "
+            "Generate one with: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        )
+    # Reject keys that are obviously too short or low-entropy
+    if len(set(key)) < 8:
+        raise ValueError(
+            "Encryption key appears to have low entropy. "
+            "Use a proper Fernet key: python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+        )
+
+
 def _get_or_create_key() -> str:
     """Get existing key or create + store a new one.
 
@@ -94,7 +124,17 @@ def _get_or_create_key() -> str:
     # 1. Environment variable (highest priority — useful for Docker/cloud)
     env_key = os.environ.get("ZENSYNORA_CONFIG_KEY", "").strip()
     if env_key:
-        return env_key
+        try:
+            _validate_key_format(env_key)
+        except ValueError as exc:
+            logger.error(
+                "ZENSYNORA_CONFIG_KEY environment variable is invalid: %s. "
+                "Falling back to other key sources.",
+                exc,
+            )
+            # Fall through to other sources instead of crashing.
+        else:
+            return env_key
 
     # 2. Try keyring
     key = _get_keyring_password()
@@ -127,13 +167,37 @@ def _get_or_create_key() -> str:
 
 
 def _load_key() -> Optional[str]:
-    """Load existing key without creating one."""
+    """Load existing key without creating one.
+    
+    SECURITY FIX (2026-05-17): Validates key format on load to catch
+    corrupted key files and invalid environment variables early.
+    """
     key = _get_keyring_password()
     if key:
-        return key
+        try:
+            _validate_key_format(key)
+        except ValueError:
+            logger.warning("OS keyring contains an invalid encryption key; ignoring.")
+            key = None
+        else:
+            return key
     if KEY_FILE.exists():
-        return KEY_FILE.read_text(encoding="utf-8").strip()
+        file_key = KEY_FILE.read_text(encoding="utf-8").strip()
+        try:
+            _validate_key_format(file_key)
+        except ValueError as exc:
+            logger.warning(
+                "Config key file %s contains an invalid key: %s. "
+                "Delete it and regenerate with: zensynora config encrypt",
+                KEY_FILE, exc,
+            )
+            return None
+        return file_key
     return None
+
+
+# Public alias for external validation
+validate_key_format = _validate_key_format
 
 
 def _get_fernet() -> "Fernet":

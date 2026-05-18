@@ -1,18 +1,20 @@
 # Optimization Plan (planx1.md)
 
-## 1️⃣ Python Codebase
+> **STATUS (2026-05-18):** Many items below have been resolved. See `docs/review01.md` for implementation details.
 
-| File / Area | Issue | Suggested Fix |
-|-------------|-------|---------------|
-| `cli.py` & other entry‑points | Heavy imports on every command (e.g., `pandas`). | Lazy‑load optional dependencies inside command handlers. |
-| `tests/` | Duplicate fixture setup across many tests. | Create shared pytest fixtures in `conftest.py` (common `client`, `temp_dir`). |
-| `dead-code-report.md` | Unused imports & functions. | Run `autoflake --remove-all-unused-imports -i` and delete dead functions after verification. |
-| Logging | `logging.basicConfig` called in multiple modules → duplicate handlers. | Centralize logging configuration in a single `logging_config.py` and import it everywhere. |
-| Exception handling | Generic `Exception` re‑raised. | Define a custom hierarchy (`ZensynoraError`, `ConfigError`, …) and raise specific types. |
-| `deploy.py` | `subprocess.run` with `shell=True` for simple commands. | Use `subprocess.run([...], check=True)` to avoid shell injection risk. |
-| `eval/` | Re‑computes large embeddings on every test run. | Cache computed embeddings in a temp directory and reuse when unchanged. |
-| `docs/` | Duplicated markdown sections across several guides. | Consolidate common parts into `_includes/` and use a pre‑processor (`mkdocs` + `markdown-include`). |
-| `graphify-out/` | Large cached JSON files are version‑controlled. | Add cache directory to `.gitignore` and generate on‑demand (`graphify update .`). |
+## 1. Python Codebase
+
+| File / Area | Issue | Suggested Fix | Status |
+|-------------|-------|---------------|--------|
+| `cli.py` & other entry-points | Heavy imports on every command (e.g., `pandas`). | Lazy-load optional dependencies inside command handlers. | ⚠️ Open |
+| `tests/` | Duplicate fixture setup across many tests. | Create shared pytest fixtures in `conftest.py` (common `client`, `temp_dir`). | ⚠️ Open |
+| `dead-code-report.md` | Unused imports & functions. | Run `autoflake --remove-all-unused-imports -i` and delete dead functions after verification. | ⚠️ Open |
+| Logging | `logging.basicConfig` called in multiple modules -> duplicate handlers. | Centralize logging configuration in a single `logging_config.py` and import it everywhere. | ✅ Resolved — `logging_config.py` is canonical; `logging.py` deprecated (2026-05-18) |
+| Exception handling | Generic `Exception` re-raised. | Define a custom hierarchy (`ZensynoraError`, `ConfigError`, ...) and raise specific types. | ⚠️ Open |
+| `deploy.py` | `subprocess.run` with `shell=True` for simple commands. | Use `subprocess.run([...], check=True)` to avoid shell injection risk. | ⚠️ Open |
+| `eval/` | Re-computes large embeddings on every test run. | Cache computed embeddings in a temp directory and reuse when unchanged. | ⚠️ Open |
+| `docs/` | Duplicated markdown sections across several guides. | Consolidate common parts into `_includes/` and use a pre-processor. | ⚠️ Open |
+| `graphify-out/` | Large cached JSON files are version-controlled. | Add cache directory to `.gitignore` and generate on-demand (`graphify update .`). | ⚠️ Open |
 
 ## 2️⃣ Frontend (React / TypeScript)
 
@@ -61,8 +63,8 @@
 
 1. **Run `autoflake`** to clean dead imports/functions and commit the changes.
 2. **Add `.gitignore` entry** for `graphify-out/cache/` and purge existing cached JSON files.
-3. **Centralize logging** – create `logging_config.py` and replace all `basicConfig` calls.
-4. **Refactor Dockerfile** – split into builder and runtime stages.
-5. **Introduce CI caching** for pip and npm to reduce workflow runtime (~30 %).
+3. ✅ **Centralize logging** – `logging_config.py` now canonical; `logging.py` deprecated (2026-05-18).
+4. **Refactor Dockerfile** – split into builder and runtime stages (already present in current Dockerfile).
+5. **Introduce CI caching** for pip and npm to reduce workflow runtime (~30%).
 
 Implementing these steps will shrink the repository, speed up CI, improve runtime performance, and make the codebase easier to maintain.

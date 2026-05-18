@@ -1,29 +1,49 @@
-"""Central logging configuration for the ZenSynora codebase.
+"""Deprecated — use ``myclaw.logging_config.configure_logging()`` instead.
 
-All modules should obtain a logger via ``logging.getLogger(__name__)`` and rely
-on the configuration defined here.  This eliminates scattered ``basicConfig``
-calls and guarantees a consistent format across the project.
+This module is retained for backward-compatibility only.  New code must
+import from ``myclaw.logging_config`` which provides the structured
+formatter, PII scrubbing, JSON/console dual output, and file logging.
+
+Usage (old, still works but deprecated):
+    from myclaw.logging import configure_logging
+    configure_logging(level=logging.INFO)
+
+Usage (preferred):
+    from myclaw.logging_config import configure_logging
+    configure_logging(level=logging.INFO, use_json=False, log_file=None)
+
+The ``init_app()`` function in ``myclaw.__init__`` already uses the
+preferred path.  If you must import this module, you will get a
+forwarding wrapper that delegates to ``logging_config`` and emits a
+``DeprecationWarning``.
 """
 
+from __future__ import annotations
+
 import logging
+import warnings
 from typing import Optional
 
-# Default format – timestamp, logger name, level, message
-_DEFAULT_FORMAT = "% (asctime)s - %(name)s - %(levelname)s - %(message)s"
-_DEFAULT_DATEFMT = "%Y-%m-%d %H:%M:%S"
 
+def configure_logging(
+    level: int = logging.INFO,
+    fmt: Optional[str] = None,
+    datefmt: Optional[str] = None,
+) -> None:
+    """DEPRECATED — delegates to ``logging_config.configure_logging``.
 
-def configure_logging(level: int = logging.INFO, fmt: Optional[str] = None, datefmt: Optional[str] = None) -> None:
-    """Configure the root logger once.
+    The *fmt* and *datefmt* arguments are ignored; the structured
+    formatter is always used.  Pass ``use_json=True`` to the real
+    function if you need JSON output.
 
-    This should be called at application start‑up (e.g., in the CLI entry point).
-    Subsequent imports only retrieve child loggers via ``logging.getLogger``.
+    This wrapper exists so legacy callers don't crash.  It will emit a
+    warning exactly once per process.
     """
-    if logging.getLogger().handlers:
-        # Logging already configured – avoid duplicate configuration.
-        return
-    logging.basicConfig(
-        level=level,
-        format=fmt or _DEFAULT_FORMAT,
-        datefmt=datefmt or _DEFAULT_DATEFMT,
+    warnings.warn(
+        "myclaw.logging is deprecated. Use myclaw.logging_config.configure_logging() instead.",
+        DeprecationWarning,
+        stacklevel=2,
     )
+    from .logging_config import configure_logging as _configure
+
+    _configure(level=level)

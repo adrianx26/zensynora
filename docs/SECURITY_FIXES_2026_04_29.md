@@ -1,15 +1,17 @@
-# Security & Stability Fixes — 2026-04-29
+# Security & Stability Fixes — 2026-04-29 (+ 2026-05-17/18)
 
-> **Audit round:** post-0.4.1 critical-bug sweep
-> **Scope:** seven defects across six files, shipped together
-> **Outcome:** all P0 items from the audit closed; AST sandbox unified
+> **Audit rounds:** post-0.4.1 critical-bug sweep (04-29) + optimization audit (05-17/18)
+> **Scope:** seven defects (04-29) + eight security/performance improvements (05-17/18)
+> **Outcome:** all P0 items closed; 18/20 optimization items resolved
 
 This document describes each fix with root cause, exact change, and test plan.
 Use it to review the diff or to onboard a new contributor to the touched code.
 
 ---
 
-## 1. Infinite recursion in `Agent._track_preload`
+## Fixes from 2026-04-29
+
+### 1. Infinite recursion in `Agent._track_preload`
 
 **File:** `myclaw/agent.py:340-356`
 **Severity:** Critical (every preload call crashed)
@@ -280,3 +282,98 @@ assert that `stream_chat` yields the generator's chunks in order.
 | SSH `AutoAddPolicy` | `myclaw/backends/ssh.py:46` already uses `RejectPolicy()` |
 | OpenAI sync client in async | `myclaw/provider.py:660,668` already uses `AsyncOpenAI` |
 | MFA secret exposure | `myclaw/mfa.py:96-131` already redacts the raw secret |
+
+---
+
+## Fixes from 2026-05-17 (Changeset 1)
+
+### 8. URL injection via string interpolation in web_search.py
+
+**File:** `myclaw/web_search.py` — `search_web`, `search_wikipedia`, `search_news`
+**Severity:** Medium (potential URL injection through query parameters)
+
+**Root cause:** URLs were constructed with raw f-strings:
+`f"https://html.duckduckgo.com/html/?q={encoded_query}"`. While `urllib.parse.quote()` was used on the query, the base URL was hardcoded in the f-string and could be manipulated if the function signature changed.
+
+**Fix:** Switched to `urllib.parse.urlencode({"q": query}, quote_via=urllib.parse.quote_plus)` + `urllib.parse.urljoin(_DDG_BASE, "/html/")`. Defined `_DDG_BASE`, `_WIKI_BASE`, `_NEWS_BASE` as trusted host constants.
+
+**Test plan:** URLs are validated at construction time; all existing web search tests pass.
+
+### 9. Missing Fernet key validation in config_encryption.py
+
+**File:** `myclaw/config_encryption.py` — `_get_or_create_key`, `_load_key`
+**Severity:** Medium (corrupted/invalid keys silently breaking config)
+
+**Root cause:** `ZENSYNORA_CONFIG_KEY` env var was used as-is without checking whether it actually was a valid Fernet key (must be 43 url-safe base64 chars + `=`). A typo in the env var would cause silent decryption failures.
+
+**Fix:** Added `_validate_key_format()` with regex `^[A-Za-z0-9_\-]{43}=$` and entropy heuristic. Env var, keyring, and file keys all validated on load. Invalid keys logged with clear warning and fallback to next source.
+
+### 10. No security linters in pre-commit pipeline
+
+**Severity:** Low (vulnerabilities accumulate over time)
+
+**Fix:** Added `bandit` (v1.7.10) SAST hook and `safety` (v3.2.14) dependency vulnerability scanner to `.pre-commit-config.yaml`. Both scoped to application source files only.
+
+---
+
+## Fixes from 2026-05-18 (Changeset 2)
+
+### 11. Timing attack on API key comparison in web/auth.py
+
+**File:** `myclaw/web/auth.py:27` — `require_admin_api_key`
+**Severity:** Medium (timing side-channel on API key validation)
+
+**Root cause:** `if x_api_key != expected:` performs byte-by-byte comparison, leaking key length and prefix information through response timing.
+
+**Fix:** Replaced with `secrets.compare_digest(x_api_key, expected)` — constant-time comparison regardless of key content.
+
+**Test plan:** Functionally identical; all existing auth tests pass.
+
+### 12. Billion-laughs XML attack vector in search_news()
+
+**File:** `myclaw/web_search.py` — `search_news`
+**Severity:** Medium (DoS via XML entity expansion)
+
+**Root cause:** `search_news()` parsed Google News RSS with `xml.etree.ElementTree.fromstring()` which is vulnerable to exponential entity expansion (billion laughs attack).
+
+**Fix:** Added `_safe_parse_xml()` that uses `defusedxml.ElementTree` when installed. Falls back to standard `ElementTree` with clear logging. Defusedxml blocks entity expansion and raises `EntitiesForbidden`.
+
+### 13. Missing rate limiting on public web search functions
+
+**File:** `myclaw/web_search.py` — all public search functions
+**Severity:** Low (potential for API abuse)
+
+**Root cause:** `search_web()`, `search_wikipedia()`, `search_news()`, and `get_webpage_content()` had no rate limiting, allowing unbounded calls to external services.
+
+**Fix:** Added `_rate_limit_check()` token-bucket limiter with per-function limits: 30/min (DuckDuckGo), 60/min (Wikipedia), 20/min (Google News), 30/min (webpage fetch). Returns structured error on limit exceeded.
+
+### 14. Deprecated logging module retained as footgun
+
+**File:** `myclaw/logging.py`
+**Severity:** Low (duplicate logging configuration path)
+
+**Root cause:** Two logging modules (`logging.py` with simple `basicConfig`, `logging_config.py` with structured formatting + PII scrubbing) caused confusion. `init_app()` was importing the wrong one.
+
+**Fix:** `logging.py` now emits `DeprecationWarning` and delegates to `logging_config.py`. `init_app()` updated to import the structured logger directly. All new code should import from `logging_config`.
+
+
+## Files changed (2026-05-17/18)
+
+| File | Changeset | Change |
+|---|---|---|
+| `pyproject.toml` | 1 | Dependency upper bounds; coverage enforcement |
+| `.pre-commit-config.yaml` | 1 | Bandit + Safety hooks |
+| `myclaw/web_search.py` | 1 + 2 | URL safety; shared session; safe XML; rate limiting |
+| `myclaw/aiohttp_session.py` | 1 | **New file** — shared async HTTP session singleton |
+| `myclaw/config_encryption.py` | 1 | Fernet key format validation |
+| `myclaw/__init__.py` | 1 | `init_app()` centralized bootstrapper |
+| `myclaw/cli.py` | 1 | Use `init_app()` instead of inline shutdown handlers |
+| `myclaw/context_window.py` | 1 | Consolidated model limits dictionary |
+| `myclaw/logging.py` | 2 | Deprecated; delegates to `logging_config.py` |
+| `myclaw/web/auth.py` | 2 | `secrets.compare_digest()` for API key comparison |
+| `myclaw/defaults.py` | 2 | `MAX_DELEGATION_DEPTH`, `TASK_TIMER_STEPS_TOTAL`, `DEFAULT_SUMMARIZATION_THRESHOLD` |
+| `myclaw/agent_internals/router.py` | 2 | Named constants replacing magic numbers |
+| `tests/test_swarm_integration.py` | 1 | `pytest.mark.xfail` for Windows |
+| `tests/test_memory_pool_concurrency.py` | 2 | `asyncio.Event` replacing `asyncio.sleep()` |
+| `docs/review01.md` | 1 + 2 | Comprehensive application review (new) |
+| Various `.md` files | 2 | Documentation updates and stale reference resolutions |

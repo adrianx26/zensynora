@@ -43,20 +43,20 @@ classifiers = [
 # Optional LLM providers, extras, and integrations are below under
 # [project.optional-dependencies].
 dependencies = [
-    "python-telegram-bot[job-queue]>=21.4",
-    "fastapi>=0.100.0",
-    "uvicorn>=0.23.0",
-    "pyyaml>=6.0",
-    "rich>=13.0",
-    "pydantic>=2.0",
-    "scrapling[all]>=0.4.2",
-    "aiosqlite>=0.20.0",
-    "httpx>=0.24.0",
-    "numpy>=1.24.0,<2.0",
-    "mcp>=1.1.2",
-    "psutil>=5.9.0",
-    "py-cpuinfo>=9.0.0",
-    "watchdog>=3.0.0",
+    "python-telegram-bot[job-queue]>=21.4,<22.0",
+    "fastapi>=0.115.0,<1.0",
+    "uvicorn>=0.23.0,<1.0",
+    "pyyaml>=6.0,<7.0",
+    "rich>=13.7,<14.0",
+    "pydantic>=2.7,<3.0",
+    "scrapling[all]>=0.4.2,<0.5.0",
+    "aiosqlite>=0.20.0,<0.21.0",
+    "httpx>=0.27.0,<1.0",
+    "numpy>=1.26.0,<2.0",
+    "mcp>=1.1.2,<2.0",
+    "psutil>=5.9.0,<6.0",
+    "py-cpuinfo>=9.0.0,<10.0",
+    "watchdog>=4.0,<5.0",
 ]
 
 [project.optional-dependencies]
@@ -130,14 +130,16 @@ all = [
 ]
 
 dev = [
-    "pytest>=7.0",
-    "pytest-asyncio>=0.21.0",
-    "pytest-cov>=4.0",
-    "ruff>=0.4.0",
-    "black>=24.0",
-    "isort>=5.13",
-    "pre-commit>=3.7",
-    "mypy>=1.9",
+    "pytest>=7.0,<9.0",
+    "pytest-asyncio>=0.21.0,<1.0",
+    "pytest-cov>=4.0,<6.0",
+    "ruff>=0.4.0,<1.0",
+    "black>=24.0,<26.0",
+    "isort>=5.13,<6.0",
+    "pre-commit>=3.7,<5.0",
+    "mypy>=1.9,<2.0",
+    "bandit>=1.7,<2.0",
+    "safety>=2.3,<3.0",
 ]
 
 [project.scripts]
@@ -226,7 +228,7 @@ ignore = [
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["."]
-addopts = "-v --tb=short"
+addopts = "-v --tb=short --cov=myclaw --cov-report=term --cov-fail-under=60"
 
 [tool.mypy]
 python_version = "3.11"

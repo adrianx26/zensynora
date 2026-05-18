@@ -101,6 +101,37 @@ Command sandboxing (allow-list, newline-injection blocked, per-token re-validati
 
 ---
 
+## Quick Start
+
+```bash
+# Clone and install with all optional features
+git clone https://github.com/adrianx26/zensynora.git
+cd zensynora
+pip install -e ".[all,dev]"
+
+# Run the interactive onboarding wizard
+zensynora onboard
+
+# Start the interactive AI console (with readline support + tab-completion)
+zensynora agent
+
+# Start the Telegram/WhatsApp gateway
+zensynora gateway
+
+# Start the Web UI backend
+zensynora webui --port 8000
+
+# Run with worker pool tuning (configurable via env vars)
+MYCLAW_WORKER_POOL_SIZE=4 zensynora agent
+
+# Docker deployment (multi-stage build with healthchecks)
+docker compose up --build
+```
+
+For all 50+ configuration options, see the [Configuration](#configuration) section and [`.env.example`](.env.example).
+
+---
+
 ## Optional dependency posture
 
 Every advanced feature degrades gracefully when its package isn't installed (no crash, just a logged warning or a structured error response):
@@ -402,7 +433,8 @@ See [`.env.example`](.env.example) for all 50+ configurable variables.
 zensynora/
 ├── myclaw/                     # Core Python package
 │   ├── agent.py                # Agent class (think, complete_structured, stream_think)
-│   ├── agent_internals/        # Phase helpers — free fns + classes (ResponseHandler)
+│   ├── aiohttp_session.py       # Shared aiohttp.ClientSession singleton (connection pooling)
+│   ├── agent_internals/         # Phase helpers — free fns + classes (ResponseHandler)
 │   ├── agents/                 # Specialized agents
 │   │   ├── data/agents.yaml    # 137 agent definitions (canonical source)
 │   │   └── registry.py         # YAML loader + embedded literal fallback

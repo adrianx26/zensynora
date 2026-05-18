@@ -6,6 +6,10 @@ summarization-threshold detection.
 
 Returns a 4-tuple consumed by ``Agent.think`` or ``None`` on early-exit
 (timeout, depth limit, medic block).
+
+QUALITY FIX (2026-05-18): Replaced magic numbers (``_depth > 10``,
+``steps_total=5``, summarization threshold) with named constants from
+``myclaw.defaults``, each overridable via environment variables.
 """
 
 from __future__ import annotations
@@ -14,6 +18,12 @@ import logging
 import time
 import uuid
 from typing import Optional, Tuple, TYPE_CHECKING
+
+from ..defaults import (
+    MAX_DELEGATION_DEPTH,
+    TASK_TIMER_STEPS_TOTAL,
+    DEFAULT_SUMMARIZATION_THRESHOLD,
+)
 
 if TYPE_CHECKING:
     from ..agent import Agent
@@ -56,14 +66,15 @@ async def route_message(
         task_id=agent._current_task_id,
         user_question=user_message,
         on_status_update=agent._handle_task_status_update,
-        steps_total=5,  # memory, knowledge, LLM, tools, response
+        steps_total=TASK_TIMER_STEPS_TOTAL,
     )
 
-    # Loop-prevention: hard depth cap.
-    if _depth > 10:
+    # Loop-prevention: hard depth cap (configurable via MYCLAW_MAX_DELEGATION_DEPTH).
+    if _depth > MAX_DELEGATION_DEPTH:
         logger.warning(
-            f"Max delegation depth reached ({_depth}). "
-            "Preventing potential infinite loop."
+            "Max delegation depth reached (%s). "
+            "Preventing potential infinite loop.",
+            _depth,
         )
         await agent._task_timer.complete_task(
             agent._current_task_id,
@@ -93,13 +104,15 @@ async def route_message(
     if agent._current_task_id and not agent._task_timer.is_task_active(
         agent._current_task_id
     ):
-        logger.warning(f"Task {agent._current_task_id} was cancelled or timed out")
+        logger.warning("Task %s was cancelled or timed out", agent._current_task_id)
         return None
 
     mem = await agent._get_memory(user_id)
     await mem.add("user", user_message)
 
-    await agent._task_timer.update_step(agent._current_task_id, "memory_loading", 1, 5)
+    await agent._task_timer.update_step(
+        agent._current_task_id, "memory_loading", 1, TASK_TIMER_STEPS_TOTAL
+    )
 
     # on_session_start hook (registered via myclaw.tools.trigger_hook).
     from ..tools import trigger_hook
@@ -109,7 +122,11 @@ async def route_message(
 
     # Background summarization decision: capture history snapshot only if
     # we'll actually use it (avoids a pointless copy every request).
-    threshold = getattr(agent.config.agents, "summarization_threshold", 10)
+    threshold = getattr(
+        agent.config.agents,
+        "summarization_threshold",
+        DEFAULT_SUMMARIZATION_THRESHOLD,
+    )
     should_summarize_after = len(history) > threshold
     full_history_for_bg = history.copy() if should_summarize_after else None
 

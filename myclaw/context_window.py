@@ -37,32 +37,15 @@ class ContextWindow:
 
     def __post_init__(self):
         if self.actual_limit == 0:
-            self.actual_limit = self._get_limit_for_model(self.model)
+            self.actual_limit = _get_limit_for_model(self.model, self.max_tokens)
 
     def _get_limit_for_model(self, model: str) -> int:
-        model_lower = model.lower()
-
-        if "gpt-4o" in model_lower or "4o" in model_lower:
-            return 128000
-        if "gpt-4-turbo" in model_lower or "turbo" in model_lower:
-            return 128000
-        if "claude-3" in model_lower or "claude-3-5" in model_lower:
-            return 200000
-        if "claude-3-5" in model_lower:
-            return 200000
-        if "gemini" in model_lower and "1.5" in model_lower:
-            return 200000
-        if "llama" in model_lower and "70b" in model_lower:
-            return 128000
-        if "mixtral" in model_lower or "8x7b" in model_lower:
-            return 32768
-
-        return self.max_tokens
+        """DEPRECATED: use module-level ``_get_limit_for_model`` instead."""
+        return _get_limit_for_model(model, self.max_tokens)
 
     def effective_limit(self) -> int:
         """Get effective token limit."""
-        model_limit = self._get_limit_for_model(self.model)
-        return min(self.max_tokens, model_limit)
+        return min(self.max_tokens, _get_limit_for_model(self.model, self.max_tokens))
 
 
 @dataclass
@@ -300,6 +283,75 @@ class AdvancedContextManager:
         self._token_usage = 0
 
 
+# ── Model context limits (bytes/tokens) ──────────────────────────────────
+# Canonical source of truth for model context window sizes.
+# Update this table when new models are released.
+_MODEL_LIMITS: Dict[str, int] = {
+    # OpenAI
+    "gpt-4o": 128000,
+    "gpt-4o-mini": 128000,
+    "gpt-4-turbo": 128000,
+    "gpt-4": 8192,
+    "gpt-3.5-turbo": 16384,
+    "o1": 200000,
+    "o1-mini": 128000,
+    "o3-mini": 200000,
+    # Anthropic
+    "claude-3-5": 200000,
+    "claude-3": 200000,
+    "claude-3-opus": 200000,
+    "claude-3-sonnet": 200000,
+    "claude-3-haiku": 200000,
+    "claude-2": 100000,
+    # Google
+    "gemini-1.5": 200000,
+    "gemini-2.0": 200000,
+    "gemini-2.5": 1000000,
+    "gemini-1.0": 32768,
+    # Meta / Llama
+    "llama-70b": 128000,
+    "llama-8b": 128000,
+    "llama-3.1": 128000,
+    "llama-3.2": 128000,
+    "llama-3": 8192,
+    # Mistral
+    "mixtral": 32768,
+    "mistral-small": 32768,
+    "mistral-large": 131072,
+    "codestral": 32768,
+    # Others
+    "command-r": 128000,
+    "deepseek": 131072,
+    "qwen": 32768,
+}
+
+
+def _get_limit_for_model(model: str, default: int = 4096) -> int:
+    """Resolve a model name to its known context window limit.
+
+    Uses substring matching against canonical model identifiers.
+    Returns *default* when the model is unrecognised.
+
+    Args:
+        model: Model name string (case-insensitive match).
+        default: Fallback token limit for unknown models.
+    """
+    model_lower = model.lower()
+    for pattern, limit in _MODEL_LIMITS.items():
+        if pattern in model_lower:
+            return limit
+    # Broad fallback patterns (match last to avoid over-matching)
+    if "gpt" in model_lower:
+        return 128000
+    if "claude" in model_lower:
+        return 200000
+    if "gemini" in model_lower:
+        return 200000
+    if "llama" in model_lower:
+        return 128000
+    return default
+
+
 def create_context_manager(model: str, max_tokens: Optional[int] = None) -> AdvancedContextManager:
     """Create a context manager for the given model.
 
@@ -325,18 +377,7 @@ def get_model_context_limit(model: str) -> int:
     Returns:
         Maximum token limit
     """
-    model_lower = model.lower()
-
-    if "gpt-4o" in model_lower:
-        return 128000
-    if "claude" in model_lower:
-        return 200000
-    if "gemini" in model_lower:
-        return 200000
-    if "llama" in model_lower:
-        return 128000
-
-    return 4096
+    return _get_limit_for_model(model, default=4096)
 
 
 __all__ = [
@@ -347,5 +388,6 @@ __all__ = [
     "AdvancedContextManager",
     "create_context_manager",
     "get_model_context_limit",
+    "_get_limit_for_model",
     "CONTEXT_WINDOW_DEFAULTS",
 ]

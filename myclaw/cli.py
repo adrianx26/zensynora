@@ -1,10 +1,9 @@
 import sys
 import asyncio
-import signal
-import atexit
 import logging
 from pathlib import Path
 import click
+from . import init_app
 from .config import load_config
 from .agent import Agent
 from .onboard import onboard as onboard_script
@@ -16,42 +15,8 @@ from .knowledge import (
 
 logger = logging.getLogger(__name__)
 
-
-def _graceful_shutdown():
-    """6.3: Graceful shutdown handler - close all pools and connections."""
-    logger.info("Shutting down gracefully...")
-    try:
-        # Close HTTP client pool
-        from . import provider
-        if hasattr(provider, 'HTTPClientPool'):
-            asyncio.run(provider.HTTPClientPool.close())
-    except Exception as e:
-        logger.error(f"Error closing HTTP pool: {e}")
-    
-    try:
-        # Close SQLite pool
-        from . import memory
-        if hasattr(memory, 'SQLitePool'):
-            memory.SQLitePool.close_all()
-    except Exception as e:
-        logger.error(f"Error closing SQLite pool: {e}")
-    
-    logger.info("Graceful shutdown complete")
-
-
-def _setup_shutdown_handlers():
-    """6.3: Setup signal handlers for graceful shutdown."""
-    def signal_handler(signum, frame):
-        logger.info(f"Received signal {signum}, initiating graceful shutdown...")
-        _graceful_shutdown()
-        sys.exit(0)
-    
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
-    atexit.register(_graceful_shutdown)
-
-
-_setup_shutdown_handlers()
+# Centralised bootstrapping: logging config, shutdown handlers, directory checks.
+init_app()
 
 
 def _build_registry(config) -> dict:
@@ -73,8 +38,7 @@ def _build_registry(config) -> dict:
 @click.group()
 def cli():
     """ZenSynora (MyClaw) CLI"""
-    from .logging import configure_logging
-    configure_logging(level=logging.INFO)
+    pass
 
 @cli.command()
 def onboard():

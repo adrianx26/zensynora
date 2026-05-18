@@ -20,6 +20,7 @@ myclaw/
 ├── agents/
 │   ├── data/agents.yaml     # 137 agent defs — canonical source [Sprint 12]
 │   └── registry.py          # YAML loader + literal fallback
+├── aiohttp_session.py      # Shared aiohttp.ClientSession singleton (connection pooling) [2026-05-17]
 ├── api_server.py            # FastAPI app: REST + WebSocket + cost + auth endpoints
 ├── auth/                    # JWT verification + OAuth2 PKCE callback [Sprint 6]
 ├── backends/                # local / docker / ssh / wsl2 execution
@@ -120,6 +121,15 @@ gateway sends reply
 * `PIIScrubFilter` — redacts emails, phones, API keys, JWTs from log
   messages, args, and `extra_fields`. User IDs hashed to `user:<sha256[:10]>`.
 * Default-on; opt out with `MYCLAW_LOG_SCRUB_PII=false`.
+* `myclaw/logging.py` is deprecated as of 2026-05-18 — delegates to this module.
+
+### `myclaw/http_session.py` + `myclaw/aiohttp_session.py` (2026-05-17)
+* `http_session.py` — shared `requests.Session` singleton for sync HTTP with
+  connection pooling and TCP keep-alive.
+* `aiohttp_session.py` — shared `aiohttp.ClientSession` singleton for async
+  HTTP with connection pooling. Lazily created, auto-closed at exit.
+* Both modules reduce latency for frequent outbound calls (web search,
+  MCP HTTP transport, knowledge fetching).
 
 ### `myclaw/tools/browser.py`
 * Playwright-backed: `browser_navigate`, `browser_screenshot`,

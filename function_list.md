@@ -57,8 +57,10 @@
 |  | `BenchmarkRunner._save_results` | Persists benchmark results to disk. |
 |  | `BenchmarkRunner.run_model_benchmark` | Runs a benchmark for a specific model/provider. |
 |  | `BenchmarkRunner.get_comparison_table` | Generates a markdown table comparing benchmark outcomes. |
-| **logging.py** | `configure_logging(level, fmt, datefmt)` | Sets up the library‑wide logger with optional format. |
+| **logging.py** | ~~`configure_logging(level, fmt, datefmt)`~~ **[DEPRECATED]** — delegates to `logging_config.configure_logging()` (2026-05-18). | Legacy wrapper that emits `DeprecationWarning`. Use `from myclaw.logging_config import configure_logging` instead. |
+| **logging_config.py** | `configure_logging(level, use_json, use_color, log_file)` | Canonical structured logger with PII scrubbing, JSON/console dual output, and file logging. |
 | **http_session.py** | `get_session()` | Returns a thread‑safe `requests.Session` instance for HTTP calls. |
+| **aiohttp_session.py** | `get_aiohttp_session(timeout)` | Returns a lazily-created, shared `aiohttp.ClientSession` singleton for async HTTP connection pooling. Added 2026-05-17. |
 | **tools/toolbox.py** | `list_tools()` | Returns a string listing all registered custom tools. |
 |  | `register_mcp_tool(name, server_name, func, documentation)` | Registers a tool for the MCP server. |
 |  | `register_tool(name, code, documentation)` | Registers a generic custom tool. |
@@ -70,7 +72,7 @@
 | **knowledge/db.py** | `KnowledgeDB` methods | Simple SQLite‑based storage for knowledge entries (create, read, update, delete). |
 | **exceptions.py** | Custom exception classes (`MyClawError`, `ConfigError`, etc.). |
 | **context_window.py** | `trim_context(messages, max_tokens)` | Trims conversation history to fit token limits. |
-| **config_encryption.py** | `encrypt_config(data, key)`, `decrypt_config(ciphertext, key)` | Helpers for encrypting/decrypting the config file. |
+| **config_encryption.py** | `encrypt_config()`, `decrypt_config()`, `load_encrypted_or_plain()`, `save_encrypted()`, `validate_key_format()` | Fernet encryption for config at rest with OS keyring integration, env var support, and key format validation. Updated 2026-05-17. |
 | **config.py** | `load_config()`, `save_config()` | Loads and persists the application configuration. |
 | **audit_log.py** | Functions for writing and verifying audit logs. |
 | **async_scheduler.py** | `AsyncScheduler` class – schedules periodic async tasks. |
@@ -92,7 +94,7 @@
 | **knowledge/researcher.py**, **knowledge/graph.py**, **knowledge/storage.py**, **knowledge/parser.py**, **knowledge/sync.py** | Modules for knowledge graph construction, storage, parsing, and synchronization. |
 | **plugin_system.py** | Plugin loading and registration utilities. |
 | **multimodal.py** | Functions to handle multimodal inputs (images, audio). |
-| **web_search.py** | Wrapper around web‑search APIs. |
+| **web_search.py** | `search_web()`, `search_wikipedia()`, `search_news()`, `get_webpage_content()`, `search_multiple()`, `format_search_results()` | Web search via DuckDuckGo/Wikipedia/Google News with URL-safe construction, shared aiohttp session, defusedxml XML parsing, and per-function rate limiting. Updated 2026-05-18. |
 | **logging_config.py** | Pre‑configured logging settings used by the app. |
 | **channels/whatsapp.py**, **channels/telegram.py** | Bot integrations for WhatsApp and Telegram. |
 | **profiles/__init__.py** | Profile management utilities. |

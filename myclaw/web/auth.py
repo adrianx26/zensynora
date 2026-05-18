@@ -2,7 +2,13 @@
 Web Authentication — API key and admin access control.
 
 Provides FastAPI dependencies for protecting sensitive endpoints.
+
+SECURITY FIX (2026-05-18): Replaced direct string comparison with
+``secrets.compare_digest()`` to prevent timing attacks on API key
+validation.
 """
+
+import secrets
 
 from fastapi import Header, HTTPException, status
 from myclaw.config import load_config
@@ -24,7 +30,8 @@ async def require_admin_api_key(x_api_key: str = Header(..., description="Admin 
             detail="Admin API key not configured. Set security.admin_api_key in config.",
         )
 
-    if x_api_key != expected:
+    # Timing-safe comparison — constant-time regardless of key length or content.
+    if not secrets.compare_digest(x_api_key, expected):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid API key.",

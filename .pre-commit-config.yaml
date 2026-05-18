@@ -64,3 +64,19 @@ repos:
   #   hooks:
   #     - id: conventional-pre-commit
   #       stages: [commit-msg]
+
+  # ── Security: Bandit static analysis for common Python vulnerabilities ──────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.10
+    hooks:
+      - id: bandit
+        args: ["-c", "pyproject.toml"]
+        files: ^(myclaw|cli\.py|onboard\.py|deploy\.py)/.*\.py$
+
+  # ── Security: Safety dependency vulnerability scanner ───────────────────────
+  - repo: https://github.com/pyupio/safety
+    rev: 3.2.14
+    hooks:
+      - id: safety
+        args: ["check", "--file=requirements-lock.txt"]
+        files: requirements-lock.txt

@@ -87,6 +87,20 @@ KB_SEARCH_EXECUTOR_WORKERS: int = int(
 )
 
 
+# ── Agent / Routing defaults ─────────────────────────────────────────────
+
+#: Maximum delegation depth before loop-prevention triggers.
+MAX_DELEGATION_DEPTH: int = int(os.environ.get("MYCLAW_MAX_DELEGATION_DEPTH", "10"))
+
+#: Number of steps reported by the task timer (memory, knowledge, LLM, tools, response).
+TASK_TIMER_STEPS_TOTAL: int = int(os.environ.get("MYCLAW_TASK_TIMER_STEPS", "5"))
+
+#: Default history-length threshold for background summarization.
+DEFAULT_SUMMARIZATION_THRESHOLD: int = int(
+    os.environ.get("MYCLAW_DEFAULT_SUMMARIZATION_THRESHOLD", "10")
+)
+
+
 # ── Public surface ───────────────────────────────────────────────────────
 
 __all__ = [
@@ -111,4 +125,7 @@ __all__ = [
     "PROVIDER_CB_FAILURE_THRESHOLD",
     "PROVIDER_CB_RESET_TIMEOUT",
     "KB_SEARCH_EXECUTOR_WORKERS",
+    "MAX_DELEGATION_DEPTH",
+    "TASK_TIMER_STEPS_TOTAL",
+    "DEFAULT_SUMMARIZATION_THRESHOLD",
 ]
