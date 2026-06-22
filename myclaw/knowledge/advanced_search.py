@@ -90,8 +90,12 @@ class SearchFilters:
     date_to: Optional[datetime] = None
     tags: Optional[List[str]] = None
     categories: Optional[List[str]] = None
-    # Hybrid search weight: 0.0 = pure FTS, 1.0 = pure semantic, 0.5 = balanced
+    # Hybrid search fusion: "weighted" (legacy) or "rrf" (Reciprocal Rank Fusion)
+    fusion_method: str = "rrf"
+    # Weighted sum parameters (used only when fusion_method="weighted")
     semantic_weight: float = 0.3
+    # RRF parameter: number of top results to consider for rank fusion
+    rrf_k: int = 60
 
 
 @dataclass
@@ -237,21 +241,34 @@ def search_advanced(
                     entity_embeddings[eid] = emb
 
         # ── Build results with combined scoring ─────────────────────────────
+        # Phase 3 (MemoPad import): support Reciprocal Rank Fusion (RRF)
+        fts_ranks: Dict[int, int] = {}
+        semantic_ranks: Dict[int, int] = {}
+
+        for rank, row in enumerate(rows):
+            eid = row["id"]
+            fts_ranks[eid] = rank + 1
+            if eid in entity_embeddings and query_embedding is not None:
+                semantic_ranks[eid] = rank + 1
+
         for row in rows:
             eid = row["id"]
             fts_rank = row["fts_rank"]
-            # FTS rank from SQLite FTS5: lower is better, so invert
-            # Typical range: -10 to 0 for BM25
-            fts_score = max(0.0, 1.0 + float(fts_rank))  # Normalize to 0..1
+            fts_score = max(0.0, 1.0 + float(fts_rank))
 
             semantic_score = 0.0
             if eid in entity_embeddings and query_embedding is not None:
                 semantic_score = cosine_similarity(query_embedding, entity_embeddings[eid])
 
-            combined = (
-                (1 - filters.semantic_weight) * fts_score +
-                filters.semantic_weight * semantic_score
-            )
+            if filters.fusion_method == "rrf":
+                fts_rrf = 1.0 / (filters.rrf_k + fts_ranks.get(eid, filters.rrf_k))
+                sem_rrf = 1.0 / (filters.rrf_k + semantic_ranks.get(eid, filters.rrf_k))
+                combined = fts_rrf + sem_rrf
+            else:
+                combined = (
+                    (1 - filters.semantic_weight) * fts_score +
+                    filters.semantic_weight * semantic_score
+                )
 
             # Gather tags
             tags: List[str] = []

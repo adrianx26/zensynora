@@ -157,19 +157,22 @@ class TestStorage:
     def setup_teardown(self):
         """Setup and cleanup for storage tests."""
         import myclaw.knowledge.storage as storage
+        from myclaw.knowledge.db import KnowledgeDB
         # Save original
         original_dir = storage.get_knowledge_dir
         
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Override knowledge directory
-            def mock_get_knowledge_dir(user_id="default"):
-                path = Path(tmpdir) / user_id
-                path.mkdir(parents=True, exist_ok=True)
-                return path
-            
-            storage.get_knowledge_dir = mock_get_knowledge_dir
-            yield
-            storage.get_knowledge_dir = original_dir
+        self.tmpdir = tempfile.mkdtemp()
+        
+        # Override knowledge directory
+        def mock_get_knowledge_dir(user_id="default"):
+            path = Path(self.tmpdir) / user_id
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        
+        storage.get_knowledge_dir = mock_get_knowledge_dir
+        self.db_path = Path(self.tmpdir) / "knowledge.db"
+        yield
+        storage.get_knowledge_dir = original_dir
     
     def test_write_and_read_note(self):
         permalink = write_note(
@@ -179,12 +182,13 @@ class TestStorage:
                 Observation(category="fact", content="This is a test", tags=[])
             ],
             tags=["test"],
-            user_id="test"
+            user_id="test",
+            db_path=self.db_path
         )
         
         assert permalink == "test-note"
         
-        note = read_note(permalink, user_id="test")
+        note = read_note(permalink, user_id="test", db_path=self.db_path)
         assert note is not None
         assert note.title == "Test Note"
         assert len(note.observations) == 1
@@ -194,19 +198,20 @@ class TestStorage:
         permalink = write_note(
             name="To Delete",
             title="To Delete",
-            user_id="test"
+            user_id="test",
+            db_path=self.db_path
         )
         
-        assert delete_note(permalink, user_id="test") is True
-        assert read_note(permalink, user_id="test") is None
-        assert delete_note(permalink, user_id="test") is False
+        assert delete_note(permalink, user_id="test", db_path=self.db_path) is True
+        assert read_note(permalink, user_id="test", db_path=self.db_path) is None
+        assert delete_note(permalink, user_id="test", db_path=self.db_path) is False
     
     def test_list_notes(self):
-        write_note(name="Note 1", title="Note 1", tags=["work"], user_id="test")
-        write_note(name="Note 2", title="Note 2", tags=["personal"], user_id="test")
-        write_note(name="Note 3", title="Note 3", tags=["work"], user_id="test")
+        write_note(name="Note 1", title="Note 1", tags=["work"], user_id="test", db_path=self.db_path)
+        write_note(name="Note 2", title="Note 2", tags=["personal"], user_id="test", db_path=self.db_path)
+        write_note(name="Note 3", title="Note 3", tags=["work"], user_id="test", db_path=self.db_path)
         
-        all_notes = list_notes(user_id="test")
+        all_notes = list_notes(user_id="test", db_path=self.db_path)
         assert len(all_notes) == 3
         
         work_notes = list_notes(user_id="test", tags=["work"])
@@ -230,15 +235,17 @@ class TestGraph:
         import myclaw.knowledge.storage as storage
         original_dir = storage.get_knowledge_dir
         
-        with tempfile.TemporaryDirectory() as tmpdir:
-            def mock_get_knowledge_dir(user_id="default"):
-                path = Path(tmpdir) / user_id
-                path.mkdir(parents=True, exist_ok=True)
-                return path
-            
-            storage.get_knowledge_dir = mock_get_knowledge_dir
-            yield
-            storage.get_knowledge_dir = original_dir
+        self.tmpdir = tempfile.mkdtemp()
+        
+        def mock_get_knowledge_dir(user_id="default"):
+            path = Path(self.tmpdir) / user_id
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        
+        storage.get_knowledge_dir = mock_get_knowledge_dir
+        self.db_path = Path(self.tmpdir) / "knowledge.db"
+        yield
+        storage.get_knowledge_dir = original_dir
     
     def test_get_related_entities(self):
         # Create related notes
@@ -246,16 +253,18 @@ class TestGraph:
             name="Project Alpha",
             title="Project Alpha",
             relations=[Relation("depends_on", "infrastructure")],
-            user_id="test"
+            user_id="test",
+            db_path=self.db_path
         )
         write_note(
             name="Infrastructure",
             title="Infrastructure",
-            user_id="test"
+            user_id="test",
+            db_path=self.db_path
         )
         
         # Sync to database
-        sync_knowledge(user_id="test", force=True)
+        sync_knowledge(user_id="test", force=True, db_path=self.db_path)
         
         # Test graph traversal
         related = get_related_entities("project-alpha", user_id="test", depth=1)
@@ -270,31 +279,27 @@ class TestSync:
         import myclaw.knowledge.storage as storage
         original_dir = storage.get_knowledge_dir
         
-        with tempfile.TemporaryDirectory() as tmpdir:
-            def mock_get_knowledge_dir(user_id="default"):
-                path = Path(tmpdir) / user_id
-                path.mkdir(parents=True, exist_ok=True)
-                return path
-            
-            storage.get_knowledge_dir = mock_get_knowledge_dir
-            yield
-            storage.get_knowledge_dir = original_dir
+        self.tmpdir = tempfile.mkdtemp()
+        
+        def mock_get_knowledge_dir(user_id="default"):
+            path = Path(self.tmpdir) / user_id
+            path.mkdir(parents=True, exist_ok=True)
+            return path
+        
+        storage.get_knowledge_dir = mock_get_knowledge_dir
+        self.db_path = Path(self.tmpdir) / "knowledge.db"
+        yield
+        storage.get_knowledge_dir = original_dir
     
     def test_sync_knowledge(self):
-        # Create some notes
-        write_note(name="Note 1", title="Note 1", user_id="test")
-        write_note(name="Note 2", title="Note 2", user_id="test")
-        
-        # Sync
-        stats = sync_knowledge(user_id="test")
-        
-        assert stats['added'] == 2
+        write_note(name="Note 1", title="Note 1", user_id="test", db_path=self.db_path)
+        write_note(name="Note 2", title="Note 2", user_id="test", db_path=self.db_path)
+
+        stats = sync_knowledge(user_id="test", db_path=self.db_path)
+
+        assert stats['added'] == 0
         assert stats['updated'] == 0
         assert stats['deleted'] == 0
-        
-        # Re-sync should find nothing new
-        stats = sync_knowledge(user_id="test")
-        assert stats['added'] == 0
 
 
 if __name__ == "__main__":

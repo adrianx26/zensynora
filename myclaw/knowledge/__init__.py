@@ -29,6 +29,7 @@ from .graph import (
     get_related_entities, get_entity_network, find_path,
     get_central_entities, build_context
 )
+from .db import EntityAlias
 from .sync import sync_knowledge, sync_and_report, verify_sync
 
 
@@ -118,6 +119,9 @@ __all__ = [
     "find_path",
     "get_central_entities",
     "build_context",
+    # Phase 3 (MemoPad import)
+    "get_backlinks",
+    "search_by_metadata",
     # Sync
     "sync_knowledge",
     "sync_and_report",

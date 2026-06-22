@@ -5,6 +5,7 @@ Handles reading/writing Markdown files to the knowledge directory.
 """
 
 import asyncio
+import hashlib
 import logging
 import re
 from concurrent.futures import ThreadPoolExecutor
@@ -16,6 +17,25 @@ from .parser import Note, Observation, Relation, parse_note, generate_markdown
 from .db import KnowledgeDB
 
 logger = logging.getLogger(__name__)
+
+
+def compute_file_checksum(file_path: Path) -> str:
+    """Compute MD5 checksum of a file (Phase 1 import from MemoPad)."""
+    md5 = hashlib.md5()
+    with open(file_path, "rb") as f:
+        for chunk in iter(lambda: f.read(8192), b""):
+            md5.update(chunk)
+    return md5.hexdigest()
+
+
+def get_file_metadata(file_path: Path) -> Dict[str, Any]:
+    """Get file metadata: mtime, size, checksum (Phase 1 import from MemoPad)."""
+    stat = file_path.stat()
+    return {
+        "mtime": stat.st_mtime,
+        "size": stat.st_size,
+        "checksum": compute_file_checksum(file_path),
+    }
 
 
 def get_knowledge_dir(user_id: str = "default") -> Path:
@@ -60,7 +80,8 @@ def write_note(
     relations: List[Relation] = None,
     tags: List[str] = None,
     user_id: str = "default",
-    content: Optional[str] = None  # Optional raw content
+    content: Optional[str] = None,  # Optional raw content
+    db_path: Optional[Path] = None
 ) -> str:
     """
     Write a new note to the knowledge base.
@@ -105,15 +126,23 @@ def write_note(
     # Write file
     file_path.write_text(markdown_content, encoding='utf-8')
     logger.info(f"Created note: {file_path}")
-    
+
+    # Phase 1 (MemoPad import): compute file metadata for change detection
+    file_meta = get_file_metadata(file_path)
+
     # Sync to database
-    with KnowledgeDB(user_id) as db:
-        db.sync_entity_from_note(parse_note(file_path))
+    with KnowledgeDB(user_id, db_path=db_path) as db:
+        db.sync_entity_from_note(
+            parse_note(file_path),
+            checksum=file_meta["checksum"],
+            mtime=file_meta["mtime"],
+            size=file_meta["size"],
+        )
     
     return permalink
 
 
-def read_note(permalink: str, user_id: str = "default") -> Optional[Note]:
+def read_note(permalink: str, user_id: str = "default", db_path: Optional[Path] = None) -> Optional[Note]:
     """
     Read a note from the knowledge base.
     
@@ -130,40 +159,44 @@ def read_note(permalink: str, user_id: str = "default") -> Optional[Note]:
     if not file_path.exists():
         return None
     
-    return parse_note(file_path)
+    with KnowledgeDB(user_id, db_path=db_path) as db:
+        note = parse_note(file_path)
+        # Optionally could fetch from DB for more data, but file is source of truth
+        return note
 
 
-def delete_note(permalink: str, user_id: str = "default") -> bool:
+def delete_note(permalink: str, user_id: str = "default", db_path: Optional[Path] = None) -> bool:
     """
     Delete a note from the knowledge base.
-    
+
     Args:
         permalink: Note permalink
         user_id: User ID for isolation
-        
+
     Returns:
         True if deleted, False if not found
     """
     knowledge_dir = get_knowledge_dir(user_id)
     file_path = knowledge_dir / f"{permalink}.md"
-    
+
     if not file_path.exists():
         return False
-    
+
     # Delete file
     file_path.unlink()
-    
+
     # Remove from database
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         db.delete_entity(permalink)
-    
+
     logger.info(f"Deleted note: {permalink}")
     return True
 
 
 def list_notes(
     user_id: str = "default",
-    tags: Optional[List[str]] = None
+    tags: Optional[List[str]] = None,
+    db_path: Optional[Path] = None
 ) -> List[Note]:
     """
     List all notes in the knowledge base.
@@ -177,6 +210,8 @@ def list_notes(
     """
     knowledge_dir = get_knowledge_dir(user_id)
     notes = []
+    with KnowledgeDB(user_id, db_path=db_path) as db:
+        db_entities = {e.permalink: e for e in db.list_all_entities()}
     
     # Get all markdown files
     for file_path in sorted(knowledge_dir.glob("*.md")):
@@ -193,7 +228,7 @@ def list_notes(
     return notes
 
 
-def update_note(permalink: str, user_id: str = "default", **kwargs) -> bool:
+def update_note(permalink: str, user_id: str = "default", db_path: Optional[Path] = None, **kwargs) -> bool:
     """
     Update an existing note.
     
@@ -226,7 +261,7 @@ def update_note(permalink: str, user_id: str = "default", **kwargs) -> bool:
     note.file_path.write_text(content, encoding='utf-8')
     
     # Resync to database
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         db.sync_entity_from_note(note)
     
     logger.info(f"Updated note: {permalink}")
@@ -272,7 +307,8 @@ async def _batch_read_notes_async(permalinks: List[str], user_id: str) -> List[N
 def search_notes(
     query: str,
     user_id: str = "default",
-    limit: int = 10
+    limit: int = 10,
+    db_path: Optional[Path] = None
 ) -> List[Note]:
     """
     Search notes using FTS5.
@@ -285,7 +321,7 @@ def search_notes(
     Returns:
         List of matching Note objects
     """
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         entities = db.search_fts(query, limit)
 
     # Batch-read all matched notes in parallel. The previous N+1 loop
@@ -293,7 +329,7 @@ def search_notes(
     return _batch_read_notes([e.permalink for e in entities], user_id)
 
 
-def get_note_by_tag(tag: str, user_id: str = "default") -> List[Note]:
+def get_note_by_tag(tag: str, user_id: str = "default", db_path: Optional[Path] = None) -> List[Note]:
     """
     Get all notes with a specific tag.
 
@@ -304,13 +340,13 @@ def get_note_by_tag(tag: str, user_id: str = "default") -> List[Note]:
     Returns:
         List of matching Note objects
     """
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         entities = db.search_by_tag(tag)
 
     return _batch_read_notes([e.permalink for e in entities], user_id)
 
 
-def get_all_tags(user_id: str = "default") -> List[str]:
+def get_all_tags(user_id: str = "default", db_path: Optional[Path] = None) -> List[str]:
     """
     Get all unique tags from all notes.
     
@@ -321,7 +357,10 @@ def get_all_tags(user_id: str = "default") -> List[str]:
         Sorted list of unique tags
     """
     tags = set()
-    for note in list_notes(user_id):
+    with KnowledgeDB(user_id, db_path=db_path) as db:
+        db_entities = db.list_all_entities()
+    db_notes = _batch_read_notes([e.permalink for e in db_entities], user_id)
+    for note in db_notes:
         tags.update(note.tags)
         for obs in note.observations:
             tags.update(obs.tags)

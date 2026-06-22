@@ -5,12 +5,12 @@ Provides graph traversal and network analysis over entity relations.
 """
 
 import logging
-from typing import List, Dict, Set, Optional, Tuple
+from typing import List, Dict, Set, Optional, Tuple, Any
 from collections import deque
 
-from .db import KnowledgeDB
+from .db import KnowledgeDB, EntityAlias
 from .parser import Note
-from .storage import read_note
+from .storage import read_note, _batch_read_notes
 
 logger = logging.getLogger(__name__)
 
@@ -350,3 +350,52 @@ def build_context(
             lines.append("")
 
     return "\n".join(lines)
+
+
+# Phase 3 (MemoPad import): backlinks and search_by_metadata
+
+def get_backlinks(permalink: str, user_id: str = "default") -> List[Dict]:
+    """
+    Find all entities that link TO the given entity.
+
+    Args:
+        permalink: Target entity permalink
+        user_id: User ID for isolation
+
+    Returns:
+        List of dicts with entity info and relation type
+    """
+    with KnowledgeDB(user_id) as db:
+        entity = db.get_entity_by_permalink(permalink)
+        if not entity:
+            return []
+        backlink_entities = db.get_backlinks(entity.id)
+
+    results = []
+    for bl_entity in backlink_entities:
+        relations = db.get_relations_from(bl_entity.id)
+        for rel_type, target_permalink, _ in relations:
+            if target_permalink == permalink:
+                results.append({
+                    "permalink": bl_entity.permalink,
+                    "name": bl_entity.name,
+                    "relation_type": rel_type,
+                })
+                break
+    return results
+
+
+def search_by_metadata(filters: Dict[str, Any], user_id: str = "default") -> List[Note]:
+    """
+    Search entities by frontmatter metadata fields.
+
+    Args:
+        filters: Dict of metadata key -> value to match
+        user_id: User ID for isolation
+
+    Returns:
+        List of matching Note objects
+    """
+    with KnowledgeDB(user_id) as db:
+        entities = db.search_by_metadata(filters)
+    return _batch_read_notes([e.permalink for e in entities], user_id)

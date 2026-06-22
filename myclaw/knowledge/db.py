@@ -24,6 +24,14 @@ BM25_DEFAULT_K1: float = 1.2  # Term frequency saturation
 BM25_DEFAULT_B: float = 0.75  # Field length normalization
 
 
+def _row_get(row, key, default=None):
+    """Safely get a value from a sqlite3.Row (which lacks .get())."""
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
+
+
 # ── FTS5 Query Sanitization (Phase 1.5) ──────────────────────────────────────
 
 _FTS_RESERVED = {"NOT", "NEAR", "AND", "OR"}
@@ -67,6 +75,15 @@ def sanitize_fts_query(query: str) -> str:
 
 
 @dataclass
+class EntityAlias:
+    """Alternative name for an entity."""
+    id: int
+    entity_id: int
+    alias: str
+    created_at: datetime
+
+
+@dataclass
 class Entity:
     """Database entity representation."""
 
@@ -76,6 +93,10 @@ class Entity:
     file_path: str
     created_at: datetime
     updated_at: datetime
+    checksum: Optional[str] = None
+    mtime: Optional[float] = None
+    size: Optional[int] = None
+    entity_metadata: Optional[Dict[str, Any]] = None  # Phase 3: frontmatter metadata for search_by_metadata
 
 
 @dataclass
@@ -95,9 +116,9 @@ class KnowledgeDB:
     - ~/.myclaw/knowledge_{user_id}.db
     """
 
-    def __init__(self, user_id: str = "default"):
+    def __init__(self, user_id: str = "default", db_path: Optional[Path] = None):
         self.user_id = user_id
-        self.db_path = Path.home() / ".myclaw" / f"knowledge_{user_id}.db"
+        self.db_path = db_path or (Path.home() / ".myclaw" / f"knowledge_{user_id}.db")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._conn: Optional[sqlite3.Connection] = None
@@ -136,6 +157,7 @@ class KnowledgeDB:
         conn = self._get_connection()
 
         # Core entities table
+        # Phase 1 (MemoPad import): added checksum, mtime, size for robust change detection
         conn.execute("""
             CREATE TABLE IF NOT EXISTS entities (
                 id INTEGER PRIMARY KEY,
@@ -143,7 +165,10 @@ class KnowledgeDB:
                 permalink TEXT UNIQUE NOT NULL,
                 file_path TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                checksum TEXT,
+                mtime REAL,
+                size INTEGER
             )
         """)
 
@@ -174,9 +199,53 @@ class KnowledgeDB:
             )
         """)
 
+        # Core entities table
+        # Phase 1 (MemoPad import): added checksum, mtime, size for robust change detection
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS entities (
+                id INTEGER PRIMARY KEY,
+                name TEXT UNIQUE NOT NULL,
+                permalink TEXT UNIQUE NOT NULL,
+                file_path TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                checksum TEXT,
+                mtime REAL,
+                size INTEGER
+            )
+        """)
+
+        # Phase 1 (MemoPad import): migrate existing databases by adding new columns
+        try:
+            conn.execute("ALTER TABLE entities ADD COLUMN checksum TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE entities ADD COLUMN mtime REAL")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE entities ADD COLUMN size INTEGER")
+        except sqlite3.OperationalError:
+            pass
+        # Phase 3 (MemoPad import): metadata column for structured search
+        try:
+            conn.execute("ALTER TABLE entities ADD COLUMN entity_metadata TEXT")
+        except sqlite3.OperationalError:
+            pass
+
         # Create indexes for better query performance
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_permalink ON entities(permalink)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name)")
+        # Phase 1 (MemoPad import): indexes for change detection fields
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_checksum ON entities(checksum)")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_file_path ON entities(file_path)")
+        except sqlite3.OperationalError:
+            pass
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_observations_entity_id ON observations(entity_id)"
         )
@@ -267,8 +336,55 @@ class KnowledgeDB:
             END
         """)
 
+        # Phase 2 (MemoPad import): EntityAlias table for alternative names
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS entity_aliases (
+                id INTEGER PRIMARY KEY,
+                entity_id INTEGER NOT NULL,
+                alias TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (entity_id) REFERENCES entities(id) ON DELETE CASCADE,
+                UNIQUE(entity_id, alias)
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_aliases_entity_id ON entity_aliases(entity_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_aliases_alias ON entity_aliases(alias)")
+
+        # Phase 2 (MemoPad import): add context and provenance_path to observations
+        try:
+            conn.execute("ALTER TABLE observations ADD COLUMN context TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE observations ADD COLUMN provenance_path TEXT")
+        except sqlite3.OperationalError:
+            pass
+
+        # Phase 4 (MemoPad import): sync_meta table for watermark-based incremental scanning
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS sync_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+
         conn.commit()
         logger.info(f"Knowledge DB initialized: {self.db_path}")
+
+    def get_sync_meta(self, key: str) -> Optional[str]:
+        """Get sync metadata value."""
+        conn = self._get_connection()
+        row = conn.execute("SELECT value FROM sync_meta WHERE key = ?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set_sync_meta(self, key: str, value: str):
+        """Set sync metadata value."""
+        conn = self._get_connection()
+        conn.execute(
+            "INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)",
+            (key, value),
+        )
+        conn.commit()
 
     def rebuild_fts_index(self):
         """
@@ -301,7 +417,9 @@ class KnowledgeDB:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.close()
 
-    def create_entity(self, name: str, permalink: str, file_path: str) -> int:
+    def create_entity(self, name: str, permalink: str, file_path: str,
+                      checksum: Optional[str] = None, mtime: Optional[float] = None,
+                      size: Optional[int] = None, entity_metadata: Optional[Dict[str, Any]] = None) -> int:
         """
         Create a new entity.
 
@@ -309,6 +427,9 @@ class KnowledgeDB:
             name: Display name
             permalink: Unique identifier (URL-friendly)
             file_path: Path to markdown file
+            checksum: File checksum for change detection (Phase 1 import)
+            mtime: File modification time (Phase 1 import)
+            size: File size in bytes (Phase 1 import)
 
         Returns:
             Entity ID
@@ -319,10 +440,12 @@ class KnowledgeDB:
         try:
             cursor = conn.execute(
                 """
-                INSERT INTO entities (name, permalink, file_path, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO entities (name, permalink, file_path, created_at, updated_at,
+                                     checksum, mtime, size, entity_metadata)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (name, permalink, str(file_path), now, now),
+                (name, permalink, str(file_path), now, now,
+                 checksum, mtime, size, json.dumps(entity_metadata) if entity_metadata else None),
             )
             conn.commit()
             return cursor.lastrowid
@@ -343,6 +466,10 @@ class KnowledgeDB:
                 file_path=row["file_path"],
                 created_at=datetime.fromisoformat(row["created_at"]),
                 updated_at=datetime.fromisoformat(row["updated_at"]),
+                checksum=_row_get(row, "checksum"),
+                mtime=_row_get(row, "mtime"),
+                size=_row_get(row, "size"),
+                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
             )
         return None
 
@@ -376,6 +503,10 @@ class KnowledgeDB:
                 file_path=row["file_path"],
                 created_at=datetime.fromisoformat(row["created_at"]),
                 updated_at=datetime.fromisoformat(row["updated_at"]),
+                checksum=_row_get(row, "checksum"),
+                mtime=_row_get(row, "mtime"),
+                size=_row_get(row, "size"),
+                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
             )
             for row in rows
         }
@@ -393,14 +524,79 @@ class KnowledgeDB:
                 file_path=row["file_path"],
                 created_at=datetime.fromisoformat(row["created_at"]),
                 updated_at=datetime.fromisoformat(row["updated_at"]),
+                checksum=_row_get(row, "checksum"),
+                mtime=_row_get(row, "mtime"),
+                size=_row_get(row, "size"),
+                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
             )
         return None
+
+    def get_entity_by_file_path(self, file_path: str) -> Optional[Entity]:
+        """Get entity by file path (for move detection)."""
+        conn = self._get_connection()
+        row = conn.execute("SELECT * FROM entities WHERE file_path = ?", (file_path,)).fetchone()
+
+        if row:
+            return Entity(
+                id=row["id"],
+                name=row["name"],
+                permalink=row["permalink"],
+                file_path=row["file_path"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+                updated_at=datetime.fromisoformat(row["updated_at"]),
+                checksum=_row_get(row, "checksum"),
+                mtime=_row_get(row, "mtime"),
+                size=_row_get(row, "size"),
+                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
+            )
+        return None
+
+    def get_entities_by_checksum(self, checksum: str) -> List[Entity]:
+        """Find entities by checksum (for move/copy detection)."""
+        conn = self._get_connection()
+        rows = conn.execute(
+            "SELECT * FROM entities WHERE checksum = ?", (checksum,)
+        ).fetchall()
+
+        return [
+            Entity(
+                id=row["id"],
+                name=row["name"],
+                permalink=row["permalink"],
+                file_path=row["file_path"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+                updated_at=datetime.fromisoformat(row["updated_at"]),
+                checksum=_row_get(row, "checksum"),
+                mtime=_row_get(row, "mtime"),
+                size=_row_get(row, "size"),
+                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
+            )
+            for row in rows
+        ]
 
     def update_entity_timestamp(self, entity_id: int):
         """Update the updated_at timestamp."""
         conn = self._get_connection()
         now = datetime.now().isoformat()
         conn.execute("UPDATE entities SET updated_at = ? WHERE id = ?", (now, entity_id))
+        conn.commit()
+
+    def update_entity_metadata(self, entity_id: int, checksum: Optional[str] = None,
+                                mtime: Optional[float] = None, size: Optional[int] = None):
+        """Update file metadata for an entity (Phase 1 import from MemoPad)."""
+        conn = self._get_connection()
+        updates = {}
+        if checksum is not None:
+            updates["checksum"] = checksum
+        if mtime is not None:
+            updates["mtime"] = mtime
+        if size is not None:
+            updates["size"] = size
+        if not updates:
+            return
+        set_clause = ", ".join(f"{k} = ?" for k in updates.keys())
+        values = list(updates.values()) + [entity_id]
+        conn.execute(f"UPDATE entities SET {set_clause} WHERE id = ?", values)
         conn.commit()
 
     def delete_entity(self, permalink: str) -> bool:
@@ -410,7 +606,8 @@ class KnowledgeDB:
         conn.commit()
         return cursor.rowcount > 0
 
-    def add_observation(self, entity_id: int, category: str, content: str, tags: List[str] = None):
+    def add_observation(self, entity_id: int, category: str, content: str, tags: List[str] = None,
+                        context: Optional[str] = None, provenance_path: Optional[str] = None):
         """Add an observation to an entity."""
         conn = self._get_connection()
         now = datetime.now().isoformat()
@@ -418,10 +615,10 @@ class KnowledgeDB:
 
         conn.execute(
             """
-            INSERT INTO observations (entity_id, category, content, tags, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO observations (entity_id, category, content, tags, created_at, context, provenance_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (entity_id, category, content, tags_json, now),
+            (entity_id, category, content, tags_json, now, context, provenance_path),
         )
         conn.commit()
 
@@ -436,7 +633,13 @@ class KnowledgeDB:
         for row in rows:
             tags = json.loads(row["tags"] or "[]")
             observations.append(
-                Observation(category=row["category"] or "", content=row["content"], tags=tags)
+                Observation(
+                    category=row["category"] or "",
+                    content=row["content"],
+                    tags=tags,
+                    context=_row_get(row, "context"),
+                    provenance_path=_row_get(row, "provenance_path"),
+                )
             )
         return observations
 
@@ -445,6 +648,52 @@ class KnowledgeDB:
         conn = self._get_connection()
         conn.execute("DELETE FROM observations WHERE entity_id = ?", (entity_id,))
         conn.commit()
+
+    # Phase 2 (MemoPad import): EntityAlias methods
+    def add_entity_alias(self, entity_id: int, alias: str) -> int:
+        """Add an alias for an entity."""
+        conn = self._get_connection()
+        now = datetime.now().isoformat()
+        try:
+            cursor = conn.execute(
+                "INSERT INTO entity_aliases (entity_id, alias, created_at) VALUES (?, ?, ?)",
+                (entity_id, alias, now),
+            )
+            conn.commit()
+            return cursor.lastrowid
+        except sqlite3.IntegrityError:
+            return -1
+
+    def get_aliases_for_entity(self, entity_id: int) -> List[str]:
+        """Get all aliases for an entity."""
+        conn = self._get_connection()
+        rows = conn.execute(
+            "SELECT alias FROM entity_aliases WHERE entity_id = ?", (entity_id,)
+        ).fetchall()
+        return [row["alias"] for row in rows]
+
+    def get_entity_by_alias(self, alias: str) -> Optional[Entity]:
+        """Find entity by alias."""
+        conn = self._get_connection()
+        row = conn.execute(
+            """SELECT e.* FROM entities e
+               JOIN entity_aliases ea ON e.id = ea.entity_id
+               WHERE ea.alias = ?""",
+            (alias,),
+        ).fetchone()
+        if row:
+            return Entity(
+                id=row["id"],
+                name=row["name"],
+                permalink=row["permalink"],
+                file_path=row["file_path"],
+                created_at=datetime.fromisoformat(row["created_at"]),
+                updated_at=datetime.fromisoformat(row["updated_at"]),
+                checksum=_row_get(row, "checksum"),
+                mtime=_row_get(row, "mtime"),
+                size=_row_get(row, "size"),
+            )
+        return None
 
     def add_relation(self, from_entity_id: int, relation_type: str, to_entity_id: int):
         """Add a relation between entities."""
@@ -635,6 +884,69 @@ class KnowledgeDB:
                     file_path=row["file_path"],
                     created_at=datetime.fromisoformat(row["created_at"]),
                     updated_at=datetime.fromisoformat(row["updated_at"]),
+                    checksum=_row_get(row, "checksum"),
+                    mtime=_row_get(row, "mtime"),
+                    size=_row_get(row, "size"),
+                    entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
+                )
+            )
+        return entities
+
+    def search_by_metadata(self, filters: Dict[str, Any]) -> List[Entity]:
+        """Search entities by frontmatter metadata fields."""
+        conn = self._get_connection()
+        where_clauses = []
+        params = []
+        for key, value in filters.items():
+            where_clauses.append(f"json_extract(entity_metadata, '$.{key}') = ?")
+            params.append(value)
+        if not where_clauses:
+            return self.list_all_entities()
+        sql = f"SELECT * FROM entities WHERE {' AND '.join(where_clauses)}"
+        rows = conn.execute(sql, tuple(params)).fetchall()
+        entities = []
+        for row in rows:
+            entities.append(
+                Entity(
+                    id=row["id"],
+                    name=row["name"],
+                    permalink=row["permalink"],
+                    file_path=row["file_path"],
+                    created_at=datetime.fromisoformat(row["created_at"]),
+                    updated_at=datetime.fromisoformat(row["updated_at"]),
+                    checksum=_row_get(row, "checksum"),
+                    mtime=_row_get(row, "mtime"),
+                    size=_row_get(row, "size"),
+                    entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
+                )
+            )
+        return entities
+
+    def get_backlinks(self, entity_id: int) -> List[Entity]:
+        """Find all entities that link TO the given entity."""
+        conn = self._get_connection()
+        rows = conn.execute(
+            """
+            SELECT e.* FROM entities e
+            JOIN relations r ON e.id = r.from_entity_id
+            WHERE r.to_entity_id = ?
+            """,
+            (entity_id,),
+        ).fetchall()
+        entities = []
+        for row in rows:
+            entities.append(
+                Entity(
+                    id=row["id"],
+                    name=row["name"],
+                    permalink=row["permalink"],
+                    file_path=row["file_path"],
+                    created_at=datetime.fromisoformat(row["created_at"]),
+                    updated_at=datetime.fromisoformat(row["updated_at"]),
+                    checksum=_row_get(row, "checksum"),
+                    mtime=_row_get(row, "mtime"),
+                    size=_row_get(row, "size"),
+                    entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
                 )
             )
         return entities
@@ -654,6 +966,10 @@ class KnowledgeDB:
                     file_path=row["file_path"],
                     created_at=datetime.fromisoformat(row["created_at"]),
                     updated_at=datetime.fromisoformat(row["updated_at"]),
+                    checksum=_row_get(row, "checksum"),
+                    mtime=_row_get(row, "mtime"),
+                    size=_row_get(row, "size"),
+                    entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
                 )
             )
         return entities
@@ -672,12 +988,18 @@ class KnowledgeDB:
             "relations": relation_count,
         }
 
-    def sync_entity_from_note(self, note: Note) -> int:
+    def sync_entity_from_note(self, note: Note,
+                              checksum: Optional[str] = None,
+                              mtime: Optional[float] = None,
+                              size: Optional[int] = None) -> int:
         """
         Sync a Note object to the database.
 
         Args:
             note: Parsed Note object
+            checksum: File checksum for change detection (Phase 1 import)
+            mtime: File modification time (Phase 1 import)
+            size: File size in bytes (Phase 1 import)
 
         Returns:
             Entity ID
@@ -693,11 +1015,14 @@ class KnowledgeDB:
             # Update timestamp
             self.update_entity_timestamp(entity_id)
         else:
-            # Create new entity
+            # Create new entity (Phase 1 import: include checksum/mtime/size)
             entity_id = self.create_entity(
                 name=note.name,
                 permalink=note.permalink,
                 file_path=str(note.file_path) if note.file_path else f"{note.permalink}.md",
+                checksum=checksum,
+                mtime=mtime,
+                size=size,
             )
 
         # Add observations

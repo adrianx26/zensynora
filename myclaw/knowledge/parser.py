@@ -20,6 +20,8 @@ class Observation:
     category: str
     content: str
     tags: List[str] = field(default_factory=list)
+    context: Optional[str] = None  # Phase 2 (MemoPad import): provenance note
+    provenance_path: Optional[str] = None  # Phase 2 (MemoPad import): source file path
 
 
 @dataclass
