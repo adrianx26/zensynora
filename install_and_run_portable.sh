@@ -74,6 +74,18 @@ export MYCLAW_HUB_DIR="$DATA_PATH/hub"
 
 # Create the main data directory if it doesn't exist
 mkdir -p "$DATA_PATH"
+# Create data subdirectories to prevent runtime errors
+mkdir -p "$MYCLAW_PROFILES_DIR"
+mkdir -p "$MYCLAW_KNOWLEDGE_DIR"
+mkdir -p "$MYCLAW_MEMORY_DIR"
+mkdir -p "$MYCLAW_PLUGINS_DIR"
+mkdir -p "$MYCLAW_CHECKPOINTS_DIR"
+mkdir -p "$MYCLAW_LOG_DIR"
+mkdir -p "$MYCLAW_WORKSPACE_DIR"
+mkdir -p "$MYCLAW_TOOLBOX_DIR"
+mkdir -p "$MYCLAW_SEMANTIC_CACHE_DIR"
+mkdir -p "$MYCLAW_AUDIT_DIR"
+mkdir -p "$MYCLAW_HUB_DIR"
 
 # --- Launch ZenSynora ---
 echo ""
@@ -83,7 +95,8 @@ echo "Press Ctrl+C to exit."
 echo ""
 
 # Execute zensynora, passing all script arguments to it
-zensynora "$@"
+## We call the module directly to avoid potential issues with wrapper scripts.
+"$PYTHON_EXEC" -m myclaw.cli "$@"
 
 echo ""
 echo "ZenSynora has exited."

@@ -61,6 +61,18 @@ set "MYCLAW_HUB_DIR=%DATA_PATH%\hub"
 
 :: Create the main data directory if it doesn't exist
 if not exist "%DATA_PATH%" mkdir "%DATA_PATH%"
+:: Create data subdirectories to prevent runtime errors
+if not exist "%MYCLAW_PROFILES_DIR%" mkdir "%MYCLAW_PROFILES_DIR%"
+if not exist "%MYCLAW_KNOWLEDGE_DIR%" mkdir "%MYCLAW_KNOWLEDGE_DIR%"
+if not exist "%MYCLAW_MEMORY_DIR%" mkdir "%MYCLAW_MEMORY_DIR%"
+if not exist "%MYCLAW_PLUGINS_DIR%" mkdir "%MYCLAW_PLUGINS_DIR%"
+if not exist "%MYCLAW_CHECKPOINTS_DIR%" mkdir "%MYCLAW_CHECKPOINTS_DIR%"
+if not exist "%MYCLAW_LOG_DIR%" mkdir "%MYCLAW_LOG_DIR%"
+if not exist "%MYCLAW_WORKSPACE_DIR%" mkdir "%MYCLAW_WORKSPACE_DIR%"
+if not exist "%MYCLAW_TOOLBOX_DIR%" mkdir "%MYCLAW_TOOLBOX_DIR%"
+if not exist "%MYCLAW_SEMANTIC_CACHE_DIR%" mkdir "%MYCLAW_SEMANTIC_CACHE_DIR%"
+if not exist "%MYCLAW_AUDIT_DIR%" mkdir "%MYCLAW_AUDIT_DIR%"
+if not exist "%MYCLAW_HUB_DIR%" mkdir "%MYCLAW_HUB_DIR%"
 
 :: --- Launch ZenSynora ---
 echo.
@@ -70,7 +82,8 @@ echo Press Ctrl+C to exit.
 echo.
 
 :: Execute zensynora, passing all script arguments to it
-zensynora %*
+:: We call the module directly to avoid potential issues with the .exe wrapper on portable drives.
+"%PYTHON_EXEC%" -m myclaw.cli %*
 
 echo.
 echo ZenSynora has exited.
