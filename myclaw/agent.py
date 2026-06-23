@@ -1031,6 +1031,48 @@ class Agent:
     async def __aexit__(self, *args):
         await self.close()
 
+    # ── Medic Diagnosis ───────────────────────────────────────────────────────
+
+    async def _run_medic_diagnosis(self, error: Exception, user_id: str) -> tuple[str, str]:
+        """
+        Runs a series of diagnostic checks using the medic_agent when an
+        unexpected error occurs.
+        Returns a tuple of (user_facing_summary, detailed_log_message).
+        """
+        logger.info("An unexpected error occurred. Running medic diagnosis...")
+        try:
+            # Lazily import medic tools to avoid circular dependencies and overhead
+            from .tools import check_system_health, get_health_report, check_memory_usage
+
+            # 1. Check basic system health
+            health_status = await asyncio.to_thread(check_system_health)
+
+            # 2. Check memory usage
+            memory_status = await asyncio.to_thread(check_memory_usage)
+
+            # 3. Get a more detailed report
+            health_report = await asyncio.to_thread(get_health_report)
+
+            # 4. Formulate a diagnosis report
+            detailed_log = (
+                f"--- Medic Agent Diagnosis ---\n"
+                f"Triggering Error: {type(error).__name__}: {error}\n"
+                f"User ID: {user_id}\n\n"
+                f"System Health Status:\n{health_status}\n\n"
+                f"Memory Status:\n{memory_status}\n\n"
+                f"Detailed Health Report:\n{health_report}\n"
+                "--- End of Diagnosis ---"
+            )
+
+            user_summary = "\n\n[Medic Agent Note: A system health check was performed due to an unexpected error. The issue has been logged.]"
+
+            logger.warning(f"Medic diagnosis complete. {detailed_log}")
+            return user_summary, detailed_log
+
+        except Exception as diag_error:
+            logger.error(f"Medic diagnosis itself failed: {diag_error}")
+            return "\n\n[Medic Agent Diagnosis failed to run.]", f"Medic diagnosis failed: {diag_error}"
+
     # ── Browse-failure alternative-source suggestions ─────────────────────────
     # Simple heuristics for proposing backup sources when browse() returns an error.
     _BROWSE_ALTERNATIVES: Dict[str, str] = {
@@ -1416,11 +1458,16 @@ class Agent:
                 self._current_task_id = None
             return error_msg
         except Exception as e:
-            logger.exception(f"Unexpected LLM provider error: {e}")
-            error_msg = f"Sorry, an unexpected error occurred: {e}"
+            logger.exception(f"Unexpected error in think loop: {e}")
+
+            # NEW: Run medic diagnosis
+            user_summary, _ = await self._run_medic_diagnosis(e, user_id)
+
+            error_msg = f"Sorry, an unexpected error occurred. Please try again later.{user_summary}"
+
             if self._current_task_id:
                 await self._task_timer.complete_task(
-                    self._current_task_id, success=False, error_message=error_msg
+                    self._current_task_id, success=False, error_message=str(e)
                 )
                 self._current_task_id = None
             return error_msg
