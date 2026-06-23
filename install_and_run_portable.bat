@@ -35,13 +35,15 @@ call "%VENV_PATH%\Scripts\activate.bat"
 
 :: --- Install/Update Dependencies ---
 echo Checking and installing/updating dependencies...
-python -m pip install --upgrade pip > nul
+python -m pip install --upgrade --quiet pip
 python -m pip install --quiet -e "%APP_PATH%"
 if %errorlevel% neq 0 (
     echo ERROR: Failed to install dependencies from pyproject.toml.
     pause
     exit /b 1
 )
+:: Explicitly install requests, as it seems to be missing from pyproject.toml
+python -m pip install --quiet requests
 echo Dependencies are up to date.
 
 :: --- Set Environment Variables for Portability ---
