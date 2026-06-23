@@ -201,6 +201,23 @@ zensynora onboard
 | `zensynora webui` | Launch the browser dashboard |
 | `zensynora benchmark` | Test model latency and accuracy |
 
+### Portable (USB/External Drive)
+
+ZenSynora can be run as a portable application from a USB stick or external drive. The included launcher scripts will automatically create a self-contained Python environment and store all data on the portable drive.
+
+1.  **Create the folder structure** on your portable drive:
+    ```
+    /ZenSynora_Portable/
+    └── app/
+    ```
+2.  **Copy the entire ZenSynora source code** into the `app/` directory.
+3.  **Place the `install_and_run_portable.bat` and `install_and_run_portable.sh` scripts** in the root `ZenSynora_Portable/` directory.
+4.  **Run the script**:
+    -   On Windows, double-click `install_and_run_portable.bat`.
+    -   On Linux/macOS, run `chmod +x install_and_run_portable.sh && ./install_and_run_portable.sh`.
+
+The first run will install all dependencies into a `venv/` folder. All application data (profiles, knowledge, logs) will be stored in a new `data/` folder on the portable drive.
+
 ### Docker
 
 ```bash
