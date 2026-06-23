@@ -404,6 +404,58 @@ class KnowledgeDB:
         conn.commit()
         logger.info("FTS indexes rebuilt")
 
+    def migrate_add_meta_type(self) -> bool:
+        """Add a meta_type TEXT column backed by json_extract(entity_metadata, '$.type').
+
+        Uses a trigger-based approach for broad SQLite compatibility (works on
+        SQLite 3.7.17+, the minimum version many environments ship). The column
+        plus an index lets callers filter by ``type`` without scanning the full
+        JSON blob on every query.
+
+        Returns True if a migration was applied, False if already up-to-date.
+        """
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT sql FROM pragma_table_info('entities') WHERE name = 'meta_type'"
+        ).fetchone()
+        if row:
+            return False
+
+        conn.execute("ALTER TABLE entities ADD COLUMN meta_type TEXT")
+
+        # Keep the column in sync on INSERT and UPDATE.
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS entities_meta_type_ai
+            AFTER INSERT ON entities FOR EACH ROW
+            BEGIN
+                UPDATE entities
+                SET meta_type = json_extract(NEW.entity_metadata, '$.type')
+                WHERE id = NEW.id;
+            END
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS entities_meta_type_au
+            AFTER UPDATE OF entity_metadata ON entities FOR EACH ROW
+            BEGIN
+                UPDATE entities
+                SET meta_type = json_extract(NEW.entity_metadata, '$.type')
+                WHERE id = NEW.id;
+            END
+        """)
+        # Back-fill existing rows.
+        conn.execute("""
+            UPDATE entities
+            SET meta_type = json_extract(entity_metadata, '$.type')
+            WHERE entity_metadata IS NOT NULL
+              AND json_extract(entity_metadata, '$.type') IS NOT NULL
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_entities_meta_type ON entities(meta_type)"
+        )
+        conn.commit()
+        logger.info("meta_type column and index applied to entities table")
+        return True
+
     def close(self):
         """Close database connection."""
         if self._conn:

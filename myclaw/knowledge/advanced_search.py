@@ -162,7 +162,7 @@ def search_advanced(
     filters = filters or SearchFilters()
     results: List[SearchResult] = []
 
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         conn = db._get_connection()
         safe_query = sanitize_fts_query(query)
 

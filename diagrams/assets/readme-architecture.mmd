@@ -46,7 +46,12 @@ flowchart TB
 
     subgraph Storage [Storage]
         Mem[Memory<br/>per-tenant]
-        KB[KnowledgeDB<br/>FTS5 + dedicated executor]
+        KB[KnowledgeDB<br/>FTS5 + executor]
+        KB_Sub[KnowledgeDB internals]
+        KB_Sub --> Aliases[EntityAliases]
+        KB_Sub --> Backlinks[Backlinks]
+        KB_Sub --> MetaSearch[Metadata Search]
+        KB_Sub --> Sync[Sync Engine<br/>circuit breaker + .bmignore]
         Vec[Vector store<br/>memory/sqlite/qdrant]
         Cache[BaseTTLCache]
     end
@@ -91,6 +96,7 @@ flowchart TB
     class CB,FC resilience
     class Prov,SC llm
     class Mem,KB,Vec,Cache storage
+    class Aliases,Backlinks,MetaSearch,Sync storage
     class Reg,Browser,Toolbox,Prompts,Repair tools
     class OC,GH,HTTP,LH,MC marketplace
     class Tr,PII,Cost observability

@@ -103,11 +103,11 @@ def test_graph_build_context_batches_depth1_reads(monkeypatch):
     fake_main = type("N", (), {
         "title": "Main", "observations": [],
     })()
-    monkeypatch.setattr(graph_mod, "read_note", lambda perm, uid: fake_main)
+    monkeypatch.setattr(graph_mod, "read_note", lambda perm, uid, db_path=None: fake_main)
     monkeypatch.setattr(
         graph_mod,
         "get_related_entities",
-        lambda perm, uid, depth: [
+        lambda perm, uid, depth, db_path=None: [
             {"depth": 1, "permalink": "x", "name": "X", "relation_type": "links"},
             {"depth": 1, "permalink": "y", "name": "Y", "relation_type": "links"},
             {"depth": 2, "permalink": "z", "name": "Z", "relation_type": "links"},

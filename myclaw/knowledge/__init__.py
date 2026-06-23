@@ -6,12 +6,22 @@ Inspired by MemoPad's Markdown + SQLite approach:
 - SQLite provides fast search and graph traversal
 - Supports observations, relations, and full-text search
 
+db_path convention
+------------------
+* ``db_path=None`` (default)  → per-user path under ``~/.myclaw/``.
+* ``db_path=Path(...)``       → used in tests and multi-tenant scenarios
+  to isolate each user/test in a dedicated SQLite file.
+
+Every public function that accepts ``db_path`` threads it through to
+``KnowledgeDB(..., db_path=db_path)`` so callers can fully control
+the backing store without relying on ``user_id`` path magic.
+
 Async wrappers: All core operations have async variants (prefixed with 'a_')
 that run sync operations in thread pools to avoid blocking the event loop.
 """
 
 import asyncio
-from typing import List, Optional
+from typing import List, Optional, Set
 
 from .db import KnowledgeDB
 from .parser import (
@@ -48,11 +58,12 @@ async def a_build_context(
     permalink: str,
     user_id: str = "default",
     depth: int = 2,
-    include_observations: bool = True
+    include_observations: bool = True,
+    db_path=None,
 ) -> str:
     """Async wrapper for build_context. Runs graph traversal in a thread pool."""
     return await asyncio.to_thread(
-        build_context, permalink, user_id, depth, include_observations
+        build_context, permalink, user_id, depth, include_observations, db_path
     )
 
 
@@ -81,11 +92,35 @@ async def a_search_advanced(
     user_id: str = "default",
     filters=None,
     limit: int = 10,
+    db_path=None,
 ):
     """Async wrapper for search_advanced."""
     from .advanced_search import search_advanced
     return await asyncio.to_thread(
-        search_advanced, query, user_id, filters, limit
+        search_advanced, query, user_id, filters, limit, db_path
+    )
+
+
+async def a_get_backlinks(permalink: str, user_id: str = "default", db_path=None):
+    """Async wrapper for get_backlinks."""
+    from .graph import get_backlinks
+    return await asyncio.to_thread(get_backlinks, permalink, user_id, db_path)
+
+
+async def a_search_by_metadata(filters: dict, user_id: str = "default", db_path=None):
+    """Async wrapper for search_by_metadata."""
+    from .graph import search_by_metadata
+    return await asyncio.to_thread(search_by_metadata, filters, user_id, db_path)
+
+
+async def a_find_paths(start_permalink: str, end_permalink: str, user_id: str = "default",
+                       max_hops: int = 3, max_paths: int = 10,
+                       relation_filter: Optional[Set[str]] = None, db_path=None):
+    """Async wrapper for find_paths."""
+    from .path_reasoning import find_paths
+    return await asyncio.to_thread(
+        find_paths, start_permalink, end_permalink, user_id,
+        max_hops, max_paths, relation_filter, db_path
     )
 
 __all__ = [
@@ -132,4 +167,7 @@ __all__ = [
     "a_read_note",
     "a_write_note",
     "a_search_advanced",
+    "a_get_backlinks",
+    "a_search_by_metadata",
+    "a_find_paths",
 ]

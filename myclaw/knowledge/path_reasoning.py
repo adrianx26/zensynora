@@ -17,6 +17,7 @@ Implementation notes:
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from collections import deque
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Set, Tuple
@@ -54,6 +55,7 @@ def find_paths(
     max_hops: int = 3,
     max_paths: int = 10,
     relation_filter: Optional[Set[str]] = None,
+    db_path: Optional[Path] = None,
 ) -> List[GraphPath]:
     """All simple paths from ``start_permalink`` to ``end_permalink``.
 
@@ -76,7 +78,7 @@ def find_paths(
     if max_hops < 1 or max_paths < 1:
         return []
 
-    with KnowledgeDB(user_id) as db:
+    with KnowledgeDB(user_id, db_path=db_path) as db:
         start = db.get_entity_by_permalink(start_permalink)
         end = db.get_entity_by_permalink(end_permalink)
         if start is None or end is None:

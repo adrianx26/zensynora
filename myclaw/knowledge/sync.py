@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple, Optional
 from datetime import datetime
 from collections import OrderedDict
+from dataclasses import dataclass
 
 from .db import KnowledgeDB
 from .parser import parse_note
@@ -24,83 +25,257 @@ from . import storage as _storage_module
 
 logger = logging.getLogger(__name__)
 
-# Background task reference for auto-extraction
-_background_extraction_task: asyncio.Task | None = None
+# Module-level parsed-note cache (shared across all user contexts)
+_note_cache: dict[str, tuple] = {}
 
-# Cache for parsed notes
-_parsed_note_cache: dict[str, tuple] = {}  # path -> (note, mtime)
-
-# Phase 1 (MemoPad import): circuit breaker for sync failures
 MAX_CONSECUTIVE_FAILURES = 3
-_sync_failures: OrderedDict[str, Dict] = OrderedDict()
 _MAX_TRACKED_FAILURES = 100
 
+# Module-level failure tracker (used by backwards-compat shims)
+_sync_failures_module: OrderedDict[str, Dict] = OrderedDict()
 
-def _record_sync_failure(path_str: str, error: str, checksum: Optional[str] = None):
-    """Record a sync failure for circuit breaker tracking."""
-    global _sync_failures
+
+# ── Module-level helpers kept for backward-compat and detect_changes ────────
+# These short-circuit to SyncEngine internals when called from outside the
+# class so external callers (e.g. tests) that import the old names still work.
+
+def _record_sync_failure(path_str: str, error: str, checksum: Optional[str] = None) -> None:
     now = datetime.now()
-    if path_str in _sync_failures:
-        info = _sync_failures.pop(path_str)
+    if path_str in _sync_failures_module:
+        info = _sync_failures_module.pop(path_str)
         info["count"] += 1
         info["last_failure"] = now
         info["last_error"] = error
         if checksum:
             info["last_checksum"] = checksum
-        _sync_failures[path_str] = info
-        logger.warning(f"Sync failure {info['count']}/{MAX_CONSECUTIVE_FAILURES} for {path_str}: {error}")
+        _sync_failures_module[path_str] = info
+        logger.warning(
+            f"Sync failure {info['count']}/{MAX_CONSECUTIVE_FAILURES} for {path_str}: {error}"
+        )
     else:
-        _sync_failures[path_str] = {
-            "count": 1,
-            "first_failure": now,
-            "last_failure": now,
-            "last_error": error,
-            "last_checksum": checksum or "",
+        _sync_failures_module[path_str] = {
+            "count": 1, "first_failure": now, "last_failure": now,
+            "last_error": error, "last_checksum": checksum or "",
         }
-    while len(_sync_failures) > _MAX_TRACKED_FAILURES:
-        _sync_failures.popitem(last=False)
+    while len(_sync_failures_module) > _MAX_TRACKED_FAILURES:
+        _sync_failures_module.popitem(last=False)
 
 
 def _should_skip_file(path_str: str, current_checksum: Optional[str] = None) -> bool:
-    """Check if file should be skipped due to repeated failures."""
-    if path_str not in _sync_failures:
+    if path_str not in _sync_failures_module:
         return False
-    info = _sync_failures[path_str]
+    info = _sync_failures_module[path_str]
     if info["count"] < MAX_CONSECUTIVE_FAILURES:
         return False
     if current_checksum and current_checksum != info.get("last_checksum"):
-        del _sync_failures[path_str]
+        del _sync_failures_module[path_str]
         return False
     return True
 
 
-def _clear_sync_failure(path_str: str):
-    """Clear failure tracking after successful sync."""
-    global _sync_failures
-    if path_str in _sync_failures:
-        del _sync_failures[path_str]
+def _clear_sync_failure(path_str: str) -> None:
+    _sync_failures_module.pop(path_str, None)
 
 
 def _get_cached_note(file_path: Path):
-    """Get note from cache or parse and cache it."""
     path_str = str(file_path)
     mtime = file_path.stat().st_mtime
-    
-    if path_str in _parsed_note_cache:
-        cached_mtime, cached_note = _parsed_note_cache[path_str]
+    if path_str in _note_cache:
+        cached_mtime, cached_note = _note_cache[path_str]
         if cached_mtime == mtime:
             return cached_note
-    
-    # Parse and cache
     note = parse_note(file_path)
-    _parsed_note_cache[path_str] = (mtime, note)
+    _note_cache[path_str] = (mtime, note)
     return note
 
 
-def clear_note_cache():
-    """Clear the parsed note cache."""
-    global _parsed_note_cache
-    _parsed_note_cache = {}
+def clear_note_cache() -> None:
+    global _note_cache
+    _note_cache.clear()
+
+
+class SyncEngine:
+    def __init__(self, user_id: str = "default", db_path: Optional[Path] = None,
+                 max_failures: int = MAX_CONSECUTIVE_FAILURES) -> None:
+        self.user_id = user_id
+        self.db_path = db_path
+        self.max_failures = max_failures
+        self._failures: OrderedDict[str, Dict] = OrderedDict()
+        self._cache: dict[str, tuple] = {}
+
+    def _record_failure(self, path_str: str, error: str,
+                        checksum: Optional[str] = None) -> None:
+        now = datetime.now()
+        if path_str in self._failures:
+            info = self._failures.pop(path_str)
+            info["count"] += 1
+            info["last_failure"] = now
+            info["last_error"] = error
+            if checksum:
+                info["last_checksum"] = checksum
+            self._failures[path_str] = info
+            logger.warning(
+                f"Sync failure {info['count']}/{self.max_failures} for {path_str}: {error}"
+            )
+        else:
+            self._failures[path_str] = {
+                "count": 1, "first_failure": now, "last_failure": now,
+                "last_error": error, "last_checksum": checksum or "",
+            }
+        while len(self._failures) > _MAX_TRACKED_FAILURES:
+            self._failures.popitem(last=False)
+
+    def _should_skip(self, path_str: str,
+                     current_checksum: Optional[str] = None) -> bool:
+        if path_str not in self._failures:
+            return False
+        info = self._failures[path_str]
+        if info["count"] < self.max_failures:
+            return False
+        if current_checksum and current_checksum != info.get("last_checksum"):
+            del self._failures[path_str]
+            return False
+        return True
+
+    def _clear_failure(self, path_str: str) -> None:
+        self._failures.pop(path_str, None)
+
+    def _get_cached_note(self, file_path: Path):
+        path_str = str(file_path)
+        mtime = file_path.stat().st_mtime
+        if path_str in self._cache:
+            cached_mtime, cached_note = self._cache[path_str]
+            if cached_mtime == mtime:
+                return cached_note
+        note = parse_note(file_path)
+        self._cache[path_str] = (mtime, note)
+        return note
+
+    def clear_cache(self) -> None:
+        self._cache.clear()
+
+    def sync(self, force: bool = False, since: Optional[float] = None) -> Dict[str, int]:
+        stats = {"added": 0, "updated": 0, "deleted": 0, "errors": 0}
+        with KnowledgeDB(self.user_id, db_path=self.db_path) as db:
+            if force:
+                logger.info("Performing full re-sync...")
+                self.clear_cache()
+                existing = db.list_all_entities()
+                for entity in existing:
+                    db.delete_entity(entity.permalink)
+                    stats["deleted"] += 1
+                files = scan_markdown_files(self.user_id, since_timestamp=since)
+                for file_path in files:
+                    try:
+                        file_meta = _storage_module.get_file_metadata(file_path)
+                        note = self._get_cached_note(file_path)
+                        db.sync_entity_from_note(
+                            note, checksum=file_meta["checksum"],
+                            mtime=file_meta["mtime"], size=file_meta["size"],
+                        )
+                        stats["added"] += 1
+                        logger.info(f"Synced: {note.permalink}")
+                    except Exception as e:
+                        stats["errors"] += 1
+                        logger.error(f"Failed to sync {file_path}: {e}")
+            else:
+                changes = detect_changes(self.user_id, db_path=self.db_path)
+                to_add = changes.to_add
+                to_update = changes.to_update
+                to_delete = changes.to_delete
+                checksums = changes.checksums
+
+                moves = detect_moves(self.user_id, to_add, checksums, db_path=self.db_path)
+                for old_path, new_path in moves.items():
+                    try:
+                        old_permalink = Path(old_path).stem
+                        db_entity = None
+                        with KnowledgeDB(self.user_id, db_path=self.db_path) as db:
+                            db_entity = db.get_entity_by_file_path(old_path)
+                        if db_entity:
+                            with KnowledgeDB(self.user_id, db_path=self.db_path) as db:
+                                db.update_entity_metadata(
+                                    db_entity.id, checksum=checksums.get(new_path),
+                                    mtime=_storage_module.get_file_metadata(Path(new_path))["mtime"],
+                                    size=_storage_module.get_file_metadata(Path(new_path))["size"],
+                                )
+                                db.update_entity_timestamp(db_entity.id)
+                            logger.info(f"Moved: {old_path} -> {new_path}")
+                            stats["updated"] += 1
+                            to_add = [f for f in to_add if str(f) != new_path]
+                    except Exception as e:
+                        stats["errors"] += 1
+                        logger.error(f"Failed to move {old_path}: {e}")
+
+                for file_path in to_add:
+                    try:
+                        file_checksum = checksums.get(str(file_path))
+                        if file_checksum and self._should_skip(str(file_path), file_checksum):
+                            logger.warning(f"Skipping {file_path} due to repeated failures")
+                            continue
+                        note = self._get_cached_note(file_path)
+                        file_meta = _storage_module.get_file_metadata(file_path)
+                        db.sync_entity_from_note(
+                            note, checksum=file_meta["checksum"],
+                            mtime=file_meta["mtime"], size=file_meta["size"],
+                        )
+                        stats["added"] += 1
+                        self._clear_failure(str(file_path))
+                        logger.info(f"Added: {note.permalink}")
+                    except Exception as e:
+                        stats["errors"] += 1
+                        self._record_failure(
+                            str(file_path), str(e), checksums.get(str(file_path))
+                        )
+                        logger.error(f"Failed to add {file_path}: {e}")
+
+                for permalink in to_update:
+                    try:
+                        knowledge_dir = _storage_module.get_knowledge_dir(self.user_id)
+                        file_path = knowledge_dir / f"{permalink}.md"
+                        if file_path.exists():
+                            file_checksum = checksums.get(str(file_path))
+                            if file_checksum and self._should_skip(str(file_path), file_checksum):
+                                logger.warning(f"Skipping {permalink} due to repeated failures")
+                                continue
+                            note = self._get_cached_note(file_path)
+                            file_meta = _storage_module.get_file_metadata(file_path)
+                            db.sync_entity_from_note(
+                                note, checksum=file_meta["checksum"],
+                                mtime=file_meta["mtime"], size=file_meta["size"],
+                            )
+                            stats["updated"] += 1
+                            self._clear_failure(str(file_path))
+                            logger.info(f"Updated: {permalink}")
+                    except Exception as e:
+                        stats["errors"] += 1
+                        file_path = knowledge_dir / f"{permalink}.md"
+                        self._record_failure(
+                            str(file_path), str(e), checksums.get(str(file_path))
+                        )
+                        logger.error(f"Failed to update {permalink}: {e}")
+
+                for permalink in to_delete:
+                    try:
+                        db.delete_entity(permalink)
+                        stats["deleted"] += 1
+                        logger.info(f"Deleted: {permalink}")
+                    except Exception as e:
+                        stats["errors"] += 1
+                        logger.error(f"Failed to delete {permalink}: {e}")
+
+        total = stats["added"] + stats["updated"] + stats["deleted"]
+        logger.info(
+            f"Sync complete: {total} changes "
+            f"({stats['added']} added, {stats['updated']} updated, "
+            f"{stats['deleted']} deleted, {stats['errors']} errors)"
+        )
+        return stats
+
+
+def clear_note_cache() -> None:
+    global _note_cache
+    _note_cache.clear()
 
 
 # Phase 1 (MemoPad import): .bmignore support
@@ -249,31 +424,22 @@ def detect_moves(user_id: str, new_files: List[Path],
     return moves
 
 
+@dataclass
+class ChangeSet:
+    to_add: List[Path]
+    to_update: List[str]
+    to_delete: List[str]
+    checksums: Dict[str, str]
+
+
 def detect_changes(
     user_id: str = "default",
     db_path: Optional[Path] = None
-) -> Tuple[List[Path], List[str], List[str], Dict[str, str]]:
-    """
-    Detect changes between filesystem and database.
-
-    Phase 1 (MemoPad import): uses checksum + mtime + size for robust detection.
-    Also detects moves/renames via checksum matching.
-
-    Args:
-        user_id: User ID for isolation
-
-    Returns:
-        Tuple of (to_add, to_update, to_delete, checksums)
-        - to_add: List of new file paths
-        - to_update: List of permalinks with modified files
-        - to_delete: List of permalinks to remove
-        - checksums: Dict mapping file_path -> checksum for new/modified files
-    """
+) -> ChangeSet:
     files = scan_markdown_files(user_id)
     with KnowledgeDB(user_id, db_path=db_path) as db:
         db_mapping = db.list_all_entities()
     db_by_permalink = {e.permalink: e for e in db_mapping}
-    db_by_file = {e.file_path: e for e in db_mapping}
     db_by_checksum: Dict[str, List] = {}
     for e in db_mapping:
         if e.checksum:
@@ -288,8 +454,6 @@ def detect_changes(
             note = _get_cached_note(file_path)
             file_meta = _storage_module.get_file_metadata(file_path)
             file_checksum = file_meta["checksum"]
-            file_mtime = file_meta["mtime"]
-            file_size = file_meta["size"]
 
             if note.permalink not in db_by_permalink:
                 to_add.append(file_path)
@@ -298,21 +462,17 @@ def detect_changes(
                 db_entity = db_by_permalink[note.permalink]
                 db_file_path = Path(db_entity.file_path) if db_entity.file_path else None
 
-                # Check for move/rename: permalink exists but file_path changed
                 if db_file_path and db_file_path != file_path:
-                    # File was moved/renamed
                     to_update.append(note.permalink)
                     checksums[str(file_path)] = file_checksum
                     continue
 
-                # Check if content changed via checksum
                 if db_entity.checksum != file_checksum:
                     to_update.append(note.permalink)
                     checksums[str(file_path)] = file_checksum
         except Exception as e:
             logger.warning(f"Failed to process {file_path}: {e}")
 
-    # Detect deleted files
     file_permalinks = set()
     for file_path in files:
         try:
@@ -322,7 +482,7 @@ def detect_changes(
             pass
     to_delete = [p for p in db_by_permalink if p not in file_permalinks]
 
-    return to_add, to_update, to_delete, checksums
+    return ChangeSet(to_add=to_add, to_update=to_update, to_delete=to_delete, checksums=checksums)
 
 
 def sync_knowledge(user_id: str = "default", force: bool = False, db_path: Optional[Path] = None,
@@ -343,140 +503,22 @@ def sync_knowledge(user_id: str = "default", force: bool = False, db_path: Optio
     Returns:
         Stats dict with counts of added, updated, deleted, errors
     """
-    stats = {"added": 0, "updated": 0, "deleted": 0, "errors": 0}
-
-    with KnowledgeDB(user_id, db_path=db_path) as db:
-        if force:
-            logger.info("Performing full re-sync...")
-            existing = db.list_all_entities()
-            for entity in existing:
-                db.delete_entity(entity.permalink)
-                stats["deleted"] += 1
-
-            files = scan_markdown_files(user_id, since_timestamp=since)
-            for file_path in files:
-                try:
-                    file_meta = _storage_module.get_file_metadata(file_path)
-                    note = parse_note(file_path)
-                    db.sync_entity_from_note(
-                        note,
-                        checksum=file_meta["checksum"],
-                        mtime=file_meta["mtime"],
-                        size=file_meta["size"],
-                    )
-                    stats["added"] += 1
-                    logger.info(f"Synced: {note.permalink}")
-                except Exception as e:
-                    stats["errors"] += 1
-                    logger.error(f"Failed to sync {file_path}: {e}")
-        else:
-            # Phase 1 import: incremental sync with checksum detection
-            to_add, to_update, to_delete, checksums = detect_changes(user_id, db_path=db_path)
-
-            # Phase 1 import: detect moves before adding
-            moves = detect_moves(user_id, to_add, checksums, db_path=db_path)
-            for old_path, new_path in moves.items():
-                try:
-                    old_permalink = Path(old_path).stem
-                    db_entity = None
-                    with KnowledgeDB(user_id, db_path=db_path) as db:
-                        db_entity = db.get_entity_by_file_path(old_path)
-                    if db_entity:
-                        with KnowledgeDB(user_id, db_path=db_path) as db:
-                            db.update_entity_metadata(
-                                db_entity.id,
-                                checksum=checksums.get(new_path),
-                                mtime=_storage_module.get_file_metadata(Path(new_path))["mtime"],
-                                size=_storage_module.get_file_metadata(Path(new_path))["size"],
-                            )
-                            db.update_entity_timestamp(db_entity.id)
-                        logger.info(f"Moved: {old_path} -> {new_path}")
-                        stats["updated"] += 1
-                        to_add = [f for f in to_add if str(f) != new_path]
-                except Exception as e:
-                    stats["errors"] += 1
-                    logger.error(f"Failed to move {old_path}: {e}")
-
-            # Add new files
-            for file_path in to_add:
-                try:
-                    file_checksum = checksums.get(str(file_path))
-                    if file_checksum and _should_skip_file(str(file_path), file_checksum):
-                        logger.warning(f"Skipping {file_path} due to repeated failures")
-                        continue
-                    note = parse_note(file_path)
-                    file_meta = _storage_module.get_file_metadata(file_path)
-                    db.sync_entity_from_note(
-                        note,
-                        checksum=file_meta["checksum"],
-                        mtime=file_meta["mtime"],
-                        size=file_meta["size"],
-                    )
-                    stats["added"] += 1
-                    _clear_sync_failure(str(file_path))
-                    logger.info(f"Added: {note.permalink}")
-                except Exception as e:
-                    stats["errors"] += 1
-                    _record_sync_failure(str(file_path), str(e), checksums.get(str(file_path)))
-                    logger.error(f"Failed to add {file_path}: {e}")
-
-            # Update modified files
-            for permalink in to_update:
-                try:
-                    knowledge_dir = _storage_module.get_knowledge_dir(user_id)
-                    file_path = knowledge_dir / f"{permalink}.md"
-                    if file_path.exists():
-                        file_checksum = checksums.get(str(file_path))
-                        if file_checksum and _should_skip_file(str(file_path), file_checksum):
-                            logger.warning(f"Skipping {permalink} due to repeated failures")
-                            continue
-                        note = parse_note(file_path)
-                        file_meta = _storage_module.get_file_metadata(file_path)
-                        db.sync_entity_from_note(
-                            note,
-                            checksum=file_meta["checksum"],
-                            mtime=file_meta["mtime"],
-                            size=file_meta["size"],
-                        )
-                        stats["updated"] += 1
-                        _clear_sync_failure(str(file_path))
-                        logger.info(f"Updated: {permalink}")
-                except Exception as e:
-                    stats["errors"] += 1
-                    file_path = knowledge_dir / f"{permalink}.md"
-                    _record_sync_failure(str(file_path), str(e), checksums.get(str(file_path)))
-                    logger.error(f"Failed to update {permalink}: {e}")
-
-            # Delete removed files
-            for permalink in to_delete:
-                try:
-                    db.delete_entity(permalink)
-                    stats["deleted"] += 1
-                    logger.info(f"Deleted: {permalink}")
-                except Exception as e:
-                    stats["errors"] += 1
-                    logger.error(f"Failed to delete {permalink}: {e}")
-
-    total = stats["added"] + stats["updated"] + stats["deleted"]
-    logger.info(f"Sync complete: {total} changes ({stats['added']} added, {stats['updated']} updated, {stats['deleted']} deleted, {stats['errors']} errors)")
-
-    return stats
+    engine = SyncEngine(user_id=user_id, db_path=db_path)
+    return engine.sync(force=force, since=since)
 
 
 def verify_sync(user_id: str = "default") -> bool:
     """
     Verify that filesystem and database are in sync.
-    
+
     Args:
         user_id: User ID for isolation
-        
+
     Returns:
         True if in sync, False otherwise
     """
     files = scan_markdown_files(user_id)
     db_mapping = get_db_file_mapping(user_id)
-    
-    # Check all files are in DB
     for file_path in files:
         try:
             note = parse_note(file_path)
@@ -486,47 +528,35 @@ def verify_sync(user_id: str = "default") -> bool:
         except Exception as e:
             logger.warning(f"Failed to parse {file_path}: {e}")
             return False
-    
-    # Check all DB entries have files
     for permalink in db_mapping:
         file_path = Path(db_mapping[permalink])
         if not file_path.exists():
             logger.warning(f"DB entry missing file: {permalink}")
             return False
-    
     logger.info("Sync verification passed")
     return True
 
 
-# Note: File watching is disabled to avoid watchdog dependency
-# Users should manually run sync when needed or rely on the sync
-# that happens automatically during write_note operations
-
 def sync_and_report(user_id: str = "default") -> str:
     """
     Sync knowledge and return a user-friendly report.
-    
+
     Args:
         user_id: User ID for isolation
-        
+
     Returns:
         Human-readable sync report
     """
     stats = sync_knowledge(user_id)
-    
-    lines = ["📚 Knowledge Sync Report"]
-    lines.append("")
-    lines.append(f"  ✅ Added: {stats['added']}")
-    lines.append(f"  🔄 Updated: {stats['updated']}")
-    lines.append(f"  🗑️ Deleted: {stats['deleted']}")
-    
+
+    lines = ["Knowledge Sync Report", "",
+             f"  Added: {stats['added']}",
+             f"  Updated: {stats['updated']}",
+             f"  Deleted: {stats['deleted']}"]
     if stats['errors'] > 0:
-        lines.append(f"  ❌ Errors: {stats['errors']}")
-    
+        lines.append(f"  Errors: {stats['errors']}")
     total = stats['added'] + stats['updated'] + stats['deleted']
-    lines.append("")
-    lines.append(f"Total changes: {total}")
-    
+    lines += ["", f"Total changes: {total}"]
     return "\n".join(lines)
 
 

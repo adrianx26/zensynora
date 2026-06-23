@@ -58,7 +58,7 @@ class GapResearcher:
             
         return list(unique_gaps.values())
 
-    async def research_gap(self, gap_query: str) -> bool:
+    async def research_gap(self, gap_query: str, user_id: str = "default", db_path: Optional[Path] = None) -> bool:
         """Perform web research for a specific gap query."""
         if not Fetcher:
             logger.warning("Scrapling not available, skipping research")
@@ -96,16 +96,17 @@ class GapResearcher:
             )
             
             # 3. Store in Knowledge Base
-            db = KnowledgeDB()
+            db = KnowledgeDB(user_id, db_path=db_path)
             
             tags = ["automated-research", "knowledge-gap-filled"]
             
-            # Save note using existing storage functions
             note_permalink = write_note(
                 name=f"research-{gap_query.lower().replace(' ', '-')}",
                 title=f"Research: {gap_query}",
                 content=summary,
-                tags=tags
+                tags=tags,
+                user_id=user_id,
+                db_path=db_path,
             )
             
             # 4. Log the research
