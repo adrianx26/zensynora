@@ -77,7 +77,7 @@ def schedule_daily_reflection(user_id: str = "default", hour: int = 20, minute: 
     return _create_job_internal(task, delay, 86400, user_id, job_id) + f" (scheduled daily at {hour:02d}:{minute:02d})"
 
 
-def generate_session_insights(user_id: str = "default", save_to_knowledge: bool = True) -> str:
+async def generate_session_insights(user_id: str = "default", save_to_knowledge: bool = True) -> str:
     """Generate insights from recent session conversations and persist them to the knowledge base.
 
     Reads the user's last 50 messages, asks the LLM to identify key topics, preferences,
@@ -98,17 +98,11 @@ def generate_session_insights(user_id: str = "default", save_to_knowledge: bool 
 
     try:
         # --- Step 1: Load recent conversation history ---
-        async def _load_history():
+        try:
             mem = Memory(user_id=user_id)
             await mem.initialize()
-            h = await mem.get_history(limit=50)
+            history = await mem.get_history(limit=50)
             await mem.close()
-            return h
-
-        try:
-            loop = asyncio.new_event_loop()
-            history = loop.run_until_complete(_load_history())
-            loop.close()
         except Exception as e:
             logger.error(f"Could not load history: {e}")
             return f"Error loading conversation history: {e}"
@@ -130,29 +124,21 @@ def generate_session_insights(user_id: str = "default", save_to_knowledge: bool 
         analysis_prompt = "\n".join(analysis_lines)
 
         # --- Step 3: Call the LLM ---
-        async def _call_llm():
+        try:
             config = load_config()
             provider = get_provider(config)
-            model = getattr(config.agents.defaults, "model", "llama3.2")
+            model = config.agents.defaults.model
             insights, _ = await provider.chat(
                 messages=[
                     {
                         "role": "system",
-                        "content": (
-                            "You are an insightful conversation analyst. "
-                            "Extract and summarise key learnings from the conversation in a clear, structured way."
-                        ),
+                        "content": "You are an insightful conversation analyst. Extract and summarise key learnings from the conversation in a clear, structured way.",
                     },
                     {"role": "user", "content": analysis_prompt},
                 ],
                 model=model,
             )
-            return insights
-
-        try:
-            loop2 = asyncio.new_event_loop()
-            insights_text = loop2.run_until_complete(_call_llm())
-            loop2.close()
+            insights_text = insights
         except Exception as e:
             logger.error(f"LLM call failed in generate_session_insights: {e}")
             return f"Error generating insights from LLM: {e}"
@@ -163,7 +149,8 @@ def generate_session_insights(user_id: str = "default", save_to_knowledge: bool 
         # --- Step 4: Save to knowledge base ---
         if save_to_knowledge:
             date_str = datetime.now().strftime("%Y-%m-%d")
-            kb_result = write_to_knowledge(
+            kb_result = await asyncio.to_thread(
+                write_to_knowledge,
                 title=f"Session Insights {date_str}",
                 content=insights_text,
                 tags="session-insights,auto-generated,daily-reflection",
@@ -179,7 +166,7 @@ def generate_session_insights(user_id: str = "default", save_to_knowledge: bool 
 
 
 
-def extract_user_preferences(user_id: str = "default") -> str:
+async def extract_user_preferences(user_id: str = "default") -> str:
     """Analyze conversation history to extract user preferences and style.
 
     Builds a profile of the user's communication style, preferences, interests,
@@ -195,8 +182,8 @@ def extract_user_preferences(user_id: str = "default") -> str:
 
     try:
         mem = Memory(user_id=user_id)
-        asyncio.get_event_loop().run_until_complete(mem.initialize())
-        history = asyncio.get_event_loop().run_until_complete(mem.get_history(limit=100))
+        await mem.initialize()
+        history = await mem.get_history(limit=100)
 
         if len(history) < 5:
             return "Not enough conversation history to build profile. Need at least 5 messages."
@@ -236,7 +223,8 @@ def extract_user_preferences(user_id: str = "default") -> str:
         # Optionally save to knowledge base
         try:
             tags_str = ",".join(["user_profile", "preferences", "auto-extracted"])
-            permalink = write_to_knowledge(
+            permalink = await asyncio.to_thread(
+                write_to_knowledge,
                 title=f"User Profile - {user_id}",
                 content=profile_json,
                 tags=tags_str,
@@ -251,7 +239,7 @@ def extract_user_preferences(user_id: str = "default") -> str:
         return f"Error extracting preferences: {e}"
 
 
-def update_user_profile(insights: str, user_id: str = "default") -> str:
+async def update_user_profile(insights: str, user_id: str = "default") -> str:
     """Update the user dialectic profile with new insights.
 
     Writes insights to the user dialectic profile file that the agent
@@ -268,10 +256,13 @@ def update_user_profile(insights: str, user_id: str = "default") -> str:
     dialectic_path = Path(__file__).parent / "profiles" / "user_dialectic.md"
 
     try:
-        dialectic_path.parent.mkdir(parents=True, exist_ok=True)
+        await asyncio.to_thread(dialectic_path.parent.mkdir, parents=True, exist_ok=True)
 
         # Read existing content
-        existing = dialectic_path.read_text() if dialectic_path.exists() else ""
+        if dialectic_path.exists():
+            existing = await asyncio.to_thread(dialectic_path.read_text, encoding="utf-8")
+        else:
+            existing = ""
 
         # Add insights section with timestamp
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -284,12 +275,13 @@ def update_user_profile(insights: str, user_id: str = "default") -> str:
         else:
             existing += new_section
 
-        dialectic_path.write_text(existing, encoding="utf-8")
+        await asyncio.to_thread(dialectic_path.write_text, existing, encoding="utf-8")
 
         # Also save to knowledge base as backup
         try:
             tags_str = ",".join(["user_profile", "dialectic", "manual_update"])
-            write_to_knowledge(
+            await asyncio.to_thread(
+                write_to_knowledge,
                 title=f"User Profile Update - {timestamp}",
                 content=insights,
                 tags=tags_str,
@@ -305,7 +297,7 @@ def update_user_profile(insights: str, user_id: str = "default") -> str:
         return f"Error updating profile: {e}"
 
 
-def get_user_profile(user_id: str = "default") -> str:
+async def get_user_profile(user_id: str = "default") -> str:
     """Get the current user dialectic profile.
 
     Reads the user dialectic profile file and returns its contents.
@@ -321,10 +313,9 @@ def get_user_profile(user_id: str = "default") -> str:
 
     try:
         if dialectic_path.exists():
-            return dialectic_path.read_text(encoding="utf-8")
+            return await asyncio.to_thread(dialectic_path.read_text, encoding="utf-8")
         else:
             return "No user dialectic profile found. Use extract_user_preferences() to generate one."
     except Exception as e:
         logger.error(f"Error reading user profile: {e}")
         return f"Error reading profile: {e}"
-

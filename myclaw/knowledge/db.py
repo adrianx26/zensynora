@@ -199,22 +199,6 @@ class KnowledgeDB:
             )
         """)
 
-        # Core entities table
-        # Phase 1 (MemoPad import): added checksum, mtime, size for robust change detection
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS entities (
-                id INTEGER PRIMARY KEY,
-                name TEXT UNIQUE NOT NULL,
-                permalink TEXT UNIQUE NOT NULL,
-                file_path TEXT NOT NULL,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                checksum TEXT,
-                mtime REAL,
-                size INTEGER
-            )
-        """)
-
         # Phase 1 (MemoPad import): migrate existing databases by adding new columns
         try:
             conn.execute("ALTER TABLE entities ADD COLUMN checksum TEXT")
@@ -651,6 +635,22 @@ class KnowledgeDB:
         conn.execute(f"UPDATE entities SET {set_clause} WHERE id = ?", values)
         conn.commit()
 
+    def update_entity_path(self, entity_id: int, new_path: str, checksum: str, mtime: float, size: int):
+        """
+        Update the file path and metadata for an entity, used for move detection.
+        """
+        conn = self._get_connection()
+        now = datetime.now().isoformat()
+        conn.execute(
+            """
+            UPDATE entities
+            SET file_path = ?, checksum = ?, mtime = ?, size = ?, updated_at = ?
+            WHERE id = ?
+            """,
+            (str(new_path), checksum, mtime, size, now, entity_id),
+        )
+        conn.commit()
+
     def delete_entity(self, permalink: str) -> bool:
         """Delete entity and all related data (cascades)."""
         conn = self._get_connection()
@@ -744,6 +744,7 @@ class KnowledgeDB:
                 checksum=_row_get(row, "checksum"),
                 mtime=_row_get(row, "mtime"),
                 size=_row_get(row, "size"),
+                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
             )
         return None
 
@@ -813,6 +814,36 @@ class KnowledgeDB:
             (entity_id, entity_id),
         )
         conn.commit()
+
+    def get_relations_from_many(self, entity_ids: List[int]) -> Dict[int, List[tuple]]:
+        """
+        Batch fetch all outgoing relations for multiple entities in one query.
+
+        Args:
+            entity_ids: List of entity IDs to fetch relations for.
+
+        Returns:
+            Dict mapping entity_id to a list of (relation_type, target_permalink, target_name) tuples.
+        """
+        if not entity_ids:
+            return {}
+
+        conn = self._get_connection()
+        placeholders = ",".join("?" * len(entity_ids))
+        sql = f"""
+            SELECT r.from_entity_id, r.relation_type, e.permalink, e.name
+            FROM relations r
+            JOIN entities e ON r.to_entity_id = e.id
+            WHERE r.from_entity_id IN ({placeholders})
+        """
+        rows = conn.execute(sql, tuple(entity_ids)).fetchall()
+
+        results: Dict[int, List[tuple]] = {eid: [] for eid in entity_ids}
+        for row in rows:
+            results[row['from_entity_id']].append(
+                (row['relation_type'], row['permalink'], row['name'])
+            )
+        return results
 
     def search_fts(self, query: str, limit: int = 10) -> List[Entity]:
         """

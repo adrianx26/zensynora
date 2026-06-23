@@ -61,6 +61,7 @@ Connect to any provider — **Ollama**, **OpenAI**, **Anthropic**, **Google Gemi
 - **Knowledge base** with FTS5 + entity graph, batched-parallel note reads (7-10× faster searches), dedicated thread-pool executor for FTS5 queries.
 - **Knowledge-graph path reasoning** — `find_paths(a, b, max_hops=3)` for "how is X connected to Y?" queries.
 - **Pluggable vector store** — pick `sqlite` (zero-dep), `qdrant` (production HNSW), or `memory` (tests) via config.
+- **Performance optimizations**: Batched queries, optimized graph traversal, and faster full-sync operations for a more responsive knowledge base.
 - **Gap Researcher** — background agent fills information gaps via web search.
 
 ### Multi-agent swarms

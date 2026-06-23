@@ -94,6 +94,14 @@ def clear_note_cache() -> None:
     _note_cache.clear()
 
 
+@dataclass
+class ChangeSet:
+    to_add: List[Path]
+    to_update: List[Tuple[str, Path]]
+    to_delete: List[str]
+    checksums: Dict[str, str]
+
+
 class SyncEngine:
     def __init__(self, user_id: str = "default", db_path: Optional[Path] = None,
                  max_failures: int = MAX_CONSECUTIVE_FAILURES) -> None:
@@ -154,17 +162,89 @@ class SyncEngine:
     def clear_cache(self) -> None:
         self._cache.clear()
 
+    def _load_bmignore_patterns(self) -> List[str]:
+        """Load ignore patterns from .bmignore file in knowledge root."""
+        knowledge_dir = _storage_module.get_knowledge_dir(self.user_id)
+        return _load_bmignore_patterns(knowledge_dir)
+
+    def _scan_markdown_files(self, since_timestamp: Optional[float] = None) -> Set[Path]:
+        """Scan the knowledge directory for all Markdown files, respecting .bmignore."""
+        knowledge_dir = _storage_module.get_knowledge_dir(self.user_id)
+        patterns = self._load_bmignore_patterns()
+        files = set()
+        for file_path in knowledge_dir.rglob("*.md"):
+            if not _should_ignore_path(file_path, knowledge_dir, patterns):
+                if since_timestamp is not None:
+                    if file_path.stat().st_mtime <= since_timestamp:
+                        continue
+                files.add(file_path)
+        return files
+
+    def _detect_changes(self, db: KnowledgeDB, since: Optional[float] = None) -> ChangeSet:
+        """Detects changes between the filesystem and the database."""
+        files = self._scan_markdown_files(since_timestamp=since)
+        db_mapping = db.list_all_entities()
+        db_by_permalink = {e.permalink: e for e in db_mapping}
+
+        to_add: List[Path] = []
+        to_update: List[Tuple[str, Path]] = []
+        checksums: Dict[str, str] = {}
+
+        for file_path in files:
+            try:
+                note = self._get_cached_note(file_path)
+                file_meta = _storage_module.get_file_metadata(file_path)
+                file_checksum = file_meta["checksum"]
+                checksums[str(file_path)] = file_checksum
+
+                if note.permalink not in db_by_permalink:
+                    to_add.append(file_path)
+                else:
+                    db_entity = db_by_permalink[note.permalink]
+                    db_file_path = Path(db_entity.file_path) if db_entity.file_path else None
+
+                    # A file move (permalink exists, path differs) or content change.
+                    if (db_file_path and db_file_path != file_path) or (db_entity.checksum != file_checksum):
+                        to_update.append((note.permalink, file_path))
+            except Exception as e:
+                logger.warning(f"Failed to process {file_path} for change detection: {e}")
+
+        file_permalinks = {self._get_cached_note(fp).permalink for fp in files if fp.exists()}
+        to_delete = [p for p in db_by_permalink if p not in file_permalinks]
+
+        return ChangeSet(to_add=to_add, to_update=to_update, to_delete=to_delete, checksums=checksums)
+
+    def _detect_moves(self, db: KnowledgeDB, new_files: List[Path],
+                      checksums: Dict[str, str]) -> Dict[str, str]:
+        """Detects moved/renamed files by matching checksums."""
+        moves: Dict[str, str] = {}
+        db_entities = db.list_all_entities()
+        db_by_checksum: Dict[str, List] = {}
+        for e in db_entities:
+            if e.checksum:
+                db_by_checksum.setdefault(e.checksum, []).append(e)
+
+        for file_path in new_files:
+            file_checksum = checksums.get(str(file_path))
+            if not file_checksum:
+                continue
+            candidates = db_by_checksum.get(file_checksum, [])
+            for candidate in candidates:
+                if candidate.file_path and candidate.file_path != str(file_path) and not Path(candidate.file_path).exists():
+                    moves[candidate.file_path] = str(file_path)
+                    break
+        return moves
+
     def sync(self, force: bool = False, since: Optional[float] = None) -> Dict[str, int]:
         stats = {"added": 0, "updated": 0, "deleted": 0, "errors": 0}
         with KnowledgeDB(self.user_id, db_path=self.db_path) as db:
             if force:
                 logger.info("Performing full re-sync...")
                 self.clear_cache()
-                existing = db.list_all_entities()
-                for entity in existing:
-                    db.delete_entity(entity.permalink)
-                    stats["deleted"] += 1
-                files = scan_markdown_files(self.user_id, since_timestamp=since)
+                # Use a single, fast transaction to clear the database.
+                db.clear_all_data()
+                stats["deleted"] = -1 # Indicate a full clear, not individual deletes.
+                files = self._scan_markdown_files()  # Ignore `since` on a full re-sync
                 for file_path in files:
                     try:
                         file_meta = _storage_module.get_file_metadata(file_path)
@@ -179,28 +259,20 @@ class SyncEngine:
                         stats["errors"] += 1
                         logger.error(f"Failed to sync {file_path}: {e}")
             else:
-                changes = detect_changes(self.user_id, db_path=self.db_path)
+                changes = self._detect_changes(db, since=since)
                 to_add = changes.to_add
                 to_update = changes.to_update
                 to_delete = changes.to_delete
                 checksums = changes.checksums
 
-                moves = detect_moves(self.user_id, to_add, checksums, db_path=self.db_path)
+                moves = self._detect_moves(db, to_add, checksums)
                 for old_path, new_path in moves.items():
                     try:
-                        old_permalink = Path(old_path).stem
-                        db_entity = None
-                        with KnowledgeDB(self.user_id, db_path=self.db_path) as db:
-                            db_entity = db.get_entity_by_file_path(old_path)
+                        db_entity = db.get_entity_by_file_path(old_path)
                         if db_entity:
-                            with KnowledgeDB(self.user_id, db_path=self.db_path) as db:
-                                db.update_entity_metadata(
-                                    db_entity.id, checksum=checksums.get(new_path),
-                                    mtime=_storage_module.get_file_metadata(Path(new_path))["mtime"],
-                                    size=_storage_module.get_file_metadata(Path(new_path))["size"],
-                                )
-                                db.update_entity_timestamp(db_entity.id)
-                            logger.info(f"Moved: {old_path} -> {new_path}")
+                            file_meta = _storage_module.get_file_metadata(Path(new_path))
+                            db.update_entity_path(db_entity.id, new_path, file_meta["checksum"], file_meta["mtime"], file_meta["size"])
+                            logger.info(f"Detected move: {old_path} -> {new_path}")
                             stats["updated"] += 1
                             to_add = [f for f in to_add if str(f) != new_path]
                     except Exception as e:
@@ -229,27 +301,24 @@ class SyncEngine:
                         )
                         logger.error(f"Failed to add {file_path}: {e}")
 
-                for permalink in to_update:
+                for permalink, file_path in to_update:
                     try:
-                        knowledge_dir = _storage_module.get_knowledge_dir(self.user_id)
-                        file_path = knowledge_dir / f"{permalink}.md"
-                        if file_path.exists():
-                            file_checksum = checksums.get(str(file_path))
-                            if file_checksum and self._should_skip(str(file_path), file_checksum):
-                                logger.warning(f"Skipping {permalink} due to repeated failures")
-                                continue
-                            note = self._get_cached_note(file_path)
-                            file_meta = _storage_module.get_file_metadata(file_path)
-                            db.sync_entity_from_note(
-                                note, checksum=file_meta["checksum"],
-                                mtime=file_meta["mtime"], size=file_meta["size"],
-                            )
-                            stats["updated"] += 1
-                            self._clear_failure(str(file_path))
-                            logger.info(f"Updated: {permalink}")
+                        # No need to re-check existence, path comes from detection
+                        file_checksum = checksums.get(str(file_path))
+                        if file_checksum and self._should_skip(str(file_path), file_checksum):
+                            logger.warning(f"Skipping {permalink} due to repeated failures")
+                            continue
+                        note = self._get_cached_note(file_path)
+                        file_meta = _storage_module.get_file_metadata(file_path)
+                        db.sync_entity_from_note(
+                            note, checksum=file_meta["checksum"],
+                            mtime=file_meta["mtime"], size=file_meta["size"],
+                        )
+                        stats["updated"] += 1
+                        self._clear_failure(str(file_path))
+                        logger.info(f"Updated: {permalink}")
                     except Exception as e:
                         stats["errors"] += 1
-                        file_path = knowledge_dir / f"{permalink}.md"
                         self._record_failure(
                             str(file_path), str(e), checksums.get(str(file_path))
                         )
@@ -422,14 +491,6 @@ def detect_moves(user_id: str, new_files: List[Path],
                     break
 
     return moves
-
-
-@dataclass
-class ChangeSet:
-    to_add: List[Path]
-    to_update: List[str]
-    to_delete: List[str]
-    checksums: Dict[str, str]
 
 
 def detect_changes(

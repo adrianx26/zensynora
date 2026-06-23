@@ -66,6 +66,7 @@ def find_paths(
         max_hops: Edge budget. Paths longer than this are not explored.
         max_paths: Stop once we've collected this many paths.
         relation_filter: If set, only edges of these types are followed.
+        db_path: Optional custom DB path. If None, uses the default per-user path.
 
     Returns:
         Up to ``max_paths`` distinct simple paths, sorted shortest-first.
@@ -163,6 +164,7 @@ def shortest_path(
     user_id: str = "default",
     max_hops: int = 3,
     relation_filter: Optional[Set[str]] = None,
+    db_path: Optional[Path] = None,
 ) -> Optional[GraphPath]:
     """Convenience: return the single shortest path or None."""
     paths = find_paths(
@@ -172,5 +174,6 @@ def shortest_path(
         max_hops=max_hops,
         max_paths=1,
         relation_filter=relation_filter,
+        db_path=db_path,
     )
     return paths[0] if paths else None

@@ -1,4 +1,4 @@
-﻿%%{init: {'theme': 'base', 'themeVariables': { 'background': '#0a0e14', 'primaryColor': '#131924', 'primaryTextColor': '#cbd5e1', 'primaryBorderColor': '#22d3ee', 'lineColor': '#64748b', 'secondaryColor': '#0f141d', 'tertiaryColor': '#0a0e14', 'clusterBkg': 'rgba(15,20,29,0.5)', 'clusterBorder': '#2a3543', 'edgeLabelBackground': '#0f141d', 'nodeBorder': '#22d3ee', 'mainBkg': '#131924', 'titleColor': '#22d3ee' }}}%%
+﻿﻿%%{init: {'theme': 'base', 'themeVariables': { 'background': '#0a0e14', 'primaryColor': '#131924', 'primaryTextColor': '#cbd5e1', 'primaryBorderColor': '#22d3ee', 'lineColor': '#64748b', 'secondaryColor': '#0f141d', 'tertiaryColor': '#0a0e14', 'clusterBkg': 'rgba(15,20,29,0.5)', 'clusterBorder': '#2a3543', 'edgeLabelBackground': '#0f141d', 'nodeBorder': '#22d3ee', 'mainBkg': '#131924', 'titleColor': '#22d3ee' }}}%%
 flowchart TB
     classDef gateway fill:#131924,stroke:#22d3ee,color:#cbd5e1,stroke-width:1.5px
     classDef auth fill:#131924,stroke:#22d3ee,color:#cbd5e1,stroke-width:1.5px
@@ -47,13 +47,12 @@ flowchart TB
     subgraph Storage [Storage]
         Mem[Memory<br/>per-tenant]
         KB[KnowledgeDB<br/>FTS5 + executor]
-        KB_Sub[KnowledgeDB internals]
-        KB_Sub --> Aliases[EntityAliases]
-        KB_Sub --> Backlinks[Backlinks]
-        KB_Sub --> MetaSearch[Metadata Search]
-        KB_Sub --> Sync[Sync Engine<br/>circuit breaker + .bmignore]
         Vec[Vector store<br/>memory/sqlite/qdrant]
         Cache[BaseTTLCache]
+        KB --> Aliases[EntityAliases]
+        KB --> Backlinks[Backlinks]
+        KB --> MetaSearch[Metadata Search]
+        KB --> Sync[Sync Engine<br/>circuit breaker + .bmignore]
     end
 
     subgraph Tools [Tools & Capabilities]

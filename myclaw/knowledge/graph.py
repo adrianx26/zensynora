@@ -31,6 +31,7 @@ def get_related_entities(
         user_id: User ID for isolation
         depth: How many hops to traverse (1 = direct neighbors)
         relation_type: Optional filter by relation type
+        db_path: Optional custom DB path. If None, uses the default per-user path.
         
     Returns:
         List of dicts with entity info and path
@@ -95,6 +96,7 @@ def get_entity_network(
         permalink: Starting entity permalink
         user_id: User ID for isolation
         max_depth: Maximum traversal depth
+        db_path: Optional custom DB path. If None, uses the default per-user path.
         
     Returns:
         Dict with nodes and edges for graph visualization
@@ -201,6 +203,7 @@ def find_path(
         to_permalink: Target entity
         user_id: User ID for isolation
         max_depth: Maximum search depth
+        db_path: Optional custom DB path. If None, uses the default per-user path.
         
     Returns:
         List of (relation_type, permalink) tuples forming the path, or None
@@ -249,6 +252,7 @@ def get_central_entities(user_id: str = "default", limit: int = 10, db_path: Opt
     Args:
         user_id: User ID for isolation
         limit: Number of entities to return
+        db_path: Optional custom DB path. If None, uses the default per-user path.
         
     Returns:
         List of entities with connection counts
@@ -256,15 +260,21 @@ def get_central_entities(user_id: str = "default", limit: int = 10, db_path: Opt
     with KnowledgeDB(user_id, db_path=db_path) as db:
         # Count outgoing and incoming relations
         conn = db._get_connection()
+        # The original query with subselects can be slow on large datasets.
+        # This version uses LEFT JOINs on pre-aggregated counts for better performance.
         rows = conn.execute("""
-            SELECT 
+            SELECT
                 e.id,
                 e.permalink,
                 e.name,
-                (SELECT COUNT(*) FROM relations WHERE from_entity_id = e.id) as out_degree,
-                (SELECT COUNT(*) FROM relations WHERE to_entity_id = e.id) as in_degree
+                COALESCE(out_counts.c, 0) as out_degree,
+                COALESCE(in_counts.c, 0) as in_degree
             FROM entities e
-            ORDER BY (out_degree + in_degree) DESC
+            LEFT JOIN (SELECT from_entity_id, COUNT(*) as c FROM relations GROUP BY from_entity_id) out_counts
+                ON e.id = out_counts.from_entity_id
+            LEFT JOIN (SELECT to_entity_id, COUNT(*) as c FROM relations GROUP BY to_entity_id) in_counts
+                ON e.id = in_counts.to_entity_id
+            ORDER BY (COALESCE(out_counts.c, 0) + COALESCE(in_counts.c, 0)) DESC
             LIMIT ?
         """, (limit,)).fetchall()
         
@@ -295,7 +305,7 @@ def build_context(
         user_id: User ID for isolation
         depth: How many hops to include
         include_observations: Whether to include observations
-        db_path: Optional custom DB path
+        db_path: Optional custom DB path. If None, uses the default per-user path.
 
     Returns:
         Formatted context string for LLM prompts
@@ -317,7 +327,7 @@ def build_context(
         lines.append("")
 
     # Get related entities
-    related = get_related_entities(permalink, user_id, depth)
+    related = get_related_entities(permalink, user_id, depth, db_path=db_path)
 
     if related:
         lines.append("## Related Knowledge")
@@ -339,7 +349,7 @@ def build_context(
         if include_observations and 1 in by_depth:
             from .storage import _batch_read_notes
             depth1_perms = [r['permalink'] for r in by_depth[1]]
-            depth1_notes = _batch_read_notes(depth1_perms, user_id)
+            depth1_notes = _batch_read_notes(depth1_perms, user_id, db_path=db_path)
             depth1_notes_by_permalink = {n.permalink: n for n in depth1_notes}
 
         for d in sorted(by_depth.keys()):
@@ -367,7 +377,7 @@ def get_backlinks(permalink: str, user_id: str = "default", db_path: Optional[Pa
     Args:
         permalink: Target entity permalink
         user_id: User ID for isolation
-        db_path: Optional custom DB path
+        db_path: Optional custom DB path. If None, uses the default per-user path.
 
     Returns:
         List of dicts with entity info and relation type
@@ -377,11 +387,16 @@ def get_backlinks(permalink: str, user_id: str = "default", db_path: Optional[Pa
         if not entity:
             return []
         backlink_entities = db.get_backlinks(entity.id)
+        if not backlink_entities:
+            return []
 
         results = []
+        # Batch fetch all relations from the backlink entities to avoid N+1 queries.
+        backlink_ids = [bl.id for bl in backlink_entities]
+        relations_map = db.get_relations_from_many(backlink_ids)
+
         for bl_entity in backlink_entities:
-            relations = db.get_relations_from(bl_entity.id)
-            for rel_type, target_permalink, _ in relations:
+            for rel_type, target_permalink, _ in relations_map.get(bl_entity.id, []):
                 if target_permalink == permalink:
                     results.append({
                         "permalink": bl_entity.permalink,
@@ -403,11 +418,11 @@ def search_by_metadata(
     Args:
         filters: Dict of metadata key -> value to match
         user_id: User ID for isolation
-        db_path: Optional custom DB path
+        db_path: Optional custom DB path. If None, uses the default per-user path.
 
     Returns:
         List of matching Note objects
     """
     with KnowledgeDB(user_id, db_path=db_path) as db:
         entities = db.search_by_metadata(filters)
-    return _batch_read_notes([e.permalink for e in entities], user_id)
+    return _batch_read_notes([e.permalink for e in entities], user_id, db_path=db_path)

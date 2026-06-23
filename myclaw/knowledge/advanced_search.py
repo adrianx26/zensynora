@@ -152,7 +152,7 @@ def search_advanced(
         user_id: User ID for isolation
         filters: Optional SearchFilters
         limit: Max results
-        db_path: Optional custom DB path
+        db_path: Optional custom DB path. If None, uses the default per-user path.
 
     Returns:
         List of SearchResult sorted by combined_score descending

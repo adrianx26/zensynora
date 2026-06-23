@@ -8,7 +8,6 @@
 # ── Config ────────────────────────────────────────────────────────────────────
 $REMOTE_HOST = "192.168.8.110"
 $REMOTE_USER = "adi"
-$REMOTE_PASS = "Alpin2003@"
 $REMOTE_DIR  = "/home/adi/zensynora"
 $LOCAL_DIR   = $PSScriptRoot   # directory containing this script
 
@@ -25,7 +24,6 @@ header "1. Checking tools"
 
 $hasSSH  = (Get-Command ssh  -ErrorAction SilentlyContinue) -ne $null
 $hasSCP  = (Get-Command scp  -ErrorAction SilentlyContinue) -ne $null
-$hasPlink = (Get-Command plink -ErrorAction SilentlyContinue) -ne $null
 
 if (-not $hasSSH)  { err "ssh not found. Please install OpenSSH (Settings > Optional Features > OpenSSH Client)." }
 if (-not $hasSCP)  { err "scp not found. Please install OpenSSH." }
@@ -33,65 +31,39 @@ success "ssh and scp are available."
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 2: Accept host key automatically using StrictHostKeyChecking=no
-#         and write password via temporary expect-style approach using plink
-#         or use a temporary SSH config.
 # ─────────────────────────────────────────────────────────────────────────────
 header "2. Preparing SSH options"
 
 $SSH_OPTS = @(
     "-o", "StrictHostKeyChecking=no",
     "-o", "UserKnownHostsFile=/dev/null",
-    "-o", "LogLevel=ERROR"
+    "-o", "LogLevel=ERROR",
+    "-o", "PasswordAuthentication=no" # Enforce key-based auth
 )
 
 # Build SSH_OPTS into a flat string for scp/ssh invocation
 $SSH_OPTS_STR = $SSH_OPTS -join " "
 
 info "SSH options: $SSH_OPTS_STR"
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Step 3: Use sshpass if available (Linux/WSL), otherwise use Plink (PuTTY),
-#         otherwise fall back to prompt-based SSH (user types password manually).
-# ─────────────────────────────────────────────────────────────────────────────
-header "3. Detecting password-passing method"
-
-# Check if we're in WSL context (unlikely for PowerShell, but just in case)
-$usePlink    = $hasPlink
-$useSSHPASS  = $false
-
-if ($usePlink) {
-    info "plink (PuTTY) found — will use plink for automated password login."
-} else {
-    info "No automated password tool found."
-    info "SSH will prompt for password. Enter '$REMOTE_PASS' when asked."
-}
+info "This script now requires SSH key-based authentication."
 
 # Helper: run a remote command via SSH (prompts password if no plink)
 function Invoke-SSH {
     param([string]$cmd)
-    if ($usePlink) {
-        plink -ssh "$REMOTE_USER@$REMOTE_HOST" -pw $REMOTE_PASS -batch $cmd
-    } else {
-        ssh @SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" $cmd
-    }
+    ssh @SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" $cmd
 }
 
 # Helper: copy local path to remote via SCP
 function Invoke-SCP-ToRemote {
     param([string]$localPath, [string]$remotePath)
-    if ($usePlink) {
-        pscp @SSH_OPTS -pw $REMOTE_PASS -r $localPath "${REMOTE_USER}@${REMOTE_HOST}:${remotePath}"
-    } else {
-        scp @SSH_OPTS -r $localPath "${REMOTE_USER}@${REMOTE_HOST}:${remotePath}"
-    }
+    scp @SSH_OPTS -r $localPath "${REMOTE_USER}@${REMOTE_HOST}:${remotePath}"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 4: Test SSH connectivity
 # ─────────────────────────────────────────────────────────────────────────────
-header "4. Testing SSH connectivity"
+header "3. Testing SSH connectivity"
 info "Connecting to ${REMOTE_USER}@${REMOTE_HOST}..."
-info "Password: $REMOTE_PASS"
 info ""
 
 try {
@@ -108,7 +80,7 @@ try {
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 5: Create remote directory & transfer project files
 # ─────────────────────────────────────────────────────────────────────────────
-header "5. Copying project files to remote"
+header "4. Copying project files to remote"
 
 # Create remote directory
 info "Creating remote directory: $REMOTE_DIR"
@@ -129,8 +101,11 @@ if ($hasRsync) {
     rsync -avz --progress @excludeArgs -e "ssh $SSH_OPTS_STR" "$LOCAL_DIR/" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
 } else {
     info "rsync not found — using scp (full copy)."
-    # scp doesn't support exclude, so we copy the whole dir
-    Invoke-SCP-ToRemote "$LOCAL_DIR" "/home/adi/"
+    info "Using tar to create an archive with exclusions and piping over SSH."
+    $tarExcludeArgs = $excludes | ForEach-Object { "--exclude=$_" }
+    $tarCmd = "tar @tarExcludeArgs -czf - -C ""$LOCAL_DIR"" ."
+    $remoteCmd = "cd $REMOTE_DIR && tar -xzf -"
+    Invoke-Command -ScriptBlock { & $tarCmd } | ssh @SSH_OPTS "$REMOTE_USER@$REMOTE_HOST" $remoteCmd
 }
 
 success "Project files transferred."
@@ -138,7 +113,7 @@ success "Project files transferred."
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 6: Run the installer on the remote machine
 # ─────────────────────────────────────────────────────────────────────────────
-header "6. Running install.sh on remote machine"
+header "5. Running install.sh on remote machine"
 
 info "Making install.sh executable..."
 Invoke-SSH "chmod +x $REMOTE_DIR/install.sh"
@@ -154,7 +129,7 @@ success "Installer completed."
 # ─────────────────────────────────────────────────────────────────────────────
 # Step 7: Verify the deployment
 # ─────────────────────────────────────────────────────────────────────────────
-header "7. Verifying deployment"
+header "6. Verifying deployment"
 
 $verifyOutput = Invoke-SSH "cd $REMOTE_DIR && source venv/bin/activate && python cli.py --help 2>&1 | head -20"
 Write-Host $verifyOutput

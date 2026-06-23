@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Performance Optimizations**:
+  - Implemented batch fetching for relations in the knowledge graph (`get_relations_from_many`) to fix N+1 query problems.
+  - Optimized `get_central_entities` query in the knowledge graph using `LEFT JOIN`s instead of slower subqueries.
+  - Optimized full knowledge base sync (`force=True`) to use a single `DELETE` transaction via `clear_all_data()`, significantly speeding up full resyncs.
+
+### Changed
+- **Refactored Knowledge Sync**: The change detection logic in `myclaw/knowledge/sync.py` was refactored to be more efficient, avoiding redundant file path lookups during updates by passing file paths directly in the `ChangeSet`.
+- **Refactored Session Tools**: Synchronous file I/O operations in `myclaw/tools/session.py` (`update_user_profile`, `get_user_profile`) were converted to be fully asynchronous using `asyncio.to_thread` to prevent blocking the event loop.
+
+---
+
 ### Phase 6.3 — Scheduler reliability layer (2026-05-06)
 
 `AsyncScheduler` previously caught exceptions, logged them, and moved on —
