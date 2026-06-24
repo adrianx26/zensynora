@@ -161,7 +161,41 @@ def start(config):
         elif config.channels.whatsapp.enabled:
             WhatsAppChannel(config, registry).run()
         else:
-            print("No channel is active. Run `python cli.py agent` for console chat.")
+            # No messaging channel configured — fall back to interactive console
+            logger.info("No messaging channel enabled. Falling back to interactive console.")
+            print("\n⚠️  No messaging channel (Telegram/WhatsApp) is configured.")
+            print("    Falling back to interactive console chat mode.\n")
+            print("    To configure a channel, run: zensynora onboard")
+            print("    Or edit ~/.myclaw/config.json\n")
+
+            agent_names = ", ".join(registry.keys())
+
+            async def _console_fallback():
+                async with registry["default"]:
+                    print(f"💬 ZenSynora console — agents: {agent_names}")
+                    print("   Use @agentname to address a specific agent. Type 'exit' to quit.\n")
+                    while True:
+                        try:
+                            msg = await asyncio.to_thread(input, "You: ")
+                        except (EOFError, KeyboardInterrupt):
+                            print("\nBye!")
+                            break
+                        if msg.strip().lower() in ["exit", "quit"]:
+                            break
+
+                        if msg.startswith("@"):
+                            parts = msg.split(None, 1)
+                            name = parts[0][1:]
+                            text = parts[1] if len(parts) > 1 else ""
+                            target_agent = registry.get(name) or registry["default"]
+                        else:
+                            target_agent = registry["default"]
+                            text = msg
+
+                        response = await target_agent.think(text)
+                        print("Claw:", response)
+
+            loop.run_until_complete(_console_fallback())
     finally:
         print("\nShutting down global ThreadPoolExecutor gracefully...")
         # Use shutdown(wait=False) to avoid blocking the event loop

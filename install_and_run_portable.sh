@@ -55,8 +55,6 @@ if [ $? -ne 0 ]; then
     echo "ERROR: Failed to install dependencies from pyproject.toml."
     exit 1
 fi
-# Explicitly install requests, as it seems to be missing from pyproject.toml
-python -m pip install --quiet requests
 echo "Dependencies are up to date."
 
 # --- Set Environment Variables for Portability ---

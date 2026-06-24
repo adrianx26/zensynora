@@ -51,3 +51,34 @@ def check_system_health() -> str:
 
 def get_health_report() -> str:
     return "Health Report:\n- CPU Load: Normal\n- Memory Usage: Normal\n- Disk Space: OK\n- Connectivity: OK"
+
+
+class MedicAgent:
+    """
+    MedicAgent - A class-based wrapper around the medic agent's health monitoring tools.
+    Instantiated by the gateway on startup to perform system health checks.
+    """
+
+    def scan_system(self) -> str:
+        """
+        Run a full system scan: memory usage + overall health status.
+
+        Returns:
+            str: A combined health report string.
+        """
+        memory_status = check_memory_usage()
+        health_status = check_system_health()
+        report = get_health_report()
+        return f"{memory_status}\n{health_status}\n{report}"
+
+    def check_memory(self, threshold_percent: float = 85.0) -> str:
+        """Delegate to the module-level check_memory_usage function."""
+        return check_memory_usage(threshold_percent)
+
+    def health_status(self) -> str:
+        """Delegate to the module-level check_system_health function."""
+        return check_system_health()
+
+    def health_report(self) -> str:
+        """Delegate to the module-level get_health_report function."""
+        return get_health_report()

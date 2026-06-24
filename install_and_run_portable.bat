@@ -42,8 +42,6 @@ if %errorlevel% neq 0 (
     pause
     exit /b 1
 )
-:: Explicitly install requests, as it seems to be missing from pyproject.toml
-python -m pip install --quiet requests
 echo Dependencies are up to date.
 
 :: --- Set Environment Variables for Portability ---
@@ -83,9 +81,14 @@ echo All application data will be stored in: %DATA_PATH%
 echo Press Ctrl+C to exit.
 echo.
 
-:: Execute zensynora, passing all script arguments to it
+:: Execute zensynora, passing all script arguments to it.
+:: If no arguments are provided, default to 'gateway' to start the messaging bot.
 :: We call the module directly to avoid potential issues with the .exe wrapper on portable drives.
-"%PYTHON_EXEC%" -m myclaw.cli %*
+if "%~1"=="" (
+    "%PYTHON_EXEC%" -m myclaw.cli gateway
+) else (
+    "%PYTHON_EXEC%" -m myclaw.cli %*
+)
 
 echo.
 echo ZenSynora has exited.

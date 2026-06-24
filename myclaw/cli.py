@@ -2,6 +2,7 @@ import sys
 import asyncio
 import logging
 from pathlib import Path
+from typing import Optional
 import click
 from . import init_app
 from .config import load_config
