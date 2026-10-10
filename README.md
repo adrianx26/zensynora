@@ -121,6 +121,10 @@ chmod +x install.sh
 ./install.sh --no-docker
 ```
 
+The installer reads core Python dependencies from the repository's
+`requirements.txt`. Optional features are offered separately; choosing the
+Playwright browser tools also downloads Chromium and may take additional time.
+
 Use `./install.sh` without `--no-docker` to allow the script to offer Docker
 when Docker and Compose are available. To recreate an invalid or outdated
 virtual environment without a prompt, run:
