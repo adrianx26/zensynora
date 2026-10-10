@@ -517,20 +517,32 @@ else
     skip "Virtual environment exists at $VENV_DIR"
 fi
 
+# Ensure pip is available in the virtual environment before using it.
+VENV_PYTHON="$VENV_DIR/bin/python"
+if [[ "$DRY_RUN" == "true" ]]; then
+    dry_run "$VENV_PYTHON -m pip --version (bootstrap with ensurepip if unavailable)"
+else
+    if ! "$VENV_PYTHON" -m pip --version >/dev/null 2>&1; then
+        info "pip is missing from the virtual environment. Bootstrapping with ensurepip..."
+        "$VENV_PYTHON" -m ensurepip --upgrade || error "pip is missing and could not be bootstrapped with ensurepip."
+    fi
+    "$VENV_PYTHON" -m pip --version >/dev/null 2>&1 || error "pip is unavailable in the virtual environment."
+fi
+
 # Upgrade core packaging tools
-run "$VENV_DIR/bin/pip" install --quiet --upgrade pip setuptools wheel
+run "$VENV_PYTHON" -m pip install --quiet --upgrade pip setuptools wheel
 
 # ── 4. CORE PYTHON DEPENDENCIES ──────────────────────────────────────────────
 header "4. Core Python dependencies"
 
 if [[ -f "$SCRIPT_DIR/requirements.txt" ]]; then
     info "Installing dependencies from requirements.txt..."
-    run "$VENV_DIR/bin/pip" install --quiet -r "$SCRIPT_DIR/requirements.txt"
+    run "$VENV_PYTHON" -m pip install --quiet -r "$SCRIPT_DIR/requirements.txt"
     success "Dependencies installed from requirements.txt"
 else
     warn "requirements.txt not found. Attempting pyproject.toml install..."
     if [[ -f "$SCRIPT_DIR/pyproject.toml" ]]; then
-        run "$VENV_DIR/bin/pip" install --quiet -e "$SCRIPT_DIR"
+        run "$VENV_PYTHON" -m pip install --quiet -e "$SCRIPT_DIR"
         success "Package installed in editable mode"
     else
         error "No requirements.txt or pyproject.toml found."
@@ -547,7 +559,7 @@ fi
 if [[ -f "$SCRIPT_DIR/pyproject.toml" ]]; then
     if ! "$VENV_DIR/bin/python" -c "import myclaw" 2>/dev/null; then
         info "Installing ZenSynora package in editable mode..."
-        run "$VENV_DIR/bin/pip" install --quiet -e "$SCRIPT_DIR"
+        run "$VENV_PYTHON" -m pip install --quiet -e "$SCRIPT_DIR"
     fi
 fi
 
@@ -555,10 +567,10 @@ fi
 if [[ "$SKIP_OPTIONAL" == "false" ]]; then
     header "5. Optional LLM SDKs"
     if prompt_yes "  Install Anthropic Claude SDK?"; then
-        run "$VENV_DIR/bin/pip" install --quiet anthropic
+        run "$VENV_PYTHON" -m pip install --quiet anthropic
     fi
     if prompt_yes "  Install Google Gemini SDK?"; then
-        run "$VENV_DIR/bin/pip" install --quiet google-generativeai
+        run "$VENV_PYTHON" -m pip install --quiet google-generativeai
     fi
 fi
 
@@ -571,14 +583,14 @@ if [[ "$SKIP_OPTIONAL" == "false" ]]; then
 
     # OpenTelemetry tracing — Sprint 2 module + Sprint 10 wiring
     if prompt_yes "  Install OpenTelemetry tracing SDK ([tracing])?"; then
-        run "$VENV_DIR/bin/pip" install --quiet \
+        run "$VENV_PYTHON" -m pip install --quiet \
             "opentelemetry-api>=1.20" "opentelemetry-sdk>=1.20" "opentelemetry-exporter-otlp>=1.20"
         success "Tracing extras installed. Enable with ZENSYNORA_TRACING_ENABLED=true."
     fi
 
     # Playwright browser tools — Sprint 3
     if prompt_yes "  Install Playwright headless browser tools ([browser])?"; then
-        run "$VENV_DIR/bin/pip" install --quiet "playwright>=1.42"
+        run "$VENV_PYTHON" -m pip install --quiet "playwright>=1.42"
         info "Installing Playwright Chromium (large download, can take a minute)…"
         run "$VENV_DIR/bin/playwright" install chromium || warn "Playwright Chromium install non-zero"
         success "Browser tools ready."
@@ -586,28 +598,28 @@ if [[ "$SKIP_OPTIONAL" == "false" ]]; then
 
     # Jinja2 prompt templates — Sprint 3
     if prompt_yes "  Install Jinja2 for prompt templates ([prompts])?"; then
-        run "$VENV_DIR/bin/pip" install --quiet "jinja2>=3.1"
+        run "$VENV_PYTHON" -m pip install --quiet "jinja2>=3.1"
     fi
 
     # JSON-schema validation — Sprint 3 alternative to Pydantic
     if prompt_yes "  Install jsonschema for structured-output validation ([jsonschema])?"; then
-        run "$VENV_DIR/bin/pip" install --quiet "jsonschema>=4.21"
+        run "$VENV_PYTHON" -m pip install --quiet "jsonschema>=4.21"
     fi
 
     # Qdrant vector backend — Sprint 4
     if prompt_yes "  Install Qdrant client for the vector store ([qdrant])?"; then
-        run "$VENV_DIR/bin/pip" install --quiet "qdrant-client>=1.7"
+        run "$VENV_PYTHON" -m pip install --quiet "qdrant-client>=1.7"
         info "Run a Qdrant server with: docker run -p 6333:6333 qdrant/qdrant"
     fi
 
     # JWT verification + OAuth — Sprint 6
     if prompt_yes "  Install PyJWT for OAuth/JWT auth ([auth])?"; then
-        run "$VENV_DIR/bin/pip" install --quiet "PyJWT[crypto]>=2.8"
+        run "$VENV_PYTHON" -m pip install --quiet "PyJWT[crypto]>=2.8"
     fi
 
     # Discord channel — Sprint 6
     if prompt_yes "  Install discord.py for the Discord channel ([discord])?"; then
-        run "$VENV_DIR/bin/pip" install --quiet "discord.py>=2.3"
+        run "$VENV_PYTHON" -m pip install --quiet "discord.py>=2.3"
     fi
 
     # PyYAML — Sprint 12 agent registry YAML loader
@@ -616,7 +628,7 @@ if [[ "$SKIP_OPTIONAL" == "false" ]]; then
     # back to the embedded literal at runtime.
     if ! "$VENV_DIR/bin/python" -c "import yaml" 2>/dev/null; then
         info "Installing PyYAML (required for the agent registry data file)…"
-        run "$VENV_DIR/bin/pip" install --quiet "pyyaml>=6.0"
+        run "$VENV_PYTHON" -m pip install --quiet "pyyaml>=6.0"
     fi
 fi
 
@@ -638,7 +650,7 @@ fi
 if [[ "$SKIP_OPTIONAL" == "false" ]]; then
     header "6.5 Redis (optional)"
     if prompt_yes "  Install Redis Python client for multi-worker state sharing?"; then
-        run "$VENV_DIR/bin/pip" install --quiet "redis>=4.0"
+        run "$VENV_PYTHON" -m pip install --quiet "redis>=4.0"
         success "redis>=4.0 installed."
         info "To enable: set ZEN_REDIS_URL=redis://localhost:6379/0"
     fi

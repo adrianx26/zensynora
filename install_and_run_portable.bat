@@ -33,10 +33,28 @@ if not exist "%PYTHON_EXEC%" (
 :: Activate the virtual environment
 call "%VENV_PATH%\Scripts\activate.bat"
 
+:: Ensure pip is available before installing or updating dependencies
+"%PYTHON_EXEC%" -m pip --version >nul 2>&1
+if errorlevel 1 (
+    echo pip is missing from the virtual environment. Bootstrapping with ensurepip...
+    "%PYTHON_EXEC%" -m ensurepip --upgrade
+    if errorlevel 1 (
+        echo ERROR: pip is missing and could not be bootstrapped with ensurepip.
+        pause
+        exit /b 1
+    )
+)
+"%PYTHON_EXEC%" -m pip --version >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: pip is unavailable in the virtual environment.
+    pause
+    exit /b 1
+)
+
 :: --- Install/Update Dependencies ---
 echo Checking and installing/updating dependencies...
-python -m pip install --upgrade --quiet pip
-python -m pip install --quiet -e "%APP_PATH%"
+"%PYTHON_EXEC%" -m pip install --upgrade --quiet pip
+"%PYTHON_EXEC%" -m pip install --quiet -e "%APP_PATH%"
 if %errorlevel% neq 0 (
     echo ERROR: Failed to install dependencies from pyproject.toml.
     pause

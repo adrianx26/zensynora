@@ -47,10 +47,23 @@ fi
 # Activate the virtual environment for this script's session
 source "$VENV_PATH/bin/activate"
 
+# Ensure pip is available before installing or updating dependencies.
+if ! "$PYTHON_EXEC" -m pip --version >/dev/null 2>&1; then
+    echo "pip is missing from the virtual environment. Bootstrapping with ensurepip..."
+    if ! "$PYTHON_EXEC" -m ensurepip --upgrade; then
+        echo "ERROR: pip is missing and could not be bootstrapped with ensurepip."
+        exit 1
+    fi
+fi
+if ! "$PYTHON_EXEC" -m pip --version >/dev/null 2>&1; then
+    echo "ERROR: pip is unavailable in the virtual environment."
+    exit 1
+fi
+
 # --- Install/Update Dependencies ---
 echo "Checking and installing/updating dependencies..."
-python -m pip install --upgrade --quiet pip
-python -m pip install --quiet -e "$APP_PATH"
+"$PYTHON_EXEC" -m pip install --upgrade --quiet pip
+"$PYTHON_EXEC" -m pip install --quiet -e "$APP_PATH"
 if [ $? -ne 0 ]; then
     echo "ERROR: Failed to install dependencies from pyproject.toml."
     exit 1

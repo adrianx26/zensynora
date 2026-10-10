@@ -1,8 +1,10 @@
 import pytest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch, MagicMock, AsyncMock
 import subprocess
 import httpx
+import myclaw.backends.hardware as hardware
 import myclaw.tools
 
 
@@ -79,6 +81,22 @@ def test_shell_allowed(mock_workspace):
 def test_shell_timeout():
     with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="ls", timeout=30)):
         assert "Error: Command timed out after 30 seconds" == myclaw.tools.shell("ls")
+
+
+def test_windows_memory_metrics_skip_missing_wmic(monkeypatch):
+    monkeypatch.setattr(hardware.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(hardware.shutil, "which", lambda name: None)
+    monkeypatch.setattr(
+        hardware.psutil,
+        "virtual_memory",
+        lambda: SimpleNamespace(total=16 * 1024**3, available=8 * 1024**3, percent=50),
+    )
+
+    metrics = hardware._get_memory_metrics()
+
+    assert metrics["type"] == "Unknown"
+    assert metrics["total_gb"] == 16.0
+    assert metrics["available_gb"] == 8.0
 
 
 def test_read_file_success(mock_workspace):

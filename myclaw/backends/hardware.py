@@ -5,15 +5,31 @@ Collects detailed system metrics for CPU, GPU, RAM, NPU, and Network.
 
 import os
 import platform
+import shutil
 import psutil
 import logging
 import subprocess
 import json
 import cpuinfo
-import GPUtil
+try:
+    import GPUtil
+except Exception:
+    GPUtil = None
 from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
+
+
+def _safe_run_command(command: List[str]) -> str:
+    """Run a command without shelling out and return stdout safely."""
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, check=False)
+        if completed.returncode == 0:
+            return completed.stdout or ""
+    except (OSError, ValueError):
+        return ""
+    return ""
+
 
 def get_system_metrics() -> Dict[str, Any]:
     """Collect all available system hardware metrics."""
@@ -61,19 +77,32 @@ def _get_memory_metrics() -> Dict[str, Any]:
     """Get RAM details including type if possible."""
     mem = psutil.virtual_memory()
     mem_type = "Unknown"
-    
+
     # Try to detect memory type (OS specific)
     try:
         if platform.system() == "Windows":
-            # wmic memorychip get memorytype -> 24=DDR3, 26=DDR4, 34=DDR5 (smbios 3.0+)
-            # Often speed is a better indicator
-            cmd = "wmic memorychip get speed, manufacturer"
-            output = subprocess.check_output(cmd, shell=True).decode()
-            mem_type = f"High Speed RAM ({output.strip().splitlines()[-1].strip()})"
+            powershell = shutil.which("powershell.exe") or shutil.which("powershell")
+            wmic = shutil.which("wmic") or shutil.which("wmic.exe")
+
+            output = ""
+            if wmic:
+                output = _safe_run_command([wmic, "memorychip", "get", "speed, manufacturer"])
+            elif powershell:
+                output = _safe_run_command([
+                    powershell,
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-Command",
+                    "Get-CimInstance Win32_PhysicalMemory -ErrorAction SilentlyContinue | Select-Object -First 1 | ForEach-Object { $_.Manufacturer + ' ' + $_.Speed + 'MHz' }",
+                ])
+
+            if output:
+                lines = [line.strip() for line in output.splitlines() if line.strip()]
+                if len(lines) > 1:
+                    mem_type = f"High Speed RAM ({lines[-1]})"
         elif platform.system() == "Linux":
             # dmidecode requires sudo, often fails for non-root
-            cmd = "ls /sys/class/dmi/id/board_name"
-            if os.path.exists(cmd):
+            if os.path.exists("/sys/class/dmi/id/board_name"):
                 mem_type = "Detected"
     except Exception:
         pass
@@ -89,16 +118,17 @@ def _get_gpu_metrics() -> List[Dict[str, Any]]:
     """Get NVIDIA GPU information via GPUtil."""
     gpus_info = []
     try:
-        gpus = GPUtil.getGPUs()
-        for gpu in gpus:
-            gpus_info.append({
-                "model": gpu.name,
-                "memory_total_mb": gpu.memoryTotal,
-                "memory_used_mb": gpu.memoryUsed,
-                "temperature_c": gpu.temperature,
-                "load_pct": gpu.load * 100,
-                "driver": gpu.driver
-            })
+        if GPUtil is not None:
+            gpus = GPUtil.getGPUs()
+            for gpu in gpus:
+                gpus_info.append({
+                    "model": gpu.name,
+                    "memory_total_mb": gpu.memoryTotal,
+                    "memory_used_mb": gpu.memoryUsed,
+                    "temperature_c": gpu.temperature,
+                    "load_pct": gpu.load * 100,
+                    "driver": gpu.driver
+                })
     except Exception as e:
         logger.debug(f"GPU detection failed/skipped: {e}")
         
