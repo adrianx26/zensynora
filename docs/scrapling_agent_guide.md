@@ -20,9 +20,10 @@ Blazing fast crawls with real-time stats and streaming. Built by Web Scrapers fo
 
 ## Setup (once)
 
-Create a virtual Python environment through any way available, like `venv`, then inside the environment do:
+Create and activate a virtual Python environment first, then install Scrapling
+inside that environment:
 
-`pip install "scrapling[all]>=0.4.2"`
+`python -m pip install "scrapling[all]>=0.4.2"`
 
 Then do this to download all the browsers' dependencies:
 

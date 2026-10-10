@@ -197,7 +197,7 @@ except ImportError:
 try:
     from anthropic import AsyncAnthropic
 except ImportError:
-    raise ImportError("pip install anthropic")
+    raise ImportError("Install in a virtual environment with: python -m pip install anthropic")
 ```
 
 ---

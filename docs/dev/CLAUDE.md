@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Workflow
 
 ### Prerequisites
-- Python 3.10+
+- Python 3.11+
 - System dependencies (e.g., `git`, `curl`, `sqlite3`)
 
 ### Installation
@@ -14,14 +14,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # Clone the repository
 git clone https://github.com/adrianx26/zensynora.git
 cd zensynora
+
+# Recommended installer creates and installs into an isolated virtual environment
 chmod +x install.sh
 ./install.sh
-# or manually:
-python -m venv venv
-source venv/bin/activate   # Linux / macOS
-# venv\Scripts\activate    # Windows
-pip install -r requirements.txt
+
+# Or install manually:
+python3 -m venv .venv
+source .venv/bin/activate   # Linux / macOS
+python -m pip install -r requirements.txt
 ```
+
+On Windows PowerShell, replace the manual setup commands with
+`py -m venv .venv`, `.\.venv\Scripts\Activate.ps1`, and
+`python -m pip install -r requirements.txt`. Do not install packages into the
+OS-managed Python or bypass PEP 668 with `--break-system-packages`.
 
 ### Quick Start
 1. Run the onboarding wizard to generate `~/.myclaw/config.json`:
@@ -56,7 +63,7 @@ python -m pytest tests/ -v --cov=myclaw --cov-report=html
 ### Linting & Formatting
 ```bash
 # Install linting tools
-pip install flake8 black isort
+python -m pip install flake8 black isort  # Run with the virtual environment active
 # Lint the codebase
 flake8 .
 # Auto‑format with black

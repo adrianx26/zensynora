@@ -1,5 +1,7 @@
 # Core dependencies for ZenSynora plus the installer tooling.
-# For development, use `pip install -e .`
+# Manual setup: create/activate a virtual environment, then run
+# `python -m pip install -r requirements.txt`. For development, use
+# `python -m pip install -e .` inside that environment.
 
 # Packaging tool used by the installer
 pip>=24.0

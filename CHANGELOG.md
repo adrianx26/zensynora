@@ -595,7 +595,8 @@ degrade gracefully when not installed.
   not installed, every tool returns ``{"ok": False, "error": "..."}``
   without crashing — `is_browser_available()` lets dynamic-tool authors
   probe support at runtime.
-- Install: `pip install playwright && playwright install chromium`.
+- Install into an activated virtual environment:
+  `python -m pip install playwright && playwright install chromium`.
 
 #### Added — `myclaw/prompts/` — versioned prompt template registry
 - `PromptTemplate` (name, version, body, description, tags, variables,
@@ -662,7 +663,8 @@ adding tests. 93 unit tests pass on this work alone.
     `@traced` (sync), `@traced_async` (async), `is_tracing_enabled()`.
   - The OTel SDK is an **optional** dependency: when not installed every
     helper is a no-op. Enable with `ZENSYNORA_TRACING_ENABLED=true` and
-    `pip install opentelemetry-sdk opentelemetry-exporter-otlp`.
+    `python -m pip install opentelemetry-sdk opentelemetry-exporter-otlp`
+    in the activated virtual environment.
   - Defaults: service name `zensynora`, OTLP gRPC exporter; falls back to
     a console exporter if OTLP isn't installed.
   - Idempotent init (safe to call repeatedly).

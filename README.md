@@ -108,7 +108,12 @@ Command sandboxing (allow-list, newline-injection blocked, per-token re-validati
 # Clone and install with all optional features
 git clone https://github.com/adrianx26/zensynora.git
 cd zensynora
-pip install -e ".[all,dev]"
+
+# Install into a project-local virtual environment (required on Debian/Ubuntu)
+# If `venv` is unavailable on Debian/Ubuntu: sudo apt install python3-venv
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[all,dev]"
 
 # Run the interactive onboarding wizard
 zensynora onboard
@@ -129,6 +134,14 @@ MYCLAW_WORKER_POOL_SIZE=4 zensynora agent
 docker compose up --build
 ```
 
+On Windows PowerShell, create and activate the environment with
+`py -m venv .venv` and `.\.venv\Scripts\Activate.ps1`, then run the same
+`python -m pip install` command. Do not install into the OS-managed Python or
+use `--break-system-packages`; Debian/Ubuntu intentionally block system-wide
+pip installs (PEP 668). If `python3 -m venv` reports that `venv` or
+`ensurepip` is missing on Debian/Ubuntu, install `python3-venv` with apt and
+retry.
+
 For all 50+ configuration options, see the [Configuration](#configuration) section and [`.env.example`](.env.example).
 
 ---
@@ -138,16 +151,18 @@ For all 50+ configuration options, see the [Configuration](#configuration) secti
 Every advanced feature degrades gracefully when its package isn't installed (no crash, just a logged warning or a structured error response):
 
 ```bash
-pip install zensynora[tracing]      # OpenTelemetry SDK + OTLP exporter
-pip install zensynora[browser]      # Playwright headless browser tools
-pip install zensynora[prompts]      # Jinja2 templates (else string.Template)
-pip install zensynora[jsonschema]   # JSON-schema validation (else Pydantic only)
-pip install zensynora[qdrant]       # Qdrant vector backend (else SQLite)
-pip install zensynora[auth]         # PyJWT[crypto] for OAuth/JWT
-pip install zensynora[discord]      # discord.py adapter
-pip install zensynora[slack]        # slack-bolt (adapter coming next)
-pip install zensynora[all]          # Everything above
+python -m pip install 'zensynora[tracing]'      # OpenTelemetry SDK + OTLP exporter
+python -m pip install 'zensynora[browser]'      # Playwright headless browser tools
+python -m pip install 'zensynora[prompts]'      # Jinja2 templates (else string.Template)
+python -m pip install 'zensynora[jsonschema]'   # JSON-schema validation (else Pydantic only)
+python -m pip install 'zensynora[qdrant]'       # Qdrant vector backend (else SQLite)
+python -m pip install 'zensynora[auth]'         # PyJWT[crypto] for OAuth/JWT
+python -m pip install 'zensynora[discord]'      # discord.py adapter
+python -m pip install 'zensynora[slack]'        # slack-bolt (adapter coming next)
+python -m pip install 'zensynora[all]'          # Everything above
 ```
+
+Run these commands with the project virtual environment activated.
 
 | Feature | Optional package | Without it |
 |---|---|---|
@@ -185,8 +200,12 @@ Detailed module map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Visual flow
 git clone https://github.com/adrianx26/zensynora.git
 cd zensynora
 
+# Create and activate a virtual environment before installing packages
+python3 -m venv .venv
+source .venv/bin/activate
+
 # Core + all LLM providers + every optional feature
-pip install -e ".[all]"
+python -m pip install -e ".[all]"
 
 # Run the setup wizard
 zensynora onboard
@@ -529,7 +548,9 @@ Contributions are welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, c
 
 ```bash
 # Install dev dependencies
-pip install -e ".[dev]"
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
 pre-commit install
 
 # Run tests

@@ -41,15 +41,21 @@ Thank you for your interest in contributing to ZenSynora (MyClaw)! This document
 ### Install in Development Mode
 ```bash
 # Create a virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+# If `venv` is unavailable on Debian/Ubuntu: sudo apt install python3-venv
+python3 -m venv .venv
+source .venv/bin/activate  # Linux / macOS
 
 # Install in editable mode
-pip install -e .
+python -m pip install -e .
 
 # Verify installation
 zensynora --help
 ```
+
+On Windows PowerShell, use `py -m venv .venv`, activate with
+`.\.venv\Scripts\Activate.ps1`, then run `python -m pip install -e .`.
+Always install into this virtual environment; do not use system pip or
+`--break-system-packages` on Debian/Ubuntu.
 
 ### Environment Configuration
 ```bash
@@ -111,7 +117,7 @@ zensynora/
 We use `pre-commit` hooks to enforce code quality automatically. Install once:
 
 ```bash
-pip install -e ".[dev]"      # Installs ruff, black, isort, pre-commit, pytest
+python -m pip install -e ".[dev]"  # Run inside the activated .venv
 pre-commit install           # Activates git hooks
 pre-commit run --all-files   # Run all checks manually (optional)
 ```

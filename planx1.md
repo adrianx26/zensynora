@@ -34,7 +34,7 @@
 | GitHub Actions (`ci.yml`) | Runs `pytest` with `--maxfail=5` but continues on failures. | Use `fail-fast: true` and limit matrix jobs to needed configurations. |
 | Dockerfile | Installs dev dependencies (`pytest`, `pre‑commit`) in production image. | Separate build stage: `builder` installs dev tools, final stage copies only runtime packages. |
 | pre‑commit | Lints whole repo each commit (e.g., `black`). | Configure `black` to run only on staged files (`--skip-string-normalization`). |
-| `install.sh` | Uses `sudo` unconditionally; fails on Windows CI runners. | Detect OS and apply sudo conditionally, or use cross‑platform `pip install -e .`. |
+| `install.sh` | Uses `sudo` unconditionally; fails on Windows CI runners. | Detect OS and apply sudo conditionally, or use a cross-platform virtual environment followed by `python -m pip install -e .`. |
 | Cache | No caching of pip wheels or npm packages, causing long CI times. | Add `actions/cache` steps for `~/.cache/pip` and `node_modules`. |
 
 ## 4️⃣ Documentation & Knowledge Graph

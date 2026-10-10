@@ -7,15 +7,19 @@ git clone https://github.com/adrianx26/zensynora.git
 cd zensynora
 
 # Create & activate virtual environment
-python -m venv venv
-source venv/bin/activate        # Linux / macOS
-# venv\Scripts\activate         # Windows
+python3 -m venv .venv
+source .venv/bin/activate       # Linux / macOS
 
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 
 # Run the onboarding wizard
 python onboard.py
 ```
+
+On Windows PowerShell, use `py -m venv .venv`, activate it with
+`.\.venv\Scripts\Activate.ps1`, and then run
+`python -m pip install -r requirements.txt`. Keep installs inside the virtual
+environment; Debian/Ubuntu system Python is externally managed (PEP 668).
 
 Edit `~/.myclaw/config.json` to configure:
 - **Telegram** — bot token + your user ID

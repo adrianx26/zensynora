@@ -108,7 +108,7 @@ gateway sends reply
 * `init_tracing(...)` — idempotent global setup; reads `ZENSYNORA_TRACING_ENABLED`.
 * `@traced` / `@traced_async` — decorators; no-op when disabled.
 * `with span("name", **attrs):` — context manager; no-op when disabled.
-* Optional dep: `opentelemetry-sdk` (`pip install zensynora[tracing]`).
+* Optional dep: `opentelemetry-sdk` (`python -m pip install 'zensynora[tracing]'`).
 
 ### `myclaw/resilience/`
 * `CircuitBreaker(name, failure_threshold, reset_timeout, ...)` — async-safe.
@@ -136,7 +136,7 @@ gateway sends reply
   `browser_fill_form`, `browser_extract_text`, `browser_wait_for`,
   `browser_close_session`.
 * Persistent contexts keyed by `session_id`; module-level pool capped at 10.
-* Optional dep: `playwright` (`pip install zensynora[browser]`).
+* Optional dep: `playwright` (`python -m pip install 'zensynora[browser]'`).
 * Returns `{"ok": False, "error": "..."}` if Playwright isn't installed —
   no crash.
 
@@ -162,7 +162,7 @@ gateway sends reply
 * `SQLiteBackend` — JSON blob storage + Python cosine. Persistent, no
   new deps. Good up to ~10–50 K vectors.
 * `QdrantBackend` — production HNSW. Optional dep
-  (`pip install zensynora[qdrant]`). Run locally with
+  (`python -m pip install 'zensynora[qdrant]'`). Run locally with
   `docker run -p 6333:6333 qdrant/qdrant`.
 * `make_backend(name, config)` — config-driven factory; falls back to
   SQLite if Qdrant requested but client missing.
@@ -175,6 +175,10 @@ gateway sends reply
 ---
 
 ## 4. Optional dependency posture
+
+Install optional packages into the activated project virtual environment;
+see the [README installation guide](../README.md#quick-start). Do not run
+these commands against Debian/Ubuntu system Python (PEP 668).
 
 Every advanced feature with an external dep degrades gracefully:
 
@@ -189,7 +193,7 @@ Every advanced feature with an external dep degrades gracefully:
 | OAuth token exchange | `httpx` (core dep, present) | n/a |
 | Discord channel | `discord.py` | `DiscordChannel.run()` raises RuntimeError |
 
-Install all extras: `pip install zensynora[all]`.
+Install all extras: `python -m pip install 'zensynora[all]'`.
 
 ---
 
