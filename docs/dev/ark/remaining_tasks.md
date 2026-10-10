@@ -193,8 +193,8 @@ Server sends: __STREAM_END__      → typing indicator removed, message finalize
 
 **Usage:**
 ```bash
-# Install prometheus-client
-pip install prometheus-client
+# Install prometheus-client in an activated virtual environment
+python -m pip install prometheus-client
 
 # Scrape metrics
 curl http://localhost:8000/metrics

@@ -442,15 +442,20 @@ flowchart TD
 
 ### Environment Variables
 
+Run these installation commands inside an activated project virtual
+environment (see the [README installation guide](../README.md#quick-start)).
+This avoids Debian/Ubuntu's PEP 668 restriction on installing into system
+Python.
+
 ```bash
 # Optional dependencies (install if needed)
-pip install watchdog              # File watching for auto-reload
-pip install sentence-transformers # Semantic cache embeddings
-pip install anthropic             # Claude provider
-pip install google-generativeai   # Gemini provider
+python -m pip install watchdog              # File watching for auto-reload
+python -m pip install sentence-transformers # Semantic cache embeddings
+python -m pip install anthropic             # Claude provider
+python -m pip install google-generativeai   # Gemini provider
 
 # Core dependencies always required
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 ### Performance Tuning

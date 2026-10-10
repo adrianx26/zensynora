@@ -159,7 +159,7 @@ The application follows several sound architectural principles:
 1. **Separation of concerns** — Agent phases (routing, context building, tool execution) are split into separate modules under `agent_internals/`.
 2. **Pluggable backends** — LLM providers via `backends/`, state store via `StateStore` ABC, rate limiter with optional Redis sync.
 3. **Defense in depth** — Sandbox validation before tool execution, tamper-evident audit logging, path traversal prevention.
-4. **Graceful degradation** — Optional dependencies gated behind `pip install zensynora[redis]` etc. Features silently disable when deps are missing rather than crashing.
+4. **Graceful degradation** — Optional dependencies gated behind installs such as `python -m pip install 'zensynora[redis]'` (inside a virtual environment). Features silently disable when deps are missing rather than crashing.
 5. **Backward compatibility** — The `_HOOKS` alias, the root-level `cli.py` wrapper, and the `onboard.py` wrapper preserve old import paths.
 
 ### 4.2 Data Flow
@@ -307,7 +307,7 @@ No `.github/workflows/` pipeline was visible at review time (the directory exist
 
 ### 8.2 Recommendations
 
-1. Add quick-start commands to README: `pip install -e . && zensynora agent`.
+1. Add quick-start commands to README: create/activate a virtual environment, then run `python -m pip install -e . && zensynora agent`.
 2. Set up `mkdocstrings` to auto-generate API reference from docstrings.
 3. Add a `docs/review01.md` (this document) as a living snapshot of codebase health.
 

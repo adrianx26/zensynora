@@ -104,11 +104,98 @@ Command sandboxing (allow-list, newline-injection blocked, per-token re-validati
 
 ## Quick Start
 
+### Install using the included scripts
+
+The universal `install.sh` script supports Linux, macOS, and Linux under
+WSL2. It installs into the repository's `venv/` directory, never into the
+OS-managed Python. On Linux, it checks for `venv`/`ensurepip` support and
+offers to install `python3-venv` on Debian/Ubuntu if that support is missing.
+If an existing `venv/` is invalid, it asks before recreating it.
+
+**Linux (including Debian/Ubuntu) and WSL2:**
+
+```bash
+# Install directly from GitHub without running git clone:
+curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-online.sh | bash
+```
+
+The bootstrap downloads the source archive into
+`~/.local/share/zensynora/source` and starts the regular `install.sh`, forwarding
+any installer options. For example, to force a traditional non-Docker install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-online.sh | bash -s -- --no-docker
+```
+
+To run the installer from a cloned checkout instead:
+
+```bash
+git clone https://github.com/adrianx26/zensynora.git
+cd zensynora
+chmod +x install.sh
+./install.sh --no-docker
+```
+
+The installer reads core Python dependencies from the repository's
+`requirements.txt`. Optional features are offered separately; choosing the
+Playwright browser tools also downloads Chromium and may take additional time.
+
+Use `./install.sh` without `--no-docker` to allow the script to offer Docker
+when Docker and Compose are available. To recreate an invalid or outdated
+virtual environment without a prompt, run:
+
+```bash
+./install.sh --no-docker --recreate-venv
+```
+
+**macOS:**
+
+```bash
+git clone https://github.com/adrianx26/zensynora.git
+cd zensynora
+chmod +x install.sh
+./install.sh --no-docker
+```
+
+**Windows:**
+
+For a standard Windows install, use WSL2 and follow the Linux commands above.
+For a native Windows portable install, use the included batch launcher from
+PowerShell:
+
+```powershell
+git clone https://github.com/adrianx26/zensynora.git zensynora-source
+New-Item -ItemType Directory -Force .\ZenSynora_Portable\app
+Copy-Item .\zensynora-source\* .\ZenSynora_Portable\app -Recurse -Force
+Copy-Item .\zensynora-source\install_and_run_portable.bat .\ZenSynora_Portable\
+Set-Location .\ZenSynora_Portable
+.\install_and_run_portable.bat
+```
+
+The native Windows launcher creates `venv/` beside the `app/` folder,
+validates an existing environment, asks before recreating a broken one, and
+stores application data in `data/`. The portable Bash launcher provides the
+same flow on Linux and macOS. These portable launchers install core package
+dependencies; use the universal installer or manual instructions below to
+select optional features.
+
+> The repository does not include a native Windows equivalent of the
+> universal `install.sh`. Do not run `install.sh` from native Command Prompt
+> or PowerShell; use WSL2, the Windows portable launcher, or the manual
+> virtual-environment setup.
+
+### Manual virtual-environment setup
+
 ```bash
 # Clone and install with all optional features
 git clone https://github.com/adrianx26/zensynora.git
 cd zensynora
-pip install -e ".[all,dev]"
+
+# Install into a project-local virtual environment (required on Debian/Ubuntu)
+# If `venv` is unavailable on Debian/Ubuntu: sudo apt install python3-venv
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[all,dev]"
 
 # Run the interactive onboarding wizard
 zensynora onboard
@@ -129,6 +216,14 @@ MYCLAW_WORKER_POOL_SIZE=4 zensynora agent
 docker compose up --build
 ```
 
+On Windows PowerShell, create and activate the environment with
+`py -m venv .venv` and `.\.venv\Scripts\Activate.ps1`, then run the same
+`python -m pip install` command. Do not install into the OS-managed Python or
+use `--break-system-packages`; Debian/Ubuntu intentionally block system-wide
+pip installs (PEP 668). If `python3 -m venv` reports that `venv` or
+`ensurepip` is missing on Debian/Ubuntu, install `python3-venv` with apt and
+retry.
+
 For all 50+ configuration options, see the [Configuration](#configuration) section and [`.env.example`](.env.example).
 
 ---
@@ -138,16 +233,18 @@ For all 50+ configuration options, see the [Configuration](#configuration) secti
 Every advanced feature degrades gracefully when its package isn't installed (no crash, just a logged warning or a structured error response):
 
 ```bash
-pip install zensynora[tracing]      # OpenTelemetry SDK + OTLP exporter
-pip install zensynora[browser]      # Playwright headless browser tools
-pip install zensynora[prompts]      # Jinja2 templates (else string.Template)
-pip install zensynora[jsonschema]   # JSON-schema validation (else Pydantic only)
-pip install zensynora[qdrant]       # Qdrant vector backend (else SQLite)
-pip install zensynora[auth]         # PyJWT[crypto] for OAuth/JWT
-pip install zensynora[discord]      # discord.py adapter
-pip install zensynora[slack]        # slack-bolt (adapter coming next)
-pip install zensynora[all]          # Everything above
+python -m pip install 'zensynora[tracing]'      # OpenTelemetry SDK + OTLP exporter
+python -m pip install 'zensynora[browser]'      # Playwright headless browser tools
+python -m pip install 'zensynora[prompts]'      # Jinja2 templates (else string.Template)
+python -m pip install 'zensynora[jsonschema]'   # JSON-schema validation (else Pydantic only)
+python -m pip install 'zensynora[qdrant]'       # Qdrant vector backend (else SQLite)
+python -m pip install 'zensynora[auth]'         # PyJWT[crypto] for OAuth/JWT
+python -m pip install 'zensynora[discord]'      # discord.py adapter
+python -m pip install 'zensynora[slack]'        # slack-bolt (adapter coming next)
+python -m pip install 'zensynora[all]'          # Everything above
 ```
+
+Run these commands with the project virtual environment activated.
 
 | Feature | Optional package | Without it |
 |---|---|---|
@@ -173,26 +270,14 @@ Detailed module map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Visual flow
 
 ---
 
-## Quick start
+## Run ZenSynora
 
-### Prerequisites
-- Python 3.11+
-- At least one LLM provider (Ollama for local, or API keys for cloud)
-
-### Install
-
-```bash
-git clone https://github.com/adrianx26/zensynora.git
-cd zensynora
-
-# Core + all LLM providers + every optional feature
-pip install -e ".[all]"
-
-# Run the setup wizard
-zensynora onboard
-```
-
-### Run
+Python 3.11+ and at least one LLM provider (Ollama locally or cloud API
+credentials) are required. After installation, activate the environment if
+you used the traditional installer or manual setup: run
+`source venv/bin/activate` for `install.sh`, or
+`source .venv/bin/activate` for the manual `.venv` setup. The Windows portable
+launcher runs the application from its own environment.
 
 | Command | Description |
 |---|---|
@@ -203,20 +288,21 @@ zensynora onboard
 
 ### Portable (USB/External Drive)
 
-ZenSynora can be run as a portable application from a USB stick or external drive. The included launcher scripts will automatically create a self-contained Python environment and store all data on the portable drive.
+For the native Windows portable layout and setup command, follow the Windows
+steps in [Install using the included scripts](#install-using-the-included-scripts).
+For Linux/macOS, put the application source in `app/`, place
+`install_and_run_portable.sh` beside it, then run:
 
-1.  **Create the folder structure** on your portable drive:
-    ```
-    /ZenSynora_Portable/
-    └── app/
-    ```
-2.  **Copy the entire ZenSynora source code** into the `app/` directory.
-3.  **Place the `install_and_run_portable.bat` and `install_and_run_portable.sh` scripts** in the root `ZenSynora_Portable/` directory.
-4.  **Run the script**:
-    -   On Windows, double-click `install_and_run_portable.bat`.
-    -   On Linux/macOS, run `chmod +x install_and_run_portable.sh && ./install_and_run_portable.sh`.
+```bash
+chmod +x install_and_run_portable.sh
+./install_and_run_portable.sh
+```
 
-The first run will install all dependencies into a `venv/` folder. All application data (profiles, knowledge, logs) will be stored in a new `data/` folder on the portable drive.
+The launcher creates and validates `venv/` next to `app/`, installs the core
+dependencies there, and keeps application data in `data/`. On Debian/Ubuntu,
+if virtual-environment support is missing, it offers to install
+`python3-venv`. If the existing portable environment is broken, it asks before
+recreating it.
 
 ### Docker
 
@@ -529,7 +615,9 @@ Contributions are welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, c
 
 ```bash
 # Install dev dependencies
-pip install -e ".[dev]"
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
 pre-commit install
 
 # Run tests

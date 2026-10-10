@@ -89,7 +89,7 @@ Goal: Port high-value patterns and capabilities from `github.com/adrianx26/memop
 | **Watch mode** | Disabled | Add optional `watchdog`-based `sync --watch`. Auto-sync on file change. Opt-in via dependency. |
 
 **Implementation notes:**
-- Make `watchdog` an optional extra: `pip install myclaw[watch]`.
+- Make `watchdog` an optional extra: `python -m pip install 'myclaw[watch]'` inside a virtual environment.
 - Use `watchdog.observers.Observer` + `PatternMatchingEventHandler`.
 - Debounce events (e.g., 500ms) to avoid thrashing on bulk saves.
 

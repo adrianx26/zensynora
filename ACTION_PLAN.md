@@ -262,7 +262,7 @@ Verified-already-fixed items (no action taken): SSH `RejectPolicy`,
     - `ssh` -- `paramiko` (already in core, keep)
   - **Remove**: `apscheduler` (unused), `speedtest-cli` (dead), `requests` (httpx covers it), `GPUtil` (unmaintained).
   - **Pin**: `numpy<2.0` until tested; relax `python-telegram-bot` exact pin.
-  - **Validation**: `pip install zensynora` installs only core deps under 50MB.
+  - **Validation**: create and activate a virtual environment, then run `python -m pip install zensynora`; this installs only core deps under 50MB.
   - **Effort**: 1 hour | **Risk**: Medium (users must update install commands)
 
 ---
@@ -333,7 +333,7 @@ Verified-already-fixed items (no action taken): SSH `RejectPolicy`,
 - [ ] **4.10 Documentation Sync**
   - Update README, architecture docs, API references to reflect:
     - New auth requirements (admin_api_key)
-    - Optional dependency installation (`pip install zensynora[openai,redis]`)
+    - Optional dependency installation inside a virtual environment (`python -m pip install 'zensynora[openai,redis]'`)
     - CORS origin configuration
     - SSH known_hosts requirement
   - **Effort**: 2 hours | **Risk**: Minimal
@@ -389,7 +389,7 @@ Week 4: 4.1 (tests) -> 4.3 (types) -> 4.5 (globals)
 - [ ] All P0 items verified with unit tests
 - [ ] Security scan (bandit, semgrep) passes with zero high/critical findings
 - [ ] pytest suite passes with >80% coverage
-- [ ] `pip install .` completes in under 30 seconds (core only)
+- [ ] `python -m pip install .` in an activated virtual environment completes in under 30 seconds (core only)
 - [ ] Agent responds to chat without RecursionError
 - [ ] Admin endpoints return 401 without valid API key
 - [ ] Shell tool rejects commands with newlines or shell metacharacters

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Virtual environment setup**: `install.sh` now checks whether Python has
+  `venv`/`ensurepip` support, offers to install Debian/Ubuntu's
+  `python3-venv` package when missing, verifies existing environments, and
+  offers to recreate invalid ones before dependency installation. Portable
+  launchers now validate existing environments and explain recovery options.
+
+### Documentation
+- Updated installation commands to use an isolated virtual environment and
+  documented the `python3-venv` repair prompt and portable launcher behavior.
+
 ### Added
 - **Performance Optimizations**:
   - Implemented batch fetching for relations in the knowledge graph (`get_relations_from_many`) to fix N+1 query problems.
@@ -595,7 +606,8 @@ degrade gracefully when not installed.
   not installed, every tool returns ``{"ok": False, "error": "..."}``
   without crashing — `is_browser_available()` lets dynamic-tool authors
   probe support at runtime.
-- Install: `pip install playwright && playwright install chromium`.
+- Install into an activated virtual environment:
+  `python -m pip install playwright && playwright install chromium`.
 
 #### Added — `myclaw/prompts/` — versioned prompt template registry
 - `PromptTemplate` (name, version, body, description, tags, variables,
@@ -662,7 +674,8 @@ adding tests. 93 unit tests pass on this work alone.
     `@traced` (sync), `@traced_async` (async), `is_tracing_enabled()`.
   - The OTel SDK is an **optional** dependency: when not installed every
     helper is a no-op. Enable with `ZENSYNORA_TRACING_ENABLED=true` and
-    `pip install opentelemetry-sdk opentelemetry-exporter-otlp`.
+    `python -m pip install opentelemetry-sdk opentelemetry-exporter-otlp`
+    in the activated virtual environment.
   - Defaults: service name `zensynora`, OTLP gRPC exporter; falls back to
     a console exporter if OTLP isn't installed.
   - Idempotent init (safe to call repeatedly).

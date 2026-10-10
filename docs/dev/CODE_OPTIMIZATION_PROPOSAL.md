@@ -477,11 +477,11 @@ def get_provider(config, provider_name: str = "ollama"):
 
 # ── Optional Dependencies ─────────────────────────────────────────────────────
 # File watching for auto-reload (config file changes)
-# Install: pip install watchdog
+# Install in an activated virtual environment: python -m pip install watchdog
 watchdog>=3.0.0
 
 # Semantic embedding for semantic cache
-# Install: pip install sentence-transformers
+# Install in an activated virtual environment: python -m pip install sentence-transformers
 sentence-transformers>=2.2.2
 
 # ── LLM Provider SDKs (Install only the ones you need) ────────────────────────

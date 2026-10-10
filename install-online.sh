@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Download a GitHub branch of ZenSynora, then run the repository's Linux installer.
+# Usage: curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-online.sh | bash
+
+set -euo pipefail
+
+REPOSITORY="adrianx26/zensynora"
+REF="${ZENSYNORA_REF:-main}"
+INSTALL_DIR="${ZENSYNORA_INSTALL_DIR:-${HOME}/.local/share/zensynora/source}"
+
+info() {
+    printf '  [INFO] %s\n' "$*"
+}
+
+error() {
+    printf '  [ERROR] %s\n' "$*" >&2
+    exit 1
+}
+
+case "$(uname -s)" in
+    Linux*) ;;
+    *)
+        error "This bootstrap installer currently supports Linux only. Use install.sh on macOS or Linux/WSL."
+        ;;
+esac
+
+command -v tar >/dev/null 2>&1 || error "tar is required to extract the GitHub source archive."
+if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
+    error "curl or wget is required to download ZenSynora."
+fi
+
+if [[ -z "$REF" ]]; then
+    error "ZENSYNORA_REF must name a GitHub branch."
+fi
+
+TEMP_DIR="$(mktemp -d)" || error "Could not create a temporary directory."
+cleanup() {
+    rm -rf -- "$TEMP_DIR"
+}
+trap cleanup EXIT
+
+ARCHIVE="$TEMP_DIR/zensynora.tar.gz"
+STAGING_DIR="$TEMP_DIR/source"
+mkdir -p "$STAGING_DIR"
+
+ARCHIVE_URL="https://codeload.github.com/${REPOSITORY}/tar.gz/refs/heads/${REF}"
+info "Downloading ${REPOSITORY} (${REF})..."
+if command -v curl >/dev/null 2>&1; then
+    curl --fail --location --silent --show-error --retry 3 \
+        --connect-timeout 20 "$ARCHIVE_URL" --output "$ARCHIVE" \
+        || error "Could not download the GitHub source archive."
+else
+    wget --https-only --tries=3 --timeout=20 --quiet "$ARCHIVE_URL" \
+        --output-document="$ARCHIVE" \
+        || error "Could not download the GitHub source archive."
+fi
+
+info "Extracting source archive..."
+tar -xzf "$ARCHIVE" --strip-components=1 -C "$STAGING_DIR" \
+    || error "Could not extract the GitHub source archive."
+[[ -f "$STAGING_DIR/install.sh" && -f "$STAGING_DIR/requirements.txt" ]] \
+    || error "The downloaded archive does not contain the expected installer and requirements files."
+
+mkdir -p "$INSTALL_DIR" || error "Could not create install directory: $INSTALL_DIR"
+cp -a "$STAGING_DIR/." "$INSTALL_DIR/" \
+    || error "Could not copy the downloaded source into: $INSTALL_DIR"
+
+info "Starting the Linux installer from $INSTALL_DIR..."
+if [[ -r /dev/tty ]]; then
+    bash "$INSTALL_DIR/install.sh" "$@" </dev/tty
+else
+    bash "$INSTALL_DIR/install.sh" "$@"
+fi

@@ -42,13 +42,15 @@
 
 4. **Make the project pip-installable** ✅ COMPLETED  
    - Create `pyproject.toml` (recommended) or `setup.py`. ✅  
-   - Define proper package structure so `pip install -e .` works. ✅  
+   - Define proper package structure so `python -m pip install -e .` works inside a virtual environment. ✅
    - Add CLI entry point so users can run `zensynora` or `myclaw` directly from terminal. ✅  
    - Update `README.md` Quick Start with:
      ```bash
      git clone ...
      cd zensynora
-     pip install -e .
+     python3 -m venv .venv
+     source .venv/bin/activate
+     python -m pip install -e .
      zensynora --help
      ``` ✅
 
@@ -166,10 +168,10 @@ myclaw/web/api.py  — Health check, static file serving, SPA routing
 
 ### Installation Methods Now Supported
 
-1. **pip** — `pip install -e . && zensynora --help`
+1. **pip** — `python3 -m venv .venv && source .venv/bin/activate && python -m pip install -e . && zensynora --help`
 2. **Docker** — `docker compose up --build`
-3. **Linux script** — `./install.sh`
-4. **Manual** — `pip install -r requirements.txt`
+3. **Linux script** — `./install.sh` (checks venv support and offers to install `python3-venv` on Debian/Ubuntu)
+4. **Manual** — create/activate a virtual environment, then run `python -m pip install -r requirements.txt`
 
 ### Next Steps (Phase 5)
 
