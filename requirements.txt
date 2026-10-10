@@ -1,5 +1,8 @@
-# Core dependencies for ZenSynora
-# This file is generated from pyproject.toml. For development, use `pip install -e .`
+# Core dependencies for ZenSynora plus the installer tooling.
+# For development, use `pip install -e .`
+
+# Packaging tool used by the installer
+pip>=24.0
 
 python-telegram-bot[job-queue]>=21.4,<22.0
 fastapi>=0.115.0,<1.0
