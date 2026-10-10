@@ -115,6 +115,21 @@ If an existing `venv/` is invalid, it asks before recreating it.
 **Linux (including Debian/Ubuntu) and WSL2:**
 
 ```bash
+# Install directly from GitHub without running git clone:
+curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-online.sh | bash
+```
+
+The bootstrap downloads the source archive into
+`~/.local/share/zensynora/source` and starts the regular `install.sh`, forwarding
+any installer options. For example, to force a traditional non-Docker install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-online.sh | bash -s -- --no-docker
+```
+
+To run the installer from a cloned checkout instead:
+
+```bash
 git clone https://github.com/adrianx26/zensynora.git
 cd zensynora
 chmod +x install.sh
