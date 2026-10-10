@@ -456,8 +456,22 @@ if [ "$PLATFORM" = "linux" ] || [ "$PLATFORM" = "wsl" ]; then
         fi
     }
     ensure_apt "python3"
-    ensure_apt "python3-pip"
-    ensure_apt "python3-venv"
+    PYTHON_BIN=$(command -v python3 || true)
+    if [[ -z "$PYTHON_BIN" ]]; then
+        error "python3 could not be found after installation."
+    fi
+    if ! "$PYTHON_BIN" -c "import venv, ensurepip" >/dev/null 2>&1; then
+        warn "Python virtual-environment support is missing (python3-venv)."
+        if prompt_yes "  Install python3-venv now to enable the isolated install?" "Y"; then
+            ensure_apt "python3-venv"
+            "$PYTHON_BIN" -c "import venv, ensurepip" >/dev/null 2>&1 \
+                || error "python3-venv was installed, but this Python still lacks venv/ensurepip support. Install the matching python3.X-venv package."
+        else
+            error "A virtual environment is required. Install python3-venv with apt, then rerun install.sh."
+        fi
+    else
+        skip "Python virtual-environment support is available"
+    fi
     ensure_apt "python3-dev"
     ensure_apt "git"
     ensure_apt "curl"
@@ -509,16 +523,35 @@ if [[ "$RECREATE_VENV" == "true" && -d "$VENV_DIR" ]]; then
     run rm -rf "$VENV_DIR"
 fi
 
+VENV_PYTHON="$VENV_DIR/bin/python"
+if [[ -d "$VENV_DIR" && "$DRY_RUN" != "true" ]] \
+    && { [[ ! -x "$VENV_PYTHON" ]] || ! "$VENV_PYTHON" -c 'import sys; raise SystemExit(sys.prefix == sys.base_prefix)' 2>/dev/null; }; then
+    warn "An existing virtual environment is incomplete or invalid: $VENV_DIR"
+    if prompt_yes "  Recreate this virtual environment before installing?" "Y"; then
+        run rm -rf "$VENV_DIR"
+    else
+        error "Repair it with --recreate-venv, or remove $VENV_DIR and rerun install.sh."
+    fi
+fi
+
 if [[ ! -d "$VENV_DIR" ]]; then
     info "Creating virtual environment..."
-    run "$PYTHON_BIN" -m venv "$VENV_DIR"
+    if ! run "$PYTHON_BIN" -m venv "$VENV_DIR"; then
+        if { [[ "$PLATFORM" == "linux" ]] || [[ "$PLATFORM" == "wsl" ]]; } \
+            && prompt_yes "  Virtual environment creation failed. Install python3-venv and retry?" "Y"; then
+            ensure_apt "python3-venv"
+            run "$PYTHON_BIN" -m venv "$VENV_DIR" \
+                || error "Could not create the virtual environment. Install the matching python3.X-venv package and retry."
+        else
+            error "Could not create the virtual environment. On Debian/Ubuntu install python3-venv, then rerun install.sh."
+        fi
+    fi
     success "Virtual environment created at $VENV_DIR"
 else
     skip "Virtual environment exists at $VENV_DIR"
 fi
 
 # Ensure pip is available in the virtual environment before using it.
-VENV_PYTHON="$VENV_DIR/bin/python"
 if [[ "$DRY_RUN" == "true" ]]; then
     dry_run "$VENV_PYTHON -m pip --version (bootstrap with ensurepip if unavailable)"
 else

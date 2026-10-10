@@ -57,6 +57,11 @@ On Windows PowerShell, use `py -m venv .venv`, activate with
 Always install into this virtual environment; do not use system pip or
 `--break-system-packages` on Debian/Ubuntu.
 
+The `install.sh` setup routine checks Python's venv support and offers to
+install `python3-venv` on Debian/Ubuntu when needed. It also validates an
+existing `venv/` and offers to recreate it if it is broken; pass
+`--no-docker --recreate-venv` to request a clean environment directly.
+
 ### Environment Configuration
 ```bash
 # Copy the example environment file

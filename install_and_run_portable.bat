@@ -17,6 +17,14 @@ echo Base Path: %BASE_PATH%
 echo ---------------------------------
 
 :: --- Python and Virtual Environment Setup ---
+if exist "%VENV_PATH%" (
+    if not exist "%PYTHON_EXEC%" (
+        goto repair_venv
+    )
+    "%PYTHON_EXEC%" -c "import sys; raise SystemExit(sys.prefix == sys.base_prefix)" >nul 2>&1
+    if errorlevel 1 goto repair_venv
+)
+
 if not exist "%PYTHON_EXEC%" (
     echo Python virtual environment not found. Creating one...
     echo This requires Python 3.11+ to be installed and in your system's PATH.
@@ -29,6 +37,25 @@ if not exist "%PYTHON_EXEC%" (
     )
     echo Virtual environment created successfully.
 )
+goto venv_ready
+
+:repair_venv
+echo The existing virtual environment is incomplete or invalid: %VENV_PATH%
+choice /c YN /m "Recreate it? This removes only the portable venv directory"
+if errorlevel 2 (
+    echo ERROR: Repair the virtual environment or choose to recreate it before continuing.
+    pause
+    exit /b 1
+)
+rmdir /s /q "%VENV_PATH%"
+python -m venv "%VENV_PATH%"
+if errorlevel 1 (
+    echo ERROR: Could not recreate the virtual environment. Reinstall Python with venv support and retry.
+    pause
+    exit /b 1
+)
+
+:venv_ready
 
 :: Activate the virtual environment
 call "%VENV_PATH%\Scripts\activate.bat"

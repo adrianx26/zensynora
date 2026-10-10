@@ -134,6 +134,13 @@ MYCLAW_WORKER_POOL_SIZE=4 zensynora agent
 docker compose up --build
 ```
 
+The Linux/macOS `install.sh` installer validates the existing `venv/` before
+installing dependencies. On Debian/Ubuntu, if Python lacks virtual-environment
+support, it offers to install `python3-venv`; if the existing environment is
+invalid, it offers to recreate it. Use `./install.sh --no-docker --recreate-venv`
+to explicitly rebuild it with the traditional installer. Portable launchers also validate their `venv/` and ask
+before replacing a broken environment.
+
 On Windows PowerShell, create and activate the environment with
 `py -m venv .venv` and `.\.venv\Scripts\Activate.ps1`, then run the same
 `python -m pip install` command. Do not install into the OS-managed Python or
@@ -235,7 +242,12 @@ ZenSynora can be run as a portable application from a USB stick or external driv
     -   On Windows, double-click `install_and_run_portable.bat`.
     -   On Linux/macOS, run `chmod +x install_and_run_portable.sh && ./install_and_run_portable.sh`.
 
-The first run will install all dependencies into a `venv/` folder. All application data (profiles, knowledge, logs) will be stored in a new `data/` folder on the portable drive.
+The first run creates a `venv/` folder, verifies it can run Python and pip,
+and installs dependencies there. On Debian/Ubuntu, if venv support is missing,
+the Linux launcher offers to install `python3-venv`. If an existing portable
+environment is incomplete, the launcher asks before recreating it. All
+application data (profiles, knowledge, logs) is stored in `data/` on the
+portable drive.
 
 ### Docker
 

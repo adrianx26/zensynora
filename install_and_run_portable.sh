@@ -22,7 +22,24 @@ echo "Base Path: $SCRIPT_DIR"
 echo "---------------------------------"
 
 # --- Python and Virtual Environment Setup ---
-if [ ! -f "$PYTHON_EXEC" ]; then
+if [ -e "$VENV_PATH" ] && {
+    [ ! -x "$PYTHON_EXEC" ] \
+        || ! "$PYTHON_EXEC" -c 'import sys; raise SystemExit(sys.prefix == sys.base_prefix)' >/dev/null 2>&1
+}; then
+    echo "The existing virtual environment is incomplete or invalid: $VENV_PATH"
+    read -r -p "Recreate it? This removes only the portable venv directory. [y/N] " RECREATE_VENV
+    case "$RECREATE_VENV" in
+        y|Y|yes|YES)
+            rm -rf "$VENV_PATH"
+            ;;
+        *)
+            echo "ERROR: Repair the virtual environment or choose to recreate it before continuing."
+            exit 1
+            ;;
+    esac
+fi
+
+if [ ! -x "$PYTHON_EXEC" ]; then
     echo "Python virtual environment not found. Creating one..."
     echo "This requires Python 3.11+ to be installed on your system."
 
@@ -36,10 +53,35 @@ if [ ! -f "$PYTHON_EXEC" ]; then
         fi
     fi
 
-    $PYTHON_CMD -m venv "$VENV_PATH"
-    if [ $? -ne 0 ]; then
-        echo "ERROR: Failed to create virtual environment."
-        exit 1
+    if ! "$PYTHON_CMD" -m venv "$VENV_PATH"; then
+        if command -v apt-get >/dev/null 2>&1; then
+            read -r -p "Virtual environment support may be missing. Install python3-venv and retry? [y/N] " INSTALL_VENV
+            case "$INSTALL_VENV" in
+                y|Y|yes|YES)
+                    if [ "$(id -u)" -eq 0 ]; then
+                        apt-get update
+                        apt-get install -y python3-venv
+                    elif command -v sudo >/dev/null 2>&1; then
+                        sudo apt-get update
+                        sudo apt-get install -y python3-venv
+                    else
+                        echo "ERROR: root privileges or sudo are required to install python3-venv."
+                        exit 1
+                    fi
+                    "$PYTHON_CMD" -m venv "$VENV_PATH" || {
+                        echo "ERROR: Could not create the venv. Install the matching python3.X-venv package and retry."
+                        exit 1
+                    }
+                    ;;
+                *)
+                    echo "ERROR: Install python3-venv (Debian/Ubuntu), then rerun this launcher."
+                    exit 1
+                    ;;
+            esac
+        else
+            echo "ERROR: Could not create the virtual environment. Ensure Python 3.11+ includes venv/ensurepip support."
+            exit 1
+        fi
     fi
     echo "Virtual environment created successfully."
 fi

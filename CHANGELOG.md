@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Virtual environment setup**: `install.sh` now checks whether Python has
+  `venv`/`ensurepip` support, offers to install Debian/Ubuntu's
+  `python3-venv` package when missing, verifies existing environments, and
+  offers to recreate invalid ones before dependency installation. Portable
+  launchers now validate existing environments and explain recovery options.
+
+### Documentation
+- Updated installation commands to use an isolated virtual environment and
+  documented the `python3-venv` repair prompt and portable launcher behavior.
+
 ### Added
 - **Performance Optimizations**:
   - Implemented batch fetching for relations in the knowledge graph (`get_relations_from_many`) to fix N+1 query problems.

@@ -29,6 +29,10 @@ On Windows PowerShell, replace the manual setup commands with
 `py -m venv .venv`, `.\.venv\Scripts\Activate.ps1`, and
 `python -m pip install -r requirements.txt`. Do not install packages into the
 OS-managed Python or bypass PEP 668 with `--break-system-packages`.
+`install.sh` checks for venv support and offers to install `python3-venv` on
+Debian/Ubuntu when missing; it also offers to recreate an invalid existing
+environment. Use `./install.sh --no-docker --recreate-venv` to request
+recreation directly.
 
 ### Quick Start
 1. Run the onboarding wizard to generate `~/.myclaw/config.json`:
@@ -44,7 +48,7 @@ OS-managed Python or bypass PEP 668 with `--break-system-packages`.
 ### Running Tests
 ```bash
 # Activate virtual environment
-source venv/bin/activate
+source .venv/bin/activate
 
 # Run all tests
 python -m pytest tests/ -v
