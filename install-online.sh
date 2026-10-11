@@ -66,8 +66,9 @@ cp -a "$STAGING_DIR/." "$INSTALL_DIR/" \
     || error "Could not copy the downloaded source into: $INSTALL_DIR"
 
 info "Starting the Linux installer from $INSTALL_DIR..."
-if [[ -r /dev/tty ]]; then
-    bash "$INSTALL_DIR/install.sh" "$@" </dev/tty
+if exec 3</dev/tty 2>/dev/null; then
+    bash "$INSTALL_DIR/install.sh" "$@" <&3 3<&-
+    exec 3<&-
 else
     bash "$INSTALL_DIR/install.sh" "$@"
 fi
