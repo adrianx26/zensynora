@@ -66,7 +66,9 @@ cp -a "$STAGING_DIR/." "$INSTALL_DIR/" \
     || error "Could not copy the downloaded source into: $INSTALL_DIR"
 
 info "Starting the Linux installer from $INSTALL_DIR..."
-if exec 3</dev/tty 2>/dev/null; then
+# Scope the stderr redirect to the probe: a bare `exec 3</dev/tty 2>/dev/null`
+# would silence stderr for the rest of the run, hiding every `read -p` prompt.
+if { exec 3</dev/tty; } 2>/dev/null; then
     bash "$INSTALL_DIR/install.sh" "$@" <&3 3<&-
     exec 3<&-
 else
