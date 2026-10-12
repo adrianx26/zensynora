@@ -440,6 +440,9 @@ header "1. System packages"
 
 if [ "$PLATFORM" = "linux" ] || [ "$PLATFORM" = "wsl" ]; then
     APT_UPDATED=0
+    # Keep debconf and needrestart (Ubuntu 22.04+) from opening interactive
+    # dialogs mid-install; passed through `env` so sudo's env_reset keeps them.
+    APT_ENV=(DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a)
     ensure_apt() {
         local pkg="$1"
         if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
@@ -447,11 +450,11 @@ if [ "$PLATFORM" = "linux" ] || [ "$PLATFORM" = "wsl" ]; then
         else
             if [[ "$APT_UPDATED" -eq 0 ]]; then
                 info "Running apt-get update..."
-                run sudo apt-get update -qq
+                run sudo env "${APT_ENV[@]}" apt-get update -qq
                 APT_UPDATED=1
             fi
             info "Installing apt package: $pkg"
-            run sudo apt-get install -y -qq "$pkg"
+            run sudo env "${APT_ENV[@]}" apt-get install -y -qq "$pkg"
             success "apt: $pkg installed"
         fi
     }
@@ -569,13 +572,14 @@ run "$VENV_PYTHON" -m pip install --quiet --upgrade pip setuptools wheel
 header "4. Core Python dependencies"
 
 if [[ -f "$SCRIPT_DIR/requirements.txt" ]]; then
-    info "Installing dependencies from requirements.txt..."
-    run "$VENV_PYTHON" -m pip install --quiet -r "$SCRIPT_DIR/requirements.txt"
+    info "Installing dependencies from requirements.txt (this can take several minutes)..."
+    run "$VENV_PYTHON" -m pip install --progress-bar on -r "$SCRIPT_DIR/requirements.txt"
     success "Dependencies installed from requirements.txt"
 else
     warn "requirements.txt not found. Attempting pyproject.toml install..."
     if [[ -f "$SCRIPT_DIR/pyproject.toml" ]]; then
-        run "$VENV_PYTHON" -m pip install --quiet -e "$SCRIPT_DIR"
+        info "Installing from pyproject.toml (this can take several minutes)..."
+        run "$VENV_PYTHON" -m pip install --progress-bar on -e "$SCRIPT_DIR"
         success "Package installed in editable mode"
     else
         error "No requirements.txt or pyproject.toml found."
@@ -584,7 +588,7 @@ fi
 
 # Install scrapling browser engines (idempotent)
 if [[ -f "$VENV_DIR/bin/scrapling" ]]; then
-    info "Installing/verifying Scrapling browsers..."
+    info "Installing/verifying Scrapling browsers (large download, may ask for sudo)..."
     run "$VENV_DIR/bin/scrapling" install --force || warn "Scrapling browser install returned non-zero"
 fi
 
@@ -673,7 +677,11 @@ if [[ "$SKIP_OPTIONAL" == "false" ]]; then
     else
         if prompt_yes "  Install Ollama for local LLMs?"; then
             info "Downloading and installing Ollama..."
-            run curl -fsSL https://ollama.com/install.sh | sh
+            if [[ "$DRY_RUN" == "true" ]]; then
+                dry_run "curl -fsSL https://ollama.com/install.sh | sh"
+            else
+                curl -fsSL https://ollama.com/install.sh | sh
+            fi
             success "Ollama installed."
         fi
     fi
@@ -695,9 +703,9 @@ header "6.6 Web UI frontend"
 if command -v npm >/dev/null 2>&1; then
     info "Node.js/npm found: $(node --version 2>/dev/null || echo 'unknown')"
     if [[ -d "$SCRIPT_DIR/webui" ]]; then
-        info "Installing WebUI dependencies..."
+        info "Installing WebUI dependencies (this can take a few minutes)..."
         if [[ "$DRY_RUN" == "false" ]]; then
-            (cd "$SCRIPT_DIR/webui" && npm install --quiet)
+            (cd "$SCRIPT_DIR/webui" && npm install --no-fund --no-audit)
             success "WebUI dependencies installed."
             # Try to build the UI if a build script exists
             if grep -q '"build"' "$SCRIPT_DIR/webui/package.json" 2>/dev/null; then
