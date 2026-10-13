@@ -16,7 +16,7 @@
   <span class="dot"></span>
   <h1 class="title">ZenSynora Architecture — Visual Guide</h1>
 </div>
-<p class="subtitle">11 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
+<p class="subtitle">14 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
 <div class="legend">
   <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
   <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
@@ -62,7 +62,7 @@
     subgraph L1[&quot;Interfaces&quot;]
         direction LR
         cli2[&quot;cli.py&lt;br/&gt;click commands&quot;]
-        webapi[&quot;web/api.py + web/settings_api.py&lt;br/&gt;Web UI backend · WebSocket chat&quot;]
+        webapi[&quot;web/&lt;br/&gt;api · settings · models · chat · jobs · backup · medic&quot;]
         gw[&quot;gateway.py&lt;br/&gt;Telegram / WhatsApp / console&quot;]
         channels[&quot;channels/&lt;br/&gt;telegram · whatsapp · discord&quot;]
         mcpsrv[&quot;mcp/server.py&lt;br/&gt;tools over MCP (stdio)&quot;]
@@ -76,12 +76,15 @@
         swarm[&quot;swarm/&lt;br/&gt;orchestrator · strategies&quot;]
         registry[&quot;agents/registry.py&lt;br/&gt;agents.yaml profiles&quot;]
         special[&quot;agents/&lt;br/&gt;medic · newtech · skill_adapter&quot;]
+        chatx[&quot;chat/&lt;br/&gt;channels · multi-agent turns&quot;]
+        jobsx[&quot;jobs/&lt;br/&gt;store · runner · evaluate · benchmark&quot;]
     end
 
     subgraph L3[&quot;Capabilities&quot;]
         direction LR
         tools[&quot;tools/&lt;br/&gt;shell · files · web · browser · kb · scheduler · swarm · toolbox&quot;]
-        provider[&quot;provider.py&lt;br/&gt;8 LLM providers&quot;]
+        provider[&quot;provider.py&lt;br/&gt;8 built-in + your own providers · rotation&quot;]
+        events[&quot;events.py&lt;br/&gt;agent-to-agent activity&quot;]
         resilience[&quot;resilience/ + offline.py&lt;br/&gt;circuit breaker · offline fallback&quot;]
         prompts[&quot;prompts/ · structured_output/&quot;]
         sandbox[&quot;sandbox.py · worker_pool.py · backends/&quot;]
@@ -100,7 +103,9 @@
     subgraph L5[&quot;Operations&quot;]
         direction LR
         doctor[&quot;doctor/&lt;br/&gt;health checks · integrity&quot;]
-        updater[&quot;updater/ (repo root)&lt;br/&gt;safe updates · migrations&quot;]
+        updater[&quot;updater/ (repo root)&lt;br/&gt;safe updates · app backup · migrations&quot;]
+        selfupd[&quot;selfupdate.py&lt;br/&gt;agent proposals → updater&quot;]
+        backupx[&quot;backup.py&lt;br/&gt;settings · keys · knowledge&quot;]
         obs[&quot;observability/ · metrics.py · logging_config.py&quot;]
     end
 
@@ -109,7 +114,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">3. A chat message, end to end</h2>
-  <p class="diagram-desc">What happens when you type in the Web UI (Telegram and the terminal follow the same path from `Agent` onwards).</p>
+  <p class="diagram-desc">What happens inside one agent when it answers (Telegram and the terminal follow the same path from `Agent` onwards). Since 0.7.1 the Web UI reaches `Agent.stream_think` through chat channels — see [§12](#12-chat-channels-and-agent-to-agent-</p>
   <div class="mermaid">sequenceDiagram
     autonumber
     actor U as You
@@ -134,8 +139,12 @@
     C-&gt;&gt;K: search notes for relevant knowledge
     C--&gt;&gt;A: system prompt + history + knowledge
     A-&gt;&gt;P: chat(messages, stream=True)
-    P--&gt;&gt;A: token stream (+ tool calls)
+    P--&gt;&gt;A: token stream (+ tool calls, collected at the end)
     A--&gt;&gt;WS: tokens
+    opt no text and no tool calls (empty reply)
+        A-&gt;&gt;P: ask once more without streaming
+        P--&gt;&gt;A: reply, or &quot;model returned an empty answer&quot; note
+    end
     WS--&gt;&gt;UI: __STREAM_START__ … tokens … __STREAM_END__
     opt the model asked for tools
         A-&gt;&gt;T: execute (parallel when independent)
@@ -148,20 +157,27 @@
     UI--&gt;&gt;U: rendered reply</div>
 </div>
 <div class="diagram-card">
-  <h2 class="diagram-title">4. Provider selection and fallback</h2>
-  <p class="diagram-desc">How a request reaches a model, and what happens when that fails. Changed in 0.5.0: the agent never silently switches to another provider.</p>
+  <h2 class="diagram-title">4. Provider selection, rotation and fallback</h2>
+  <p class="diagram-desc">How a request reaches a model, and what happens when that fails. Changed in 0.5.0: the agent never silently switches to another provider *unless you asked for it* — 0.7.1 adds an explicit rotation list (Models page).</p>
   <div class="mermaid">flowchart TD
-    start([&quot;Agent needs a reply&quot;]) --&gt; pick[&quot;Provider = agent&#x27;s own, else agents.defaults.provider&quot;]
+    start([&quot;Agent needs a reply&quot;]) --&gt; rot{&quot;Rotation on and this agent&lt;br/&gt;uses the default model?&quot;}
+    rot -- yes --&gt; order[&quot;Candidates = default + rotation list&lt;br/&gt;(round-robin: start at the next one)&quot;]
+    order --&gt; tryc[&quot;provider.chat() with candidate&quot;]
+    tryc -- ok --&gt; replied([&quot;Stream reply&lt;br/&gt;(model shown on the message)&quot;])
+    tryc -- &quot;error: rate limit, down,&lt;br/&gt;missing model, in-stream error&quot; --&gt; nextc{&quot;more candidates?&quot;}
+    nextc -- yes --&gt; tryc
+    nextc -- no --&gt; fail([&quot;Error shown in chat&quot;])
+    rot -- no --&gt; pick[&quot;Provider = agent&#x27;s own, else agents.defaults.provider&lt;br/&gt;(built-in or one of your providers)&quot;]
     pick --&gt; init{&quot;Provider can start?&lt;br/&gt;(SDK installed, API key set)&quot;}
     init -- no --&gt; err[&quot;ProviderUnavailableError&lt;br/&gt;clear message shown in chat&quot;]
     init -- yes --&gt; breaker{&quot;Circuit breaker&lt;br/&gt;open?&quot;}
     breaker -- closed --&gt; llmcall[&quot;provider.chat()&quot;]
-    llmcall -- ok --&gt; replied([&quot;Stream reply&quot;])
+    llmcall -- ok --&gt; replied
     llmcall -- &quot;server rejects tool list&lt;br/&gt;(llama.cpp without --jinja)&quot; --&gt; notools[&quot;Retry once without tools&lt;br/&gt;remember for next calls&quot;]
     notools --&gt; replied
     llmcall -- &quot;connection error&quot; --&gt; offline{&quot;intelligence.offline_mode?&quot;}
     breaker -- open --&gt; offline
-    offline -- no --&gt; fail([&quot;Error shown in chat&quot;])
+    offline -- no --&gt; fail
     offline -- yes --&gt; fb[&quot;Try local providers in order&lt;br/&gt;Ollama → LM Studio → llama.cpp&lt;br/&gt;(skipping the one that just failed)&quot;]
     fb -- ok --&gt; replied
     fb -- none reachable --&gt; fail</div>
@@ -229,31 +245,35 @@
         kdb[&quot;knowledge/ + knowledge_&amp;lt;user&amp;gt;.db&lt;br/&gt;Markdown notes + FTS5 index&quot;]
         tlb[&quot;tools/ · skills/ · plugins/ · hub/&lt;br/&gt;generated tools and installed skills&quot;]
         misc[&quot;cost · metering · audit · swarm · state DBs&quot;]
-        med[&quot;medic/&lt;br/&gt;integrity baseline · file backups · task log&quot;]
+        med[&quot;medic/&lt;br/&gt;integrity baseline · file backups · task log · proposals/&quot;]
+        chatdb[&quot;chat.db · jobs.db&lt;br/&gt;channels + messages · jobs + runs (0.7.1)&quot;]
         logs[&quot;logs/zensynora.log&lt;br/&gt;rotating JSON log (since 0.7.0)&quot;]
         mig[&quot;.migrations.json&lt;br/&gt;applied data migrations&quot;]
     end
     app[&quot;ZenSynora (any version)&quot;] &lt;--&gt; data
     upd[&quot;updater&quot;] -- &quot;backup before every update&quot; --&gt; data
+    bkp[&quot;~/.myclaw-backups/&lt;br/&gt;your backups (manual / automatic)&quot;] &lt;-- &quot;zensynora backup · Backups page&quot; --&gt; data
     doc[&quot;doctor / medic&quot;] -- &quot;reads + safe fixes&quot; --&gt; data</div>
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">9. Safe updates</h2>
-  <p class="diagram-desc">`zensynora update` (`updater/`, added in 0.6.0). Steps 1–9 never touch the running version; any failure undoes the completed steps in reverse order.</p>
+  <p class="diagram-desc">`zensynora update` (`updater/`, added in 0.6.0; program-folder backup and data check added in 0.7.1). Steps 1–10 never touch the running version; any failure undoes the completed steps in reverse order.</p>
   <div class="mermaid">flowchart TD
     s1[&quot;1 Preflight&lt;br/&gt;Python, disk space, service state&quot;] --&gt; s2[&quot;2 Fetch&lt;br/&gt;GitHub, folder or archive&quot;]
     s2 --&gt; s3[&quot;3 Hand-off&lt;br/&gt;newer updater takes over&quot;]
     s3 --&gt; s4[&quot;4 Back up ~/.myclaw + .env&quot;]
-    s4 --&gt; s5[&quot;5 Carry over .env, data/&quot;]
-    s5 --&gt; s6[&quot;6 Build side by side&lt;br/&gt;venv · packages · extras · Web UI&quot;]
-    s6 --&gt; s7[&quot;7 Verify&lt;br/&gt;imports new code, loads YOUR config&quot;]
-    s7 --&gt; s8[&quot;8 Stop service&quot;]
-    s8 --&gt; s9[&quot;9 Data migrations&quot;]
-    s9 --&gt; s10[&quot;10 Activate&lt;br/&gt;atomic symlink switch&quot;]
-    s10 --&gt; s11[&quot;11 Start service, confirm up&quot;]
-    s11 --&gt; s12([&quot;12 Record, prune old releases&quot;])
+    s4 --&gt; s5[&quot;5 Back up the whole program folder&lt;br/&gt;archive + inventory of every file&quot;]
+    s5 --&gt; s6[&quot;6 Carry over .env, data/&quot;]
+    s6 --&gt; s7[&quot;7 Build side by side&lt;br/&gt;venv · packages · extras · Web UI&quot;]
+    s7 --&gt; s8[&quot;8 Verify&lt;br/&gt;imports new code, loads YOUR config&quot;]
+    s8 --&gt; s9[&quot;9 Stop service&quot;]
+    s9 --&gt; s10[&quot;10 Data migrations&quot;]
+    s10 --&gt; s11[&quot;11 Activate&lt;br/&gt;atomic symlink switch&quot;]
+    s11 --&gt; s12[&quot;12 Settings, API keys, knowledge&lt;br/&gt;checked, restored if missing&quot;]
+    s12 --&gt; s13[&quot;13 Start service, confirm up&quot;]
+    s13 --&gt; s14([&quot;14 Record, prune old releases&quot;])
 
-    s2 &amp; s6 &amp; s7 &amp; s9 &amp; s10 &amp; s11 -. &quot;failure&quot; .-&gt; rb[&quot;Roll back&lt;br/&gt;old version stays active,&lt;br/&gt;data restored if migrated&quot;]</div>
+    s2 &amp; s7 &amp; s8 &amp; s10 &amp; s11 &amp; s13 -. &quot;failure&quot; .-&gt; rb[&quot;Roll back&lt;br/&gt;old version active again · data restored if migrated ·&lt;br/&gt;program folder compared with the inventory and&lt;br/&gt;restored from the archive if anything differs&quot;]</div>
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">10. Doctor and medic</h2>
@@ -284,6 +304,7 @@
         m3[&quot;validate_modification · detect_errors_in_file · check_file_virustotal&quot;]
         m4[&quot;record_task_execution · get_task_analytics&quot;]
         m5[&quot;prevent_infinite_loop&lt;br/&gt;called by the router on every step&quot;]
+        m6[&quot;read_source_file · propose_code_change ·&lt;br/&gt;get_recent_problems · record_lesson (0.7.1, §14)&quot;]
     end</div>
 </div>
 <div class="diagram-card">
@@ -291,14 +312,80 @@
   
   <div class="mermaid">flowchart TB
     base[&quot;~/.local/share/zensynora/&quot;]
-    base --&gt; src[&quot;source → releases/0.7.0-…&lt;br/&gt;(symlink: the active version)&quot;]
+    base --&gt; src[&quot;source → releases/0.7.1-…&lt;br/&gt;(symlink: the active version)&quot;]
     base --&gt; rel[&quot;releases/&quot;]
-    rel --&gt; r1[&quot;0.7.0-20261013T…&lt;br/&gt;code + venv/ + webui/dist&quot;]
-    rel --&gt; r2[&quot;0.6.0-…&lt;br/&gt;kept for rollback&quot;]
-    base --&gt; bk[&quot;backups/&lt;br/&gt;~/.myclaw snapshots (mode 700)&quot;]
+    rel --&gt; r1[&quot;0.7.1-20261013T…&lt;br/&gt;code + venv/ + webui/dist&quot;]
+    rel --&gt; r2[&quot;0.7.0-…&lt;br/&gt;kept for rollback&quot;]
+    base --&gt; bk[&quot;backups/&lt;br/&gt;~/.myclaw snapshots + app-folder.tar.gz (mode 700)&quot;]
+    base --&gt; stg[&quot;staging/&lt;br/&gt;temporary copies for approved proposals&quot;]
     base --&gt; lg[&quot;logs/update-*.log&quot;]
     base --&gt; st[&quot;updater-state.json&quot;]
     svc[&quot;systemd myclaw.service&lt;br/&gt;and source/venv/bin/activate&quot;] -. &quot;use the path through&quot; .-&gt; src</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">12. Chat channels and agent-to-agent talk</h2>
+  <p class="diagram-desc">Added in 0.7.1 (`myclaw/chat/`, `myclaw/events.py`, `myclaw/web/chat_api.py`, `webui/src/components/ChatView.tsx`).</p>
+  <div class="mermaid">sequenceDiagram
+    autonumber
+    actor U as You
+    participant UI as Chat (React)
+    participant WS as /ws/channels/{id}
+    participant E as ChatEngine
+    participant S as chat.db
+    participant A1 as @default
+    participant A2 as @writer
+    participant EV as events.py
+
+    U-&gt;&gt;UI: &quot;@default ask writer for a haiku&quot;
+    UI-&gt;&gt;WS: {type: message}
+    WS-&gt;&gt;E: post()
+    E-&gt;&gt;S: save your message
+    E-&gt;&gt;E: who answers? @mentions, else reply mode&lt;br/&gt;(lead · everyone in turn · everyone at once)
+    E-&gt;&gt;A1: stream_think(group context + message)&lt;br/&gt;CURRENT_CHANNEL / CURRENT_AGENT set
+    A1-&gt;&gt;EV: delegation_start (default → writer)
+    EV--&gt;&gt;WS: event → card in chat + Activity panel
+    EV-&gt;&gt;S: saved as an &quot;event&quot; message
+    A1-&gt;&gt;A2: delegate tool → think(task)
+    A2--&gt;&gt;A1: haiku
+    A1-&gt;&gt;EV: delegation_end (+ result, ms)
+    A1--&gt;&gt;E: answer tokens
+    E--&gt;&gt;WS: stream_start · chunk… · stream_end (model, time)
+    E-&gt;&gt;S: save the answer</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">13. Jobs</h2>
+  <p class="diagram-desc">Added in 0.7.1 (`myclaw/jobs/`, `myclaw/web/jobs_api.py`, Jobs page).</p>
+  <div class="mermaid">flowchart LR
+    ui[&quot;Jobs page / API&lt;br/&gt;add · edit · pause · run now&quot;] --&gt; store[(&quot;jobs.db&lt;br/&gt;jobs + runs&quot;)]
+    tick[&quot;runner loop&lt;br/&gt;(every few s, inside zensynora webui)&quot;] -- &quot;due jobs&quot; --&gt; run
+    ui -- &quot;Run now&quot; --&gt; run[&quot;run_job()&lt;br/&gt;agent.think(prompt)&lt;br/&gt;timeout · retries · clean memory&quot;]
+    run --&gt; store
+    run -- &quot;post result&quot; --&gt; chan[&quot;channel (optional)&quot;]
+    run -- &quot;auto-evaluate&quot; --&gt; judge[&quot;main model scores 0-10&lt;br/&gt;against success criteria&quot;]
+    ui -- &quot;Benchmark&quot; --&gt; bench[&quot;same prompt on up to 8 models&lt;br/&gt;time + score side by side&quot;]
+    bench --&gt; store
+    judge --&gt; store
+    tick -- &quot;also&quot; --&gt; ab[&quot;automatic backups when due&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">14. Self-update proposals</h2>
+  <p class="diagram-desc">Added in 0.7.1 (`myclaw/selfupdate.py`, `myclaw/web/medic_api.py`, Doctor page, `zensynora medic`). Agents never write to the program folder.</p>
+  <div class="mermaid">flowchart TD
+    probs[&quot;get_recent_problems&lt;br/&gt;log errors · failed / low-score jobs&quot;] --&gt; agent[&quot;Agent (medic self-review job,&lt;br/&gt;or any agent you ask in chat)&quot;]
+    agent -- read_source_file --&gt; code[(&quot;installed code, read-only&quot;)]
+    agent -- propose_code_change --&gt; check{&quot;inside program folder? no venv/.git/.env?&lt;br/&gt;Python compiles? size ok?&quot;}
+    check -- no --&gt; back[&quot;refused · reason returned to the agent&quot;]
+    check -- yes --&gt; prop[&quot;proposal + diff&lt;br/&gt;~/.myclaw/medic/proposals/&quot;]
+    prop --&gt; you{&quot;You review&lt;br/&gt;Doctor → Change proposals&quot;}
+    you -- reject --&gt; rj[&quot;rejected&quot;]
+    you -- approve --&gt; stale{&quot;code unchanged&lt;br/&gt;since the proposal?&quot;}
+    stale -- no --&gt; outd[&quot;failed: ask for a new proposal&quot;]
+    stale -- yes --&gt; stage[&quot;staging/ = copy of current release + change&quot;]
+    stage --&gt; upd[&quot;update.sh update --from-dir staging --force&lt;br/&gt;(all steps of §9)&quot;]
+    upd -- ok --&gt; ok[&quot;new release active · restart to use it ·&lt;br/&gt;zensynora update rollback undoes it&quot;]
+    upd -- failure --&gt; rb[&quot;rolled back · running version unchanged&quot;]
+    agent -- record_lesson --&gt; kb[(&quot;knowledge note&lt;br/&gt;medic-lessons&quot;)]
+    kb -. &quot;found by later searches&quot; .-&gt; agent</div>
 </div>
 
 <div class="footer">

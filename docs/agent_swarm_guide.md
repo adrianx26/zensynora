@@ -1,6 +1,10 @@
 # Agent Swarm Guide
 
-> **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent).
+> **Applies to:** v0.7.1 · **Reviewed:** 2026-10-13. **v0.7.1:** delegation
+> works again (before, every `delegate` call answered "Agent registry not
+> initialized"), and in the Web UI each hand-over between agents — delegation
+> or swarm — is shown in the chat channel and its Activity panel
+> ([Web UI guide](webui_guide.md#chat-channels-and-several-agents)). Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent).
 
 ## Overview
 

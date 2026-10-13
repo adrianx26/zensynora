@@ -15,8 +15,8 @@ import zipfile
 from pathlib import Path
 from typing import List
 
-from . import UPDATER_PROTOCOL
-from .backup import RELEASE_USER_FILES, _safe_extract, create_backup, restore_backup
+from . import UPDATER_PROTOCOL, app_backup
+from .backup import RELEASE_USER_FILES, _safe_extract, create_backup, ensure_user_data, restore_backup
 from .layout import read_version, version_tuple
 from .pipeline import Context, NothingToDo, Step, UpdateError, clean_env, sh
 
@@ -100,7 +100,7 @@ class FetchRelease(Step):
 
     def run(self, ctx: Context) -> None:
         lay = ctx.layout
-        incoming = lay.releases / f".incoming-{ctx.stamp}"
+        incoming = lay.releases / f".incoming-{ctx.stamp}-{os.getpid()}"
         ctx.extra["incoming"] = incoming
         kind, value = ctx.opts.source_kind, ctx.opts.source_value
 
@@ -140,6 +140,12 @@ class FetchRelease(Step):
             )
         ctx.new_version = new_version
         ctx.new_id = f"{new_version}-{ctx.stamp}"
+        n = 1
+        # Fixed in v0.7.1: after a hand-over the new updater can start in the
+        # same second as the old one, whose staged copy already uses this name.
+        while (lay.releases / ctx.new_id).exists():
+            n += 1
+            ctx.new_id = f"{new_version}-{ctx.stamp}-{n}"
         ctx.new_dir = lay.releases / ctx.new_id
         os.rename(incoming, ctx.new_dir)
         log.info("  new version: %s -> %s", ctx.current_version, new_version)
@@ -213,6 +219,70 @@ class BackupUserData(Step):
             },
         )
     # No rollback: a backup is never deleted automatically on failure.
+
+
+# ── 3b. Full backup of the installed program folder (v0.7.1) ─────────────────
+class BackupAppFolder(Step):
+    """Archive the whole folder of the running version, venv included.
+
+    The old folder is never modified by an update (the new version is built
+    next to it), but if anything goes wrong — a crash half-way through, a
+    disk problem, a first update that moves a legacy install — the rollback
+    checks the folder against the inventory taken here and puts the archived
+    copy back if it differs. Result: a failed update leaves the install
+    exactly as it was.
+    """
+
+    name = "backup-app"
+    description = "Backing up the whole installed program folder"
+
+    def should_run(self, ctx: Context) -> bool:
+        return ctx.opts.app_backup != "none" and ctx.backup_dir is not None
+
+    def run(self, ctx: Context) -> None:
+        folder = ctx.current_dir
+        mode = ctx.opts.app_backup
+        need = app_backup.folder_size(folder, mode) // 2 + 200_000_000  # compressed estimate + margin
+        free = shutil.disk_usage(ctx.layout.base).free
+        if mode == "full" and free < need + MIN_FREE_BYTES:
+            mode = "code"
+            ctx.note("Not enough free disk space for a full program-folder backup including venv/; "
+                     "backed up everything except venv/ instead.")
+            need = app_backup.folder_size(folder, mode) // 2 + 200_000_000
+        if free < need + MIN_FREE_BYTES // 3:
+            raise UpdateError(f"Not enough free disk space to back up {folder} "
+                              f"(need about {(need + MIN_FREE_BYTES // 3) // 1_000_000} MB).")
+        app_backup.snapshot(folder, ctx.backup_dir, mode)
+        ctx.extra["app_folder"] = str(folder)
+        ctx.extra["app_backup_mode"] = mode
+        _add_to_manifest(ctx.backup_dir, {"app_folder": str(folder), "app_backup_mode": mode})
+
+    def rollback(self, ctx: Context) -> None:
+        folder = ctx.extra.get("app_folder")
+        if not folder or not ctx.backup_dir or not (ctx.backup_dir / app_backup.INVENTORY).exists():
+            return
+        diffs = app_backup.differences(Path(folder), ctx.backup_dir)
+        if not diffs:
+            log.info("  previous program folder verified: unchanged")
+            return
+        log.warning("  previous program folder differs from the backup (%d+ changes, e.g. %s) — restoring it",
+                    len(diffs), diffs[0])
+        app_backup.restore(Path(folder), ctx.backup_dir)
+        left = app_backup.differences(Path(folder), ctx.backup_dir)
+        if left:
+            log.error("  program folder still differs after restore: %s", "; ".join(left[:5]))
+        else:
+            log.info("  previous program folder restored and verified")
+
+
+def _add_to_manifest(backup_dir: Path, fields: dict) -> None:
+    path = backup_dir / "manifest.json"
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        data = {}
+    data.update(fields)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
 # ── 4. Carry user files from the old release into the new one ───────────────
@@ -436,6 +506,30 @@ class ActivateRelease(Step):
             point_source_to(lay, ctx.current_dir)
 
 
+# ── 9b. Put settings, API keys and knowledge base back in place (v0.7.1) ────
+class RestoreUserData(Step):
+    """After switching, make sure nothing the user owns went missing.
+
+    Settings (config.json and its key file), the knowledge base and the
+    release's .env are compared with the pre-update backup; any file that is
+    missing is restored from it. Files a migration changed on purpose are left
+    alone — only missing ones come back.
+    """
+
+    name = "restore-data"
+    description = "Restoring your settings, API keys and knowledge base in place"
+
+    def should_run(self, ctx: Context) -> bool:
+        return ctx.backup_dir is not None
+
+    def run(self, ctx: Context) -> None:
+        restored = ensure_user_data(ctx.layout, ctx.backup_dir, ctx.new_dir)
+        if restored:
+            log.info("  restored %d missing file(s): %s", len(restored), ", ".join(restored[:8]))
+        else:
+            log.info("  settings, API keys and knowledge base are all in place")
+
+
 # ── 10. Start the service again and confirm it stays up ──────────────────────
 class StartService(Step):
     name = "start-service"
@@ -493,13 +587,31 @@ def prune(layout, state, keep_releases: int, keep_backups: int) -> List[str]:
         if p.name not in keep:
             shutil.rmtree(p, ignore_errors=True)
             removed.append(f"releases/{p.name}")
-    backups = sorted((p for p in layout.backups.iterdir() if p.is_dir()), key=lambda p: p.name, reverse=True)
+    # Only backups made by updates are pruned (v0.7.1): manual ones and
+    # "before-restore" safety copies are kept until you delete them.
+    backups = sorted((p for p in layout.backups.iterdir() if p.is_dir() and _is_update_backup(p)),
+                     key=lambda p: p.name, reverse=True)
     for p in backups[max(keep_backups, 1):]:
         shutil.rmtree(p, ignore_errors=True)
         removed.append(f"backups/{p.name}")
+    # Program-folder archives are large: keep them for the newest 2 updates only
+    # (the data backups next to them stay).
+    for p in backups[:max(keep_backups, 1)][2:]:
+        for name in (app_backup.ARCHIVE, app_backup.INVENTORY):
+            if (p / name).exists():
+                (p / name).unlink()
+                removed.append(f"backups/{p.name}/{name}")
     for r in removed:
         log.info("  removed old %s", r)
     return removed
+
+
+def _is_update_backup(path: Path) -> bool:
+    try:
+        label = json.loads((path / "manifest.json").read_text(encoding="utf-8")).get("label", "")
+    except (OSError, ValueError):
+        return False
+    return "-to-" in label
 
 
 def default_pipeline() -> List[Step]:
@@ -508,12 +620,14 @@ def default_pipeline() -> List[Step]:
         FetchRelease(),
         HandoffIfNewer(),
         BackupUserData(),
+        BackupAppFolder(),  # v0.7.1: full program-folder backup, restored on failure
         CarryOverUserFiles(),
         BuildRelease(),
         VerifyRelease(),
         StopService(),      # stop before touching data so nothing writes during migration
         MigrateUserData(),
         ActivateRelease(),
+        RestoreUserData(),  # v0.7.1: settings, API keys, knowledge base back in place
         StartService(),
         Finalize(),
     ]

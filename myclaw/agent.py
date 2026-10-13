@@ -38,6 +38,7 @@ import inspect
 from pathlib import Path
 from typing import List, Dict, Tuple, Optional, AsyncIterator, Set, Union, Any
 from collections import OrderedDict
+import itertools
 from dataclasses import dataclass, field
 from datetime import datetime
 import time
@@ -59,6 +60,13 @@ kb_gap_logger = logging.getLogger("myclaw.knowledge.gaps")
 # imports `GAP_FILE` from `myclaw.agent` keeps working; new code should
 # prefer `from myclaw.defaults import GAP_FILE` to avoid the indirection.
 from .defaults import GAP_FILE  # noqa: E402
+
+# v0.7.1: shared counter for the "round_robin" rotation strategy.
+_ROUND_ROBIN = itertools.count()
+
+# v0.7.1: conversation-memory scope (set by the chat engine per channel/agent).
+import contextvars  # noqa: E402
+MEMORY_SCOPE: contextvars.ContextVar[str] = contextvars.ContextVar("zensynora_memory_scope", default="")
 
 _LAST_ACTIVE_TIME = time.time()
 
@@ -335,6 +343,8 @@ class Agent:
             getattr(config.agents, "profiles_dir", "~/.myclaw/profiles")
         ).expanduser()
         self._custom_system_prompt = system_prompt
+        # (provider, model) that produced the last answer — set by rotation (v0.7.1).
+        self.last_model_used: Optional[tuple] = None
         self._system_prompt_loaded = False
         self._system_prompt = ""
 
@@ -697,11 +707,15 @@ class Agent:
         return "standard"
 
     async def _get_memory(self, user_id: str) -> Memory:
-        if user_id not in self._memories:
-            mem = Memory(user_id=user_id)
+        # v0.7.1: chat channels give every (channel, agent) its own history
+        # while the knowledge base stays the user's (it is keyed by user_id).
+        scope = MEMORY_SCOPE.get()
+        key = f"{user_id}__{scope}" if scope else user_id
+        if key not in self._memories:
+            mem = Memory(user_id=key)
             await mem.initialize()
-            self._memories[user_id] = mem
-        return self._memories[user_id]
+            self._memories[key] = mem
+        return self._memories[key]
 
     @property
     def provider(self):
@@ -746,6 +760,11 @@ class Agent:
         from .observability import span
         from .resilience import CircuitBreakerError
 
+        # v0.7.1: default-LLM rotation / fallback list (Settings → Model).
+        candidates = self._rotation_candidates()
+        if candidates:
+            return await self._rotating_chat(candidates, messages, stream)
+
         async def _primary():
             with span("provider.chat", provider=self._provider_name, model=model):
                 return await self.provider.chat(messages, model, stream=stream)
@@ -788,6 +807,67 @@ class Agent:
 
         with span("provider.fallback_chat", provider=self._provider_name, model=model):
             return await self._fallback_wrapper.chat(messages, model, stream=stream)
+
+    # ── Default-LLM rotation (v0.7.1) ────────────────────────────────────────
+    def _follows_default_model(self) -> bool:
+        """True for the default agent and named agents that use the default model."""
+        if self.name == "default":
+            return True
+        try:
+            d = self.config.agents.defaults
+        except AttributeError:
+            return False
+        return self._provider_name == d.provider and self.model == d.model
+
+    def _rotation_candidates(self) -> List[tuple]:
+        """Ordered (provider, model) pairs to try, or [] when rotation is off."""
+        try:
+            rot = self.config.agents.rotation
+        except AttributeError:
+            return []
+        if not (rot.enabled and rot.entries) or not self._follows_default_model():
+            return []
+        pairs = [(self._provider_name, self.model)]
+        for e in rot.entries:
+            pair = (e.provider, e.model)
+            if e.provider and e.model and pair not in pairs:
+                pairs.append(pair)
+        if rot.strategy == "round_robin" and len(pairs) > 1:
+            start = next(_ROUND_ROBIN) % len(pairs)
+            pairs = pairs[start:] + pairs[:start]
+        return pairs
+
+    async def _rotating_chat(self, candidates: List[tuple], messages, stream: bool):
+        """Try each (provider, model) until one answers; remember which one did."""
+        errors: List[str] = []
+        for prov_name, model in candidates:
+            try:
+                prov = get_provider(self._config, prov_name)
+                if not stream:
+                    result = await prov.chat(messages, model, stream=False)
+                    self.last_model_used = (prov_name, model)
+                    return result
+                gen, collector = await prov.chat(messages, model, stream=True)
+                it = gen.__aiter__()
+                try:
+                    first = await it.__anext__()
+                except StopAsyncIteration:
+                    first = None  # empty text is fine (e.g. a tool-call-only reply)
+
+                async def _chained(first=first, it=it):
+                    if first is not None:
+                        yield first
+                    async for chunk in it:
+                        yield chunk
+
+                self.last_model_used = (prov_name, model)
+                if errors:
+                    logger.warning("Rotation: answered by %s/%s after: %s", prov_name, model, "; ".join(errors))
+                return _chained(), collector
+            except Exception as e:  # rate limit, server down, missing model, bad key…
+                errors.append(f"{prov_name}/{model}: {str(e)[:160]}")
+                logger.info("Rotation: %s/%s failed (%s); trying the next model", prov_name, model, e)
+        raise ProviderUnavailableError("All models in the rotation failed — " + " | ".join(errors))
 
     def _extract_suggested_topics(self, message: str) -> List[str]:
         """Extract suggested topics from a message for knowledge gap guidance.
@@ -1262,14 +1342,17 @@ class Agent:
         except Exception as e:
             logger.error(f"Recovery LLM call failed: {e}")
 
-        # Build a meaningful fallback
-        fallback_parts = ["I'm sorry — I wasn't able to generate a useful response right now."]
-        if not had_kb_results:
-            fallback_parts.append(
-                f"\n\nI also noticed my knowledge base has no entries related to your query. "
-                f"You can add information with:\n"
-                f'  `write_to_knowledge(title="<topic>", content="<details>")`'
-            )
+        # Build a meaningful fallback.
+        # Changed 2026-10-13 (v0.7.1): the old text blamed the knowledge base
+        # ("no entries on this topic"), which is almost never the cause — an
+        # empty answer comes from the model (overloaded free tier, a reasoning
+        # model running out of tokens, a model without tool support…).
+        used = self.last_model_used or (self._provider_name, self.model)
+        fallback_parts = [
+            f"I'm sorry — the model ({used[0]}/{used[1]}) returned an empty answer twice.",
+            "Please try again. If it keeps happening, pick another model on the Models page,",
+            "or turn on rotation there so another model answers automatically.",
+        ]
         return " ".join(fallback_parts)
 
     # -- Sub-method: Route message ------------------------------------------------
@@ -1587,24 +1670,26 @@ class Agent:
             return
 
         full_response = "".join(response_parts)
+        # The provider fills the collector while the stream is consumed, so it
+        # is complete only now.
+        tool_calls = tool_calls_collector if tool_calls_collector else None
 
-        # Empty-response recovery for streaming
-        if self._is_empty_response(full_response):
-            logger.warning("Streaming produced empty response — emitting fallback.")
-            fallback = "I'm sorry — I wasn't able to generate a response."
-            if not had_kb_results:
-                fallback += (
-                    " My knowledge base has no entries on this topic. "
-                    'You can add information with: write_to_knowledge(title="<topic>", content="<details>")'
-                )
-            yield fallback
-            full_response = fallback
+        # Empty-response recovery for streaming.
+        # Fixed 2026-10-13 (v0.7.1): this ran before the tool-call check, so a
+        # reply that consisted only of a tool call (no text — normal for
+        # agents) was answered with "I wasn't able to generate a response. My
+        # knowledge base has no entries on this topic…" even though the agent
+        # was working. Now: tool calls → run them below; truly empty → ask the
+        # model once more (like think() does), and only then explain.
+        if not tool_calls and self._is_empty_response(full_response):
+            logger.warning("Streaming produced an empty response — retrying once without streaming.")
+            full_response = await self._recover_empty_response(
+                messages, user_message, user_id, had_kb_results
+            )
+            yield full_response
 
         # Trigger post_llm_call hooks for initial response
         trigger_hook("post_llm_call", full_response, None)
-
-        # Step 2: Check for tool calls collected during streaming
-        tool_calls = tool_calls_collector if tool_calls_collector else None
 
         if tool_calls:
             # ── Tool calls detected — execute and stream follow-up ──────────────

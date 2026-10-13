@@ -226,9 +226,17 @@ class BaseStrategy(ABC):
             )
         
         start_time = time.time()
+        # v0.7.1: swarm work shows up in the Web UI chat as agent-to-agent talk.
+        from ..events import CURRENT_AGENT, emit, short
+        sender = CURRENT_AGENT.get() or "swarm"
+        emit({"type": "delegation_start", "from": sender, "to": agent_name,
+              "task": short(prompt, 1500), "via": "swarm"})
+        token = CURRENT_AGENT.set(agent_name)
         try:
             result_text = await agent.think(prompt, user_id=user_id, _depth=1)
             execution_time = time.time() - start_time
+            emit({"type": "delegation_end", "from": sender, "to": agent_name, "ok": True,
+                  "result": short(result_text, 4000), "ms": int(execution_time * 1000), "via": "swarm"})
             
             return AgentResult(
                 agent_name=agent_name,
@@ -238,12 +246,16 @@ class BaseStrategy(ABC):
             )
         except Exception as e:
             logger.error(f"Agent {agent_name} execution failed: {e}")
+            emit({"type": "delegation_end", "from": sender, "to": agent_name, "ok": False,
+                  "result": short(str(e), 500), "ms": int((time.time() - start_time) * 1000), "via": "swarm"})
             return AgentResult(
                 agent_name=agent_name,
                 success=False,
                 error=str(e),
                 execution_time_seconds=time.time() - start_time
             )
+        finally:
+            CURRENT_AGENT.reset(token)
 
 
 class ParallelStrategy(BaseStrategy):

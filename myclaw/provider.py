@@ -778,6 +778,16 @@ class OpenAICompatProvider(BaseLLMProvider):
                     stream=True,
                 )
                 async for chunk in response:
+                    # v0.7.1: OpenRouter and some gateways report problems
+                    # (rate limit, model overloaded, context too long) as an
+                    # "error" object inside the stream instead of an HTTP
+                    # error. Raise it, so the user sees the real reason (and
+                    # rotation can try the next model) instead of an empty reply.
+                    extra = getattr(chunk, "model_extra", None) or {}
+                    err = extra.get("error")
+                    if err:
+                        msg = err.get("message") if isinstance(err, dict) else str(err)
+                        raise RuntimeError(f"{model}: {msg or 'error from the model server'}")
                     if chunk.choices and len(chunk.choices) > 0:
                         delta = chunk.choices[0].delta
                         if delta and delta.content:
@@ -820,6 +830,10 @@ class OpenAICompatProvider(BaseLLMProvider):
             model=model,
             messages=messages,
         )
+        err = (getattr(response, "model_extra", None) or {}).get("error")  # see the streaming note above
+        if err or not getattr(response, "choices", None):
+            detail = err.get("message") if isinstance(err, dict) else (str(err) if err else "no choices in the reply")
+            raise RuntimeError(f"{model}: {detail}")
         msg = response.choices[0].message
         tool_calls = _openai_tool_calls_to_dict(msg.tool_calls)
         result = (msg.content or "", tool_calls)
@@ -1331,14 +1345,115 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
 
         cls = _PROVIDER_MAP.get(name)
         if cls is None:
-            raise ValueError(
-                f"Unknown provider '{name}'. Supported: {', '.join(SUPPORTED_PROVIDERS)}"
-            )
-        logger.debug(f"Initialising provider: {name}")
-        provider = cls(config)
+            custom = find_custom_provider(config, name)
+            if custom is None:
+                raise ValueError(
+                    f"Unknown provider '{name}'. Available: {', '.join(provider_names(config))}"
+                )
+            logger.debug(f"Initialising custom provider: {name}")
+            provider = _build_custom_provider(custom)
+        else:
+            logger.debug(f"Initialising provider: {name}")
+            provider = cls(config)
         _provider_cache[name] = provider
         _provider_cache_timestamps[name] = now
         return provider
+
+
+# ── Custom providers (v0.7.1) ────────────────────────────────────────────────
+# Users can add their own providers in Settings → Providers. They live in
+# config.providers.custom and are looked up by name after the built-in ones.
+
+CUSTOM_PROVIDER_KINDS = ("openai", "ollama")
+
+
+def find_custom_provider(config, name: str):
+    """Return the CustomProviderConfig called *name*, or None."""
+    try:
+        for cp in config.providers.custom:
+            if cp.name.strip().lower() == name.strip().lower():
+                return cp
+    except AttributeError:
+        pass
+    return None
+
+
+def provider_names(config=None) -> List[str]:
+    """Built-in provider names followed by the user's custom providers."""
+    names = list(SUPPORTED_PROVIDERS)
+    if config is not None:
+        try:
+            names += [cp.name for cp in config.providers.custom if cp.name not in names]
+        except AttributeError:
+            pass
+    return names
+
+
+LOCAL_BUILTIN_PROVIDERS = ("ollama", "lmstudio", "llamacpp")
+_CLOUD_DEFAULT_URLS = {
+    "anthropic": "https://api.anthropic.com/v1",
+    "gemini": "https://generativelanguage.googleapis.com/v1beta",
+}
+
+
+def provider_endpoint(config, name: str) -> Optional[Dict[str, Any]]:
+    """How to reach a provider: {kind, base_url, api_key, local, label}.
+
+    kind is "ollama", "anthropic", "gemini" or "openai" (OpenAI-compatible).
+    Used by the connection test, the doctor and the model lists so built-in
+    and custom providers are handled the same way. None if unknown.
+    """
+    name = (name or "").strip()
+    if name in SUPPORTED_PROVIDERS:
+        pcfg = getattr(config.providers, name, None)
+        key = pcfg.api_key.get_secret_value() if pcfg is not None and hasattr(pcfg, "api_key") else ""
+        kind = name if name in ("ollama", "anthropic", "gemini") else "openai"
+        url = getattr(pcfg, "base_url", "") or _CLOUD_DEFAULT_URLS.get(name, "")
+        return {"kind": kind, "base_url": url.rstrip("/"), "api_key": key,
+                "local": name in LOCAL_BUILTIN_PROVIDERS, "label": name, "custom": False}
+    cp = find_custom_provider(config, name)
+    if cp is None:
+        return None
+    return {"kind": (cp.kind or "openai").lower(), "base_url": cp.base_url.rstrip("/"),
+            "api_key": cp.api_key.get_secret_value(), "local": bool(cp.local),
+            "label": cp.label or cp.name, "custom": True, "models": list(cp.models)}
+
+
+def _build_custom_provider(cp) -> BaseLLMProvider:
+    kind = (cp.kind or "openai").lower()
+    if kind == "ollama":
+        prov = OllamaProvider.__new__(OllamaProvider)
+        prov.base_url = (cp.base_url or "http://localhost:11434").rstrip("/")
+        prov.timeout = DEFAULT_TIMEOUT
+        return prov
+    if kind != "openai":
+        raise ValueError(f"Custom provider '{cp.name}': unknown kind '{cp.kind}' "
+                         f"(use one of: {', '.join(CUSTOM_PROVIDER_KINDS)})")
+    if not cp.base_url:
+        raise ValueError(f"Custom provider '{cp.name}' has no server URL.")
+    return OpenAICompatProvider(
+        api_key=cp.api_key.get_secret_value(), base_url=cp.base_url.rstrip("/"),
+    )
+
+
+async def complete_text(provider: BaseLLMProvider, messages: List[Dict], model: str) -> str:
+    """One plain completion WITHOUT tool definitions (v0.7.1).
+
+    ``provider.chat()`` always offers the agent's tools, so a small model may
+    answer with a tool call instead of text. Utility calls — writing an agent
+    prompt, judging a job result — use this instead.
+    """
+    if isinstance(provider, OpenAICompatProvider):
+        resp = await provider.client.chat.completions.create(model=model, messages=messages)
+        return (resp.choices[0].message.content or "").strip()
+    if isinstance(provider, OllamaProvider):
+        client = HTTPClientPool.get_client(provider.timeout)
+        r = await client.post(f"{provider.base_url}/api/chat",
+                              json={"model": model, "messages": messages, "stream": False})
+        r.raise_for_status()
+        return (r.json().get("message", {}).get("content") or "").strip()
+    text, _ = await provider.chat(messages, model)
+    return (text or "").strip()
 
 
 def clear_provider_cache():
@@ -1358,4 +1473,5 @@ LLMProvider = OllamaProvider
 # internal helpers (e.g. _profile_cache, _LAST_ACTIVE_TIME). Names that
 # aren't here are still importable by direct attribute access — they
 # just don't participate in star imports.
-__all__ = ['LLMProvider', 'Message', 'ToolCall', 'ToolCallFunction', 'get_provider', 'SUPPORTED_PROVIDERS']
+__all__ = ['LLMProvider', 'Message', 'ToolCall', 'ToolCallFunction', 'get_provider', 'SUPPORTED_PROVIDERS',
+           'provider_names', 'find_custom_provider', 'complete_text']

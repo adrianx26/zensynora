@@ -31,7 +31,10 @@
     agent --&gt; llm[&quot;LLM providers&lt;br/&gt;local or cloud&quot;]
     agent --&gt; tools[&quot;95 tools&lt;br/&gt;sandboxed&quot;]
     agent &lt;--&gt; state[(&quot;~/.myclaw&lt;br/&gt;memory · knowledge · config&quot;)]
-    ops[&quot;doctor · updater&quot;] -.-&gt; agent &amp; state</div>
+    agent &lt;--&gt; agent2[&quot;other agents&lt;br/&gt;delegation · swarms&quot;]
+    jobs[&quot;Jobs&lt;br/&gt;schedule · score · bench&quot;] --&gt; agent
+    ops[&quot;doctor · medic · updater&quot;] -.-&gt; agent &amp; state
+    agent -. proposals .-&gt; ops</div>
 </div>
 
 <div class="footer">

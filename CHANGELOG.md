@@ -7,6 +7,106 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-10-13
+
+A real multi-agent chat, model switching and your own providers, a Jobs
+page, backups, safer updates, and an approval-gated way for agents to
+improve ZenSynora's own code.
+
+### Added
+- **Chat channels** (`myclaw/chat/`, `myclaw/web/chat_api.py`, Web UI): group
+  rooms with several agents (`#general` and your own) and direct messages
+  with one agent. `@name` pulls an agent into the conversation, `@all` asks
+  every member; the reply mode decides who answers otherwise (lead / everyone
+  in turn / everyone at once). Answers stream into separate bubbles, history
+  is kept in `~/.myclaw/chat.db`, and each agent has its own memory per
+  channel while the knowledge base stays shared. Stop button, Shift+Enter for
+  new lines, `@` autocomplete, two-factor support.
+- **Agent-to-agent activity** (`myclaw/events.py`): delegations
+  (`delegate`, swarms), tool calls and job runs are published as events and
+  shown in the chat and in an Activity panel — who asked whom, what came back
+  and how long it took.
+- **Models page**: switch the default model in one click (the previous one
+  is remembered), a **rotation** list (fallback on errors such as rate
+  limits, or round-robin), "Rotate now", and **your own providers**: any
+  OpenAI-compatible server (local or online) or another Ollama server, with
+  presets for vLLM, LocalAI, Jan, KoboldCpp, text-generation-webui, DeepSeek,
+  Mistral, Cerebras, Together, GitHub Models, Hugging Face, NVIDIA NIM,
+  Gemini (OpenAI-compatible), xAI and Fireworks — several with free tiers.
+  API: `/api/models`, `/api/models/default`, `/api/models/rotate`.
+- **✨ Generate prompt** for named agents (Settings → Agents): the main model
+  writes the system prompt from the agent's name and new *description*
+  field (`POST /api/agents/generate-prompt`).
+- **Jobs page** (`myclaw/jobs/`, `myclaw/web/jobs_api.py`): add, edit, pause,
+  run now and delete jobs; schedules manual / once / every N minutes / daily
+  / weekly; post results to a channel; retries and timeouts; run history
+  with output, duration and model; **evaluate** a run (0–10 score against
+  success criteria, by the main model, automatic if enabled) and
+  **benchmark** a job on up to 8 models side by side. Templates: morning
+  briefing, weekly knowledge clean-up, medic self-review.
+- **Backups** (`myclaw/backup.py`, Web UI Backups page, `zensynora backup
+  create|list|restore|delete`): settings + API keys (with the config key),
+  knowledge base, conversations and chat, jobs/own tools/skills; checksums
+  in a manifest, check, download, import, restore of selected parts (a safety
+  backup is made first), automatic backups while the Web UI runs (interval
+  and retention in Settings). Stored in `~/.myclaw-backups`
+  (`MYCLAW_BACKUP_DIR` or Settings to change).
+- **Approval-gated self-update** (`myclaw/selfupdate.py`, Doctor → Change
+  proposals, `zensynora medic proposals|show|approve|reject|apply|problems`):
+  agents can read the installed code (`read_source_file`,
+  `list_source_files`) and file proposals with `propose_code_change`
+  (complete new file content; checked: inside the program folder, never
+  venv/.git/.env, Python must compile, size limits; unified diff stored).
+  Nothing changes until you approve; the change is then installed **through
+  the safe updater** as a new release — full backup, side-by-side install,
+  checks, optional test run, switch, automatic rollback on failure.
+  Proposals are refused if the code changed since they were made.
+  Documentation-only changes can be auto-approved (off by default).
+- **Medic learning**: `get_recent_problems` (grouped log errors, failed or
+  low-scoring job runs, open proposals) and `record_lesson` (knowledge note
+  `medic-lessons`, shown on the Doctor page); a "Run self-review" button and
+  job template tie them together.
+- **Updater: full program-folder backup** (`updater/app_backup.py`). Before
+  switching, the running release folder is archived completely (code,
+  `venv/`, web UI build, `.env`, your own files) with an inventory; if the
+  update fails, the folder is compared with the inventory and restored from
+  the archive when anything differs. After a successful update the
+  settings, API keys and knowledge base are checked and restored in place
+  if missing. `--app-backup full|code|none`; program archives are kept for
+  the last two updates only (they are large).
+- `python -m myclaw`; `zensynora webui --host/--reload` (from 0.7.0) used by
+  the docs; `MYCLAW_BACKUP_DIR`.
+
+### Fixed
+- **"I wasn't able to generate a response. My knowledge base has no entries
+  on this topic…"** in the Web UI: the streaming path judged the reply empty
+  *before* looking for tool calls, so every answer that started with a tool
+  call (normal for agents) got this text. Tool calls now run; a truly empty
+  reply is retried once, and the final message names the model instead of
+  blaming the knowledge base.
+- Errors that OpenRouter and other gateways send *inside* the stream (rate
+  limit, overloaded model) are now shown instead of an empty answer, and let
+  rotation move to the next model.
+- **"Error searching knowledge: no such column: write"**: search text such as
+  `write: …`, `a-b` or `c++` was parsed as FTS5 syntax. Every word is now
+  quoted (knowledge base and conversation search); long sentences fall back
+  to "any word, best match first".
+- **Delegation never worked** ("Agent registry not initialized"):
+  `set_registry` replaced a dictionary that the tool modules had already
+  imported. It is now updated in place. The same problem made Telegram
+  scheduling report "Scheduler not available" — fixed the same way.
+- `#general` is created on first use (fresh installs could get a 404).
+- Uninstall: also removes `chat.db`, `jobs.db`, `metering.db` and the
+  per-user knowledge indexes with `--keep-config`, and asks before deleting
+  `~/.myclaw-backups`.
+
+### Changed
+- The Web UI chat is built on channels; the old per-agent socket
+  (`/ws/chat/{agent}`) still works for scripts.
+- Docker compose keeps backups inside the data volume.
+- Version 0.7.1. Tests: 508 (new: `test_v071_features.py`,
+  `test_selfupdate.py`, knowledge-search regression).
+
 ## [0.7.0] - 2026-10-13
 
 Health checks you can trust, documentation rebuilt from scratch, and every

@@ -43,6 +43,7 @@ class Options:
     manage_service: bool = True
     skip_webui: bool = False
     dry_run: bool = False
+    app_backup: str = "full"  # v0.7.1: full | code | none (program-folder backup)
 
 
 @dataclass

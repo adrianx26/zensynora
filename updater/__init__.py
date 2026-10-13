@@ -6,7 +6,8 @@ Layout it manages (``BASE`` defaults to ``~/.local/share/zensynora``)::
       source -> releases/0.5.1-20261013T201500   (symlink = the active release)
       releases/<version>-<timestamp>/            (one self-contained copy per version,
                                                   each with its own venv/ and webui/dist)
-      backups/<timestamp>-<from>-to-<to>/        (user-data snapshot + manifest)
+      backups/<timestamp>-<from>-to-<to>/        (user-data snapshot, full program-folder
+                                                  archive + inventory, manifest)
       logs/update-<timestamp>.log
       updater-state.json                         (history used for rollback)
 
@@ -19,7 +20,9 @@ itself, so a failure at any point leaves the previous working release active.
 
 # Bump when the updater's own behaviour changes in a way a newer release should
 # take over (an older installed updater hands off to a newer downloaded one).
-UPDATER_PROTOCOL = 1
+# 2 (v0.7.1): full program-folder backup + restore on failure, data put back
+#   in place after the switch, manual backups never pruned.
+UPDATER_PROTOCOL = 2
 
 DEFAULT_REPO = "adrianx26/zensynora"
 DEFAULT_REF = "main"

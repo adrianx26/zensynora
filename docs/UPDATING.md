@@ -2,8 +2,13 @@
 
 ZenSynora updates **side by side**: the new version is downloaded and built in
 its own folder while the current one keeps working. It is only switched in
-after it has passed its checks against your configuration, and your data is
-backed up first. Any failure leaves the previous version active.
+after it has passed its checks against your configuration. Before anything
+changes, **your data and the whole installed program folder are backed up**;
+any failure puts the previous version back exactly as it was.
+
+> Updated for v0.7.1: full program-folder backup and restore, settings/API
+> keys/knowledge base checked and restored after the switch, approval-gated
+> self-update proposals (see [Medic & Doctor](medic_agent_guide.md#6-self-update-proposals)).
 
 ## Everyday use
 
@@ -18,10 +23,10 @@ If the `zensynora` command isn't available, use the script directly:
 
 | Command | What it does |
 |---|---|
-| `update` *(default)* | Update to the latest `main`. `--ref v0.7.0` for a tag/branch, `--from-dir PATH` / `--from-archive FILE` for offline updates, `--run-tests` to run the test suite before switching, `--force` to reinstall the same version. |
+| `update` *(default)* | Update to the latest `main`. `--ref v0.7.1` for a tag/branch, `--from-dir PATH` / `--from-archive FILE` for offline updates, `--run-tests` to run the test suite before switching, `--force` to reinstall the same version, `--app-backup full\|code\|none` for the program-folder backup (default `full`; `code` skips `venv/`). |
 | `rollback` | Activate the previous version. Restores `~/.myclaw` too **only if** that update changed your data (`--restore-data` / `--keep-data` to override). `--to RELEASE` picks a specific one. |
 | `status [--check] [--json]` | Installed version, available releases and backups, recent updates. |
-| `backup [--label X]` | Back up `~/.myclaw` now. |
+| `backup [--label X]` | Back up `~/.myclaw` now (for selective backups use `zensynora backup create` or the Web UI **Backups** page). |
 | `restore --backup NAME` | Restore `~/.myclaw` from a backup (current data is saved first). |
 | `prune` | Delete old releases/backups (defaults: keep 3 releases, 5 backups). |
 
@@ -38,20 +43,33 @@ curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-on
  1 preflight        Python ≥ 3.11, ~1.5 GB free, find current version, service running?
  2 fetch            download/copy new source → releases/<version>-<time>/
  3 handoff          if the new version ships a newer updater, it takes over
- 4 backup           ~/.myclaw + .env + data/ → backups/<time>-<from>-to-<to>/  (mode 700)
- 5 carry-over       copy .env and data/ into the new release
- 6 build            new venv, requirements, `pip install -e`, your extra packages, web UI
- 7 verify           imports, load YOUR config with the new code, `zensynora --help`
- 8 stop service     systemd `myclaw` (only if it was running)
- 9 migrate          versioned data migrations (see below)
-10 activate         atomically repoint  source -> releases/<new>
-11 start service    and confirm it stays up
-12 finalize         record history, prune old releases/backups
+ 4 backup data      ~/.myclaw + .env + data/ → backups/<time>-<from>-to-<to>/  (mode 700)
+ 5 backup program   the whole running release folder (code, venv, web UI, .env,
+                    your own files) → app-folder.tar.gz + an inventory of every file
+ 6 carry-over       copy .env and data/ into the new release
+ 7 build            new venv, requirements, `pip install -e`, your extra packages, web UI
+ 8 verify           imports, load YOUR config with the new code, `zensynora --help`
+ 9 stop service     systemd `myclaw` (only if it was running)
+10 migrate          versioned data migrations (see below)
+11 activate         atomically repoint  source -> releases/<new>
+12 restore data     settings, API keys and knowledge base checked; anything missing
+                    is put back from the backup of step 4
+13 start service    and confirm it stays up
+14 finalize         record history, prune old releases/backups
 ```
 
-Steps 1–9 never touch the running version. If any step fails, the completed
-steps are undone in reverse order (new release folder deleted, data restored
-from the backup if a migration ran, `source` pointed back, service restarted).
+Steps 1–10 never touch the running version. If any step fails, the completed
+steps are undone in reverse order: the new release folder is deleted, data is
+restored from the backup if a migration ran, `source` is pointed back, the
+service is restarted — and the previous program folder is compared with the
+inventory from step 5 and **restored from the archive if anything in it
+differs** (changed, missing or extra files). The update log says what was
+restored.
+
+Program-folder archives are large (about the size of the folder,
+compressed), so they are kept for the last two updates; data backups follow
+`--keep-backups` (default 5). Backups you make yourself (`update.sh backup`,
+`zensynora backup`, the Web UI) are never pruned automatically.
 
 ## Layout
 
@@ -59,7 +77,8 @@ from the backup if a migration ran, `source` pointed back, service restarted).
 ~/.local/share/zensynora/
   source -> releases/0.6.0-20261013T203000   # what everything runs from
   releases/                                  # one complete copy per version (own venv)
-  backups/                                   # user-data snapshots (contain API keys)
+  backups/                                   # data snapshots + program archives (contain API keys)
+  staging/                                   # temporary copies for approved self-update proposals
   logs/update-*.log                          # full log of every update
   updater-state.json                         # history used by rollback
 ~/.myclaw/                                   # your data, shared by all versions
@@ -72,7 +91,17 @@ older in-place install moves it to `releases/<version>-legacy-…` so it stays
 available for rollback.
 
 Docker deployments update by rebuilding the image (`install.sh --docker`);
-data lives in the Docker volume and is not touched by this updater.
+data lives in the Docker volume and is not touched by this updater. Back it up
+first with the Web UI **Backups** page or `docker compose exec zensynora
+zensynora backup create`.
+
+## Changes proposed by agents
+
+Agents can propose changes to ZenSynora's own code. An approved proposal is
+installed by this updater exactly like an update from a local folder
+(`--from-dir` a copy of the current release with the change applied,
+`--force`), so every safeguard above applies, and `rollback` undoes it.
+Details: [Medic & Doctor → Self-update proposals](medic_agent_guide.md#6-self-update-proposals).
 
 ## For developers: extending the update procedure
 
@@ -118,5 +147,5 @@ one before doing anything else.
 
 `tests/test_updater.py` covers the pipeline rollback, backups, migrations,
 adoption of legacy installs, version policy and pruning without network
-access. For an end-to-end check, point `--base`/`--data-dir` at a scratch
+access; `tests/test_selfupdate.py` covers proposals going through it. For an end-to-end check, point `--base`/`--data-dir` at a scratch
 folder and update between two local source trees with `--from-dir`.

@@ -38,40 +38,42 @@ _FTS_RESERVED = {"NOT", "NEAR", "AND", "OR"}
 _FTS_RESERVED_RE = re.compile(r"\b(NOT|NEAR|AND|OR)\b", re.IGNORECASE)
 
 
-def sanitize_fts_query(query: str) -> str:
-    """Sanitize a user-provided query for safe use in FTS5 MATCH.
+def sanitize_fts_query(query: str, any_term: bool = False) -> str:
+    """Turn free text into a safe FTS5 MATCH expression.
 
-    FTS5 query syntax supports operators like NOT, NEAR, AND, OR, quotes,
-    and prefixes. Unmatched quotes or malicious operators can cause syntax
-    errors or alter query semantics. This function:
+    Fixed 2026-10-13 (v0.7.1): the old version only removed quotes and the
+    words AND/OR/NOT/NEAR, so ordinary text could still be read as FTS5
+    syntax — ``write: a file`` became a column filter ("no such column:
+    write"), ``a-b`` too, and ``c++`` or brackets were syntax errors. Now every
+    word is quoted as a plain term, so no user text is ever parsed as syntax:
 
-    1. Escapes embedded double quotes (FTS5 delimiter)
-    2. Removes standalone reserved operators to prevent boolean injection
-    3. Balances unmatched quotes
-    4. Strips leading/trailing whitespace
+        write: a file   ->  "write" "a" "file"
+        how-to (C++)    ->  "how" "to" "C"
+        pyth*           ->  "pyth"*        (a trailing * still means prefix)
 
-    Args:
-        query: Raw user search string
+    Terms are combined with FTS5's implicit AND, as before; with
+    ``any_term=True`` they are joined with OR (used as a fallback for long
+    sentences, ranked by relevance).
 
     Returns:
-        Sanitized query safe for FTS5 MATCH
+        The MATCH expression, or ``"*"`` when there is nothing to search for
+        (callers treat ``"*"`` as "no text filter"; it is not valid in MATCH).
     """
     if not query or not query.strip():
         return "*"
+    terms = []
+    for m in _FTS_TERM_RE.finditer(query):
+        word, star = m.group(1), m.group(2)
+        if _FTS_RESERVED_RE.fullmatch(word):
+            continue  # a bare AND/OR/NOT/NEAR adds nothing as a search term
+        terms.append(f'"{word}"' + ("*" if star else ""))
+    terms = terms[:_FTS_MAX_TERMS]
+    return (" OR " if any_term else " ").join(terms) if terms else "*"
 
-    sanitized = query.strip()
 
-    # Escape embedded double quotes by replacing with spaces
-    sanitized = sanitized.replace('"', " ")
-
-    # Replace standalone reserved FTS5 operators with spaces
-    # (preserve them when they're part of a larger word)
-    sanitized = _FTS_RESERVED_RE.sub(" ", sanitized)
-
-    # Collapse multiple spaces
-    sanitized = re.sub(r"\s+", " ", sanitized).strip()
-
-    return sanitized if sanitized else "*"
+# Words = runs of letters/digits/underscore in any script; optional trailing *.
+_FTS_TERM_RE = re.compile(r"(\w+)(\*)?", re.UNICODE)
+_FTS_MAX_TERMS = 32
 
 
 @dataclass
@@ -878,7 +880,36 @@ class KnowledgeDB:
 
         # Phase 1.5: Sanitize user input to prevent FTS5 injection
         safe_query = sanitize_fts_query(query)
+        if safe_query == "*":
+            return []  # no searchable words (MATCH "*" is an FTS5 error)
 
+        rows = self._match_entities(conn, safe_query, limit)
+        # v0.7.1: a whole sentence (the agent searches with the user's
+        # message) rarely has every word in one note. If the strict search
+        # finds nothing, accept notes with any of the words, best match first.
+        if not rows and safe_query.count(" ") >= 3:
+            rows = self._match_entities(conn, sanitize_fts_query(query, any_term=True), limit)
+
+        entities = []
+        seen_ids = set()
+        for row in rows:
+            if row["id"] not in seen_ids:
+                seen_ids.add(row["id"])
+                entities.append(
+                    Entity(
+                        id=row["id"],
+                        name=row["name"],
+                        permalink=row["permalink"],
+                        file_path=row["file_path"],
+                        created_at=datetime.fromisoformat(row["created_at"]),
+                        updated_at=datetime.fromisoformat(row["updated_at"]),
+                    )
+                )
+        return entities
+
+    @staticmethod
+    def _match_entities(conn, q: str, limit: int):
+        """Run the FTS5 entity search for an already-sanitized expression."""
         # Try enhanced search with observations (optimization 3.1)
         # Fall back to entities-only search for backward compatibility
         try:
@@ -903,7 +934,7 @@ class KnowledgeDB:
                 ORDER BY match_rank
                 LIMIT ?
                 """,
-                (safe_query, safe_query, limit),
+                (q, q, limit),
             ).fetchall()
         except sqlite3.OperationalError:
             # Fall back to entities-only search for existing databases
@@ -917,25 +948,10 @@ class KnowledgeDB:
                 ORDER BY fts.rank
                 LIMIT ?
                 """,
-                (safe_query, limit),
+                (q, limit),
             ).fetchall()
 
-        entities = []
-        seen_ids = set()
-        for row in rows:
-            if row["id"] not in seen_ids:
-                seen_ids.add(row["id"])
-                entities.append(
-                    Entity(
-                        id=row["id"],
-                        name=row["name"],
-                        permalink=row["permalink"],
-                        file_path=row["file_path"],
-                        created_at=datetime.fromisoformat(row["created_at"]),
-                        updated_at=datetime.fromisoformat(row["updated_at"]),
-                    )
-                )
-        return entities
+        return rows
 
     def rank_bm25(
         self, fts_table: str, query: str, k1: float = BM25_DEFAULT_K1, b: float = BM25_DEFAULT_B

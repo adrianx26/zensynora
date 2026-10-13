@@ -10,7 +10,7 @@ import shutil
 import tarfile
 import time
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from .layout import Layout, timestamp
 
@@ -142,6 +142,62 @@ def restore_backup(layout: Layout, backup_dir: Path, take_safety_copy: bool = Tr
         shutil.rmtree(staging, ignore_errors=True)
     log.info("  user data restored from %s", backup_dir.name)
     return safety
+
+
+# Files that must survive every update: settings + API keys, the config key,
+# the knowledge base (v0.7.1). Patterns are relative to the data directory.
+PROTECTED = ("config.json", ".config_key", "knowledge_*.db", "vectors.db", "knowledge_gaps.jsonl")
+PROTECTED_DIRS = ("knowledge/",)
+
+
+def _protected(rel: str) -> bool:
+    import fnmatch
+
+    return rel.startswith(PROTECTED_DIRS) or any(fnmatch.fnmatch(rel, p) for p in PROTECTED)
+
+
+def ensure_user_data(layout: Layout, backup_dir: Path, release_dir: Optional[Path] = None) -> List[str]:
+    """Put back any protected file that is missing after an update.
+
+    Compares ``~/.myclaw`` (and the new release's ``.env``) with the pre-update
+    backup and restores only what is *missing*; files a migration changed on
+    purpose are kept. Returns the restored paths (relative).
+    """
+    restored: List[str] = []
+    archive = backup_dir / "user-data.tar.gz"
+    if archive.exists():
+        top = layout.data_dir.name
+        with tarfile.open(archive, "r:gz") as tar:
+            for member in tar.getmembers():
+                if not member.isfile():
+                    continue
+                parts = Path(member.name).parts
+                if len(parts) < 2 or parts[0] != top or ".." in parts:
+                    continue
+                rel = "/".join(parts[1:])
+                dst = layout.data_dir.joinpath(*parts[1:])
+                if not _protected(rel) or dst.exists():
+                    continue
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                src = tar.extractfile(member)
+                if src is None:
+                    continue
+                with open(dst, "wb") as out:
+                    shutil.copyfileobj(src, out)
+                os.chmod(dst, member.mode & 0o777 or 0o600)
+                os.utime(dst, (member.mtime, member.mtime))
+                restored.append(rel)
+    rel_archive = backup_dir / "release-files.tar.gz"
+    if release_dir is not None and rel_archive.exists():
+        with tarfile.open(rel_archive, "r:gz") as tar:
+            for member in tar.getmembers():
+                if member.isfile() and member.name == ".env" and not (release_dir / ".env").exists():
+                    src = tar.extractfile(member)
+                    if src is not None:
+                        (release_dir / ".env").write_bytes(src.read())
+                        os.chmod(release_dir / ".env", 0o600)
+                        restored.append(".env (program folder)")
+    return restored
 
 
 def restore_release_files(backup_dir: Path, release_dir: Path) -> None:

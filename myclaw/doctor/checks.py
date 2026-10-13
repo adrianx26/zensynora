@@ -42,6 +42,8 @@ def _has_module(name: str) -> bool:
 def _providers_in_use(cfg) -> set:
     used = {cfg.agents.defaults.provider}
     used |= {a.provider for a in cfg.agents.named if a.provider}
+    if cfg.agents.rotation.enabled:  # v0.7.1
+        used |= {e.provider for e in cfg.agents.rotation.entries if e.provider}
     return used
 
 
@@ -76,8 +78,13 @@ def _core_packages(ctx):
 def _provider_sdk(ctx):
     cfg = ctx.get_config()
     missing = []
+    from ..provider import find_custom_provider
+
     for p in sorted(_providers_in_use(cfg)):
         spec = PROVIDER_SDK.get(p)
+        cp = None if spec else find_custom_provider(cfg, p)
+        if cp is not None and cp.kind == "openai":
+            spec = ("openai", "openai")  # custom OpenAI-compatible providers use the openai SDK
         if spec and not _has_module(spec[0]):
             missing.append(f"{p} needs '{spec[1]}'")
     if missing:
@@ -142,13 +149,17 @@ def _config_file(ctx):
 
 @check("provider_config", "Provider settings", "configuration")
 def _provider_config(ctx):
-    from ..provider import SUPPORTED_PROVIDERS
+    from ..provider import SUPPORTED_PROVIDERS, find_custom_provider
 
     cfg = ctx.get_config()
     problems = []
     for p in sorted(_providers_in_use(cfg)):
         if p not in SUPPORTED_PROVIDERS:
-            problems.append(f"unknown provider '{p}'")
+            cp = find_custom_provider(cfg, p)  # v0.7.1: user-added providers
+            if cp is None:
+                problems.append(f"unknown provider '{p}'")
+            elif not cp.base_url:
+                problems.append(f"{p}: server URL missing")
             continue
         if p not in LOCAL_PROVIDERS:
             pcfg = getattr(cfg.providers, p, None)
@@ -166,19 +177,18 @@ def _probe(ctx):
         return ctx.cache["probe"]
     import httpx
 
+    from ..provider import provider_endpoint
+
     cfg = ctx.get_config()
     p = cfg.agents.defaults.provider
-    pcfg = getattr(cfg.providers, p, None)
-    base = (getattr(pcfg, "base_url", "") or {
-        "anthropic": "https://api.anthropic.com/v1",
-        "gemini": "https://generativelanguage.googleapis.com/v1beta"}.get(p, "")).rstrip("/")
-    key = pcfg.api_key.get_secret_value() if pcfg is not None and hasattr(pcfg, "api_key") else ""
+    ep = provider_endpoint(cfg, p) or {"kind": "openai", "base_url": "", "api_key": ""}
+    kind, base, key = ep["kind"], ep["base_url"], ep["api_key"]
     headers, params = {}, {}
-    if p == "ollama":
+    if kind == "ollama":
         url = f"{base}/api/tags"
-    elif p == "anthropic":
+    elif kind == "anthropic":
         url, headers = f"{base}/models", {"x-api-key": key, "anthropic-version": "2023-06-01"}
-    elif p == "gemini":
+    elif kind == "gemini":
         url, params = f"{base}/models", {"key": key}
     else:
         url = f"{base}/models"
@@ -192,9 +202,9 @@ def _probe(ctx):
             res = {"ok": False, "error": f"HTTP {r.status_code} from {url}", "models": [], "ms": ms}
         else:
             body = r.json()
-            if p == "ollama":
+            if kind == "ollama":
                 models = [m.get("name", "") for m in body.get("models", [])]
-            elif p == "gemini":
+            elif kind == "gemini":
                 models = [m.get("name", "").removeprefix("models/") for m in body.get("models", [])]
             else:
                 models = [m.get("id", "") for m in body.get("data", [])]

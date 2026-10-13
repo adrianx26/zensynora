@@ -150,6 +150,18 @@ class TestDatabase:
         assert len(results) == 1
         assert results[0].permalink == "project-alpha"
 
+    def test_search_fts_free_text_is_never_syntax(self, db):
+        """v0.7.1 regression: 'write: x' raised "no such column: write"."""
+        eid = db.create_entity("Write Guide", "write-guide", "w.md")
+        db.add_observation(eid, "tip", "how to write a config file", [])
+        for text in ["write: guide", "a-b write", "c++ (write)", "write AND",
+                     '"write', "NOT", "", "  ", "*", "wri*"]:
+            db.search_fts(text, limit=5)  # must not raise
+        assert [e.permalink for e in db.search_fts("write: guide")] == ["write-guide"]
+        # A long sentence falls back to "any word", best match first.
+        hits = db.search_fts("please tell me how I should write the config", limit=5)
+        assert hits and hits[0].permalink == "write-guide"
+
 
 # ── Storage Tests ────────────────────────────────────────────────────────────
 

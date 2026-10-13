@@ -18,6 +18,12 @@ from .core import (
     is_tool_independent,
 )
 
+# v0.7.1: the job queue and notification callback are set at runtime
+# (set_job_queue / set_notification_callback rebind them in core), so they
+# are read from the core module at call time — names imported above would
+# stay None forever ("Scheduler not available").
+from . import core as _core  # noqa: E402
+
 import json
 import time
 import re
@@ -45,10 +51,10 @@ def _create_job_internal(task: str, delay: int, every: int, user_id: str, job_id
         result = await agent.think(jd["task"], user_id=jd["user_id"])
         msg = f"⏰ Scheduled task '{jd['task']}' result:\n{result}"
         # Try channel-agnostic callback first (WhatsApp, future channels)
-        if _notification_callback:
+        if _core._notification_callback:
             try:
                 import asyncio
-                asyncio.ensure_future(_notification_callback(jd["user_id"], msg))
+                asyncio.ensure_future(_core._notification_callback(jd["user_id"], msg))
             except Exception as e:
                 logger.error(f"Notification callback error: {e}")
         # Fall back to Telegram bot.send_message
@@ -59,16 +65,16 @@ def _create_job_internal(task: str, delay: int, every: int, user_id: str, job_id
             )
 
     if every > 0:
-        _job_queue.run_repeating(_job_fn, interval=every, first=every, name=job_id, data=job_data)
+        _core._job_queue.run_repeating(_job_fn, interval=every, first=every, name=job_id, data=job_data)
         return f"Recurring job '{job_id}' scheduled — runs every {every}s."
     else:
-        _job_queue.run_once(_job_fn, when=delay, name=job_id, data=job_data)
+        _core._job_queue.run_once(_job_fn, when=delay, name=job_id, data=job_data)
         return f"One-shot job '{job_id}' scheduled — fires in {delay}s."
 
 
 def schedule(task: str, delay: int = 0, every: int = 0, user_id: str = "default") -> str:
     """Schedule a task to run in the future, executed by the default agent."""
-    if _job_queue is None and _notification_callback is None:
+    if _core._job_queue is None and _core._notification_callback is None:
         return "Error: Scheduler not available (no channel gateway running)."
     if delay <= 0 and every <= 0:
         return "Error: Specify 'delay' (one-shot) or 'every' (recurring) in seconds."
@@ -81,8 +87,8 @@ def edit_schedule(job_id: str, new_task: str = "", delay: int = -1, every: int =
     """Edit an active scheduled job.
     new_task specifies the new action. delay/every > 0 reschedules it.
     """
-    if _job_queue is None: return "Error: Scheduler not available."
-    jobs = _job_queue.get_jobs_by_name(job_id)
+    if _core._job_queue is None: return "Error: Scheduler not available."
+    jobs = _core._job_queue.get_jobs_by_name(job_id)
     if not jobs: return f"No job found with ID: {job_id}"
 
     job = jobs[0]
@@ -106,8 +112,8 @@ def split_schedule(job_id: str, sub_tasks_json: str) -> str:
     sub_tasks_json: A JSON array of strings, each being a new task.
     They will inherit the delay/every settings of the original job.
     """
-    if _job_queue is None: return "Error: Scheduler not available."
-    jobs = _job_queue.get_jobs_by_name(job_id)
+    if _core._job_queue is None: return "Error: Scheduler not available."
+    jobs = _core._job_queue.get_jobs_by_name(job_id)
     if not jobs: return f"No job found with ID: {job_id}"
 
     import json
@@ -137,8 +143,8 @@ def split_schedule(job_id: str, sub_tasks_json: str) -> str:
 
 def suspend_schedule(job_id: str) -> str:
     """Suspend (pause) an active scheduled job without cancelling it."""
-    if _job_queue is None: return "Error: Scheduler not available."
-    jobs = _job_queue.get_jobs_by_name(job_id)
+    if _core._job_queue is None: return "Error: Scheduler not available."
+    jobs = _core._job_queue.get_jobs_by_name(job_id)
     if not jobs: return f"No job found with ID: {job_id}"
     for job in jobs:
         job.enabled = False
@@ -147,8 +153,8 @@ def suspend_schedule(job_id: str) -> str:
 
 def resume_schedule(job_id: str) -> str:
     """Resume a suspended scheduled job."""
-    if _job_queue is None: return "Error: Scheduler not available."
-    jobs = _job_queue.get_jobs_by_name(job_id)
+    if _core._job_queue is None: return "Error: Scheduler not available."
+    jobs = _core._job_queue.get_jobs_by_name(job_id)
     if not jobs: return f"No job found with ID: {job_id}"
     for job in jobs:
         job.enabled = True
@@ -157,9 +163,9 @@ def resume_schedule(job_id: str) -> str:
 
 def cancel_schedule(job_id: str) -> str:
     """Cancel an active scheduled job by its ID."""
-    if _job_queue is None:
+    if _core._job_queue is None:
         return "Error: Scheduler not available."
-    jobs = _job_queue.get_jobs_by_name(job_id)
+    jobs = _core._job_queue.get_jobs_by_name(job_id)
     if not jobs:
         return f"No job found with ID: {job_id}"
     for job in jobs:
@@ -169,9 +175,9 @@ def cancel_schedule(job_id: str) -> str:
 
 def list_schedules() -> str:
     """List all currently active scheduled jobs."""
-    if _job_queue is None:
+    if _core._job_queue is None:
         return "Error: Scheduler not available."
-    jobs = _job_queue.jobs()
+    jobs = _core._job_queue.jobs()
     if not jobs:
         return "No scheduled jobs active."
     lines = []
@@ -360,7 +366,7 @@ def auto_schedule(
     """
     from ..scheduler_features import ComplexityAnalyzer, decompose_task
 
-    if _job_queue is None and _notification_callback is None:
+    if _core._job_queue is None and _core._notification_callback is None:
         return "Error: Scheduler not available (no channel gateway running)."
     if delay <= 0 and every <= 0:
         return "Error: Specify 'delay' (one-shot) or 'every' (recurring) in seconds."
@@ -460,7 +466,7 @@ def nlp_schedule(task: str, natural_time: str, user_id: str = "default") -> str:
     Returns:
         Success or error message with parsed schedule info.
     """
-    if _job_queue is None and _notification_callback is None:
+    if _core._job_queue is None and _core._notification_callback is None:
         return "Error: Scheduler not available (no channel gateway running)."
 
     parsed = _parse_natural_schedule(natural_time)

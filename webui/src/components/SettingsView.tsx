@@ -73,6 +73,15 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
     ],
   },
   {
+    // v0.7.1: approval-gated self-update (see Doctor → Change proposals)
+    title: 'Self-update by agents',
+    fields: [
+      { path: 'medic.self_update.enabled', label: 'Agents may read the code and propose changes', kind: 'bool', help: 'Nothing is installed without your approval.' },
+      { path: 'medic.self_update.auto_approve_low_risk', label: 'Install documentation-only changes without asking', kind: 'bool' },
+      { path: 'medic.self_update.run_tests', label: 'Run the test suite before switching to a changed version', kind: 'bool', help: 'Needs pytest in the virtual environment.' },
+    ],
+  },
+  {
     title: 'Timeouts & memory',
     fields: [
       { path: 'timeouts.llm_seconds', label: 'LLM request timeout (s)', kind: 'number' },
@@ -123,6 +132,8 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [probe, setProbe] = useState<Record<string, ProbeResult & { loading?: boolean }>>({});
+  // v0.7.1: index of the named agent whose prompt is being generated
+  const [generating, setGenerating] = useState<number | null>(null);
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -201,6 +212,25 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
       setProbe(p => ({ ...p, [provider]: res }));
     } catch (e) {
       setProbe(p => ({ ...p, [provider]: { ok: false, models: [], error: (e as Error).message } }));
+    }
+  };
+
+  // v0.7.1: write an agent's system prompt from its name + description with the main LLM.
+  const generatePrompt = async (i: number, a: Json, onDone: (prompt: string) => void) => {
+    if (a.system_prompt?.trim() && !window.confirm('Replace the current system prompt with a generated one?')) return;
+    setGenerating(i);
+    setNotice(null);
+    try {
+      const res = await api<{ prompt: string; provider: string; model: string }>('/api/agents/generate-prompt', {
+        method: 'POST',
+        body: JSON.stringify({ name: a.name || '', description: a.description || '' }),
+      });
+      onDone(res.prompt);
+      setNotice({ kind: 'ok', text: `Prompt written by ${res.provider}/${res.model} — review it, then Save settings.` });
+    } catch (e) {
+      setNotice({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setGenerating(null);
     }
   };
 
@@ -362,7 +392,10 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
           </div>
         )}
 
-        {tab === 'Providers' && data.providers.map(p => (
+        {tab === 'Providers' && (
+          <div className="notice">Add local or online providers of your own (vLLM, LocalAI, DeepSeek, Mistral, Cerebras, GitHub Models…) on the <b>Models</b> page.</div>
+        )}
+        {tab === 'Providers' && data.providers.filter(p => PROVIDER_LABELS[p]).map(p => (
           <div className="settings-card" key={p}>
             <h3>{PROVIDER_LABELS[p] || p}{p === defaultProvider && <span className="badge default-badge">default</span>}</h3>
             {providerFields(p).map(renderField)}
@@ -400,8 +433,20 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
                     </div>
                   </div>
                   <div className="field">
-                    <label className="field-label">System prompt</label>
-                    <textarea className="field-input" rows={3} value={a.system_prompt || ''} onChange={e => setAgent('system_prompt', e.target.value)} />
+                    <label className="field-label">Short description</label>
+                    <input className="field-input" value={a.description || ''} placeholder="e.g. Reviews Python code for bugs and explains fixes simply"
+                      onChange={e => setAgent('description', e.target.value)} />
+                  </div>
+                  <div className="field">
+                    <div className="field-label-row">
+                      <label className="field-label">System prompt</label>
+                      <button type="button" className="ghost-btn" disabled={generating !== null || !(a.name || a.description)}
+                        title="Write the prompt from the name and description with the default (main) model"
+                        onClick={() => generatePrompt(i, a, prompt => setAgent('system_prompt', prompt))}>
+                        {generating === i ? 'Writing…' : '✨ Generate prompt'}
+                      </button>
+                    </div>
+                    <textarea className="field-input" rows={a.system_prompt ? 8 : 3} value={a.system_prompt || ''} onChange={e => setAgent('system_prompt', e.target.value)} />
                   </div>
                   <button type="button" className="ghost-btn danger" onClick={() => update('agents.named', named.filter((_: Json, j: number) => j !== i))}>
                     Remove agent
@@ -410,7 +455,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
               );
             })}
             <button type="button" className="ghost-btn" onClick={() => update('agents.named', [...named, {
-              name: `agent${named.length + 1}`, provider: '', model: getPath(draft, 'agents.defaults.model') || '', system_prompt: '',
+              name: `agent${named.length + 1}`, provider: '', model: getPath(draft, 'agents.defaults.model') || '', system_prompt: '', description: '',
             }])}>+ Add agent</button>
           </div>
         )}

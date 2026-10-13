@@ -308,6 +308,24 @@ class OpenRouterConfig(BaseModel):
 # ── Providers Container ───────────────────────────────────────────────────────
 
 
+class CustomProviderConfig(BaseModel):
+    """A provider added by the user (v0.7.1).
+
+    Any OpenAI-compatible server — local (vLLM, LocalAI, Jan, KoboldCpp,
+    text-generation-webui, a second llama.cpp…) or online (DeepSeek, Mistral,
+    Cerebras, Together, GitHub Models…) — or another Ollama server.
+    """
+
+    name: str  # unique id used in settings, e.g. "deepseek" or "office-gpu"
+    label: str = ""  # display name
+    kind: str = "openai"  # "openai" (OpenAI-compatible) or "ollama"
+    base_url: str = ""
+    api_key: SecretStr = SecretStr("")
+    local: bool = False  # True = runs on your machine/network (shown as "local")
+    models: list[str] = []  # optional list for model pickers when /models is unavailable
+    notes: str = ""
+
+
 class ProvidersConfig(BaseModel):
     ollama: OllamaConfig = OllamaConfig()
     lmstudio: LMStudioConfig = LMStudioConfig()
@@ -317,6 +335,8 @@ class ProvidersConfig(BaseModel):
     gemini: GeminiConfig = GeminiConfig()
     groq: GroqConfig = GroqConfig()
     openrouter: OpenRouterConfig = OpenRouterConfig()
+    # v0.7.1: user-defined providers (see CustomProviderConfig).
+    custom: list[CustomProviderConfig] = []
 
 
 # ── Agent Config ──────────────────────────────────────────────────────────────
@@ -334,11 +354,39 @@ class NamedAgentConfig(BaseModel):
     model: str = "llama3.2"
     provider: str = ""  # empty = inherit from defaults
     system_prompt: str = ""
+    # v0.7.1: short "what this agent does"; shown in the Web UI and used by
+    # the prompt generator (Settings → Agents → ✨ Generate prompt).
+    description: str = ""
+
+
+class ModelChoice(BaseModel):
+    """One provider + model pair (used by the rotation list)."""
+
+    provider: str
+    model: str
+
+
+class RotationConfig(BaseModel):
+    """Default-LLM rotation (v0.7.1).
+
+    strategy:
+      * "fallback"    — always start with the default model; on an error
+                        (rate limit, server down, missing model) try the next.
+      * "round_robin" — spread requests: each new request starts with the
+                        next model in the list, still falling back on errors.
+    Applies to the default agent and to named agents without their own model.
+    """
+
+    enabled: bool = False
+    strategy: str = "fallback"
+    entries: list[ModelChoice] = []
 
 
 class AgentsConfig(BaseModel):
     defaults: AgentDefaults = AgentDefaults()
     named: list[NamedAgentConfig] = []
+    # v0.7.1: rotate / fall back across several provider+model pairs.
+    rotation: RotationConfig = RotationConfig()
     # Configurable context summarization threshold
     summarization_threshold: int = 10
     # Fallback profiles directory (local workspace profiles take precedence)
@@ -441,6 +489,18 @@ class SecurityConfig(BaseModel):
     gdpr_enabled: bool = False
 
 
+class SelfUpdateConfig(BaseModel):
+    """Approval-gated self-update (v0.7.1) — see myclaw/selfupdate.py.
+
+    Agents may *propose* changes to ZenSynora's code; nothing is installed
+    until you approve it, and then only through the safe updater.
+    """
+
+    enabled: bool = True  # agents can read the code and file proposals
+    auto_approve_low_risk: bool = False  # documentation-only changes install without asking
+    run_tests: bool = False  # run the test suite on the new release before switching (needs pytest)
+
+
 class MedicConfig(BaseModel):
     """Configuration for Medic Agent system health monitoring."""
 
@@ -453,6 +513,7 @@ class MedicConfig(BaseModel):
     secondary_llm_model: str = ""
     backup_dir: str = ""  # Local backup directory
     virustotal_api_key: SecretStr = SecretStr("")  # VirusTotal API key
+    self_update: SelfUpdateConfig = SelfUpdateConfig()  # v0.7.1
 
 
 class NewTechConfig(BaseModel):
@@ -573,6 +634,20 @@ class IntelligenceConfig(BaseModel):
     offline_mode: bool = True  # Auto-fallback to local LLM on connection failure
 
 
+class BackupConfig(BaseModel):
+    """Backups of settings, API keys and the knowledge base (v0.7.1)."""
+
+    auto_enabled: bool = False  # periodic backups while the Web UI runs
+    interval_hours: int = 24
+    keep: int = 10  # automatic backups to keep (manual ones are never pruned)
+    # What a backup contains. Settings + API keys are always included.
+    include_knowledge: bool = True
+    include_memory: bool = True  # conversations, chat channels
+    include_jobs: bool = True  # jobs, self-made tools, skills
+    before_update: bool = True  # the updater always backs up; this adds a full app backup
+    dir: str = ""  # empty = <install base>/backups or ~/.myclaw-backups
+
+
 class AppConfig(BaseModel):
     providers: ProvidersConfig = ProvidersConfig()
     agents: AgentsConfig = AgentsConfig()
@@ -592,6 +667,7 @@ class AppConfig(BaseModel):
     backends: BackendConfig = BackendConfig()
     mcp: MCPConfig = MCPConfig()
     intelligence: IntelligenceConfig = IntelligenceConfig()
+    backup: BackupConfig = BackupConfig()
 
     def get(self, key: str, default=None):
         """Dict-style .get() for backward compatibility."""

@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
+import ProposalsPanel from './ProposalsPanel';
 
 // Same checks as `zensynora doctor` (myclaw/doctor/checks.py).
 interface CheckResult {
@@ -84,6 +85,9 @@ const DoctorView: React.FC = () => {
           {fixNote && <div className="notice">{fixNote.map((n, i) => <div key={i}>{n}</div>)}</div>}
           {error && <div className="notice error">{error}</div>}
         </div>
+
+        {/* v0.7.1: approval-gated self-update — agents' code proposals and lessons */}
+        <ProposalsPanel />
 
         {report && categories.map(cat => (
           <div className="settings-card" key={cat}>
