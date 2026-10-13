@@ -22,3 +22,6 @@ py-cpuinfo>=9.0.0,<10.0
 watchdog>=4.0,<5.0
 requests>=2.31.0,<3.0
 paramiko>=3.4.0,<4.0
+# OpenAI-compatible client: used by llama.cpp, LM Studio, OpenAI, Groq and
+# OpenRouter providers. Without it those providers cannot be used at all.
+openai>=1.0,<3.0

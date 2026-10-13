@@ -44,6 +44,7 @@ import time
 
 from .memory import Memory
 from .provider import get_provider, SUPPORTED_PROVIDERS
+from .exceptions import ProviderUnavailableError
 from .tools import TOOLS, trigger_hook, _HOOKS, get_parallel_executor, is_tool_independent
 from .knowledge import search_notes, build_context, write_note
 from .semantic_cache import get_semantic_cache
@@ -713,12 +714,14 @@ class Agent:
             try:
                 self._provider = get_provider(self._config, self._provider_name)
             except Exception as e:
-                logger.warning(
-                    f"Could not init provider '{self._provider_name}' ({e}). "
-                    "Falling back to Ollama."
-                )
-                self._provider = get_provider(self._config, "ollama")
-                self._provider_name = "ollama"
+                # Do NOT silently switch to Ollama: the user picked this
+                # provider on purpose, and quietly sending their chat to
+                # localhost:11434 produced confusing "404 /api/chat" errors
+                # (e.g. llama.cpp selected but the `openai` SDK missing).
+                logger.error("Could not initialise provider '%s': %s", self._provider_name, e)
+                raise ProviderUnavailableError(
+                    f"The '{self._provider_name}' provider could not be started: {e}"
+                ) from e
         return self._provider
 
     async def _provider_chat(self, messages, model, stream: bool = False):
@@ -779,7 +782,9 @@ class Agent:
         # Initialize fallback wrapper on first need.
         if self._fallback_wrapper is None:
             from .offline import FallbackChatWrapper
-            self._fallback_wrapper = FallbackChatWrapper(self.provider, self.config)
+            self._fallback_wrapper = FallbackChatWrapper(
+                self.provider, self.config, primary_name=self._provider_name
+            )
 
         with span("provider.fallback_chat", provider=self._provider_name, model=model):
             return await self._fallback_wrapper.chat(messages, model, stream=stream)

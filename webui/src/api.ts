@@ -71,4 +71,5 @@ export interface SystemHealth {
   tools: number;
   config_file_exists: boolean;
   websocket_clients: number;
+  version?: string;
 }

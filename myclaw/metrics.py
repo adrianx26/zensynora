@@ -193,7 +193,7 @@ class PrometheusMetrics:
             "ZenSynora application information",
             registry=_METRICS_REGISTRY,
         )
-        self.app_info.info({"version": "0.4.1"})
+        self.app_info.info({"version": __import__("myclaw").__version__})
 
     def record_llm_request(
         self,

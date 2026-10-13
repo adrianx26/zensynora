@@ -30,6 +30,13 @@ class ProviderError(ZenSynoraError):
     pass
 
 
+class ProviderUnavailableError(ProviderError):
+    """Raised when the configured LLM provider cannot be initialised at all
+    (missing SDK, missing API key, unknown provider name)."""
+
+    pass
+
+
 class SecurityError(ZenSynoraError):
     """Raised when a security check fails (auth, sandbox escape, etc.)."""
 
