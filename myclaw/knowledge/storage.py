@@ -268,8 +268,14 @@ def update_note(permalink: str, user_id: str = "default", db_path: Optional[Path
     return True
 
 
-def _batch_read_notes(permalinks: List[str], user_id: str) -> List[Note]:
+def _batch_read_notes(
+    permalinks: List[str], user_id: str, db_path: Optional[Path] = None
+) -> List[Note]:
     """Read multiple notes in parallel using a thread pool.
+
+    ``db_path`` is accepted for signature parity with ``read_note()`` (callers
+    such as ``graph.build_context`` pass it); notes are read from disk, which
+    is the source of truth, so it is not needed here.
 
     Each individual `read_note()` is a blocking stat+open+parse, so for N
     permalinks we'd otherwise pay N * (stat + open + parse) serially.

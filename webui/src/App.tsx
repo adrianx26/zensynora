@@ -1,10 +1,27 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import './index.css';
 import TypewriterText from './components/TypewriterText';
+import SettingsView from './components/SettingsView';
+import ToolsView from './components/ToolsView';
+import CostDashboard from './components/CostDashboard';
+import { api, getApiBase, getWsBase, getAdminKey, type SystemHealth } from './api';
+
+type View = 'chat' | 'settings' | 'costs' | 'tools';
+const VIEW_KEY = 'zensynora_view';
+const VIEW_TITLES: Record<View, string> = { chat: 'Chat', settings: 'Settings', costs: 'Costs & usage', tools: 'Tools' };
+
+function getSavedView(): View {
+  try {
+    const v = localStorage.getItem(VIEW_KEY);
+    if (v === 'chat' || v === 'settings' || v === 'costs' || v === 'tools') return v;
+  } catch { /* ignore */ }
+  return 'chat';
+}
 
 interface Agent {
   name: string;
   model: string;
+  provider?: string;
 }
 
 interface ChatMessage {
@@ -18,20 +35,6 @@ interface ToolInfo {
   name: string;
   status: string;
   args?: Record<string, unknown>;
-}
-
-// ── Configuration: derive API base from window.location ──────────────────────
-function getApiBase(): string {
-  const { protocol, hostname, port } = window.location;
-  const apiPort = port === '5173' || port === '' ? '8000' : port;
-  return `${protocol}//${hostname}:${apiPort}`;
-}
-
-function getWsBase(): string {
-  const { protocol, hostname, port } = window.location;
-  const wsProtocol = protocol === 'https:' ? 'wss:' : 'ws:';
-  const apiPort = port === '5173' || port === '' ? '8000' : port;
-  return `${wsProtocol}//${hostname}:${apiPort}`;
 }
 
 // ── localStorage helpers for message persistence ─────────────────────────────
@@ -67,6 +70,16 @@ function setThemeDoc(theme: 'dark' | 'light') {
   try { localStorage.setItem(THEME_KEY, theme); } catch { /* ignore */ }
 }
 
+
+function HealthRow({ label, value, state }: { label: string; value: string; state?: 'ok' | 'warn' | 'err' | 'off' }) {
+  return (
+    <div className="health-row">
+      <span>{label}</span>
+      <span className={`health-value ${state || ''}`} title={value}>{value}</span>
+    </div>
+  );
+}
+
 function App() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [activeAgent, setActiveAgent] = useState<string>('default');
@@ -74,8 +87,13 @@ function App() {
   const [input, setInput] = useState('');
   const [theme, setTheme] = useState<'dark' | 'light'>(getSavedTheme);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'open' | 'closed'>('connecting');
+  const [gaveUp, setGaveUp] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [view, setView] = useState<View>(getSavedView);
+  const [health, setHealth] = useState<SystemHealth | null>(null);
+  const [healthError, setHealthError] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -87,11 +105,12 @@ function App() {
 
   // Track pending tool calls during streaming
   const pendingToolsRef = useRef<ToolInfo[]>([]);
+  // Latest connect function, used by the reconnect timer.
+  const connectRef = useRef<() => void>(() => {});
 
-  // Apply theme on mount
   useEffect(() => { setThemeDoc(theme); }, [theme]);
+  useEffect(() => { try { localStorage.setItem(VIEW_KEY, view); } catch { /* ignore */ } }, [view]);
 
-  // Toggle theme
   const toggleTheme = useCallback(() => {
     setTheme(prev => {
       const next = prev === 'dark' ? 'light' : 'dark';
@@ -100,52 +119,71 @@ function App() {
     });
   }, []);
 
-  // ── Fetch available agents ─────────────────────────────────────────────────
-  useEffect(() => {
-    const apiBase = getApiBase();
-    fetch(`${apiBase}/api/agents`)
-      .then(res => res.json())
+  // ── Agents & live health ───────────────────────────────────────────────────
+  const loadAgents = useCallback(() => {
+    api<{ agents: Agent[] }>('/api/agents')
       .then(data => {
-        setAgents(data.agents || []);
+        const list = data.agents || [];
+        setAgents(list);
+        setActiveAgent(cur => (list.some(a => a.name === cur) ? cur : 'default'));
       })
-      .catch(err => console.error("Error fetching agents:", err));
+      .catch(err => console.error('Error fetching agents:', err));
   }, []);
 
-  // ── Load persisted messages when agent changes ─────────────────────────────
-  useEffect(() => {
-    setMessages(loadMessages(activeAgent));
-  }, [activeAgent]);
+  const loadHealth = useCallback(() => {
+    api<SystemHealth>('/api/system/health')
+      .then(h => { setHealth(h); setHealthError(false); })
+      .catch(() => setHealthError(true));
+  }, []);
 
-  // ── Persist messages ───────────────────────────────────────────────────────
   useEffect(() => {
-    saveMessages(activeAgent, messages);
-  }, [activeAgent, messages]);
+    loadAgents();
+    loadHealth();
+    const iv = setInterval(loadHealth, 15000);
+    return () => clearInterval(iv);
+  }, [loadAgents, loadHealth]);
+
+  // ── Load / persist messages per agent ──────────────────────────────────────
+  useEffect(() => { setMessages(loadMessages(activeAgent)); }, [activeAgent]);
+  useEffect(() => { saveMessages(activeAgent, messages); }, [activeAgent, messages]);
 
   // ── WebSocket with reconnection, heartbeat, and streaming ──────────────────
+  const teardownSocket = useCallback(() => {
+    const ws = wsRef.current;
+    if (ws) {
+      // Detach handlers first so an intentional close does not trigger the
+      // auto-reconnect logic for the previous agent.
+      ws.onopen = null; ws.onclose = null; ws.onerror = null; ws.onmessage = null;
+      ws.close();
+      wsRef.current = null;
+    }
+    if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+    if (heartbeatRef.current) clearInterval(heartbeatRef.current);
+    reconnectTimeoutRef.current = null;
+    heartbeatRef.current = null;
+  }, []);
+
   const connectWebSocket = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-    const wsBase = getWsBase();
-    const wsUrl = `${wsBase}/ws/chat/${activeAgent}`;
-    const ws = new WebSocket(wsUrl);
+    const ws = new WebSocket(`${getWsBase()}/ws/chat/${encodeURIComponent(activeAgent)}`);
     wsRef.current = ws;
     setConnectionStatus('connecting');
 
     ws.onopen = () => {
       reconnectAttempts.current = 0;
+      setGaveUp(false);
       setConnectionStatus('open');
       setMessages(prev => {
         if (prev.length === 1 && prev[0].sender === 'system' && prev[0].text.includes('Connecting')) {
-          return [{ sender: 'system', text: `Connected securely to agent [${activeAgent}]` }];
+          return [{ sender: 'system', text: `Connected to agent [${activeAgent}]` }];
         }
-        return [...prev, { sender: 'system', text: `Reconnected to agent [${activeAgent}]` }];
+        return prev;
       });
 
       if (heartbeatRef.current) clearInterval(heartbeatRef.current);
       heartbeatRef.current = setInterval(() => {
-        if (ws.readyState === WebSocket.OPEN) {
-          ws.send('__ping__');
-        }
+        if (ws.readyState === WebSocket.OPEN) ws.send('__ping__');
       }, 30000);
     };
 
@@ -154,14 +192,12 @@ function App() {
 
       if (data === '__pong__') return;
 
-      // ── Stream start ──
       if (data === '__STREAM_START__') {
         setIsStreaming(true);
         setMessages(prev => [...prev, { sender: 'agent', text: '', isStreaming: true }]);
         return;
       }
 
-      // ── Stream end ──
       if (data === '__STREAM_END__') {
         setIsStreaming(false);
         setMessages(prev => {
@@ -176,11 +212,9 @@ function App() {
         return;
       }
 
-      // ── Tool calls start ──
       if (data === '__TOOL_CALLS_START__') {
         pendingToolsRef.current = [];
         setIsStreaming(false);
-        // Finalize the previous streaming message
         setMessages(prev => {
           const last = prev[prev.length - 1];
           if (last && last.sender === 'agent' && last.isStreaming) {
@@ -193,38 +227,34 @@ function App() {
         return;
       }
 
-      // ── Tool call info (JSON) ──
       if (data.startsWith('{"tool":')) {
         try {
-          const toolInfo = JSON.parse(data) as ToolInfo;
-          pendingToolsRef.current.push(toolInfo);
+          pendingToolsRef.current.push(JSON.parse(data) as ToolInfo);
         } catch { /* ignore malformed */ }
         return;
       }
 
-      // ── Tool calls end ──
       if (data === '__TOOL_CALLS_END__') {
         const tools = pendingToolsRef.current;
         pendingToolsRef.current = [];
         if (tools.length > 0) {
           const toolList = tools.map(t => `• ${t.name}`).join('\n');
-          setMessages(prev => [...prev, {
-            sender: 'system',
-            text: `🔧 Running tools:\n${toolList}`,
-            tools
-          }]);
+          setMessages(prev => [...prev, { sender: 'system', text: `🔧 Running tools:\n${toolList}`, tools }]);
         }
         return;
       }
 
-      // ── Error marker ──
-      if (data.startsWith('__ERROR__:')) {
+      if (data.startsWith('__ERROR__:') || data.startsWith('__QUOTA_EXCEEDED__')) {
         setIsStreaming(false);
-        setMessages(prev => [...prev, { sender: 'system', text: data }]);
+        setMessages(prev => [...prev, { sender: 'system', text: data.replace(/^__\w+__:\s*/, '') }]);
         return;
       }
 
-      // ── Regular chunk ──
+      if (data === '__MFA_REQUIRED__') {
+        setMessages(prev => [...prev, { sender: 'system', text: 'This Web UI requires an MFA code. Send it as: __MFA__:123456' }]);
+        return;
+      }
+
       setMessages(prev => {
         const last = prev[prev.length - 1];
         if (last && last.sender === 'agent' && last.isStreaming) {
@@ -246,83 +276,93 @@ function App() {
       }
 
       if (reconnectAttempts.current < MAX_RECONNECT_ATTEMPTS) {
-        const delay = Math.min(
-          RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts.current),
-          30000
-        );
+        const delay = Math.min(RECONNECT_BASE_DELAY * Math.pow(2, reconnectAttempts.current), 30000);
         reconnectAttempts.current += 1;
-        reconnectTimeoutRef.current = setTimeout(() => {
-          connectWebSocket();
-        }, delay);
+        reconnectTimeoutRef.current = setTimeout(() => connectRef.current(), delay);
       } else {
-        setMessages(prev => [...prev, {
-          sender: 'system',
-          text: 'Connection lost. Max reconnection attempts reached. Please refresh the page.'
-        }]);
+        setGaveUp(true);
       }
     };
 
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err);
+    ws.onerror = () => {
       setConnectionStatus('closed');
       setIsStreaming(false);
     };
   }, [activeAgent]);
 
+  useEffect(() => { connectRef.current = connectWebSocket; }, [connectWebSocket]);
+
   useEffect(() => {
-    if (wsRef.current) {
-      wsRef.current.close();
-    }
-    if (reconnectTimeoutRef.current) {
-      clearTimeout(reconnectTimeoutRef.current);
-    }
-    if (heartbeatRef.current) {
-      clearInterval(heartbeatRef.current);
-    }
+    teardownSocket();
     reconnectAttempts.current = 0;
-
+    setGaveUp(false);
     connectWebSocket();
+    return () => teardownSocket();
+  }, [activeAgent, connectWebSocket, teardownSocket]);
 
-    return () => {
-      if (wsRef.current) wsRef.current.close();
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-    };
-  }, [activeAgent, connectWebSocket]);
+  const reconnectNow = () => {
+    teardownSocket();
+    reconnectAttempts.current = 0;
+    setGaveUp(false);
+    connectWebSocket();
+  };
 
   // ── Auto-scroll chat ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
+    if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  }, [messages, view]);
 
   const sendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || !wsRef.current) return;
     if (wsRef.current.readyState !== WebSocket.OPEN) {
-      setMessages(prev => [...prev, { sender: 'system', text: 'Not connected. Message queued.' }]);
+      setMessages(prev => [...prev, { sender: 'system', text: 'Not connected — message not sent.' }]);
       return;
     }
-
     setMessages(prev => [...prev, { sender: 'user', text: input }]);
     wsRef.current.send(input);
     setInput('');
   };
 
-  const clearHistory = () => {
-    setMessages([{ sender: 'system', text: `History cleared for agent [${activeAgent}]` }]);
-    try { localStorage.removeItem(`${STORAGE_KEY}_${activeAgent}`); } catch { /* ignore */ }
+  const clearHistory = async () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      setTimeout(() => setConfirmClear(false), 4000);
+      return;
+    }
+    setConfirmClear(false);
+    let note = `History cleared for agent [${activeAgent}]`;
+    try {
+      // Also wipe the server-side memory the agents use as context.
+      await api('/api/history', { method: 'DELETE' });
+    } catch (e) {
+      note += ` (only in this browser: ${(e as Error).message})`;
+    }
+    try { agents.forEach(a => localStorage.removeItem(`${STORAGE_KEY}_${a.name}`)); } catch { /* ignore */ }
+    setMessages([{ sender: 'system', text: note }]);
   };
+
+  const onSettingsSaved = () => {
+    loadAgents();
+    loadHealth();
+  };
+
+  const current = agents.find(a => a.name === activeAgent);
+  const llm = health?.llm;
+
+  const NavButton = ({ id, icon, label }: { id: View; icon: string; label: string }) => (
+    <button
+      className={`nav-btn ${view === id ? 'active' : ''}`}
+      onClick={() => { setView(id); setSidebarOpen(false); }}
+      aria-current={view === id ? 'page' : undefined}
+    >
+      <span className="nav-icon" aria-hidden>{icon}</span>{label}
+    </button>
+  );
 
   return (
     <div className="app-container">
-      {/* Mobile sidebar toggle */}
-      <button
-        className="mobile-sidebar-toggle"
-        onClick={() => setSidebarOpen(prev => !prev)}
-        aria-label="Toggle sidebar"
-      >
+      <button className="mobile-sidebar-toggle" onClick={() => setSidebarOpen(prev => !prev)} aria-label="Toggle sidebar">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="3" y1="6" x2="21" y2="6"></line>
           <line x1="3" y1="12" x2="21" y2="12"></line>
@@ -330,132 +370,187 @@ function App() {
         </svg>
       </button>
 
-      {/* Sidebar Overlay */}
       <div className={`sidebar glass-panel ${sidebarOpen ? 'open' : ''}`}>
         <div className="sidebar-section">
           <div className="sidebar-title">
             <span>Swarm Directory</span>
-            <div className="agent-status" style={{color: "var(--text-secondary)"}}>
+            <div className="agent-status">
               <span className={`status-dot ${connectionStatus}`}></span>
-              {connectionStatus === 'open' ? 'Online' : connectionStatus === 'connecting' ? 'Connecting...' : 'Offline'}
+              {connectionStatus === 'open' ? 'Online' : connectionStatus === 'connecting' ? 'Connecting…' : 'Offline'}
             </div>
           </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '16px' }}>
+          <div className="agent-list">
             {agents.map((agent) => (
               <div
                 key={agent.name}
                 className={`agent-item ${activeAgent === agent.name ? 'active' : ''}`}
-                onClick={() => { setActiveAgent(agent.name); setSidebarOpen(false); }}
+                onClick={() => { setActiveAgent(agent.name); setView('chat'); setSidebarOpen(false); }}
               >
-                <div className="agent-avatar">
-                  {agent.name.charAt(0).toUpperCase()}
-                </div>
+                <div className="agent-avatar">{agent.name.charAt(0).toUpperCase()}</div>
                 <div className="agent-info">
                   <span className="agent-name">{agent.name}</span>
-                  <span className="agent-status">{agent.model}</span>
+                  <span className="agent-status">{agent.provider ? `${agent.provider} · ` : ''}{agent.model}</span>
                 </div>
               </div>
             ))}
           </div>
+          <button className="link-btn" onClick={() => { setView('settings'); setSidebarOpen(false); }}>+ Add or edit agents</button>
         </div>
 
-        <div className="sidebar-section" style={{ borderTop: "1px solid var(--panel-border)" }}>
-          <div className="sidebar-title">System Health</div>
-          <div style={{ marginTop: '16px', fontSize: '0.85rem', color: "var(--text-secondary)", lineHeight: "1.8" }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Memory Graph DB</span>
-              <span style={{ color: "var(--success-color)" }}>Connected</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>MCP Client</span>
-              <span>Loaded (1 Servers)</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span>Swarm Orchestrator</span>
-              <span>Idle</span>
-            </div>
+        <div className="sidebar-section bordered">
+          <div className="sidebar-title">Navigate</div>
+          <nav className="nav-list">
+            <NavButton id="chat" icon="💬" label="Chat" />
+            <NavButton id="settings" icon="⚙️" label="Settings" />
+            <NavButton id="costs" icon="📊" label="Costs & usage" />
+            <NavButton id="tools" icon="🧰" label="Tools" />
+          </nav>
+        </div>
+
+        <div className="sidebar-section bordered">
+          <div className="sidebar-title">
+            <span>System Health</span>
+            <button className="icon-btn" onClick={loadHealth} title="Refresh" aria-label="Refresh health">↻</button>
           </div>
+          {healthError && <div className="health-row"><span className="health-value err">Backend unreachable</span></div>}
+          {health && (
+            <div className="health-list">
+              <HealthRow
+                label="LLM"
+                value={llm?.ok ? `${llm.provider} · ${llm.latency_ms} ms` : `${llm?.provider}: offline`}
+                state={llm?.ok ? (llm.model_available === false ? 'warn' : 'ok') : 'err'}
+              />
+              {llm?.ok && llm.model_available === false && (
+                <div className="health-note">Model “{llm.model}” not found on the server — pick one in Settings.</div>
+              )}
+              {!llm?.ok && llm?.error && <div className="health-note">{llm.error}</div>}
+              <HealthRow
+                label="Knowledge DB"
+                value={health.knowledge.ok ? `${health.knowledge.entities ?? 0} notes` : 'error'}
+                state={health.knowledge.ok ? 'ok' : 'err'}
+              />
+              <HealthRow
+                label="MCP client"
+                value={health.mcp.enabled ? `${health.mcp.servers} server${health.mcp.servers === 1 ? '' : 's'}` : 'disabled'}
+                state={health.mcp.enabled ? 'ok' : 'off'}
+              />
+              <HealthRow label="Swarms" value={health.swarm.enabled ? 'enabled' : 'disabled'} state={health.swarm.enabled ? 'ok' : 'off'} />
+              <HealthRow label="Tools" value={`${health.tools}`} />
+              <HealthRow
+                label="Channels"
+                value={[health.channels.telegram && 'Telegram', health.channels.whatsapp && 'WhatsApp'].filter(Boolean).join(', ') || 'none'}
+                state={health.channels.telegram || health.channels.whatsapp ? 'ok' : 'off'}
+              />
+              {!health.config_file_exists && (
+                <div className="health-note">Not configured yet — open Settings to pick a model.</div>
+              )}
+            </div>
+          )}
         </div>
 
-        <div className="sidebar-section sidebar-controls" style={{ borderTop: "1px solid var(--panel-border)" }}>
+        <div className="sidebar-section sidebar-controls bordered">
           <button className="control-btn" onClick={toggleTheme}>
             {theme === 'dark' ? '☀️ Light Mode' : '🌙 Dark Mode'}
           </button>
-          <button className="control-btn danger" onClick={clearHistory}>
-            🗑️ Clear History
+          <button className={`control-btn danger ${confirmClear ? 'confirm' : ''}`} onClick={clearHistory}>
+            {confirmClear ? '⚠️ Click again to clear all history' : '🗑️ Clear History'}
           </button>
         </div>
       </div>
 
-      {/* Main Chat Interface */}
       <div className="main-content">
-        <div className="glass-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-
-          <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--panel-border)', display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-            <h2 className="text-gradient">ZenSynora UI</h2>
-            <span className="badge">Agent: {activeAgent}</span>
-            <span className="badge">Workspace: {window.location.hostname}</span>
-            <span className={`badge status-badge ${connectionStatus}`}>
-              {connectionStatus === 'open' ? '🟢 Connected' : connectionStatus === 'connecting' ? '🟡 Connecting...' : '🔴 Disconnected'}
-            </span>
+        <div className="glass-panel main-panel">
+          <div className="main-header">
+            <h2 className="text-gradient">ZenSynora</h2>
+            <span className="view-title">{VIEW_TITLES[view]}</span>
+            {view === 'chat' && (
+              <>
+                <span className="badge">Agent: {activeAgent}</span>
+                {current && <span className="badge">Model: {current.model}</span>}
+                <span className={`badge status-badge ${connectionStatus}`}>
+                  {connectionStatus === 'open' ? '🟢 Connected' : connectionStatus === 'connecting' ? '🟡 Connecting…' : '🔴 Disconnected'}
+                </span>
+              </>
+            )}
+            <div className="header-actions">
+              {view !== 'chat' && <button className="ghost-btn" onClick={() => setView('chat')}>← Back to chat</button>}
+              {view === 'chat' && (
+                <button className="ghost-btn" onClick={() => setView('settings')} title="Settings">⚙️ Settings</button>
+              )}
+            </div>
           </div>
 
-          <div className="chat-window" ref={scrollRef}>
-            {messages.map((msg, i) => (
-              <div key={i} className={`chat-message ${msg.sender}`}>
-                <div className="message-avatar">
-                  {msg.sender === 'user' ? 'U' : msg.sender === 'system' ? '⚙️' : '🤖'}
+          {view === 'chat' && (
+            <>
+              {gaveUp && (
+                <div className="connection-banner">
+                  <span>Lost connection to the ZenSynora server. Is <code>zensynora webui</code> still running?</span>
+                  <button className="primary-btn" onClick={reconnectNow}>Reconnect</button>
                 </div>
-                <div className="message-content">
-                  {/*
-                    Agent responses use the TypewriterText component for
-                    smooth char-by-char reveal. User/system messages are
-                    rendered verbatim — typewriting them would feel like
-                    a UI lag for the operator's own input.
-                  */}
-                  {msg.sender === 'agent' ? (
-                    <TypewriterText
-                      text={msg.text}
-                      active={!!msg.isStreaming}
-                    />
-                  ) : (
-                    msg.text
-                  )}
-                  {msg.isStreaming && (
-                    <span className="typing-indicator">
-                      <span className="dot"></span>
-                      <span className="dot"></span>
-                      <span className="dot"></span>
-                    </span>
-                  )}
-                </div>
+              )}
+
+              <div className="chat-window" ref={scrollRef}>
+                {messages.map((msg, i) => (
+                  <div key={i} className={`chat-message ${msg.sender}`}>
+                    <div className="message-avatar">
+                      {msg.sender === 'user' ? 'U' : msg.sender === 'system' ? '⚙️' : '🤖'}
+                    </div>
+                    <div className="message-content">
+                      {msg.sender === 'agent' ? (
+                        <TypewriterText text={msg.text} active={!!msg.isStreaming} />
+                      ) : (
+                        msg.text
+                      )}
+                      {msg.isStreaming && (
+                        <span className="typing-indicator">
+                          <span className="dot"></span>
+                          <span className="dot"></span>
+                          <span className="dot"></span>
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className="glass-panel chat-input-wrapper" style={{ margin: '0 24px 24px 24px', width: 'auto' }}>
-            <form onSubmit={sendMessage} style={{ display: 'flex', width: '100%', gap: '12px' }}>
-              <input
-                type="text"
-                className="chat-input"
-                placeholder={isStreaming ? "Agent is thinking..." : "Message the swarm..."}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                disabled={isStreaming || connectionStatus !== 'open'}
-              />
-              <button
-                type="submit"
-                className="chat-submit"
-                disabled={isStreaming || connectionStatus !== 'open' || !input.trim()}
-              >
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="22" y1="2" x2="11" y2="13"></line>
-                  <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
-              </button>
-            </form>
-          </div>
+              <div className="chat-input-wrapper">
+                <form onSubmit={sendMessage} className="chat-form">
+                  <input
+                    type="text"
+                    className="chat-input"
+                    placeholder={
+                      connectionStatus !== 'open' ? 'Waiting for connection…'
+                        : isStreaming ? 'Agent is thinking…' : `Message ${activeAgent}…`
+                    }
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    disabled={isStreaming || connectionStatus !== 'open'}
+                  />
+                  <button
+                    type="submit"
+                    className="chat-submit"
+                    aria-label="Send"
+                    disabled={isStreaming || connectionStatus !== 'open' || !input.trim()}
+                  >
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="22" y1="2" x2="11" y2="13"></line>
+                      <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                  </button>
+                </form>
+              </div>
+            </>
+          )}
+
+          {view === 'settings' && <SettingsView onSaved={onSettingsSaved} />}
+          {view === 'tools' && <ToolsView />}
+          {view === 'costs' && (
+            <div className="settings-view">
+              <div className="settings-body">
+                <CostDashboard apiBase={getApiBase()} apiKey={getAdminKey() || undefined} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -586,17 +586,24 @@ else
     fi
 fi
 
-# Install scrapling browser engines (idempotent)
+# Install scrapling browser engines (idempotent: without --force, scrapling
+# skips browsers that are already present instead of re-downloading them)
 if [[ -f "$VENV_DIR/bin/scrapling" ]]; then
     info "Installing/verifying Scrapling browsers (large download, may ask for sudo)..."
-    run "$VENV_DIR/bin/scrapling" install --force || warn "Scrapling browser install returned non-zero"
+    run "$VENV_DIR/bin/scrapling" install || warn "Scrapling browser install returned non-zero"
 fi
 
-# Install package in editable mode if not already done via requirements
+# Install the package itself (editable) so the `zensynora` / `myclaw`
+# commands exist in the venv. Checking `import myclaw` is not enough: when the
+# installer is run from the source directory, the CWD is on sys.path, the
+# import succeeds, and the package (and its console scripts) were never installed.
 if [[ -f "$SCRIPT_DIR/pyproject.toml" ]]; then
-    if ! "$VENV_DIR/bin/python" -c "import myclaw" 2>/dev/null; then
+    if [[ ! -x "$VENV_DIR/bin/zensynora" ]] \
+        || ! "$VENV_PYTHON" -m pip show --quiet zensynora >/dev/null 2>&1; then
         info "Installing ZenSynora package in editable mode..."
         run "$VENV_PYTHON" -m pip install --quiet -e "$SCRIPT_DIR"
+    else
+        skip "ZenSynora package already installed in the venv"
     fi
 fi
 
@@ -812,7 +819,8 @@ if [[ "$DRY_RUN" == "false" ]]; then
     check_import() {
         local name="$1"
         local module="${2:-$1}"
-        if ! "$VENV_DIR/bin/python" -c "import $module" 2>/dev/null; then
+        # Run from / so a source checkout in the CWD cannot mask a missing install.
+        if ! (cd / && "$VENV_DIR/bin/python" -c "import $module") 2>/dev/null; then
             warn "Import $name FAILED"
             FAILED=$((FAILED + 1))
         else
@@ -822,6 +830,7 @@ if [[ "$DRY_RUN" == "false" ]]; then
 
     check_import "telegram"
     check_import "httpx"
+    check_import "h2 (httpx HTTP/2 support)" "h2"
     check_import "fastapi"
     check_import "mcp"
     check_import "aiosqlite"
@@ -832,6 +841,7 @@ if [[ "$DRY_RUN" == "false" ]]; then
     check_import "rich"
     check_import "yaml"
     check_import "uvicorn"
+    check_import "websockets (Web UI chat)" "websockets"
     check_import "apscheduler"
     check_import "scrapling"
 
@@ -878,11 +888,17 @@ if [[ "$DRY_RUN" == "false" ]]; then
         warn "Agent registry YAML NOT FOUND — registry will fall back to embedded literal"
     fi
 
-    # Check CLI entry point
-    if "$VENV_DIR/bin/python" -c "from myclaw.cli import cli" 2>/dev/null; then
+    # Check CLI entry point (module import + installed console script)
+    if (cd / && "$VENV_DIR/bin/python" -c "from myclaw.cli import cli") >/dev/null 2>&1; then
         success "CLI entry point OK"
     else
         warn "CLI entry point check FAILED"
+        FAILED=$((FAILED + 1))
+    fi
+    if (cd / && "$VENV_DIR/bin/zensynora" --help) >/dev/null 2>&1; then
+        success "zensynora command OK ($VENV_DIR/bin/zensynora)"
+    else
+        warn "zensynora command check FAILED"
         FAILED=$((FAILED + 1))
     fi
 
@@ -899,13 +915,14 @@ header "✅  ZenSynora is ready!"
 echo ""
 echo "  Next steps:"
 echo "  1. source $VENV_DIR/bin/activate"
-echo "  2. python cli.py onboard"
-echo "  3. python cli.py agent"
-echo "  4. python cli.py webui  (Dashboard)"
+echo "  2. zensynora onboard"
+echo "  3. zensynora agent"
+echo "  4. zensynora webui  (Dashboard)"
 echo ""
 echo "  ─ CLI Examples ───────────────────────────────"
-echo "  python cli.py knowledge sync"
-echo "  python cli.py knowledge search 'how to use'"
+echo "  zensynora knowledge sync"
+echo "  zensynora knowledge search 'how to use'"
+echo "  (or, from $SCRIPT_DIR: python cli.py <command>)"
 echo ""
 if [[ -f "$SCRIPT_DIR/.env" ]]; then
     echo "  Remember to edit $SCRIPT_DIR/.env with your API keys."

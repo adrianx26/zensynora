@@ -1,5 +1,5 @@
 from pathlib import Path
-from fastapi import FastAPI, WebSocket, Depends
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -69,6 +69,34 @@ def _ensure_registry() -> dict:
 
 app = FastAPI(title="ZenSynora Web UI Backend", version="1.0.1")
 
+
+async def _close_async_db_pool() -> None:
+    # Pooled aiosqlite connections use non-daemon threads; close them so the
+    # server process can exit after Ctrl+C instead of hanging.
+    from myclaw.memory import cleanup_on_shutdown
+    await cleanup_on_shutdown()
+
+
+app.router.add_event_handler("shutdown", _close_async_db_pool)
+
+
+async def _reset_agent_registry() -> None:
+    """Drop cached agents so the next chat uses freshly saved settings."""
+    global _agent_registry
+    old = _agent_registry
+    _agent_registry = {}
+    for agent in old.values():
+        try:
+            await agent.close()
+        except Exception as exc:  # pragma: no cover - best effort
+            logger.debug("Error closing agent during registry reset: %s", exc)
+
+
+from myclaw.web import settings_api as _settings_api  # noqa: E402
+
+_settings_api.set_config_changed_hook(_reset_agent_registry)
+app.include_router(_settings_api.router)
+
 # Metrics middleware (must be first to capture all requests)
 app.add_middleware(MetricsMiddleware)
 
@@ -113,11 +141,17 @@ async def get_agents():
         {
             "name": "default",
             "model": defaults.model,
+            "provider": defaults.provider,
             "system_prompt": getattr(defaults, "system_prompt", ""),
         }
     ]
     for na in config.agents.named:
-        agents.append({"name": na.name, "model": na.model, "system_prompt": na.system_prompt or ""})
+        agents.append({
+            "name": na.name,
+            "model": na.model,
+            "provider": na.provider or defaults.provider,
+            "system_prompt": na.system_prompt or "",
+        })
     return {"agents": agents}
 
 
@@ -242,6 +276,7 @@ async def chat_websocket(websocket: WebSocket, agent_name: str):
     await websocket.accept()
     session_id = str(uuid.uuid4())
     register_websocket_session(session_id)
+    _settings_api.ws_opened()
 
     # ── MFA check ────────────────────────────────────────────────────────────
     # If MFA is enabled for user "webui", first message must be "__MFA__:<code>"
@@ -255,6 +290,7 @@ async def chat_websocket(websocket: WebSocket, agent_name: str):
         await websocket.send_text("__ERROR__: Agent not found.")
         await websocket.close()
         unregister_websocket_session(session_id)
+        _settings_api.ws_closed()
         return
 
     try:
@@ -277,7 +313,6 @@ async def chat_websocket(websocket: WebSocket, agent_name: str):
                     else:
                         await websocket.send_text("__MFA_FAIL__")
                         await websocket.close()
-                        unregister_websocket_session(session_id)
                         return
                 else:
                     await websocket.send_text("__MFA_REQUIRED__")
@@ -290,6 +325,10 @@ async def chat_websocket(websocket: WebSocket, agent_name: str):
                 continue
 
             logger.info(f"Received WS message for {agent_name}: {data[:80]}...")
+
+            # Re-resolve per message: saving settings rebuilds the registry,
+            # and an open socket must pick up the new provider/model.
+            agent = _ensure_registry().get(agent_name) or agent
 
             # Signal the start of streaming
             await websocket.send_text("__STREAM_START__")
@@ -316,11 +355,17 @@ async def chat_websocket(websocket: WebSocket, agent_name: str):
                 await websocket.send_text("__STREAM_END__")
                 record_response_time(time.time() - start_time)
 
+    except WebSocketDisconnect:
+        logger.debug("WebSocket client disconnected (%s)", agent_name)
     except Exception as e:
         logger.error(f"WebSocket Error: {e}")
-        await websocket.close()
+        try:
+            await websocket.close()
+        except Exception:
+            pass
     finally:
         unregister_websocket_session(session_id)
+        _settings_api.ws_closed()
 
 
 # ── Static File Serving (built React frontend) ──────────────────────────────
