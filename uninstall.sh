@@ -328,6 +328,22 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
 
     success "Processes stopped."
 
+    # ── 1.5 MANAGED RELEASES (installed/updated by update.sh) ────────────────
+    BASE_DIR="$(dirname "$SCRIPT_DIR")"
+    if [[ "$(basename "$BASE_DIR")" == "releases" ]]; then BASE_DIR="$(dirname "$BASE_DIR")"; fi
+    if [[ -d "$BASE_DIR/releases" ]]; then
+        header "1.5 Managed releases & update backups"
+        info "Found $BASE_DIR/releases (older versions) and $BASE_DIR/backups (settings backups)."
+        if prompt_yes "  Remove old releases, update backups and update logs?"; then
+            for d in "$BASE_DIR/releases"/*; do
+                [[ "$(readlink -f "$d")" == "$(readlink -f "$SCRIPT_DIR")" ]] && continue
+                run rm -rf "$d"
+            done
+            run rm -rf "$BASE_DIR/backups" "$BASE_DIR/logs" "$BASE_DIR/updater-state.json"
+            success "Old releases and backups removed."
+        fi
+    fi
+
     # ── 2. VIRTUAL ENVIRONMENT ───────────────────────────────────────────────
     header "2. Removing virtual environment"
     # Use the script directory, not the CWD: running from ~ must never remove ~/venv.

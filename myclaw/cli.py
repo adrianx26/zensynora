@@ -305,6 +305,41 @@ def list_skills():
     for name, metadata in TOOLS.items():
         click.echo(f" - {name}")
 
+### UPDATE / VERSION ###
+@cli.command(
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True, "help_option_names": []},
+)
+@click.argument("updater_args", nargs=-1, type=click.UNPROCESSED)
+def update(updater_args):
+    """Safely update ZenSynora (backup, side-by-side build, auto-rollback).
+
+    \b
+    zensynora update                 update to the latest version
+    zensynora update status --check  show installed/latest version
+    zensynora update rollback        go back to the previous version
+    zensynora update --help          all options
+    """
+    import os
+    import shutil
+
+    root = Path(__file__).resolve().parent.parent
+    script = root / "update.sh"
+    if not script.exists():
+        raise click.ClickException(
+            f"update.sh not found in {root}. Update once with install-online.sh to get the updater."
+        )
+    bash = shutil.which("bash") or "/bin/bash"
+    os.execv(bash, [bash, str(script), *updater_args])
+
+
+@cli.command()
+def version():
+    """Show the installed ZenSynora version."""
+    from . import __version__
+
+    click.echo(f"ZenSynora {__version__}  ({Path(__file__).resolve().parent.parent})")
+
+
 ### WEB UI COMMANDS ###
 @cli.command()
 @click.option('--port', default=8000, help='Port to run the FastAPI proxy server')

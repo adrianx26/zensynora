@@ -184,6 +184,22 @@ select optional features.
 > or PowerShell; use WSL2, the Windows portable launcher, or the manual
 > virtual-environment setup.
 
+### Updating
+
+Updates keep your settings and data and never replace a working install in
+place: the new version is built next to the current one, checked against your
+config, and switched in atomically after `~/.myclaw` is backed up. Any failure
+rolls back automatically.
+
+```bash
+zensynora update                  # latest version
+zensynora update status --check   # installed vs. latest
+zensynora update rollback         # previous version
+```
+
+Installs older than 0.6.0 get the updater by re-running the online installer
+once. Details, layout and how to add migrations: [docs/UPDATING.md](docs/UPDATING.md).
+
 ### Manual virtual-environment setup
 
 ```bash
