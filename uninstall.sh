@@ -417,6 +417,9 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
             run rm -f  "$MYCLAW_DIR/"memory_*.db           # Sprint 11: per-tenant memory shards
             run rm -rf "$MYCLAW_DIR/plugins"               # Sprint 9 marketplace install dir
             run rm -rf "$MYCLAW_DIR/hub"                   # Sprint 9 local hub registry
+            # v0.7.1: chat channels, jobs, per-user knowledge indexes, usage meter
+            run rm -f  "$MYCLAW_DIR/chat.db" "$MYCLAW_DIR/jobs.db" "$MYCLAW_DIR/metering.db"
+            run rm -f  "$MYCLAW_DIR/"knowledge_*.db
             success "Data cleared, config preserved."
         else
             if confirm_data_removal "  Remove all MyClaw data in $MYCLAW_DIR?"; then
@@ -428,6 +431,20 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
         fi
     else
         skip "No ~/.myclaw directory found."
+    fi
+
+    # ── 3.4 Backups made from the Web UI / `zensynora backup` (v0.7.1) ───────
+    # They live outside ~/.myclaw (default ~/.myclaw-backups) so that removing
+    # the data folder never deletes them; they are only removed on request.
+    BACKUP_DIR="$HOME/.myclaw-backups"
+    if [[ -d "$BACKUP_DIR" ]]; then
+        header "3.4 Backups"
+        if [[ "$KEEP_DATA" == "false" ]] && confirm_data_removal "  Also delete your backups in $BACKUP_DIR?"; then
+            run rm -rf "$BACKUP_DIR"
+            success "Backups removed."
+        else
+            skip "Backups kept in $BACKUP_DIR"
+        fi
     fi
 
     # ── 3.5 Scheduler persistence cleanup ────────────────────────────────────

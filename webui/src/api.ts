@@ -73,3 +73,137 @@ export interface SystemHealth {
   websocket_clients: number;
   version?: string;
 }
+
+// ── v0.7.1: channels, jobs, models, backups, medic proposals ─────────────────
+
+export interface Channel {
+  id: string;
+  name: string;
+  kind: 'channel' | 'dm';
+  topic: string;
+  members: string[];
+  reply_mode: 'lead' | 'all' | 'parallel';
+  last_text?: string;
+  last_id?: number | null;
+}
+
+/** A stored chat message. role "event" = agent-to-agent activity (meta.type says which). */
+export interface ChatMsg {
+  id: number;
+  channel_id: string;
+  role: 'user' | 'agent' | 'system' | 'event';
+  sender: string;
+  text: string;
+  meta: Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  created: number;
+}
+
+export interface AgentInfo {
+  name: string;
+  model: string;
+  provider?: string;
+  description?: string;
+  system_prompt?: string;
+}
+
+export interface Job {
+  id: string;
+  name: string;
+  prompt: string;
+  agent: string;
+  schedule: 'manual' | 'once' | 'interval' | 'daily' | 'weekly';
+  every_minutes: number;
+  at_time: string;
+  days: string;
+  run_at: number | null;
+  enabled: boolean;
+  channel_id: string;
+  success_criteria: string;
+  auto_evaluate: boolean;
+  fresh_context: boolean;
+  timeout_s: number;
+  retries: number;
+  created_by: string;
+  next_run: number | null;
+  last_run: number | null;
+  last_status: string;
+  running?: boolean;
+  stats?: { runs: number; success_rate: number | null; avg_score: number | null; avg_ms: number | null };
+}
+
+export interface JobRun {
+  id: number;
+  job_id: string;
+  kind: 'run' | 'bench';
+  trigger: string;
+  status: 'running' | 'ok' | 'error' | 'timeout' | 'cancelled' | 'interrupted';
+  started: number;
+  finished: number | null;
+  ms: number | null;
+  provider: string;
+  model: string;
+  output: string;
+  error: string;
+  score: number | null;
+  evaluation: Record<string, any> | null; // eslint-disable-line @typescript-eslint/no-explicit-any
+  attempt: number;
+}
+
+export interface ModelChoice { provider: string; model: string }
+
+export interface ModelsOverview {
+  default: ModelChoice;
+  rotation: { enabled: boolean; strategy: 'fallback' | 'round_robin'; entries: ModelChoice[] };
+  providers: { name: string; label: string; local: boolean; custom: boolean; configured: boolean }[];
+}
+
+export interface BackupInfo {
+  name: string;
+  bytes: number;
+  mtime: number;
+  created?: string;
+  label?: string;
+  files?: Record<string, number>;
+  error?: string;
+  note?: string;
+  version?: string;
+  parts?: string[];
+  valid?: boolean;
+}
+
+export interface Proposal {
+  id: string;
+  title: string;
+  reason: string;
+  author: string;
+  status: 'pending' | 'approved' | 'applying' | 'applied' | 'failed' | 'rejected';
+  risk: 'low' | 'high';
+  created: number;
+  updated?: number;
+  files?: Record<string, string>;
+  diff?: string;
+  notes?: string[];
+  history?: { at: number; action: string; by: string; note?: string }[];
+  result?: { ok: boolean; note: string; log: string; log_tail: string };
+}
+
+/** "3 min ago" style, for timestamps in seconds. */
+export function ago(ts?: number | null): string {
+  if (!ts) return '—';
+  const s = Math.round(Date.now() / 1000 - ts);
+  const future = s < 0;
+  const a = Math.abs(s);
+  const txt = a < 60 ? `${a}s` : a < 3600 ? `${Math.round(a / 60)} min` : a < 86400 ? `${Math.round(a / 3600)} h` : `${Math.round(a / 86400)} d`;
+  return future ? `in ${txt}` : `${txt} ago`;
+}
+
+export function fmtTime(ts?: number | null): string {
+  if (!ts) return '—';
+  return new Date(ts * 1000).toLocaleString();
+}
+
+export function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}

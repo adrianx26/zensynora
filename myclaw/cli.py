@@ -360,6 +360,183 @@ def doctor(fix, offline, as_json, problems):
     sys.exit({"ok": 0, "warn": 1, "fail": 2}[report.overall])
 
 
+### BACKUPS (v0.7.1) ###
+@cli.group()
+def backup():
+    """Back up / restore settings, API keys, knowledge base, memory and jobs.
+
+    \b
+    zensynora backup create              everything (as set in Settings → Backups)
+    zensynora backup create -p settings  only settings + API keys
+    zensynora backup list
+    zensynora backup restore NAME        (a safety backup is taken first)
+    """
+
+
+@backup.command("create")
+@click.option("-p", "--part", "parts", multiple=True,
+              type=click.Choice(["settings", "knowledge", "memory", "jobs"]),
+              help="What to include (repeat). Default: the parts chosen in Settings.")
+@click.option("--note", default="", help="A note stored with the backup.")
+def backup_create(parts, note):
+    """Create a backup now."""
+    from . import backup as _backup
+
+    info = _backup.create_backup(list(parts) or None, "manual", note)
+    click.echo(f"✔ {info['name']}  ({info['bytes'] // 1024} KB, parts: {', '.join(info.get('parts', []))})")
+    click.echo(f"  in {Path(info['path']).parent}")
+
+
+@backup.command("list")
+def backup_list():
+    """List backups (newest first)."""
+    from . import backup as _backup
+
+    items = _backup.list_backups()
+    if not items:
+        click.echo(f"No backups yet in {_backup.backup_dir()}.")
+        return
+    for b in items:
+        state = "" if b.get("valid") else "  [unreadable]"
+        click.echo(f"{b['name']}  {b['bytes'] // 1024:>7} KB  v{b.get('version', '?')}  "
+                   f"{','.join(b.get('parts', []))}{state}")
+
+
+@backup.command("restore")
+@click.argument("name")
+@click.option("-p", "--part", "parts", multiple=True,
+              type=click.Choice(["settings", "knowledge", "memory", "jobs"]),
+              help="Only restore these parts (repeat). Default: everything in the backup.")
+@click.option("--yes", is_flag=True, help="Don't ask for confirmation.")
+def backup_restore(name, parts, yes):
+    """Restore a backup (stop the web UI / agents first)."""
+    from . import backup as _backup
+
+    if not yes:
+        click.confirm(f"Restore {name}? Current files will be replaced (a safety backup is made first)",
+                      abort=True)
+    try:
+        r = _backup.restore_backup(name, list(parts) or None)
+    except FileNotFoundError:
+        raise click.ClickException(f"No backup called {name}. See: zensynora backup list")
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    click.echo(f"✔ Restored {r['restored']} files ({', '.join(r['parts'])}). "
+               f"Undo with: zensynora backup restore {r['safety_backup']}")
+
+
+@backup.command("delete")
+@click.argument("name")
+def backup_delete(name):
+    """Delete a backup."""
+    from . import backup as _backup
+
+    try:
+        _backup.delete_backup(name)
+    except FileNotFoundError:
+        raise click.ClickException(f"No backup called {name}.")
+    click.echo(f"Deleted {name}")
+
+
+### MEDIC SELF-UPDATE (v0.7.1) ###
+@cli.group()
+def medic():
+    """Review code changes proposed by agents (approval-gated self-update).
+
+    \b
+    zensynora medic proposals            list (add --status pending)
+    zensynora medic show ID              reason + diff
+    zensynora medic approve ID           approve and install via the safe updater
+    zensynora medic reject ID --note …
+    zensynora medic problems             what the medic would look at
+    """
+
+
+@medic.command("proposals")
+@click.option("--status", type=click.Choice(["pending", "approved", "applying", "applied", "failed", "rejected"]))
+def medic_proposals(status):
+    from . import selfupdate
+
+    items = selfupdate.list_proposals(status)
+    if not items:
+        click.echo("No proposals.")
+    for p in items:
+        click.echo(f"{p['id']}  [{p['status']:<8}] {p.get('risk', '?'):<4} risk  {p['title']}  (by {p['author']})")
+
+
+@medic.command("show")
+@click.argument("pid")
+def medic_show(pid):
+    from . import selfupdate
+
+    p = selfupdate.get_proposal(pid)
+    if not p:
+        raise click.ClickException(f"No proposal {pid}.")
+    click.echo(f"{p['title']}\nstatus: {p['status']} · risk: {p['risk']} · by {p['author']}\n\n{p['reason']}\n")
+    click.echo(p.get("diff") or "(no diff)")
+    if p.get("result"):
+        click.echo(f"\nResult: {p['result'].get('note')}\nLog: {p['result'].get('log')}")
+
+
+@medic.command("approve")
+@click.argument("pid")
+@click.option("--no-apply", is_flag=True, help="Only approve; install later with `medic apply`.")
+def medic_approve(pid, no_apply):
+    """Approve a proposal and install it (backup, side-by-side build, checks, rollback on failure)."""
+    from . import selfupdate
+
+    try:
+        selfupdate.approve(pid, by="you (cli)")
+        if no_apply:
+            click.echo("Approved.")
+            return
+        click.echo("Installing through the safe updater… (this can take a few minutes)")
+        p = selfupdate.apply_proposal(pid)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    click.echo(("✔ " if p["status"] == "applied" else "✘ ") + p.get("result", {}).get("note", p["status"]))
+    if p.get("result", {}).get("log"):
+        click.echo(f"  log: {p['result']['log']}")
+
+
+@medic.command("apply")
+@click.argument("pid")
+def medic_apply(pid):
+    """Install an approved proposal (or retry a failed one)."""
+    from . import selfupdate
+
+    p = selfupdate.get_proposal(pid)
+    if p and p["status"] == "failed":
+        selfupdate.approve(pid, by="you (cli retry)")
+    try:
+        p = selfupdate.apply_proposal(pid)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    click.echo(("✔ " if p["status"] == "applied" else "✘ ") + p.get("result", {}).get("note", p["status"]))
+
+
+@medic.command("reject")
+@click.argument("pid")
+@click.option("--note", default="")
+def medic_reject(pid, note):
+    from . import selfupdate
+
+    try:
+        selfupdate.reject(pid, by="you (cli)", note=note)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    click.echo("Rejected.")
+
+
+@medic.command("problems")
+@click.option("--hours", default=24, show_default=True)
+def medic_problems(hours):
+    """Recent errors, failed/low-score job runs and open proposals."""
+    from . import selfupdate
+
+    click.echo(selfupdate.get_recent_problems(hours))
+
+
 @cli.command()
 def version():
     """Show the installed ZenSynora version."""

@@ -32,14 +32,6 @@ router = APIRouter()
 
 _LOOPBACK = {"127.0.0.1", "::1", "localhost", "testclient"}
 
-# Providers that speak the OpenAI-compatible /models endpoint.
-_OPENAI_COMPATIBLE = {"lmstudio", "llamacpp", "openai", "groq", "openrouter"}
-
-_CLOUD_DEFAULT_URLS = {
-    "anthropic": "https://api.anthropic.com/v1",
-    "gemini": "https://generativelanguage.googleapis.com/v1beta",
-}
-
 # Python SDK each provider needs at chat time (the probe below uses plain
 # HTTP, so without this check "Test connection" could pass while chat fails).
 _PROVIDER_SDK = {
@@ -66,6 +58,32 @@ def _missing_sdk(provider: str) -> Optional[str]:
     except (ImportError, ValueError):
         found = False
     return None if found else pip_name
+
+
+# ── Ready-made custom providers (v0.7.1) ────────────────────────────────────
+# Shown in Settings → Providers → "Add provider". All are OpenAI-compatible
+# (or Ollama). "free" means the service offers a free tier or free models;
+# limits change, so the UI says "check the provider's page".
+PROVIDER_PRESETS: List[Dict[str, Any]] = [
+    # Local servers (run on your computer or network)
+    {"name": "vllm", "label": "vLLM", "kind": "openai", "base_url": "http://localhost:8000/v1", "local": True},
+    {"name": "localai", "label": "LocalAI", "kind": "openai", "base_url": "http://localhost:8080/v1", "local": True},
+    {"name": "jan", "label": "Jan", "kind": "openai", "base_url": "http://localhost:1337/v1", "local": True},
+    {"name": "koboldcpp", "label": "KoboldCpp", "kind": "openai", "base_url": "http://localhost:5001/v1", "local": True},
+    {"name": "textgen", "label": "text-generation-webui", "kind": "openai", "base_url": "http://localhost:5000/v1", "local": True},
+    {"name": "ollama-remote", "label": "Ollama on another machine", "kind": "ollama", "base_url": "http://192.168.1.10:11434", "local": True},
+    # Online services
+    {"name": "deepseek", "label": "DeepSeek", "kind": "openai", "base_url": "https://api.deepseek.com/v1", "local": False},
+    {"name": "mistral", "label": "Mistral AI", "kind": "openai", "base_url": "https://api.mistral.ai/v1", "local": False, "free": True},
+    {"name": "cerebras", "label": "Cerebras", "kind": "openai", "base_url": "https://api.cerebras.ai/v1", "local": False, "free": True},
+    {"name": "together", "label": "Together AI", "kind": "openai", "base_url": "https://api.together.xyz/v1", "local": False},
+    {"name": "github-models", "label": "GitHub Models", "kind": "openai", "base_url": "https://models.inference.ai.azure.com", "local": False, "free": True},
+    {"name": "huggingface", "label": "Hugging Face router", "kind": "openai", "base_url": "https://router.huggingface.co/v1", "local": False, "free": True},
+    {"name": "nvidia", "label": "NVIDIA NIM", "kind": "openai", "base_url": "https://integrate.api.nvidia.com/v1", "local": False, "free": True},
+    {"name": "gemini-openai", "label": "Google Gemini (OpenAI-compatible)", "kind": "openai", "base_url": "https://generativelanguage.googleapis.com/v1beta/openai", "local": False, "free": True},
+    {"name": "xai", "label": "xAI (Grok)", "kind": "openai", "base_url": "https://api.x.ai/v1", "local": False},
+    {"name": "fireworks", "label": "Fireworks AI", "kind": "openai", "base_url": "https://api.fireworks.ai/inference/v1", "local": False},
+]
 
 
 # Callback set by web.api so a settings change rebuilds the agent registry.
@@ -160,7 +178,53 @@ def _public_config(cfg: AppConfig) -> Tuple[Dict[str, Any], List[str]]:
         if obj.get_secret_value():
             set_secrets.append(path)
         _set_path(data, path, "")
+    # v0.7.1: custom providers keep their API key inside a list item.
+    for i, cp in enumerate(cfg.providers.custom):
+        if cp.api_key.get_secret_value():
+            set_secrets.append(f"providers.custom.{cp.name}.api_key")
+        data["providers"]["custom"][i]["api_key"] = ""
     return data, set_secrets
+
+
+_HELPER_KEYS = ("_previous_name", "clear_api_key")
+
+
+def _merge_custom_providers(new_items: Any, raw: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Validate the custom-provider list from the form and keep stored API keys.
+
+    The browser never receives API keys, so an empty ``api_key`` means "keep
+    the saved one" (matched by name, or by ``_previous_name`` after a rename);
+    ``clear_api_key: true`` removes it.
+    """
+    from myclaw.provider import CUSTOM_PROVIDER_KINDS, SUPPORTED_PROVIDERS
+
+    if not isinstance(new_items, list):
+        raise HTTPException(status_code=400, detail="providers.custom must be a list")
+    stored = {c.get("name"): c for c in (_get_path(raw, "providers.custom") or []) if isinstance(c, dict)}
+    out, seen = [], set()
+    for item in new_items:
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=400, detail="Invalid custom provider entry")
+        name = str(item.get("name", "")).strip()
+        if not name or not all(ch.isalnum() or ch in "-_." for ch in name):
+            raise HTTPException(status_code=400, detail=f"Custom provider name '{name}' must use letters, digits, - _ .")
+        if name in SUPPORTED_PROVIDERS:
+            raise HTTPException(status_code=400, detail=f"'{name}' is a built-in provider; pick another name.")
+        if name in seen:
+            raise HTTPException(status_code=400, detail=f"Two custom providers are called '{name}'.")
+        seen.add(name)
+        if item.get("kind", "openai") not in CUSTOM_PROVIDER_KINDS:
+            raise HTTPException(status_code=400, detail=f"{name}: kind must be one of {', '.join(CUSTOM_PROVIDER_KINDS)}")
+        if not str(item.get("base_url", "")).strip():
+            raise HTTPException(status_code=400, detail=f"{name}: server URL is required.")
+        clean = {k: v for k, v in item.items() if k not in _HELPER_KEYS}
+        if item.get("clear_api_key"):
+            clean["api_key"] = ""
+        elif not clean.get("api_key"):
+            prev = stored.get(item.get("_previous_name") or name) or {}
+            clean["api_key"] = prev.get("api_key", "")
+        out.append(clean)
+    return out
 
 
 def _read_raw_config() -> Dict[str, Any]:
@@ -182,7 +246,7 @@ class SettingsUpdate(BaseModel):
 
 @router.get("/api/settings", dependencies=guard)
 async def get_settings():
-    from myclaw.provider import SUPPORTED_PROVIDERS
+    from myclaw.provider import provider_names
 
     cfg = load_config(force_reload=True)
     data, set_secrets = _public_config(cfg)
@@ -190,7 +254,8 @@ async def get_settings():
         "config": data,
         "secrets_set": set_secrets,
         "secret_paths": _secret_paths(cfg),
-        "providers": SUPPORTED_PROVIDERS,
+        "providers": provider_names(cfg),
+        "provider_presets": PROVIDER_PRESETS,
         "config_file": str(CONFIG_FILE),
         "config_file_exists": CONFIG_FILE.exists(),
     }
@@ -215,6 +280,8 @@ async def update_settings(update: SettingsUpdate):
             raise HTTPException(status_code=400, detail=f"Unknown setting: {path}")
         if path in secret_paths and (value is None or value == ""):
             continue  # empty secret field = keep the stored value
+        if path == "providers.custom":
+            value = _merge_custom_providers(value, raw)
         _set_path(raw, path, value)
 
     for path in update.clear_secrets:
@@ -225,11 +292,20 @@ async def update_settings(update: SettingsUpdate):
     provider = _get_path(raw, "agents.defaults.provider")
     from myclaw.provider import SUPPORTED_PROVIDERS
 
-    if provider and provider not in SUPPORTED_PROVIDERS:
+    # Built-in providers plus the user's custom ones (v0.7.1).
+    known = set(SUPPORTED_PROVIDERS) | {
+        c.get("name") for c in (_get_path(raw, "providers.custom") or []) if isinstance(c, dict)
+    }
+    if provider and provider not in known:
         raise HTTPException(status_code=400, detail=f"Unknown provider: {provider}")
+    for entry in _get_path(raw, "agents.rotation.entries") or []:
+        if (entry or {}).get("provider") not in known:
+            raise HTTPException(status_code=400, detail=f"Unknown provider in rotation: {(entry or {}).get('provider')}")
+    if (_get_path(raw, "agents.rotation.strategy") or "fallback") not in ("fallback", "round_robin"):
+        raise HTTPException(status_code=400, detail="Rotation strategy must be 'fallback' or 'round_robin'.")
     for named in _get_path(raw, "agents.named") or []:
         p = (named or {}).get("provider") or ""
-        if p and p not in SUPPORTED_PROVIDERS:
+        if p and p not in known:
             raise HTTPException(status_code=400, detail=f"Unknown provider for agent {named.get('name')}: {p}")
         if not (named or {}).get("name", "").strip():
             raise HTTPException(status_code=400, detail="Every named agent needs a name.")
@@ -267,27 +343,39 @@ class ProbeRequest(BaseModel):
     provider: str
     base_url: Optional[str] = None  # unsaved value from the form, optional
     api_key: Optional[str] = None  # unsaved value from the form, optional
+    kind: Optional[str] = None  # for an unsaved custom provider: "openai" | "ollama"
 
 
-async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str]) -> Dict[str, Any]:
+async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str],
+                 kind: Optional[str] = None) -> Dict[str, Any]:
+    """Test a provider and list its models.
+
+    v0.7.1: works for custom providers too (via provider_endpoint), and for an
+    unsaved custom provider when ``kind`` + ``base_url`` come from the form.
+    """
+    from myclaw.provider import provider_endpoint
+
     cfg = load_config()
-    pcfg = getattr(cfg.providers, provider, None)
-    if pcfg is None:
-        return {"ok": False, "error": f"Unknown provider '{provider}'", "models": []}
+    ep = provider_endpoint(cfg, provider)
+    if ep is None:
+        if not (kind and base_url):
+            return {"ok": False, "error": f"Unknown provider '{provider}'", "models": []}
+        ep = {"kind": kind, "base_url": "", "api_key": "", "local": False}
 
-    url = (base_url or getattr(pcfg, "base_url", "") or _CLOUD_DEFAULT_URLS.get(provider, "")).rstrip("/")
-    key = api_key
-    if not key and hasattr(pcfg, "api_key"):
-        key = pcfg.api_key.get_secret_value()
+    kind = kind or ep["kind"]
+    url = (base_url or ep["base_url"]).rstrip("/")
+    key = api_key or ep["api_key"]
+    if not url:
+        return {"ok": False, "error": "No server URL set.", "models": []}
 
     headers: Dict[str, str] = {}
     params: Dict[str, str] = {}
-    if provider == "ollama":
+    if kind == "ollama":
         endpoint = f"{url}/api/tags"
-    elif provider == "anthropic":
+    elif kind == "anthropic":
         endpoint = f"{url}/models"
         headers = {"x-api-key": key or "", "anthropic-version": "2023-06-01"}
-    elif provider == "gemini":
+    elif kind == "gemini":
         endpoint = f"{url}/models"
         params = {"key": key or ""}
     else:
@@ -295,7 +383,7 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str])
         if key:
             headers["Authorization"] = f"Bearer {key}"
 
-    missing = _missing_sdk(provider)
+    missing = _missing_sdk(provider if provider in _PROVIDER_SDK else ("openai" if kind == "openai" else ""))
     if missing:
         return {
             "ok": False,
@@ -307,7 +395,9 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str])
             "url": url,
         }
 
-    if provider not in ("ollama", "lmstudio", "llamacpp") and not key:
+    # Built-in cloud providers always need a key. Custom ones may not (local
+    # servers); a cloud server without a key answers 401, reported below.
+    if provider in ("openai", "groq", "openrouter", "anthropic", "gemini") and not key:
         return {"ok": False, "error": "API key is not set.", "models": [], "url": url}
 
     started = time.monotonic()
@@ -316,32 +406,30 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str])
             resp = await client.get(endpoint, headers=headers, params=params)
         latency_ms = int((time.monotonic() - started) * 1000)
         if resp.status_code >= 400:
+            hint = " (check the API key)" if resp.status_code in (401, 403) else ""
             return {
                 "ok": False,
-                "error": f"HTTP {resp.status_code} from {endpoint}",
-                "models": [],
+                "error": f"HTTP {resp.status_code} from {endpoint}{hint}",
+                "models": list(ep.get("models") or []),
                 "url": url,
             }
         body = resp.json()
-        if provider == "ollama":
+        if kind == "ollama":
             models = [m.get("name", "") for m in body.get("models", [])]
-        elif provider == "gemini":
+        elif kind == "gemini":
             models = [m.get("name", "").removeprefix("models/") for m in body.get("models", [])]
         else:
             models = [m.get("id", "") for m in body.get("data", [])]
-        return {
-            "ok": True,
-            "models": sorted(m for m in models if m),
-            "latency_ms": latency_ms,
-            "url": url,
-        }
+        models = sorted({m for m in models if m} | set(ep.get("models") or []))
+        return {"ok": True, "models": models, "latency_ms": latency_ms, "url": url}
     except Exception as e:
-        return {"ok": False, "error": f"Cannot reach {url}: {e.__class__.__name__}", "models": [], "url": url}
+        return {"ok": False, "error": f"Cannot reach {url}: {e.__class__.__name__}",
+                "models": list(ep.get("models") or []), "url": url}
 
 
 @router.post("/api/settings/probe", dependencies=guard)
 async def probe_provider(req: ProbeRequest):
-    return await _probe(req.provider, req.base_url, req.api_key)
+    return await _probe(req.provider, req.base_url, req.api_key, req.kind)
 
 
 # ── Live system health (replaces the hard-coded sidebar values) ──────────────

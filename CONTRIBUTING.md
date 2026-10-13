@@ -159,7 +159,11 @@ isort .
 | A health check | one `@check` function in `myclaw/doctor/checks.py` | [docs/medic_agent_guide.md](docs/medic_agent_guide.md#adding-a-check) |
 | A change to stored data (config keys, DB schema, folders) | a migration `updater/migrations/m_NNNN_name.py` | [docs/UPDATING.md](docs/UPDATING.md#add-a-data-migration) |
 | A new update step | a `Step` in `updater/steps.py` | [docs/UPDATING.md](docs/UPDATING.md#add-or-change-an-update-step) |
-| A Web UI page | `webui/src/components/` + navigation in `App.tsx` | [webui/README.md](webui/README.md) |
+| A Web UI page | `webui/src/components/` + `NavButton` in `App.tsx` + a router in `myclaw/web/` included in `api.py` | [webui/README.md](webui/README.md) |
+| Something agents do that the chat should show | `myclaw.events.emit({"type": …})` (+ a card in `ChatView.tsx` `eventSummary`) | [docs/architecture_diagram.md §12](docs/architecture_diagram.md#12-chat-channels-and-agent-to-agent-talk) |
+| A provider preset (local or online) | `PROVIDER_PRESETS` in `myclaw/web/settings_api.py` | [docs/webui_guide.md](docs/webui_guide.md#models-switch-rotate-add-providers) |
+| A job template | `TEMPLATES` in `webui/src/components/JobsView.tsx` | [docs/webui_guide.md](docs/webui_guide.md#jobs-scheduled-and-on-demand-tasks) |
+| Data that should be in backups | `_PART_PATTERNS` in `myclaw/backup.py` | [docs/webui_guide.md](docs/webui_guide.md#backups-settings-api-keys-knowledge) |
 | An LLM provider | `myclaw/provider.py` (+ SDK in `requirements.txt` if it is needed at chat time) | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
 Every user-visible change gets a line in `CHANGELOG.md` under `[Unreleased]`.

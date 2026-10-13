@@ -1,8 +1,10 @@
 # ZenSynora Architecture
 
-> **Status:** reflects **v0.7.0** (2026-10-13). Updated from the v0.4.1
+> **Status:** reflects **v0.7.1** (2026-10-13). Updated from the v0.4.1
 > version: adds the Web UI settings API, provider routing changes, the safe
-> updater and the doctor/medic rewrite; test inventory recounted.
+> updater and the doctor/medic rewrite (0.7.0); chat channels, agent-to-agent
+> events, jobs, backups, model rotation, custom providers and approval-gated
+> self-update (0.7.1); test inventory recounted.
 > **Audience:** contributors and operators. For end-user docs see
 > [`README.md`](../README.md). Sprint history:
 > [`archive/SPRINTS_SUMMARY.md`](archive/SPRINTS_SUMMARY.md).
@@ -26,13 +28,17 @@ myclaw/
 ├── api_server.py            # FastAPI app: REST + WebSocket + cost + auth endpoints
 ├── auth/                    # JWT verification + OAuth2 PKCE callback [Sprint 6]
 ├── backends/                # local / docker / ssh / wsl2 execution
+├── backup.py                # Backups of settings, API keys, knowledge, chat, jobs [0.7.1]
 ├── caching/                 # Shared BaseTTLCache + PersistentCacheMixin [Sprint 11]
 ├── channels/                # telegram / whatsapp / discord / web adapters [Sprint 6]
+├── chat/                    # Web UI chat channels: store (chat.db) + multi-agent engine [0.7.1]
 ├── config.py                # Pydantic config + hot-reload (watchdog)
 ├── cost_tracker.py          # SQLite cost accumulator + dashboard queries
 ├── defaults.py              # Single source of truth for tunable constants [Sprint 10]
 ├── doctor/                  # Health checks, integrity baseline, safe fixes [0.7.0]
 ├── evals/                   # Dataset-driven eval harness [Sprint 7]
+├── events.py                # Agent-to-agent activity events (delegation, tools, jobs) [0.7.1]
+├── jobs/                    # Jobs: store (jobs.db) + runner (schedule, evaluate, benchmark) [0.7.1]
 ├── knowledge/
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
 │   ├── path_reasoning.py    # find_paths / shortest_path [Sprint 7]
@@ -44,8 +50,9 @@ myclaw/
 ├── messaging/               # AgentMessage envelope + InProcessBroker [Sprint 7]
 ├── observability/           # OpenTelemetry tracing — wired Sprint 10
 ├── prompts/                 # Versioned Jinja2 prompt registry [Sprint 3]
-├── provider.py              # LLM providers + Message TypedDict
+├── provider.py              # LLM providers (+ your own, providers.custom) + Message TypedDict
 ├── resilience/              # Circuit breaker + fallback chain — wired Sprint 10
+├── selfupdate.py            # Agents' code-change proposals → approval → safe updater [0.7.1]
 ├── structured_output/       # extract_json / validate / repair_json [Sprint 3]
 ├── swarm/                   # Multi-agent orchestrator + strategies
 ├── tenancy/                 # UserContext + scoping helpers [Sprint 6 + 11]
@@ -55,24 +62,36 @@ myclaw/
 │   └── ...
 ├── vector/                  # Pluggable backends: memory / sqlite / qdrant [Sprint 4]
 ├── web/
-│   ├── api.py               # Web UI backend: WebSocket chat, agents, static SPA
-│   └── settings_api.py      # Settings, health, doctor, costs, history [0.5.0]
+│   ├── api.py               # Web UI backend: wiring, agents, legacy chat socket, static SPA
+│   ├── settings_api.py      # Settings, health, doctor, costs, history [0.5.0]
+│   ├── chat_api.py          # Channels REST + /ws/channels/{id} [0.7.1]
+│   ├── models_api.py        # Default model, rotation, prompt generator [0.7.1]
+│   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
+│   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
+│   └── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
 └── ... (~50 utility modules)
 
 updater/                     # Safe updates: side-by-side releases, backups,
-                             # migrations, rollback (stdlib only) [0.6.0]
+                             # migrations, rollback (stdlib only) [0.6.0];
+                             # app_backup.py: full program-folder archive [0.7.1]
 
 webui/src/
-├── App.tsx                  # Shell: chat, navigation, live health
-├── api.ts                   # Backend helpers (API base, admin key)
+├── App.tsx                  # Shell: channels + agents sidebar, navigation, live health
+├── api.ts                   # Backend helpers and shared types
+├── colors.ts                # Stable colour per agent [0.7.1]
 └── components/
+    ├── ChatView.tsx         # Channel chat, @mentions, activity panel [0.7.1]
+    ├── ModelsView.tsx       # Default model, rotation, your providers [0.7.1]
+    ├── JobsView.tsx         # Jobs, runs, evaluation, benchmark [0.7.1]
+    ├── BackupsView.tsx      # Backups [0.7.1]
+    ├── ProposalsPanel.tsx   # Change proposals + lessons (Doctor page) [0.7.1]
     ├── SettingsView.tsx     # Settings page [0.5.0]
     ├── DoctorView.tsx       # Doctor page [0.7.0]
     ├── ToolsView.tsx        # Tool list [0.5.0]
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 488 tests (pytest --collect-only, 2026-10-13)
+tests/                       # 508 tests (pytest --collect-only, 2026-10-13)
 ```
 
 ---
@@ -239,7 +258,7 @@ Install all extras: `python -m pip install 'zensynora[all]'`.
 
 ## 6. Test inventory
 
-Counted with `pytest --collect-only` on 2026-10-13 (v0.7.0).
+Counted with `pytest --collect-only` on 2026-10-13 (v0.7.1).
 
 | Suite | Tests |
 |---|---|
@@ -252,7 +271,7 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.0).
 | `test_discord_channel.py` | 9 |
 | `test_doctor_medic.py` | 10 |
 | `test_evals.py` | 17 |
-| `test_knowledge.py` | 18 |
+| `test_knowledge.py` | 19 |
 | `test_marketplace.py` | 26 |
 | `test_memory.py` | 6 |
 | `test_messaging.py` | 13 |
@@ -264,6 +283,7 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.0).
 | `test_resilience.py` | 8 |
 | `test_scheduler_features.py` | 30 |
 | `test_security.py` | 8 |
+| `test_selfupdate.py` | 8 |
 | `test_sprint10_integrations.py` | 16 |
 | `test_sprint8_perf_quality.py` | 6 |
 | `test_structured_output.py` | 20 |
@@ -271,9 +291,10 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.0).
 | `test_tenancy_scoping.py` | 15 |
 | `test_tools.py` | 35 |
 | `test_updater.py` | 9 |
+| `test_v071_features.py` | 11 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **488** |
+| **Total** | **508** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 
@@ -298,3 +319,8 @@ pytest -q -o addopts=""
 * **Change the data format** → add a migration in `updater/migrations/`
   ([guide](UPDATING.md#add-a-data-migration)).
 * **Change how updates work** → add a `Step` in `updater/steps.py`.
+* **Add a Web UI page** → a component in `webui/src/components/`, a
+  `NavButton` in `App.tsx`, a router in `myclaw/web/` included in `api.py`.
+* **Emit agent activity** → `myclaw.events.emit({"type": …})` from code that
+  runs for an agent; it reaches the channel automatically.
+* **Add a provider preset** → `PROVIDER_PRESETS` in `myclaw/web/settings_api.py`.

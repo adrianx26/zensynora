@@ -1,6 +1,7 @@
 # Medic & Doctor Guide
 
-> **Applies to:** v0.7.0 · **Rewritten:** 2026-10-13
+> **Applies to:** v0.7.1 · **Rewritten:** 2026-10-13 · **v0.7.1:** self-update
+> proposals and learning ([section 6](#6-self-update-proposals))
 > Before 0.7.0 most medic tools described here did not exist in the code
 > (two "health" tools returned fixed text). Everything below is implemented
 > and covered by `tests/test_doctor_medic.py`.
@@ -16,6 +17,7 @@ against runaway loops.
 | See the same report in the browser | Web UI → **Doctor** |
 | Repair safe things automatically | `zensynora doctor --fix` or **Fix automatically** |
 | Let an agent check/repair itself | the medic tools below (available to every agent) |
+| Let agents propose fixes to the code (you approve) | Doctor → **Change proposals**, `zensynora medic` ([section 6](#6-self-update-proposals)) |
 
 ---
 
@@ -94,6 +96,11 @@ All tools are registered in `myclaw/tools/__init__.py` and implemented in
 | `record_task_execution(task_name, success, duration_seconds, error)` | Log a task outcome |
 | `get_task_analytics(days=7)` | Success rate, average duration, most-failing tasks |
 | `prevent_infinite_loop(record=True)` | Runaway-loop guard status (see below) |
+| `read_source_file(path, start_line, max_lines)` / `list_source_files(pattern)` | Read the installed code (read-only; never `venv/`, `.git`, `.env`) — v0.7.1 |
+| `propose_code_change(title, reason, file_path, new_content, files_json)` | File a change proposal; installed only after you approve it — v0.7.1 |
+| `list_change_proposals(status)` | Proposals and their status — v0.7.1 |
+| `get_recent_problems(hours=24)` | Grouped log errors, failed or low-scoring job runs, open proposals — v0.7.1 |
+| `record_lesson(topic, lesson)` | Save a lesson to the knowledge note `medic-lessons` — v0.7.1 |
 
 ### Integrity and recovery
 
@@ -175,3 +182,81 @@ Details: [MEDIC_CHANGE_MGMT.md](MEDIC_CHANGE_MGMT.md).
 | `Databases: … malformed` | Restore your data from an update backup (same commands). |
 | `Code integrity: N file(s) differ` | If you didn't edit them, use `recover_file` or `zensynora update --force`. |
 | Loop guard blocks normal use | Raise `medic.max_loop_iterations`. |
+| The chat says "the model … returned an empty answer twice" | The model server answered with nothing (overloaded free tier, a reasoning model that ran out of tokens, a model without tool support). Try again, pick another model on the **Models** page, or turn on rotation there. |
+| `Errors in the last 24 h … no such column: write` | Fixed in 0.7.1 (knowledge search parsed text as FTS5 syntax). Update with `zensynora update`. |
+| Delegation answers "Agent registry not initialized" | Fixed in 0.7.1. Update with `zensynora update`. |
+
+---
+
+## 6. Self-update proposals
+
+> Added in v0.7.1 · code: `myclaw/selfupdate.py` · tests: `tests/test_selfupdate.py`
+
+Agents can improve ZenSynora's own code — but **never by writing to the
+program folder**. They propose; you decide; the safe updater installs.
+
+```mermaid
+flowchart LR
+    agent["Agent / medic self-review"] -- read_source_file --> code[("installed code<br/>read-only")]
+    agent -- propose_code_change --> prop["Proposal<br/>~/.myclaw/medic/proposals/"]
+    prop -- checks --> chk{"inside program folder?<br/>Python compiles?<br/>size ok?"}
+    chk -- no --> rej["refused, reason told to the agent"]
+    chk -- yes --> you{"You: Doctor → Change proposals<br/>or zensynora medic approve"}
+    you -- reject --> done1["rejected"]
+    you -- approve --> stage["copy of current release<br/>+ the change"]
+    stage --> upd["safe updater<br/>backup · build · verify · switch"]
+    upd -- ok --> applied["new release active<br/>(restart ZenSynora)"]
+    upd -- failure --> rb["automatic rollback<br/>running version unchanged"]
+```
+
+**How a proposal is checked.** Paths must stay inside the installed program
+folder; `venv/`, `.git`, `node_modules`, build output, `.env` and the config
+key are off limits; Python files must compile; at most 20 files of 400 KB
+each; a unified diff is stored for review. Changes that touch only `.md`,
+`.txt` or `.rst` files are *low risk*; everything else is *high risk*.
+
+**How it is installed.** On approval, the current release is copied (without
+`venv/`), the change is applied to the copy, and `update.sh update
+--from-dir <copy> --force` runs — full data and program-folder backup,
+side-by-side build, checks against your settings (and the test suite when
+`medic.self_update.run_tests` is on), switch, automatic rollback on any
+failure. If a file changed after the proposal was made, the install is
+refused ("ask for a new proposal"). The result and the updater log are kept
+with the proposal. Undo an installed change with `zensynora update rollback`.
+
+**Commands.**
+
+```bash
+zensynora medic proposals [--status pending]
+zensynora medic show ID          # reason + diff
+zensynora medic approve ID       # approve and install now
+zensynora medic reject ID --note "not needed"
+zensynora medic apply ID         # install an approved one / retry a failed one
+zensynora medic problems         # what the medic looks at
+```
+
+**Settings** (Settings → Features → *Self-update by agents*, or `config.json`):
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `medic.self_update.enabled` | `true` | Agents may read the code and file proposals |
+| `medic.self_update.auto_approve_low_risk` | `false` | Install documentation-only proposals without asking |
+| `medic.self_update.run_tests` | `false` | Run the test suite on the new release before switching (needs `pytest` in the venv) |
+
+Self-update needs the standard install (`~/.local/share/zensynora`, made by
+`install-online.sh` or `zensynora update`). Docker and portable installs can
+still review proposals but install them by rebuilding / copying.
+
+### Learning
+
+* `get_recent_problems` groups identical errors from the log and lists
+  failed or low-scoring job runs (score below 6) and open proposals.
+* `record_lesson` appends to the knowledge note **medic-lessons**, so every
+  agent can find past causes and fixes with a normal knowledge search; the
+  Doctor page lists them.
+* **Run self-review** (Doctor page) — or the *Medic self-review* job
+  template, e.g. daily at 03:00 — asks the default agent to look at the
+  problems, read the code involved, propose at most one small fix and record
+  what it learned. The run is scored like any job, so the Jobs page shows how
+  useful the reviews are. Other agents can join through the chat (for
+  example `@coder review proposal …`) and by delegation.

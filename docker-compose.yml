@@ -86,6 +86,9 @@ services:
       # Log to stdout for Docker log collection
       MYCLAW_LOG_LEVEL: ${MYCLAW_LOG_LEVEL:-INFO}
       # Data and config live in $HOME/.myclaw = /data/.myclaw (set in the Dockerfile).
+      # v0.7.1: Web UI / CLI backups inside the data volume, so they survive
+      # re-creating the container (default would be /data/.myclaw-backups).
+      MYCLAW_BACKUP_DIR: /data/.myclaw/backups-zensynora
       # Hostname for service discovery
       ZENSYNORA_HOSTNAME: zensynora
 

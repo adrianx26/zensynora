@@ -1,6 +1,8 @@
 # ZenSynora Web UI
 
-> Replaces the Vite template README (2026-10-13, v0.7.0).
+> Replaces the Vite template README (2026-10-13). **v0.7.1:** chat channels with
+> several agents, Models, Jobs and Backups pages, change proposals on the
+> Doctor page. User guide: [docs/webui_guide.md](../docs/webui_guide.md).
 
 React 19 + TypeScript + Vite front end for ZenSynora. The production build in
 `dist/` is served by the Python backend (`myclaw/web/api.py`) on the same
@@ -14,15 +16,25 @@ zensynora webui            # http://localhost:8000
 
 | Page | Component | Backend |
 |---|---|---|
-| Chat (streaming, per-agent history) | `src/App.tsx` | WebSocket `/ws/chat/{agent}` |
-| Settings — model, providers, agents, channels, features, security | `src/components/SettingsView.tsx` | `GET/PUT /api/settings`, `POST /api/settings/probe` |
-| Doctor — health checks and safe fixes | `src/components/DoctorView.tsx` | `GET /api/system/doctor`, `POST /api/system/doctor/fix` |
+| Chat — channels, direct messages, @mentions, agent-to-agent activity | `src/components/ChatView.tsx` (+ sidebar in `src/App.tsx`) | `/api/channels…`, WebSocket `/ws/channels/{id}`, `/api/activity` |
+| Models — default model, rotation, your own providers | `src/components/ModelsView.tsx` | `/api/models`, `/api/models/default`, `/api/models/rotate`, `/api/settings` |
+| Jobs — add, run, monitor, evaluate, benchmark | `src/components/JobsView.tsx` | `/api/jobs…` |
+| Backups — create, check, restore, download, import, automatic | `src/components/BackupsView.tsx` | `/api/backups…` |
+| Settings — providers, agents (✨ generate prompt), channels, features, security | `src/components/SettingsView.tsx` | `GET/PUT /api/settings`, `POST /api/settings/probe`, `POST /api/agents/generate-prompt` |
+| Doctor — health checks, safe fixes, change proposals, lessons | `src/components/DoctorView.tsx`, `src/components/ProposalsPanel.tsx` | `/api/system/doctor…`, `/api/medic/…` |
 | Costs & usage | `src/components/CostDashboard.tsx` | `/api/v1/costs/*` |
 | Tools | `src/components/ToolsView.tsx` | `GET /api/tools` |
 | Sidebar health | `src/App.tsx` | `GET /api/system/health` (every 15 s) |
 
-Settings, Doctor, Costs and history clearing are answered only for requests
-from the same computer, or with the admin API key (`X-API-Key`; the UI asks
+Chat events on `/ws/channels/{id}` (JSON): `hello`, `message`, `stream_start`,
+`chunk`, `stream_end`, `turn_start`, `turn_end`, `tool_start`, `tool_end`,
+`delegation_start`, `delegation_end`, `job_run`, `channel`, `error`. Send
+`{"type": "message", "text": …}`, `{"type": "stop"}` or, with two-factor
+authentication on, `{"type": "mfa", "code": …}` first. The older per-agent
+socket `/ws/chat/{agent}` still works for scripts.
+
+Settings, Models, Jobs, Backups, Doctor, Costs, deleting channels and history
+clearing are answered only for requests from the same computer, or with the admin API key (`X-API-Key`; the UI asks
 for it when needed). Secrets are never sent to the browser.
 
 ## Development

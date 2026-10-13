@@ -680,9 +680,17 @@ def clear_hooks(event_type: str = None) -> str:
 
 
 def set_registry(registry: dict):
-    """Called by gateway.py after building the agent registry."""
-    global _agent_registry
-    _agent_registry = registry
+    """Called by gateway.py, the CLI and the Web UI after building the agent registry.
+
+    Fixed 2026-10-13 (v0.7.1): this used to *rebind* the module global, but
+    the tool modules (swarm.py's ``delegate``, scheduler.py, …) did
+    ``from .core import _agent_registry`` at import time and kept the old,
+    empty dict — so every delegation answered "Agent registry not
+    initialized". The dict is now updated in place, so all of them see it.
+    """
+    if registry is not _agent_registry:
+        _agent_registry.clear()
+        _agent_registry.update(registry)
     # Phase 6.1: Sync to state store for multi-worker awareness
     try:
         from ..state_store import get_state_store

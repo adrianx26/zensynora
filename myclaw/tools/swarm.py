@@ -28,11 +28,26 @@ async def delegate(agent_name: str, task: str, _depth: int = 0) -> str:
     if agent_name not in _agent_registry:
         available = ", ".join(_agent_registry.keys())
         return f"Error: Unknown agent '{agent_name}'. Available: {available}"
+    # v0.7.1: show the hand-over in the Web UI chat as agent-to-agent talk.
+    from ..events import CURRENT_AGENT, emit, short
+    import time as _time
+
+    sender = CURRENT_AGENT.get() or "default"
+    started = _time.monotonic()
+    emit({"type": "delegation_start", "from": sender, "to": agent_name, "task": short(task, 1500)})
+    token = CURRENT_AGENT.set(agent_name)  # tools the helper uses are attributed to it
     try:
-        return await _agent_registry[agent_name].think(task, user_id="__delegate__", _depth=_depth)
+        result = await _agent_registry[agent_name].think(task, user_id="__delegate__", _depth=_depth)
+        emit({"type": "delegation_end", "from": sender, "to": agent_name, "ok": True,
+              "result": short(result, 4000), "ms": int((_time.monotonic() - started) * 1000)})
+        return result
     except Exception as e:
         logger.error(f"Delegation error: {e}")
+        emit({"type": "delegation_end", "from": sender, "to": agent_name, "ok": False,
+              "result": short(str(e), 500), "ms": int((_time.monotonic() - started) * 1000)})
         return f"Delegation failed: {e}"
+    finally:
+        CURRENT_AGENT.reset(token)
 
 
 # ── Agent Swarm Tools ──────────────────────────────────────────────────────────

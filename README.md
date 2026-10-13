@@ -9,9 +9,9 @@ your conversations, builds a personal knowledge base, uses 95 tools, and can
 split work across teams of agents — with a local model like llama.cpp or
 Ollama, or any major cloud provider.
 
-[![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.1-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)](#requirements)
-[![Tests](https://img.shields.io/badge/tests-488-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-508-brightgreen.svg)](#development)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 
 [Quick start](#quick-start) · [Using it](#using-zensynora) · [Updating](#updating-and-health) ·
@@ -19,7 +19,7 @@ Ollama, or any major cloud provider.
 
 </div>
 
-![ZenSynora Web UI — settings](docs/images/webui-settings.png)
+![ZenSynora Web UI — a channel with three agents and their delegation activity](docs/images/webui-chat.png)
 
 ## Why ZenSynora
 
@@ -30,10 +30,16 @@ Ollama, or any major cloud provider.
   with full-text search and a knowledge graph the agents read and write.
 - **Does things.** 95 tools: files, sandboxed shell, web and headless browser,
   scheduling, knowledge, delegation, and tools the agent writes for itself.
-- **Works in teams.** 137 ready-made agent profiles and swarms (parallel,
-  sequential, hierarchical, voting).
-- **Easy to run.** A web UI with chat, settings, cost tracking and a built-in
-  doctor; updates that back up your data first and roll back on failure.
+- **Works in teams.** Chat channels with several agents at once — see who
+  delegates what to whom. 137 ready-made agent profiles and swarms
+  (parallel, sequential, hierarchical, voting).
+- **Any model, switchable.** Change the default model in one click, rotate
+  or fall back across models, add your own local or online providers.
+- **Runs jobs.** Scheduled or on-demand tasks with history, scoring and
+  model benchmarks.
+- **Safe to run and to change.** Backups of settings, API keys and knowledge;
+  updates that back up the whole install and roll back on failure; agents
+  can propose fixes to their own code — installed only when you approve.
 
 ## Quick start
 
@@ -67,9 +73,10 @@ source ~/.local/share/zensynora/source/venv/bin/activate
 zensynora webui                     # open http://localhost:8000
 ```
 
-Then open **Settings → Model**, pick your provider, click **Test connection &
-list models**, choose a model and save. (Or run `zensynora onboard` for a
-terminal wizard.)
+Then open **Models**, pick your provider and a model and click *Make
+default* (or run `zensynora onboard` for a terminal wizard). Chat in
+`#general`, or click an agent for a private conversation. Tour of the pages:
+[docs/webui_guide.md](docs/webui_guide.md).
 
 > **llama.cpp tip:** start `llama-server` with `--jinja` so agents can use
 > tools; use provider `llamacpp` with the server's `/v1` URL.
@@ -78,13 +85,15 @@ terminal wizard.)
 
 | Command | What it does |
 |---|---|
-| `zensynora webui [--port 8000] [--host 127.0.0.1]` | Web UI: chat, settings, doctor, costs, tools (`--host 127.0.0.1` = this computer only) |
+| `zensynora webui [--port 8000] [--host 127.0.0.1]` | Web UI: chat channels, models, jobs, backups, settings, doctor (`--host 127.0.0.1` = this computer only) |
 | `zensynora agent` | Chat in the terminal (`@name` to address an agent) |
 | `zensynora gateway` | Run the Telegram or WhatsApp bot (falls back to terminal chat) |
 | `zensynora mcp-server` | Expose ZenSynora's tools to MCP clients over stdio |
 | `zensynora knowledge sync \| search \| list \| read \| write` | Manage the knowledge base |
 | `zensynora swarm …` · `skills …` · `memory …` | Swarms, tools/skills, conversation memory |
 | `zensynora doctor` | Health check with fix hints (`--fix`, `--offline`, `--json`) |
+| `zensynora backup create \| list \| restore` | Back up / restore settings, API keys, knowledge, conversations, jobs |
+| `zensynora medic proposals \| show \| approve` | Review code changes proposed by agents |
 | `zensynora update` | Safe update (`status --check`, `rollback`, `backup`) |
 | `zensynora version` | Installed version and location |
 
@@ -106,22 +115,32 @@ zensynora update rollback         # back to the previous version
 zensynora doctor --fix            # check everything, repair safe issues
 ```
 
-Updates never overwrite a working install. The new version is built next to
-the current one, checked against **your** configuration, and switched in
-atomically after `~/.myclaw` is backed up; any failure rolls back
-automatically. Details: [docs/UPDATING.md](docs/UPDATING.md).
+Updates never overwrite a working install. Your data **and the whole
+installed program folder** are backed up first; the new version is built
+next to the current one, checked against **your** configuration and switched
+in atomically; settings, API keys and knowledge are verified afterwards. Any
+failure restores the previous install exactly as it was. Details:
+[docs/UPDATING.md](docs/UPDATING.md).
+
+For your own backups use the Web UI **Backups** page (manual or automatic)
+or `zensynora backup create`.
 
 The doctor checks packages and provider libraries, your settings, the model
 server and model, databases, permissions, code integrity and recent errors —
-also available as the **Doctor** page in the web UI.
+also available as the **Doctor** page in the web UI. There, **Change
+proposals** shows fixes that agents propose for ZenSynora's own code (the
+medic's self-review looks at recent errors and failed jobs): you read the
+diff and approve or reject; approved changes are installed through the safe
+updater and can be rolled back.
 Details: [docs/medic_agent_guide.md](docs/medic_agent_guide.md).
 
-![Doctor page](docs/images/webui-doctor.png)
+![Change proposals on the Doctor page](docs/images/webui-proposals.png)
 
 ## Configuration
 
-The easiest way is **Web UI → Settings** (model, providers and API keys,
-agents, channels, features, security). Everything is stored in
+The easiest way is the Web UI: **Models** (default model, rotation, your own
+providers) and **Settings** (built-in providers and API keys, agents with
+✨ prompt generation, channels, features, security). Everything is stored in
 `~/.myclaw/config.json`; API keys are never sent back to the browser, and
 settings are only reachable from the same computer unless you set an admin
 API key.
@@ -133,6 +152,7 @@ API key.
 | LM Studio | `lmstudio`, `http://localhost:1234/v1` | |
 | OpenAI · Groq · OpenRouter | API key | OpenAI-compatible |
 | Anthropic · Gemini | API key | install `anthropic` / `google-generativeai` |
+| **Your own** (Models → Add provider) | URL (+ key) | any OpenAI-compatible server or another Ollama; presets for vLLM, LocalAI, DeepSeek, Mistral, Cerebras, GitHub Models … |
 
 Environment variables override the file — useful for Docker and services:
 
@@ -143,6 +163,7 @@ MYCLAW_LLAMACPP_BASE_URL=http://localhost:8080/v1
 MYCLAW_OPENAI_API_KEY=sk-...
 MYCLAW_TELEGRAM_TOKEN=...
 MYCLAW_LOG_FILE=off                 # disable ~/.myclaw/logs/zensynora.log
+MYCLAW_BACKUP_DIR=/path/to/backups  # where backups go (default ~/.myclaw-backups)
 ```
 
 All supported variables are listed in [.env.example](.env.example).
@@ -156,18 +177,24 @@ flowchart LR
     agent --> llm["LLM providers<br/>local or cloud"]
     agent --> tools["95 tools<br/>sandboxed"]
     agent <--> state[("~/.myclaw<br/>memory · knowledge · config")]
-    ops["doctor · updater"] -.-> agent & state
+    agent <--> agent2["other agents<br/>delegation · swarms"]
+    jobs["Jobs<br/>schedule · score · bench"] --> agent
+    ops["doctor · medic · updater"] -.-> agent & state
+    agent -. proposals .-> ops
 ```
 
 | Area | Where |
 |---|---|
 | Agents and the request pipeline | `myclaw/agent.py`, `myclaw/agent_internals/` |
+| Chat channels, agent-to-agent events | `myclaw/chat/`, `myclaw/events.py`, `myclaw/web/chat_api.py` |
+| Jobs (schedule, evaluate, benchmark) | `myclaw/jobs/`, `myclaw/web/jobs_api.py` |
+| Backups | `myclaw/backup.py`, `myclaw/web/backup_api.py` |
 | LLM providers, fallback, circuit breaker | `myclaw/provider.py`, `myclaw/offline.py`, `myclaw/resilience/` |
 | Tools | `myclaw/tools/` |
 | Memory and knowledge | `myclaw/memory.py`, `myclaw/knowledge/` |
 | Swarms and agent profiles | `myclaw/swarm/`, `myclaw/agents/data/agents.yaml` |
 | Web UI backend / front end | `myclaw/web/`, `webui/` |
-| Doctor and medic | `myclaw/doctor/`, `myclaw/agents/medic_agent.py` |
+| Doctor, medic and self-update proposals | `myclaw/doctor/`, `myclaw/agents/medic_agent.py`, `myclaw/selfupdate.py` |
 | Safe updater | `updater/`, `update.sh` |
 
 Diagrams of every major flow: [docs/architecture_diagram.md](docs/architecture_diagram.md) ·
@@ -187,7 +214,7 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 git clone https://github.com/adrianx26/zensynora.git && cd zensynora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q -o addopts=""        # 488 tests
+pytest -q -o addopts=""        # 508 tests
 ruff check .
 ```
 

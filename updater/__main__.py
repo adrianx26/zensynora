@@ -76,6 +76,7 @@ def cmd_update(args) -> int:
         allow_downgrade=args.allow_downgrade, run_tests=args.run_tests,
         keep_releases=args.keep_releases, keep_backups=args.keep_backups,
         manage_service=not args.no_service, skip_webui=args.skip_webui,
+        app_backup=args.app_backup,
     )
     with _lock(layout):
         ctx = Context(layout=layout, state=State.load(layout.state_file), opts=opts, stamp=timestamp())
@@ -117,7 +118,7 @@ def cmd_update(args) -> int:
 
 def _passthrough(args) -> list:
     out = ["update", "--repo", args.repo, "--keep-releases", str(args.keep_releases),
-           "--keep-backups", str(args.keep_backups)]
+           "--keep-backups", str(args.keep_backups), "--app-backup", getattr(args, "app_backup", "full")]
     for flag in ("force", "allow_downgrade", "run_tests", "no_service", "skip_webui", "verbose"):
         if getattr(args, flag):
             out.append("--" + flag.replace("_", "-"))
@@ -307,6 +308,9 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("--keep-backups", type=int, default=5)
     u.add_argument("--no-service", action="store_true", help="don't stop/start the systemd service")
     u.add_argument("--skip-webui", action="store_true", help="don't rebuild the web UI")
+    u.add_argument("--app-backup", choices=("full", "code", "none"), default="full",
+                   help="back up the installed program folder first: full (default, with venv), "
+                        "code (without venv) or none")
     u.add_argument("--no-handoff", action="store_true", help=argparse.SUPPRESS)
     u.add_argument("--cleanup-source", action="store_true", help=argparse.SUPPRESS)
     u.set_defaults(func=cmd_update)

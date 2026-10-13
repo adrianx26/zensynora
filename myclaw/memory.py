@@ -649,22 +649,16 @@ class Memory:
             await self.initialize()
 
         try:
-            # Security: Sanitize query - only allow alphanumeric and basic FTS operators
-            # Remove potentially dangerous characters that could manipulate FTS queries
-            sanitized_query = re.sub(r'[^\w\s"\*\-\(\)ANDORNOT]', "", query)
-            processed_query = sanitized_query
-
-            exact_phrases = re.findall(r'"([^"]+)"', processed_query)
-            if exact_phrases:
-                for phrase in exact_phrases:
-                    processed_query = processed_query.replace(f'"{phrase}"', f'"{phrase}"')
-
-            if not any(op in processed_query.upper() for op in ["AND", "OR", "NOT", "*"]):
-                words = processed_query.split()
-                if len(words) == 1:
-                    processed_query = f"{processed_query}*"
-                elif len(words) <= 3:
-                    processed_query = " ".join(f"{w}*" for w in words)
+            # Fixed 2026-10-13 (v0.7.1): text such as "write: x" or "a-b" was
+            # read as FTS5 syntax (column filters / operators) and failed.
+            # Every word is now quoted; short queries also match word prefixes.
+            from .knowledge.db import sanitize_fts_query
+            processed_query = sanitize_fts_query(query)
+            if processed_query == "*":
+                return []
+            terms = processed_query.split(" ")
+            if len(terms) <= 3:
+                processed_query = " ".join(t if t.endswith("*") else t + "*" for t in terms)
 
             if boost_recent:
                 sql = """

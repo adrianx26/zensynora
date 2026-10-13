@@ -18,6 +18,12 @@ from .core import (
     is_tool_independent,
 )
 
+# v0.7.1: the job queue and notification callback are set at runtime
+# (set_job_queue / set_notification_callback rebind them in core), so they
+# are read from the core module at call time — names imported above would
+# stay None forever ("Scheduler not available").
+from . import core as _core  # noqa: E402
+
 import json
 import asyncio
 from pathlib import Path
@@ -40,7 +46,7 @@ def schedule_daily_reflection(user_id: str = "default", hour: int = 20, minute: 
     Returns:
         Success or error message.
     """
-    if _job_queue is None and _notification_callback is None:
+    if _core._job_queue is None and _core._notification_callback is None:
         return "Error: Scheduler not available (no channel gateway running)."
 
     task = (
@@ -70,7 +76,7 @@ def schedule_daily_reflection(user_id: str = "default", hour: int = 20, minute: 
     job_id = f"daily_reflection_{user_id}"
 
     # Remove existing daily reflection jobs to avoid duplicates
-    existing_jobs = _job_queue.get_jobs_by_name(job_id) if _job_queue else []
+    existing_jobs = _core._job_queue.get_jobs_by_name(job_id) if _core._job_queue else []
     for job in existing_jobs:
         job.schedule_removal()
 

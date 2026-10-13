@@ -99,6 +99,36 @@ from myclaw.web import settings_api as _settings_api  # noqa: E402
 _settings_api.set_config_changed_hook(_reset_agent_registry)
 app.include_router(_settings_api.router)
 
+# v0.7.1: model switching/rotation + prompt generator, multi-agent chat
+# channels, jobs, backups and medic self-update proposals.
+from myclaw.web import models_api as _models_api  # noqa: E402
+from myclaw.web import chat_api as _chat_api  # noqa: E402
+from myclaw.web import jobs_api as _jobs_api  # noqa: E402
+from myclaw.web import backup_api as _backup_api  # noqa: E402
+from myclaw.web import medic_api as _medic_api  # noqa: E402
+
+_chat_api.set_registry_getter(_ensure_registry)
+_jobs_api.set_registry_getter(_ensure_registry, _chat_api.engine)
+_backup_api.set_restore_hook(_reset_agent_registry)  # restored settings take effect at once
+app.include_router(_models_api.router)
+app.include_router(_chat_api.router)
+app.include_router(_jobs_api.router)
+app.include_router(_backup_api.router)
+app.include_router(_medic_api.router)  # self-update proposals (v0.7.1)
+
+
+async def _start_background_runner() -> None:
+    """Job scheduler + automatic backups run inside the Web UI process."""
+    _jobs_api.start_runner()
+
+
+async def _stop_background_runner() -> None:
+    await _jobs_api.stop_runner()
+
+
+app.router.add_event_handler("startup", _start_background_runner)
+app.router.add_event_handler("shutdown", _stop_background_runner)
+
 # Metrics middleware (must be first to capture all requests)
 app.add_middleware(MetricsMiddleware)
 
@@ -153,6 +183,7 @@ async def get_agents():
             "model": na.model,
             "provider": na.provider or defaults.provider,
             "system_prompt": na.system_prompt or "",
+            "description": getattr(na, "description", "") or "",
         })
     return {"agents": agents}
 

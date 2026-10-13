@@ -140,6 +140,13 @@ _LAZY_AGENT_TOOLS = {
     "create_backup":             ("myclaw.agents.medic_agent",   "create_backup",             "Create a local backup of a file"),
     "list_backups":              ("myclaw.agents.medic_agent",   "list_backups",              "List all local backups"),
     "check_file_virustotal":     ("myclaw.agents.medic_agent",   "check_file_virustotal",     "Check a file against VirusTotal for malware detection"),
+    # Medic self-update and learning (v0.7.1) — proposals need your approval
+    "read_source_file":          ("myclaw.selfupdate",           "read_source_file",          "Read part of ZenSynora's installed source code (read-only)"),
+    "list_source_files":         ("myclaw.selfupdate",           "list_source_files",         "List ZenSynora source files matching a glob"),
+    "propose_code_change":       ("myclaw.selfupdate",           "propose_code_change",       "Propose a change to ZenSynora's code; installed only after the user approves it"),
+    "list_change_proposals":     ("myclaw.selfupdate",           "list_change_proposals",     "List code-change proposals and their status"),
+    "get_recent_problems":       ("myclaw.selfupdate",           "get_recent_problems",       "Recent errors, failed/low-score job runs and open proposals"),
+    "record_lesson":             ("myclaw.selfupdate",           "record_lesson",             "Save a lesson learned to the knowledge base (note medic-lessons)"),
     # New Tech Agent
     "fetch_ai_news":             ("myclaw.agents.newtech_agent", "fetch_ai_news",             "Fetch AI news from various sources"),
     "get_technology_proposals":  ("myclaw.agents.newtech_agent", "get_technology_proposals",  "Get all technology proposals"),

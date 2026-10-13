@@ -17,11 +17,27 @@ import re
 import time
 from typing import Dict, TYPE_CHECKING
 
+from ..events import emit, short
+
 if TYPE_CHECKING:
     from ..agent import Agent
     from ..memory import Memory
 
 logger = logging.getLogger(__name__)
+
+
+def _public_args(args: Dict) -> Dict:
+    """Tool arguments without internal keys (``_depth``…) for display."""
+    return {k: v for k, v in (args or {}).items() if not str(k).startswith("_")}
+
+
+def _emit_tool(agent, name: str, args: Dict, ok: bool, output: str, duration) -> None:
+    """Activity event for the Web UI chat (v0.7.1); no-op outside a chat channel."""
+    emit({
+        "type": "tool_end", "tool": name, "ok": bool(ok),
+        "args": short(_public_args(args), 200), "result": short(output, 400),
+        "ms": int(duration * 1000) if duration is not None else None,
+    })
 
 
 async def execute_tools(
@@ -85,6 +101,8 @@ async def execute_tools(
                 content = f"Tool {r['tool_name']} error: {r['error']}"
             tool_results_by_id[tool_call_id] = content
             await mem.add("tool", content)
+            _emit_tool(agent, r["tool_name"], tc.get("function", {}).get("arguments", {}),
+                       r["success"], r["result"] if r["success"] else r["error"], None)
 
             # KB extraction for substantial parallel tool results
             # (fire-and-forget; never blocks the response path).
@@ -127,6 +145,8 @@ async def execute_tools(
 
         start_time = time.time()
         logger.info(f"[AUDIT] Tool execution started: {tool_name} with args: {args}")
+        if tool_name != "delegate":  # delegation emits its own, richer events
+            emit({"type": "tool_start", "tool": tool_name, "args": short(_public_args(args), 200)})
 
         try:
             func = TOOLS[tool_name]["func"]
@@ -161,6 +181,8 @@ async def execute_tools(
             logger.info(
                 f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)"
             )
+            if tool_name != "delegate":
+                _emit_tool(agent, tool_name, args, True, tool_output, duration)
 
             # Fire-and-forget KB extraction for substantial outputs.
             if agent._kb_auto_extract and agent._should_save_tool_result(tool_name, tool_output):
@@ -176,6 +198,7 @@ async def execute_tools(
             content = f"Tool error: {e}"
             tool_results_by_id[tool_call_id] = content
             await mem.add("tool", content)
+            _emit_tool(agent, tool_name, args, False, str(e), time.time() - start_time)
 
     # Build the followup turn for OpenAI compatibility: an assistant
     # message with all tool_calls, followed by one tool message per id

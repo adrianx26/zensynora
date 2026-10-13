@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zensynora"
-version = "0.7.0"
+version = "0.7.1"
 description = "A powerful personal AI agent with multi-provider LLM support, Telegram/WhatsApp gateways, persistent memory, and agent swarms."
 readme = "README.md"
 license = {text = "AGPL-3.0"}

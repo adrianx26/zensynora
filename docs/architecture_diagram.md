@@ -1,6 +1,9 @@
 # ZenSynora Architecture — Visual Guide
 
-> **Version:** 0.7.0 · **Last updated:** 2026-10-13
+> **Version:** 0.7.1 · **Last updated:** 2026-10-13
+> 0.7.1: chat channels and agent-to-agent events (§12), jobs (§13),
+> approval-gated self-update (§14), backups, model rotation and custom
+> providers (§4), full program-folder backup in updates (§9).
 > Rewritten for 0.7.0. The previous version showed planning phases and
 > modules that no longer match the code. Every diagram below reflects the
 > current source tree; file names are given so you can jump to the code.
@@ -19,6 +22,9 @@
 9. [Safe updates](#9-safe-updates)
 10. [Doctor and medic](#10-doctor-and-medic)
 11. [Install layout on disk](#11-install-layout-on-disk)
+12. [Chat channels and agent-to-agent talk](#12-chat-channels-and-agent-to-agent-talk)
+13. [Jobs](#13-jobs)
+14. [Self-update proposals](#14-self-update-proposals)
 
 ---
 
@@ -69,7 +75,7 @@ flowchart TB
     subgraph L1["Interfaces"]
         direction LR
         cli2["cli.py<br/>click commands"]
-        webapi["web/api.py + web/settings_api.py<br/>Web UI backend · WebSocket chat"]
+        webapi["web/<br/>api · settings · models · chat · jobs · backup · medic"]
         gw["gateway.py<br/>Telegram / WhatsApp / console"]
         channels["channels/<br/>telegram · whatsapp · discord"]
         mcpsrv["mcp/server.py<br/>tools over MCP (stdio)"]
@@ -83,12 +89,15 @@ flowchart TB
         swarm["swarm/<br/>orchestrator · strategies"]
         registry["agents/registry.py<br/>agents.yaml profiles"]
         special["agents/<br/>medic · newtech · skill_adapter"]
+        chatx["chat/<br/>channels · multi-agent turns"]
+        jobsx["jobs/<br/>store · runner · evaluate · benchmark"]
     end
 
     subgraph L3["Capabilities"]
         direction LR
         tools["tools/<br/>shell · files · web · browser · kb · scheduler · swarm · toolbox"]
-        provider["provider.py<br/>8 LLM providers"]
+        provider["provider.py<br/>8 built-in + your own providers · rotation"]
+        events["events.py<br/>agent-to-agent activity"]
         resilience["resilience/ + offline.py<br/>circuit breaker · offline fallback"]
         prompts["prompts/ · structured_output/"]
         sandbox["sandbox.py · worker_pool.py · backends/"]
@@ -107,7 +116,9 @@ flowchart TB
     subgraph L5["Operations"]
         direction LR
         doctor["doctor/<br/>health checks · integrity"]
-        updater["updater/ (repo root)<br/>safe updates · migrations"]
+        updater["updater/ (repo root)<br/>safe updates · app backup · migrations"]
+        selfupd["selfupdate.py<br/>agent proposals → updater"]
+        backupx["backup.py<br/>settings · keys · knowledge"]
         obs["observability/ · metrics.py · logging_config.py"]
     end
 
@@ -119,8 +130,10 @@ flowchart TB
 
 ## 3. A chat message, end to end
 
-What happens when you type in the Web UI (Telegram and the terminal follow
-the same path from `Agent` onwards).
+What happens inside one agent when it answers (Telegram and the terminal
+follow the same path from `Agent` onwards). Since 0.7.1 the Web UI reaches
+`Agent.stream_think` through chat channels — see [§12](#12-chat-channels-and-agent-to-agent-talk);
+the per-agent socket shown here still works for scripts.
 
 ```mermaid
 sequenceDiagram
@@ -147,8 +160,12 @@ sequenceDiagram
     C->>K: search notes for relevant knowledge
     C-->>A: system prompt + history + knowledge
     A->>P: chat(messages, stream=True)
-    P-->>A: token stream (+ tool calls)
+    P-->>A: token stream (+ tool calls, collected at the end)
     A-->>WS: tokens
+    opt no text and no tool calls (empty reply)
+        A->>P: ask once more without streaming
+        P-->>A: reply, or "model returned an empty answer" note
+    end
     WS-->>UI: __STREAM_START__ … tokens … __STREAM_END__
     opt the model asked for tools
         A->>T: execute (parallel when independent)
@@ -163,24 +180,32 @@ sequenceDiagram
 
 ---
 
-## 4. Provider selection and fallback
+## 4. Provider selection, rotation and fallback
 
 How a request reaches a model, and what happens when that fails. Changed in
-0.5.0: the agent never silently switches to another provider.
+0.5.0: the agent never silently switches to another provider *unless you
+asked for it* — 0.7.1 adds an explicit rotation list (Models page).
 
 ```mermaid
 flowchart TD
-    start(["Agent needs a reply"]) --> pick["Provider = agent's own, else agents.defaults.provider"]
+    start(["Agent needs a reply"]) --> rot{"Rotation on and this agent<br/>uses the default model?"}
+    rot -- yes --> order["Candidates = default + rotation list<br/>(round-robin: start at the next one)"]
+    order --> tryc["provider.chat() with candidate"]
+    tryc -- ok --> replied(["Stream reply<br/>(model shown on the message)"])
+    tryc -- "error: rate limit, down,<br/>missing model, in-stream error" --> nextc{"more candidates?"}
+    nextc -- yes --> tryc
+    nextc -- no --> fail(["Error shown in chat"])
+    rot -- no --> pick["Provider = agent's own, else agents.defaults.provider<br/>(built-in or one of your providers)"]
     pick --> init{"Provider can start?<br/>(SDK installed, API key set)"}
     init -- no --> err["ProviderUnavailableError<br/>clear message shown in chat"]
     init -- yes --> breaker{"Circuit breaker<br/>open?"}
     breaker -- closed --> llmcall["provider.chat()"]
-    llmcall -- ok --> replied(["Stream reply"])
+    llmcall -- ok --> replied
     llmcall -- "server rejects tool list<br/>(llama.cpp without --jinja)" --> notools["Retry once without tools<br/>remember for next calls"]
     notools --> replied
     llmcall -- "connection error" --> offline{"intelligence.offline_mode?"}
     breaker -- open --> offline
-    offline -- no --> fail(["Error shown in chat"])
+    offline -- no --> fail
     offline -- yes --> fb["Try local providers in order<br/>Ollama → LM Studio → llama.cpp<br/>(skipping the one that just failed)"]
     fb -- ok --> replied
     fb -- none reachable --> fail
@@ -194,6 +219,7 @@ flowchart TD
 | `openai`, `groq`, `openrouter` | OpenAI-compatible cloud APIs | `openai` |
 | `anthropic` | Anthropic Messages API | `anthropic` (optional) |
 | `gemini` | Google Gemini | `google-generativeai` (optional) |
+| *your own* (`providers.custom`) | any OpenAI-compatible server, or another Ollama | `openai` / httpx |
 
 ---
 
@@ -275,12 +301,14 @@ flowchart TB
         kdb["knowledge/ + knowledge_&lt;user&gt;.db<br/>Markdown notes + FTS5 index"]
         tlb["tools/ · skills/ · plugins/ · hub/<br/>generated tools and installed skills"]
         misc["cost · metering · audit · swarm · state DBs"]
-        med["medic/<br/>integrity baseline · file backups · task log"]
+        med["medic/<br/>integrity baseline · file backups · task log · proposals/"]
+        chatdb["chat.db · jobs.db<br/>channels + messages · jobs + runs (0.7.1)"]
         logs["logs/zensynora.log<br/>rotating JSON log (since 0.7.0)"]
         mig[".migrations.json<br/>applied data migrations"]
     end
     app["ZenSynora (any version)"] <--> data
     upd["updater"] -- "backup before every update" --> data
+    bkp["~/.myclaw-backups/<br/>your backups (manual / automatic)"] <-- "zensynora backup · Backups page" --> data
     doc["doctor / medic"] -- "reads + safe fixes" --> data
 ```
 
@@ -288,24 +316,27 @@ flowchart TB
 
 ## 9. Safe updates
 
-`zensynora update` (`updater/`, added in 0.6.0). Steps 1–9 never touch the
-running version; any failure undoes the completed steps in reverse order.
+`zensynora update` (`updater/`, added in 0.6.0; program-folder backup and
+data check added in 0.7.1). Steps 1–10 never touch the running version; any
+failure undoes the completed steps in reverse order.
 
 ```mermaid
 flowchart TD
     s1["1 Preflight<br/>Python, disk space, service state"] --> s2["2 Fetch<br/>GitHub, folder or archive"]
     s2 --> s3["3 Hand-off<br/>newer updater takes over"]
     s3 --> s4["4 Back up ~/.myclaw + .env"]
-    s4 --> s5["5 Carry over .env, data/"]
-    s5 --> s6["6 Build side by side<br/>venv · packages · extras · Web UI"]
-    s6 --> s7["7 Verify<br/>imports new code, loads YOUR config"]
-    s7 --> s8["8 Stop service"]
-    s8 --> s9["9 Data migrations"]
-    s9 --> s10["10 Activate<br/>atomic symlink switch"]
-    s10 --> s11["11 Start service, confirm up"]
-    s11 --> s12(["12 Record, prune old releases"])
+    s4 --> s5["5 Back up the whole program folder<br/>archive + inventory of every file"]
+    s5 --> s6["6 Carry over .env, data/"]
+    s6 --> s7["7 Build side by side<br/>venv · packages · extras · Web UI"]
+    s7 --> s8["8 Verify<br/>imports new code, loads YOUR config"]
+    s8 --> s9["9 Stop service"]
+    s9 --> s10["10 Data migrations"]
+    s10 --> s11["11 Activate<br/>atomic symlink switch"]
+    s11 --> s12["12 Settings, API keys, knowledge<br/>checked, restored if missing"]
+    s12 --> s13["13 Start service, confirm up"]
+    s13 --> s14(["14 Record, prune old releases"])
 
-    s2 & s6 & s7 & s9 & s10 & s11 -. "failure" .-> rb["Roll back<br/>old version stays active,<br/>data restored if migrated"]
+    s2 & s7 & s8 & s10 & s11 & s13 -. "failure" .-> rb["Roll back<br/>old version active again · data restored if migrated ·<br/>program folder compared with the inventory and<br/>restored from the archive if anything differs"]
 ```
 
 ---
@@ -342,6 +373,7 @@ flowchart LR
         m3["validate_modification · detect_errors_in_file · check_file_virustotal"]
         m4["record_task_execution · get_task_analytics"]
         m5["prevent_infinite_loop<br/>called by the router on every step"]
+        m6["read_source_file · propose_code_change ·<br/>get_recent_problems · record_lesson (0.7.1, §14)"]
     end
 ```
 
@@ -352,14 +384,103 @@ flowchart LR
 ```mermaid
 flowchart TB
     base["~/.local/share/zensynora/"]
-    base --> src["source → releases/0.7.0-…<br/>(symlink: the active version)"]
+    base --> src["source → releases/0.7.1-…<br/>(symlink: the active version)"]
     base --> rel["releases/"]
-    rel --> r1["0.7.0-20261013T…<br/>code + venv/ + webui/dist"]
-    rel --> r2["0.6.0-…<br/>kept for rollback"]
-    base --> bk["backups/<br/>~/.myclaw snapshots (mode 700)"]
+    rel --> r1["0.7.1-20261013T…<br/>code + venv/ + webui/dist"]
+    rel --> r2["0.7.0-…<br/>kept for rollback"]
+    base --> bk["backups/<br/>~/.myclaw snapshots + app-folder.tar.gz (mode 700)"]
+    base --> stg["staging/<br/>temporary copies for approved proposals"]
     base --> lg["logs/update-*.log"]
     base --> st["updater-state.json"]
     svc["systemd myclaw.service<br/>and source/venv/bin/activate"] -. "use the path through" .-> src
+```
+
+---
+
+## 12. Chat channels and agent-to-agent talk
+
+Added in 0.7.1 (`myclaw/chat/`, `myclaw/events.py`, `myclaw/web/chat_api.py`,
+`webui/src/components/ChatView.tsx`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as You
+    participant UI as Chat (React)
+    participant WS as /ws/channels/{id}
+    participant E as ChatEngine
+    participant S as chat.db
+    participant A1 as @default
+    participant A2 as @writer
+    participant EV as events.py
+
+    U->>UI: "@default ask writer for a haiku"
+    UI->>WS: {type: message}
+    WS->>E: post()
+    E->>S: save your message
+    E->>E: who answers? @mentions, else reply mode<br/>(lead · everyone in turn · everyone at once)
+    E->>A1: stream_think(group context + message)<br/>CURRENT_CHANNEL / CURRENT_AGENT set
+    A1->>EV: delegation_start (default → writer)
+    EV-->>WS: event → card in chat + Activity panel
+    EV->>S: saved as an "event" message
+    A1->>A2: delegate tool → think(task)
+    A2-->>A1: haiku
+    A1->>EV: delegation_end (+ result, ms)
+    A1-->>E: answer tokens
+    E-->>WS: stream_start · chunk… · stream_end (model, time)
+    E->>S: save the answer
+```
+
+* Each `(channel, agent)` pair has its own conversation memory
+  (`MEMORY_SCOPE`); the knowledge base is shared.
+* Tool calls (`tool_start` / `tool_end`), swarm hand-offs and job runs travel
+  the same way. Nothing is emitted when no channel is set, so the CLI,
+  Telegram and tests are unaffected.
+
+---
+
+## 13. Jobs
+
+Added in 0.7.1 (`myclaw/jobs/`, `myclaw/web/jobs_api.py`, Jobs page).
+
+```mermaid
+flowchart LR
+    ui["Jobs page / API<br/>add · edit · pause · run now"] --> store[("jobs.db<br/>jobs + runs")]
+    tick["runner loop<br/>(every few s, inside zensynora webui)"] -- "due jobs" --> run
+    ui -- "Run now" --> run["run_job()<br/>agent.think(prompt)<br/>timeout · retries · clean memory"]
+    run --> store
+    run -- "post result" --> chan["channel (optional)"]
+    run -- "auto-evaluate" --> judge["main model scores 0-10<br/>against success criteria"]
+    ui -- "Benchmark" --> bench["same prompt on up to 8 models<br/>time + score side by side"]
+    bench --> store
+    judge --> store
+    tick -- "also" --> ab["automatic backups when due"]
+```
+
+---
+
+## 14. Self-update proposals
+
+Added in 0.7.1 (`myclaw/selfupdate.py`, `myclaw/web/medic_api.py`, Doctor page,
+`zensynora medic`). Agents never write to the program folder.
+
+```mermaid
+flowchart TD
+    probs["get_recent_problems<br/>log errors · failed / low-score jobs"] --> agent["Agent (medic self-review job,<br/>or any agent you ask in chat)"]
+    agent -- read_source_file --> code[("installed code, read-only")]
+    agent -- propose_code_change --> check{"inside program folder? no venv/.git/.env?<br/>Python compiles? size ok?"}
+    check -- no --> back["refused · reason returned to the agent"]
+    check -- yes --> prop["proposal + diff<br/>~/.myclaw/medic/proposals/"]
+    prop --> you{"You review<br/>Doctor → Change proposals"}
+    you -- reject --> rj["rejected"]
+    you -- approve --> stale{"code unchanged<br/>since the proposal?"}
+    stale -- no --> outd["failed: ask for a new proposal"]
+    stale -- yes --> stage["staging/ = copy of current release + change"]
+    stage --> upd["update.sh update --from-dir staging --force<br/>(all steps of §9)"]
+    upd -- ok --> ok["new release active · restart to use it ·<br/>zensynora update rollback undoes it"]
+    upd -- failure --> rb["rolled back · running version unchanged"]
+    agent -- record_lesson --> kb[("knowledge note<br/>medic-lessons")]
+    kb -. "found by later searches" .-> agent
 ```
 
 ---

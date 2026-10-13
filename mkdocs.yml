@@ -6,6 +6,7 @@ repo_url: https://github.com/adrianx26/zensynora
 nav:
   - Home: README.md
   - Using ZenSynora:
+      - Web UI guide: webui_guide.md
       - Updating: UPDATING.md
       - Medic & Doctor: medic_agent_guide.md
       - Choosing an LLM: llm_recommendations.md
