@@ -67,7 +67,9 @@ def _ensure_registry() -> dict:
     return registry
 
 
-app = FastAPI(title="ZenSynora Web UI Backend", version="1.0.1")
+from myclaw import __version__ as _APP_VERSION  # noqa: E402
+
+app = FastAPI(title="ZenSynora Web UI Backend", version=_APP_VERSION)
 
 
 async def _close_async_db_pool() -> None:
@@ -125,7 +127,7 @@ class ChatMessage(BaseModel):
 # ── Health Check (used by Docker) ───────────────────────────────────────────
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "zensynora-webui"}
+    return {"status": "healthy", "service": "zensynora-webui", "version": _APP_VERSION}
 
 
 @app.get("/api/status")

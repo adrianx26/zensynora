@@ -720,6 +720,36 @@ class OpenAICompatProvider(BaseLLMProvider):
             default_headers=extra_headers or {},
         )
 
+    # None = unknown, False = the server rejected tool definitions once
+    # (e.g. llama-server started without --jinja); then we stop sending them.
+    _tools_supported: Optional[bool] = None
+
+    @staticmethod
+    def _is_tools_rejection(err: Exception) -> bool:
+        status = getattr(err, "status_code", None)
+        if status not in (400, 422, 500, 501):
+            return False
+        text = str(err).lower()
+        return any(k in text for k in ("tool", "jinja", "function call", "functions"))
+
+    async def _create_completion(self, **kwargs):
+        """chat.completions.create() that retries once without `tools` when
+        the server cannot handle them (llama.cpp without --jinja, some LM
+        Studio models), so plain chat still works."""
+        if self._tools_supported is not False:
+            try:
+                return await self.client.chat.completions.create(tools=_get_tool_schemas(), **kwargs)
+            except Exception as e:
+                if not self._is_tools_rejection(e):
+                    raise
+                logger.warning(
+                    "Server rejected tool definitions (%s); continuing without tools. "
+                    "For llama.cpp start llama-server with --jinja to enable tools.",
+                    str(e)[:200],
+                )
+                self._tools_supported = False
+        return await self.client.chat.completions.create(**kwargs)
+
     @retry_with_backoff(max_retries=3, base_delay=1.0)
     async def chat(self, messages, model="gpt-4o-mini", stream: bool = False):
         # Sanitize messages to ensure OpenAI API compatibility
@@ -742,10 +772,9 @@ class OpenAICompatProvider(BaseLLMProvider):
             async def generate():
                 # Buffer for incremental tool call assembly (OpenAI streams tool_calls in deltas)
                 _tc_buffer: Dict[int, Dict] = {}
-                response = await self.client.chat.completions.create(
+                response = await self._create_completion(
                     model=model,
                     messages=messages,
-                    tools=_get_tool_schemas(),
                     stream=True,
                 )
                 async for chunk in response:
@@ -787,10 +816,9 @@ class OpenAICompatProvider(BaseLLMProvider):
 
             return generate(), tool_calls_collector
 
-        response = await self.client.chat.completions.create(
+        response = await self._create_completion(
             model=model,
             messages=messages,
-            tools=_get_tool_schemas(),
         )
         msg = response.choices[0].message
         tool_calls = _openai_tool_calls_to_dict(msg.tool_calls)
