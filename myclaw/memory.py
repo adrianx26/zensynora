@@ -431,6 +431,11 @@ class Memory:
         if not self._initialized:
             await self.initialize()
 
+        # Messages buffered by add() are not in the DB yet; without this the
+        # most recent turns (up to batch_size) were missing from the history.
+        if self._pending_messages:
+            await self.flush()
+
         is_default_columns = columns is None or columns == ["role", "content"]
         if is_default_columns:
             cache_key = limit
@@ -519,6 +524,16 @@ class Memory:
         except Exception as e:
             logger.error(f"Error during cleanup: {e}")
             return total_deleted
+
+    async def clear(self) -> int:
+        """Delete every stored message for this user. Returns rows removed."""
+        if not self._initialized:
+            await self.initialize()
+        self._pending_messages = []
+        self._history_cache.clear()
+        cur = await self.conn.execute("DELETE FROM messages")
+        await self.conn.commit()
+        return cur.rowcount if cur.rowcount is not None else 0
 
     async def get_stats(self) -> dict:
         """Get memory statistics."""

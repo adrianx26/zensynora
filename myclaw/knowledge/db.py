@@ -658,6 +658,21 @@ class KnowledgeDB:
         conn.commit()
         return cursor.rowcount > 0
 
+    def clear_all_data(self) -> None:
+        """Remove every entity, observation, relation and alias in one transaction.
+
+        Used by ``SyncEngine.sync(force=True)`` (``knowledge sync --force``).
+        Child tables are cleared first so this works with or without
+        ``PRAGMA foreign_keys``; the FTS delete triggers keep the full-text
+        indexes in step.
+        """
+        conn = self._get_connection()
+        with conn:
+            conn.execute("DELETE FROM relations")
+            conn.execute("DELETE FROM observations")
+            conn.execute("DELETE FROM entity_aliases")
+            conn.execute("DELETE FROM entities")
+
     def add_observation(self, entity_id: int, category: str, content: str, tags: List[str] = None,
                         context: Optional[str] = None, provenance_path: Optional[str] = None):
         """Add an observation to an entity."""

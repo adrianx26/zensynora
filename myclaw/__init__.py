@@ -92,7 +92,14 @@ def _install_shutdown_handlers() -> None:
             from . import provider
             if hasattr(provider, "HTTPClientPool"):
                 import asyncio
-                asyncio.run(provider.HTTPClientPool.close())
+                try:
+                    asyncio.get_running_loop()
+                except RuntimeError:
+                    # No loop running (atexit / plain CLI) — safe to run close().
+                    asyncio.run(provider.HTTPClientPool.close())
+                # If a loop is still running (signal inside uvicorn/telegram),
+                # the server's own shutdown closes its clients; creating the
+                # coroutine here would only leak an "never awaited" warning.
         except Exception as exc:
             logger.debug("Error closing HTTP pool: %s", exc)
         # Close SQLite pool

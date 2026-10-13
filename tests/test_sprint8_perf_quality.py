@@ -116,7 +116,7 @@ def test_graph_build_context_batches_depth1_reads(monkeypatch):
 
     calls = {"count": 0, "args": None}
 
-    def fake_batch(perms, uid):
+    def fake_batch(perms, uid, db_path=None):
         calls["count"] += 1
         calls["args"] = list(perms)
         return []
