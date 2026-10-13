@@ -116,6 +116,10 @@ ENV_OVERRIDES = {
     "providers.anthropic.api_key": "MYCLAW_ANTHROPIC_API_KEY",
     "providers.gemini.api_key": "MYCLAW_GEMINI_API_KEY",
     "providers.groq.api_key": "MYCLAW_GROQ_API_KEY",
+    # Added 0.7.0: local OpenAI-compatible servers and OpenRouter were not overridable.
+    "providers.llamacpp.base_url": "MYCLAW_LLAMACPP_BASE_URL",
+    "providers.lmstudio.base_url": "MYCLAW_LMSTUDIO_BASE_URL",
+    "providers.openrouter.api_key": "MYCLAW_OPENROUTER_API_KEY",
     # Telegram
     "channels.telegram.token": "MYCLAW_TELEGRAM_TOKEN",
     # WhatsApp
@@ -442,7 +446,7 @@ class MedicConfig(BaseModel):
 
     enabled: bool = False
     enable_hash_check: bool = True
-    repo_url: str = "https://github.com/zensynora/zensynora"
+    repo_url: str = "https://github.com/adrianx26/zensynora"  # used by recover_file
     scan_on_startup: bool = False
     max_loop_iterations: int = 100
     secondary_llm_provider: str = ""

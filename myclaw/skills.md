@@ -1,6 +1,6 @@
 # MyClaw Agent Skills Reference
 
-> **Version**: 0.2 (Post-Phase1-4 Implementation)
+> **Version**: 0.3 (medic tools implemented — ZenSynora 0.7.0)
 > **Evaluation Method**: Autoresearch-inspired iterative scoring loop
 > **Scoring Rubric**: `Score = 0.4×Correctness + 0.3×Reliability + 0.2×Clarity + 0.1×Coverage`
 > **Improvement Threshold**: KEEP improvement if delta_score ≥ 0.05 for ≥ 3 skills
@@ -363,8 +363,45 @@
 - **Category**: Web Scraping
 - **Tool**: Scrapling (via custom python code / TOOLBOX or direct `shell` CLI)
 - **Description**: For advanced web scraping, bypass anti-bot protections (like Cloudflare Turnstile), stealth headless browsing, and full spider framework.
-- **Reference**: Documentation is available in [`docs/scrapling_agent_guide.md`](docs/scrapling_agent_guide.md). Read it before attempting to use Scrapling in Python code or the CLI.
+- **Reference**: Documentation is available in [`docs/scrapling_agent_guide.md`](../docs/scrapling_agent_guide.md). Read it before attempting to use Scrapling in Python code or the CLI.
 - **Baseline Score**: *TBD*
+
+---
+
+## Skill Group 12: Medic — Health, Integrity & Recovery (NEW in 0.7.0)
+
+All tools below are implemented in `myclaw/agents/medic_agent.py` (before 0.7.0
+twelve of them were advertised but missing). Full guide:
+[`docs/medic_agent_guide.md`](../docs/medic_agent_guide.md).
+
+### SK-12.1 — `check_system_health` / `get_health_report`
+- **Description**: Run the doctor checks (packages, provider SDKs, config, LLM server, databases, disk, permissions, recent errors).
+- **Input Contract**: `offline: bool = False` (skip network checks); `get_health_report` also takes `as_json: bool`.
+- **Output Contract**: `"OK|WARN|FAIL: n checks ok, …"` followed by each problem and its fix hint / full report.
+
+### SK-12.2 — `scan_files` / `verify_file_integrity` / `enable_hash_check`
+- **Description**: Record and verify SHA-256 hashes of the installed code.
+- **Input Contract**: `file_paths` (comma-separated, relative to the install) / `file_path` / `enabled: bool`.
+- **Output Contract**: `"Recorded N file hash(es)…"`, `"OK: N file(s) match…"` or `"CHANGED: …"` with the list.
+
+### SK-12.3 — `create_backup` / `list_backups` / `recover_file`
+- **Description**: Back up and restore files inside the installation only. Recovery prefers the backup matching the integrity baseline, then GitHub at `v<version>` (`allow_main=True` for `main`).
+- **Output Contract**: path of the backup / list / `"Restored … from …"`, or `"ERROR: … outside the ZenSynora installation"`.
+
+### SK-12.4 — `detect_errors_in_file` / `validate_modification`
+- **Description**: Syntax-check `.py/.json/.yaml/.toml`; validate a proposed change (syntax, size, risky calls such as `eval`, `os.system`, `shell=True`).
+- **Output Contract**: `"OK: …"` / `"SYNTAX ERROR … line N"`; `"VALID"`, `"VALID WITH WARNINGS: …"` or `"INVALID: …"`.
+
+### SK-12.5 — `check_file_virustotal`
+- **Description**: Look up a file's SHA-256 on VirusTotal (no upload). Needs `medic.virustotal_api_key` or `api_key`.
+- **Output Contract**: `"CLEAN|SUSPICIOUS|DANGER: …"` or `"UNKNOWN: …"`.
+
+### SK-12.6 — `record_task_execution` / `get_task_analytics`
+- **Description**: Log task outcomes to `~/.myclaw/medic/tasks.jsonl` and summarise success rate, duration and failing tasks.
+
+### SK-12.7 — `prevent_infinite_loop`
+- **Description**: Runaway-loop guard; the router calls it on every step. Blocks when more than `medic.max_loop_iterations` (default 100) steps happen within 60 s.
+- **Output Contract**: `"OK: n/limit …"` or `"Execution limit reached: …"`.
 
 ---
 
@@ -375,3 +412,4 @@
 | 0.0 | 2026-03-15 | Initial baseline skills definition. Overall eval: 0.880 avg across 26 tasks |
 | 0.1 | 2026-03-15 | Improved: rich docstrings for shell/file/toolbox (Clarity 0.40→1.0), HTML stripping in browse (Coverage 0.70→1.0), ALLOWED_COMMANDS expanded, bigram knowledge search in agent.py. Overall: 0.989 avg |
 | 0.2 | 2026-03-29 | Phase 1-4 Implementation Complete: Added Lifecycle Hooks (SK-0.1 to 0.3), Natural Language Scheduling (SK-5.6), Session Learning (SK-8.1 to 8.5), Skill Management (SK-9.1 to 9.8), ZenHub Registry (SK-10.1 to 10.7). Total: ~35 new tools added. |
+| 0.3 | 2026-10-13 | Skill Group 12 (Medic): all 15 medic tools implemented and documented (ZenSynora 0.7.0). |

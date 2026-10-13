@@ -1,5 +1,7 @@
 # 🗺️ ZenSynora (MyClaw) – ROADMAP 2026-2027
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../README.md).
+
 **Version:** 0.4 (April 2026)  
 **Author:** Adrian Petrescu (lead developer)  
 **Status:** Active – in progress

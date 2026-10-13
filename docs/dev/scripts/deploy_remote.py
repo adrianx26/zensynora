@@ -2,11 +2,13 @@
 """
 ZenSynora — SSH Deploy via GitHub Clone
 Steps:
-  1. SSH connect to 192.168.8.110 (user: adi)
+  1. SSH connect to $ZENSYNORA_DEPLOY_HOST
   2. Clone github.com/adrianx26/zensynora
   3. Run install.sh from the cloned repo
 """
 
+import getpass
+import os
 import sys
 import warnings
 import paramiko
@@ -15,12 +17,15 @@ import time
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 # ── Config ────────────────────────────────────────────────────────────────────
-REMOTE_HOST = "192.168.8.110"
-REMOTE_USER = "adi"
-REMOTE_PASS = "Alpin2003@"
-ROOT_PASS   = "Alpin@2033@"
+# SECURITY (2026-10-13): host, user and two passwords used to be hard-coded
+# here and were published in the repository. They now come from the
+# environment or an interactive prompt. Prefer `python deploy.py` (repo root).
+REMOTE_HOST = os.environ.get("ZENSYNORA_DEPLOY_HOST", "")
+REMOTE_USER = os.environ.get("ZENSYNORA_DEPLOY_USER", getpass.getuser())
+REMOTE_PASS = os.environ.get("ZENSYNORA_DEPLOY_PASSWORD") or getpass.getpass("SSH password: ")
+ROOT_PASS   = os.environ.get("ZENSYNORA_DEPLOY_SUDO_PASSWORD") or getpass.getpass("sudo password: ")
 REPO_URL    = "https://github.com/adrianx26/zensynora.git"
-REMOTE_DIR  = "/home/adi/zensynora"
+REMOTE_DIR  = os.environ.get("ZENSYNORA_DEPLOY_DIR", f"/home/{REMOTE_USER}/zensynora")
 
 # ── Colors ────────────────────────────────────────────────────────────────────
 C = "\033[0;36m"; G = "\033[0;32m"; Y = "\033[1;33m"; R = "\033[0;31m"

@@ -1,5 +1,7 @@
 # MemoPad → Zensynora Import Plan
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../README.md).
+
 Goal: Port high-value patterns and capabilities from `github.com/adrianx26/memopad` into zensynora's `myclaw/knowledge/`, respecting zensynora's existing architecture (raw SQLite, no ORM, per-user tenancy, async-first).
 
 ---

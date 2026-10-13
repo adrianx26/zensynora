@@ -477,7 +477,10 @@ class LogAnalyzer:
     def _configure_default_sources(self) -> None:
         """Configure default log sources."""
         self.log_sources = [
-            Path.home() / ".myclaw" / "logs" / "agent.log",
+            # zensynora.log is written by init_app() since 0.7.0 (before that no
+            # log file existed, so log analysis never found anything).
+            Path.home() / ".myclaw" / "logs" / "zensynora.log",
+            Path.home() / ".myclaw" / "logs" / "agent.log",  # legacy name
             Path.home() / ".myclaw" / "task_logs",
         ]
         self.log_sources = [s for s in self.log_sources if s and s.exists()]

@@ -1,5 +1,7 @@
 # Medic Agent Change Management Enhancement
 
+> **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Change management is a Python API (`myclaw.agents`), not an LLM tool. Since 0.7.0 the log analyzer reads `~/.myclaw/logs/zensynora.log`, which ZenSynora now writes by default — earlier versions wrote no log file, so the analyzer had nothing to read. User-facing health checks are in the [Medic & Doctor Guide](medic_agent_guide.md).
+
 ## Summary
 
 The Medic Agent has been enhanced with comprehensive change management capabilities. These features enable the agent to:

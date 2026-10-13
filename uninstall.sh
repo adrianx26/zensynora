@@ -17,6 +17,8 @@
 #    --remove-networks      Also remove Docker networks (default: keep networks)
 #    --keep-data            Preserve user data directories (~/.myclaw)
 #    --keep-config          Preserve config but remove other data
+#    --purge                With --yes: also delete ~/.myclaw and update backups
+#                           (v0.7.0: --yes alone no longer deletes your data)
 #    --dry-run              Show what would be done without doing it
 #    --help, -h             Show this help message
 #
@@ -37,6 +39,7 @@ REMOVE_VOLUMES=false
 REMOVE_NETWORKS=false
 KEEP_DATA=false
 KEEP_CONFIG=false
+PURGE=false
 DRY_RUN=false
 
 while [[ $# -gt 0 ]]; do
@@ -73,6 +76,10 @@ while [[ $# -gt 0 ]]; do
             KEEP_CONFIG=true
             shift
             ;;
+        --purge)
+            PURGE=true
+            shift
+            ;;
         --dry-run)
             DRY_RUN=true
             shift
@@ -92,6 +99,7 @@ while [[ $# -gt 0 ]]; do
             echo "Traditional Options:"
             echo "  --keep-data            Preserve ~/.myclaw data directory"
             echo "  --keep-config          Preserve config but remove other data"
+            echo "  --purge                With --yes: also delete ~/.myclaw data and update backups"
             echo ""
             echo "General:"
             echo "  --yes, -y              Non-interactive mode"
@@ -140,10 +148,25 @@ prompt_yes() {
     esac
 }
 
+# Prompts that delete the user's own data (memory, knowledge, settings,
+# backups). Fixed 2026-10-13 (v0.7.0): `--yes` used to answer these with "yes"
+# too, so an unattended uninstall wiped ~/.myclaw. Without a terminal they now
+# need an explicit --purge.
+confirm_data_removal() {
+    if [[ "$INTERACTIVE" == "false" ]]; then
+        [[ "$PURGE" == "true" ]]
+        return
+    fi
+    prompt_yes "$1"
+}
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Environment Detection
 # ─────────────────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Relative paths below (webui/, __pycache__ sweep) must refer to the project,
+# not to wherever the user happened to run this script from. (Fixed 0.7.0.)
+cd "$SCRIPT_DIR"
 DOCKER_AVAILABLE=false
 DOCKER_COMPOSE_CMD=""
 
@@ -308,10 +331,12 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
         fi
     fi
 
-    # Kill Python-based CLI processes
-    if pgrep -f "python.*cli\.py" >/dev/null 2>&1; then
-        info "Terminating MyClaw CLI processes..."
-        run pkill -f "python.*cli\.py" || true
+    # Kill ZenSynora CLI processes only. The old pattern "python.*cli\.py"
+    # also matched unrelated programs of other projects. (Fixed 0.7.0.)
+    ZS_PATTERN="myclaw\.cli|zensynora (agent|gateway|webui|mcp-server)|${SCRIPT_DIR}/cli\.py"
+    if pgrep -f "$ZS_PATTERN" >/dev/null 2>&1; then
+        info "Terminating ZenSynora CLI processes..."
+        run pkill -f "$ZS_PATTERN" || true
     fi
 
     # Kill Uvicorn (Web UI backend)
@@ -321,9 +346,9 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
     fi
 
     # Kill Node (Web UI frontend dev server)
-    if pgrep -f "node.*webui" >/dev/null 2>&1; then
+    if pgrep -f "node.*${SCRIPT_DIR}/webui" >/dev/null 2>&1; then
         info "Terminating Web UI frontend (node)..."
-        run pkill -f "node.*webui" || true
+        run pkill -f "node.*${SCRIPT_DIR}/webui" || true
     fi
 
     success "Processes stopped."
@@ -334,7 +359,7 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
     if [[ -d "$BASE_DIR/releases" ]]; then
         header "1.5 Managed releases & update backups"
         info "Found $BASE_DIR/releases (older versions) and $BASE_DIR/backups (settings backups)."
-        if prompt_yes "  Remove old releases, update backups and update logs?"; then
+        if prompt_yes "  Remove old releases, update backups (copies of your settings) and update logs?"; then
             for d in "$BASE_DIR/releases"/*; do
                 [[ "$(readlink -f "$d")" == "$(readlink -f "$SCRIPT_DIR")" ]] && continue
                 run rm -rf "$d"
@@ -394,7 +419,7 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
             run rm -rf "$MYCLAW_DIR/hub"                   # Sprint 9 local hub registry
             success "Data cleared, config preserved."
         else
-            if prompt_yes "  Remove all MyClaw data in $MYCLAW_DIR?"; then
+            if confirm_data_removal "  Remove all MyClaw data in $MYCLAW_DIR?"; then
                 run rm -rf "$MYCLAW_DIR"
                 success "Data directory cleared."
             else
@@ -419,7 +444,7 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
     # source (OpenClaw / GitHub releases / local hub).
     if [[ -d "$MYCLAW_DIR/plugins" ]]; then
         header "3.6 Plugin marketplace artifacts"
-        if [[ "$KEEP_DATA" == "false" ]] && prompt_yes "  Remove downloaded plugin artifacts ($MYCLAW_DIR/plugins)?"; then
+        if [[ "$KEEP_DATA" == "false" ]] && confirm_data_removal "  Remove downloaded plugin artifacts ($MYCLAW_DIR/plugins)?"; then
             run rm -rf "$MYCLAW_DIR/plugins"
             success "Plugin install directory removed."
         else
@@ -501,6 +526,25 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
 fi
 
 # ── DONE ─────────────────────────────────────────────────────────────────────
+# ── Program files of a managed install (~/.local/share/zensynora) ───────────
+# Added 0.7.0: installs made by install-online.sh / update.sh live in one base
+# folder (source -> releases/<version>). Offer to remove it completely; this
+# runs last because this script itself lives inside that folder.
+if [[ "$DOCKER_ONLY" == "false" && "$DRY_RUN" == "false" ]]; then
+    MANAGED_BASE="$(dirname "$SCRIPT_DIR")"
+    [[ "$(basename "$MANAGED_BASE")" == "releases" ]] && MANAGED_BASE="$(dirname "$MANAGED_BASE")"
+    if [[ -d "$MANAGED_BASE/releases" || -L "$MANAGED_BASE/source" ]]; then
+        header "Program files"
+        if confirm_data_removal "  Delete the ZenSynora program folder $MANAGED_BASE (code, venvs, update backups)?"; then
+            cd /
+            rm -rf -- "$MANAGED_BASE"
+            success "Removed $MANAGED_BASE"
+        else
+            skip "Program files kept in $MANAGED_BASE"
+        fi
+    fi
+fi
+
 header "⚠️  ZenSynora Uninstallation Complete"
 
 if [[ "$DRY_RUN" == "true" ]]; then

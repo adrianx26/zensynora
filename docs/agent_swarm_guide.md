@@ -1,5 +1,7 @@
 # Agent Swarm Guide
 
+> **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent).
+
 ## Overview
 
 Agent Swarms is a powerful multi-agent coordination system for MyClaw that enables multiple AI agents to collaborate on complex tasks. Instead of relying on a single agent, swarms distribute work across specialized agents using various coordination strategies.

@@ -1,3 +1,5 @@
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../../README.md).
+
 I cannot directly generate downloadable files. However, I can help you create this content in a format that's easy to copy and save.
 
 Here's the complete review as Markdown content that you can copy into a file:

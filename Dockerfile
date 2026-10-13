@@ -67,13 +67,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=python-builder /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Create non-root user for security
-RUN groupadd -r zensynora && useradd -r -g zensynora -m -d /home/zensynora zensynora
+# Create non-root user for security.
+# Changed 2026-10-13 (v0.7.0): the user now has a fixed UID (default 1000, the
+# usual first Linux user). With a random system UID the container could not
+# write to the ./data folder bind-mounted by docker-compose.yml.
+# Build with --build-arg ZENSYNORA_UID=$(id -u) to match your own user.
+ARG ZENSYNORA_UID=1000
+ARG ZENSYNORA_GID=1000
+RUN groupadd -g "${ZENSYNORA_GID}" zensynora \
+    && useradd -u "${ZENSYNORA_UID}" -g zensynora -m -d /home/zensynora zensynora
 
-# Set up data directory (mount this as a volume for persistence)
-RUN mkdir -p /data/.myclaw && chown -R zensynora:zensynora /data
+# Set up data directory (mount this as a volume for persistence).
+# ZenSynora keeps everything in ~/.myclaw, so HOME=/data puts it in /data/.myclaw.
+RUN mkdir -p /data/.myclaw/logs && chown -R zensynora:zensynora /data
 ENV HOME=/data
-ENV MYCLAW_CONFIG_DIR=/data/.myclaw
 
 # Set working directory
 WORKDIR /app
@@ -84,7 +91,9 @@ COPY --chown=zensynora:zensynora requirements.txt ./
 
 # Copy application code
 COPY --chown=zensynora:zensynora myclaw/ ./myclaw/
-COPY --chown=zensynora:zensynora cli.py onboard.py deploy.py ./
+# updater/ holds the data migrations (doctor checks them; stdlib only).
+COPY --chown=zensynora:zensynora updater/ ./updater/
+COPY --chown=zensynora:zensynora cli.py onboard.py ./
 
 # Copy built frontend from frontend-builder stage
 COPY --from=frontend-builder --chown=zensynora:zensynora /frontend/dist ./webui/dist
@@ -104,8 +113,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
 # 8080 — WhatsApp webhook (optional)
 EXPOSE 8000 8080
 
-# Default command: show help
-CMD ["zensynora", "--help"]
+# Default command: the web UI (the HEALTHCHECK above expects it).
+# Changed 2026-10-13 (v0.7.0): was `--help`, so `docker run` exited at once.
+CMD ["zensynora", "webui", "--host", "0.0.0.0", "--port", "8000"]
 
 # ── Stage 4: Development (optional target) ───────────────────────────────────
 FROM runtime AS development

@@ -1,5 +1,7 @@
 # ZenSynora (MyClaw) Implementation Plan
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../README.md).
+
 ## Overview
 Based on comparison with Hermes Agent and inspiration from OpenClaw, this plan outlines improvements across 4 phases.
 
@@ -211,7 +213,7 @@ A comprehensive optimization initiative implementing 21 performance, reliability
 
 See [CODE_OPTIMIZATION_PROPOSAL.md](CODE_OPTIMIZATION_PROPOSAL.md) for detailed technical documentation.
 
-See [docs/architecture_with_optimizations.md](architecture_with_optimizations.md) for updated architecture diagrams.
+See [docs/architecture_with_optimizations.md](../archive/architecture_with_optimizations.md) for updated architecture diagrams.
 
 ### 5.1 Caching & Performance (~6 hours)
 

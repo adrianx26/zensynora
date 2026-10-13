@@ -1,5 +1,7 @@
 # Agent.py Decomposition Plan
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../README.md).
+
 > **Status:** **EXECUTED** in Sprint 5 (2026-04-30). agent.py shrank from
 > 1784 → 1487 lines (-16%); 14 new isolated tests; 175 pre-existing
 > tests unchanged.

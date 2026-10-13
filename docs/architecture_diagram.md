@@ -1,297 +1,369 @@
-# ZenSynora Architecture Diagram
+# ZenSynora Architecture — Visual Guide
 
-## System Overview
+> **Version:** 0.7.0 · **Last updated:** 2026-10-13
+> Rewritten for 0.7.0. The previous version showed planning phases and
+> modules that no longer match the code. Every diagram below reflects the
+> current source tree; file names are given so you can jump to the code.
+> Text-oriented companion: [ARCHITECTURE.md](ARCHITECTURE.md).
 
-```mermaid
-flowchart TB
-    subgraph Gateway ["GATEWAY (gateway.py)"]
-        direction LR
-        TG["Telegram Bot"]
-        WA["WhatsApp Cloud"]
-        CLI["CLI / Console Chat"]
-    end
+**Contents**
 
-    Gateway --> AgentRouter
+1. [System context](#1-system-context)
+2. [Component map](#2-component-map)
+3. [A chat message, end to end](#3-a-chat-message-end-to-end)
+4. [Provider selection and fallback](#4-provider-selection-and-fallback)
+5. [Tool execution](#5-tool-execution)
+6. [Swarms](#6-swarms)
+7. [Settings from the Web UI](#7-settings-from-the-web-ui)
+8. [Where data lives](#8-where-data-lives)
+9. [Safe updates](#9-safe-updates)
+10. [Doctor and medic](#10-doctor-and-medic)
+11. [Install layout on disk](#11-install-layout-on-disk)
 
-    subgraph AgentSystem ["AGENT SYSTEM"]
-        direction TB
-        AgentRouter{Agent Router}
-        Agent["Agent (agent.py)"]
-        Swarm["Agent Swarms (swarm/)"]
-    end
+---
 
-    AgentSystem --> Tools
+## 1. System context
 
-    subgraph Tools ["TOOLS (myclaw/tools/)"]
-        direction TB
-        T_Core["core.py"]
-        T_Shell["shell.py"]
-        T_Files["files.py"]
-        T_Web["web.py"]
-        T_KB["kb.py"]
-        T_Sched["scheduler.py"]
-        T_Swarm["swarm.py"]
-        T_Toolbox["toolbox.py"]
-    end
-
-    Tools --> Storage
-
-    subgraph Storage ["PERSISTENCE & STORAGE"]
-        direction LR
-        Memory["MEMORY (memory.py)"]
-        Knowledge["KNOWLEDGE (knowledge/)"]
-        Toolbox["TOOLBOX (~/.myclaw/)"]
-        State["STATE STORE (state_store.py)"]
-        AsyncSched["ASYNC SCHEDULER (async_scheduler.py)"]
-    end
-```
-
-## New Tool Categories (Evolution)
+Who talks to ZenSynora, and what ZenSynora talks to.
 
 ```mermaid
 flowchart LR
-    subgraph P1 ["Phase 1: Quick Wins"]
-        direction TB
-        T1["register_hook()<br/>list_hooks()<br/>nlp_schedule()"]
+    user(["You"])
+    subgraph entry["Entry points"]
+        webui["Web UI<br/>browser · port 8000"]
+        cli["Terminal<br/>zensynora agent"]
+        tg["Telegram bot"]
+        wa["WhatsApp Cloud"]
+        mcpc["MCP clients<br/>zensynora mcp-server"]
     end
-
-    subgraph P2 ["Phase 2: Skill System"]
-        direction TB
-        T2["benchmark_skill()<br/>evaluate_skill()<br/>improve_skill()"]
+    core["ZenSynora core<br/>agents · tools · memory · knowledge"]
+    subgraph llm["LLM providers"]
+        local["Local: llama.cpp · Ollama · LM Studio"]
+        cloud["Cloud: OpenAI · Anthropic · Gemini · Groq · OpenRouter"]
     end
-
-    subgraph P3 ["Phase 3: Memory & Learning"]
-        direction TB
-        T3["generate_session_insights()<br/>extract_user_preferences()<br/>update_user_profile()"]
+    subgraph ext["Outside services (optional)"]
+        web["Web pages / search"]
+        mcps["External MCP servers"]
+        vt["VirusTotal"]
+        gh["GitHub (updates, file recovery)"]
     end
+    disk[("~/.myclaw<br/>config · databases · knowledge")]
 
-    subgraph P4 ["Phase 4: ZenHub Ecosystem"]
-        direction TB
-        T4["hub_search()<br/>hub_install()<br/>discover_external_skills()"]
-    end
-
-    P1 --> P2 --> P3 --> P4
+    user --> webui & cli & tg & wa
+    mcpc --> core
+    webui & cli & tg & wa --> core
+    core --> local & cloud
+    core --> web & mcps & vt & gh
+    core <--> disk
 ```
 
-## Agent Package (myclaw/agents/)
+---
+
+## 2. Component map
+
+The main packages under `myclaw/`, grouped by layer. Arrows point from a
+layer to the layer it uses.
 
 ```mermaid
 flowchart TB
-    subgraph Agents ["Specialized Agents"]
+    subgraph L1["Interfaces"]
         direction LR
-        SA["SkillAdapter"]
-        MA["MedicAgent"]
-        NTA["NewTechAgent"]
+        cli2["cli.py<br/>click commands"]
+        webapi["web/api.py + web/settings_api.py<br/>Web UI backend · WebSocket chat"]
+        gw["gateway.py<br/>Telegram / WhatsApp / console"]
+        channels["channels/<br/>telegram · whatsapp · discord"]
+        mcpsrv["mcp/server.py<br/>tools over MCP (stdio)"]
+        apisrv["api_server.py<br/>REST API library (/api/v1)"]
     end
 
-    SA --- SA_Tools["analyze_ext<br/>convert_skill<br/>register_ext"]
-    MA --- MA_Tools["check_health<br/>verify_integr<br/>recover_file<br/>validate_mod"]
-    NTA --- NTA_Tools["fetch_ai_news<br/>generate_prop<br/>add_to_roadmap"]
+    subgraph L2["Agents"]
+        direction LR
+        agent["agent.py<br/>Agent: think · stream_think"]
+        internals["agent_internals/<br/>router · context_builder · tool_executor"]
+        swarm["swarm/<br/>orchestrator · strategies"]
+        registry["agents/registry.py<br/>agents.yaml profiles"]
+        special["agents/<br/>medic · newtech · skill_adapter"]
+    end
 
-    Agents --> Registry["Registry & Discovery"]
+    subgraph L3["Capabilities"]
+        direction LR
+        tools["tools/<br/>shell · files · web · browser · kb · scheduler · swarm · toolbox"]
+        provider["provider.py<br/>8 LLM providers"]
+        resilience["resilience/ + offline.py<br/>circuit breaker · offline fallback"]
+        prompts["prompts/ · structured_output/"]
+        sandbox["sandbox.py · worker_pool.py · backends/"]
+    end
+
+    subgraph L4["State"]
+        direction LR
+        memory["memory.py<br/>conversation history (aiosqlite pool)"]
+        knowledge["knowledge/<br/>notes · FTS5 · graph"]
+        cache["semantic_cache.py · caching/"]
+        vector["vector/<br/>sqlite · qdrant · memory"]
+        config["config.py<br/>pydantic · hot reload"]
+        stats["cost_tracker.py · metering.py · audit_log.py"]
+    end
+
+    subgraph L5["Operations"]
+        direction LR
+        doctor["doctor/<br/>health checks · integrity"]
+        updater["updater/ (repo root)<br/>safe updates · migrations"]
+        obs["observability/ · metrics.py · logging_config.py"]
+    end
+
+    L1 --> L2 --> L3 --> L4
+    L5 -.-> L1 & L2 & L3 & L4
 ```
 
-## Backends Package (myclaw/backends/)
+---
 
-```mermaid
-classDiagram
-    class AbstractBackend {
-        <<abstract>>
-        +execute(command)
-        +upload(local, remote)
-        +download(remote, local)
-        +is_available()
-    }
-    class LocalBackend
-    class DockerBackend
-    class SSHBackend
-    class WSL2Backend
+## 3. A chat message, end to end
 
-    AbstractBackend <|-- LocalBackend
-    AbstractBackend <|-- DockerBackend
-    AbstractBackend <|-- SSHBackend
-    AbstractBackend <|-- WSL2Backend
-
-    class BackendDiscovery {
-        +discover_backends()
-        +get_default_backend()
-    }
-```
-
-## Data Flow: Request Processing
+What happens when you type in the Web UI (Telegram and the terminal follow
+the same path from `Agent` onwards).
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant Gateway
-    participant Agent
-    participant Hooks
-    participant KB as Knowledge Base
-    participant LLM as LLM Provider
-    participant Tools as Tool Executor
+    autonumber
+    actor U as You
+    participant UI as Web UI (React)
+    participant WS as web/api.py<br/>WebSocket /ws/chat/{agent}
+    participant A as Agent.stream_think
+    participant R as router + medic loop guard
+    participant C as context_builder
+    participant M as memory.py
+    participant K as knowledge/
+    participant P as provider.py
+    participant T as tools/
 
-    User->>Gateway: Sends Message
-    Gateway->>Agent: think(message)
-    Agent->>Hooks: on_session_start
-    Agent->>KB: search_knowledge(query)
-    KB-->>Agent: Results found
-    Agent->>Hooks: pre_llm_call
-    Agent->>LLM: generate_response(context)
-    LLM-->>Agent: tool_calls (if needed)
-
-    loop Tool Execution
-        Agent->>Tools: execute(tool_name, args)
-        Tools->>Agent: tool_output
+    U->>UI: type a message
+    UI->>WS: send text
+    WS->>WS: quota + optional MFA check
+    WS->>A: stream_think(text, user="webui")
+    A->>R: start task timer, depth + loop limits
+    A->>M: add(user message)
+    A->>C: build context
+    C->>M: get_history() (flushes buffered turns)
+    C->>K: search notes for relevant knowledge
+    C-->>A: system prompt + history + knowledge
+    A->>P: chat(messages, stream=True)
+    P-->>A: token stream (+ tool calls)
+    A-->>WS: tokens
+    WS-->>UI: __STREAM_START__ … tokens … __STREAM_END__
+    opt the model asked for tools
+        A->>T: execute (parallel when independent)
+        T-->>A: results
+        A->>P: chat again with tool results
+        P-->>A: final answer stream
+        A-->>WS: tokens
     end
-
-    Agent->>Hooks: post_llm_call
-    Agent->>Hooks: on_session_end
-    Agent-->>Gateway: final_response
-    Gateway-->>User: Delivers Response
+    A->>M: add(assistant reply)
+    UI-->>U: rendered reply
 ```
 
-## Tool Execution Pipeline
+---
+
+## 4. Provider selection and fallback
+
+How a request reaches a model, and what happens when that fails. Changed in
+0.5.0: the agent never silently switches to another provider.
 
 ```mermaid
 flowchart TD
-    Req["Tool Call Request"] --> RL["Rate Limiter (Token Bucket)"]
-    RL --> SC["Security Check (Allowlist)"]
-    SC --> TR["Tool Registry Lookup"]
-    TR --> Exec["Async Execution"]
-    Exec --> AL["Audit Logger (duration, status)"]
+    start(["Agent needs a reply"]) --> pick["Provider = agent's own, else agents.defaults.provider"]
+    pick --> init{"Provider can start?<br/>(SDK installed, API key set)"}
+    init -- no --> err["ProviderUnavailableError<br/>clear message shown in chat"]
+    init -- yes --> breaker{"Circuit breaker<br/>open?"}
+    breaker -- closed --> llmcall["provider.chat()"]
+    llmcall -- ok --> replied(["Stream reply"])
+    llmcall -- "server rejects tool list<br/>(llama.cpp without --jinja)" --> notools["Retry once without tools<br/>remember for next calls"]
+    notools --> replied
+    llmcall -- "connection error" --> offline{"intelligence.offline_mode?"}
+    breaker -- open --> offline
+    offline -- no --> fail(["Error shown in chat"])
+    offline -- yes --> fb["Try local providers in order<br/>Ollama → LM Studio → llama.cpp<br/>(skipping the one that just failed)"]
+    fb -- ok --> replied
+    fb -- none reachable --> fail
 ```
 
-## Error Handling: Browse Tool
+| Provider | Talks to | Python package |
+|---|---|---|
+| `llamacpp` | `llama-server` (OpenAI API, default `:8080/v1`) | `openai` |
+| `ollama` | Ollama native API (`:11434/api/chat`) | — (httpx) |
+| `lmstudio` | LM Studio (OpenAI API, `:1234/v1`) | `openai` |
+| `openai`, `groq`, `openrouter` | OpenAI-compatible cloud APIs | `openai` |
+| `anthropic` | Anthropic Messages API | `anthropic` (optional) |
+| `gemini` | Google Gemini | `google-generativeai` (optional) |
 
-```mermaid
-flowchart TD
-    Req["requests.get(url)"] --> ErrType{Error Type?}
-    ErrType -- Timeout --> Way1["Wayback Machine Suggestion"]
-    ErrType -- 404 --> Way2["Wayback + Search Suggestions"]
-    ErrType -- 403 --> KB_S["Suggest search_knowledge()"]
-    ErrType -- Conn --> Net["Check Internet/URL Verification"]
+---
 
-    Way1 --> Res["Structured Response"]
-    Way2 --> Res
-    KB_S --> Res
-    Net --> Res
-```
-
-## Knowledge Gap Handling
-
-```mermaid
-flowchart TD
-    Search["search_knowledge(query)"] --> Found{Results Found?}
-    Found -- Yes --> Return["Return formatted results"]
-    Found -- No --> Cache{In Gap Cache?}
-
-    Cache -- Yes --> Guidance["Return guidance + suggestions"]
-    Cache -- No --> Log["Log to gap_log"]
-    Log --> AddCache["Add to Gap Cache (300s)"]
-    AddCache --> Guidance
-```
-
-## Skill Lifecycle
+## 5. Tool execution
 
 ```mermaid
 flowchart LR
-    Reg["register_tool()"] --> AST["AST Validate"]
-    AST --> Compile["Code Compile"]
-    Compile --> Load["Load & Test"]
-    Load --> Toolbox["TOOLBOX REGISTRY"]
-
-    Toolbox --> Eval["evaluate()"]
-    Toolbox --> Bench["benchmark()"]
-    Toolbox --> Imp["improve()"]
-
-    Imp --> Backup["Auto-backup (.bak)"]
-    Backup --> Rollback["rollback()"]
+    llm["Model returns tool calls"] --> exec["agent_internals/tool_executor.py"]
+    exec --> indep{"Independent<br/>of each other?"}
+    indep -- yes --> par["Run in parallel"]
+    indep -- no --> seq["Run in order"]
+    par & seq --> hooks["pre/post hooks<br/>tools/core.py"]
+    hooks --> kind{"Tool type"}
+    kind -- shell --> allow["Allow-list + blocked commands<br/>tools/shell.py"]
+    kind -- generated / external skill --> sb["Sandbox<br/>sandbox.py · worker_pool.py"]
+    kind -- web / browser --> ssrf["URL safety checks<br/>tools/web.py · tools/browser.py"]
+    kind -- other --> direct["Run function"]
+    allow & sb & ssrf & direct --> audit["audit_log.py · metrics"]
+    audit --> back["Results back to the model"]
 ```
 
-## User Profile System
+---
+
+## 6. Swarms
+
+A swarm splits one task across several agents (`swarm/orchestrator.py`).
+
+```mermaid
+flowchart LR
+    task(["Task"]) --> orch["SwarmOrchestrator"]
+    orch --> strat{"Strategy"}
+    strat --> p["Parallel<br/>all agents at once"]
+    strat --> s["Sequential<br/>each builds on the last"]
+    strat --> h["Hierarchical<br/>coordinator delegates"]
+    strat --> v["Voting<br/>agents vote on answers"]
+    p & s & h & v --> agg["Aggregation<br/>synthesis · best · concatenate"]
+    agg --> store[("swarm/storage.py<br/>SQLite")]
+    agg --> result(["Result"])
+```
+
+---
+
+## 7. Settings from the Web UI
+
+Added in 0.5.0 (`web/settings_api.py`).
+
+```mermaid
+sequenceDiagram
+    actor U as You
+    participant S as Settings page
+    participant API as /api/settings
+    participant G as access guard
+    participant F as ~/.myclaw/config.json
+    participant R as agent registry
+
+    U->>S: change model / keys / agents
+    S->>API: PUT {changes, clear_secrets}
+    API->>G: from localhost, or X-API-Key = admin key?
+    G-->>API: allowed
+    API->>API: validate against AppConfig schema<br/>(empty secret = keep stored value)
+    API->>F: save (encrypted if a key exists)
+    API->>R: rebuild agents, clear provider cache
+    API-->>S: saved (+ which changes need a restart)
+    Note over S,API: GET never returns secrets — only which ones are set
+```
+
+---
+
+## 8. Where data lives
+
+Everything personal is under `~/.myclaw`, shared by every installed version.
 
 ```mermaid
 flowchart TB
-    Init["Agent Initialization"] --> LoadMD["Load user_dialectic.md"]
-    LoadMD --> Prompt["Append to System Prompt"]
-
-    subgraph Updates ["Runtime Updates"]
-        direction LR
-        Extract["extract_preferences()"]
-        Update["update_user_profile()"]
-        Reflect["daily_reflection()"]
-    end
-
-    Updates --> KB["Knowledge Base"]
-    Updates --> ProfileMD["user_dialectic.md"]
-```
-
-## ZenHub Registry
-
-```mermaid
-flowchart TD
-    subgraph FS ["File System (~/.myclaw/)"]
-        Hub["hub/"]
-        Hub --- Index["index.json"]
-        Hub --- H_Skills["skills/ (Published)"]
-        Skills["skills/ (External)"]
-    end
-
-    subgraph Ops ["ZenHub Operations"]
+    subgraph data["~/.myclaw"]
         direction TB
-        Search["hub_search()"]
-        Publish["hub_publish()"]
-        Install["hub_install()"]
-        Discover["discover_external()"]
+        cfgf["config.json · .config_key<br/>settings + API keys (mode 600)"]
+        mem["memory_&lt;user&gt;.db<br/>conversation history"]
+        kdb["knowledge/ + knowledge_&lt;user&gt;.db<br/>Markdown notes + FTS5 index"]
+        tlb["tools/ · skills/ · plugins/ · hub/<br/>generated tools and installed skills"]
+        misc["cost · metering · audit · swarm · state DBs"]
+        med["medic/<br/>integrity baseline · file backups · task log"]
+        logs["logs/zensynora.log<br/>rotating JSON log (since 0.7.0)"]
+        mig[".migrations.json<br/>applied data migrations"]
     end
-
-    Search --> Index
-    Publish --> H_Skills
-    Install --> Toolbox["TOOLBOX"]
-    Discover --> Skills
+    app["ZenSynora (any version)"] <--> data
+    upd["updater"] -- "backup before every update" --> data
+    doc["doctor / medic"] -- "reads + safe fixes" --> data
 ```
 
-## File Structure Summary (myclaw/)
+---
+
+## 9. Safe updates
+
+`zensynora update` (`updater/`, added in 0.6.0). Steps 1–9 never touch the
+running version; any failure undoes the completed steps in reverse order.
 
 ```mermaid
 flowchart TD
-    Root["myclaw/"]
-    Root --- Core["agent.py<br/>tools/ (pkg)<br/>memory.py<br/>config.py<br/>state_store.py"]
-    Root --- Agents["agents/ (pkg)<br/>medic, newtech, adapter"]
-    Root --- Backends["backends/ (pkg)<br/>local, docker, ssh, wsl2"]
-    Root --- Knowledge["knowledge/ (pkg)<br/>db, graph, sync, researcher"]
-    Root --- Swarm["swarm/ (pkg)<br/>orchestrator, strategies"]
-    Root --- Channels["channels/ (pkg)<br/>telegram, whatsapp"]
+    s1["1 Preflight<br/>Python, disk space, service state"] --> s2["2 Fetch<br/>GitHub, folder or archive"]
+    s2 --> s3["3 Hand-off<br/>newer updater takes over"]
+    s3 --> s4["4 Back up ~/.myclaw + .env"]
+    s4 --> s5["5 Carry over .env, data/"]
+    s5 --> s6["6 Build side by side<br/>venv · packages · extras · Web UI"]
+    s6 --> s7["7 Verify<br/>imports new code, loads YOUR config"]
+    s7 --> s8["8 Stop service"]
+    s8 --> s9["9 Data migrations"]
+    s9 --> s10["10 Activate<br/>atomic symlink switch"]
+    s10 --> s11["11 Start service, confirm up"]
+    s11 --> s12(["12 Record, prune old releases"])
+
+    s2 & s6 & s7 & s9 & s10 & s11 -. "failure" .-> rb["Roll back<br/>old version stays active,<br/>data restored if migrated"]
 ```
 
-## Model Context Protocol (MCP)
+---
+
+## 10. Doctor and medic
+
+`zensynora doctor`, the Web UI **Doctor** page and the medic agent's tools
+share one set of checks (`myclaw/doctor/`, rewritten in 0.7.0).
 
 ```mermaid
 flowchart LR
-    subgraph ExtClients ["External Clients"]
-        Cursor["Cursor"]
-        Claude["Claude Desktop"]
+    subgraph callers["Callers"]
+        c1["zensynora doctor [--fix]"]
+        c2["Web UI → Doctor"]
+        c3["Medic tools<br/>check_system_health · get_health_report"]
+        c4["Gateway startup scan"]
+        c5["Agent error diagnosis"]
     end
-
-    subgraph ZenServer ["MCP Server"]
-        MS["mcp/server.py"]
+    callers --> run["run_checks()"]
+    subgraph checks["Checks (doctor/checks.py)"]
+        e["environment<br/>Python · packages · provider SDKs · disk · RAM · CPU"]
+        cf["configuration<br/>file valid · providers · API keys"]
+        l["llm (network)<br/>server reachable · model exists"]
+        d["data<br/>folders · SQLite quick_check · migrations"]
+        sec["security<br/>file permissions · Web UI access"]
+        i["install · runtime · integrity<br/>layout · Web UI build · log errors · service · hashes"]
     end
+    run --> checks --> rep["Report<br/>ok / warn / fail + how to fix"]
+    rep -- "--fix" --> fx["Safe fixes<br/>folders · permissions · migrations"]
 
-    subgraph ZenClient ["MCP Client"]
-        MC["mcp/client.py"]
+    subgraph medicx["Other medic tools"]
+        m1["scan_files · verify_file_integrity · recover_file"]
+        m2["create_backup · list_backups"]
+        m3["validate_modification · detect_errors_in_file · check_file_virustotal"]
+        m4["record_task_execution · get_task_analytics"]
+        m5["prevent_infinite_loop<br/>called by the router on every step"]
     end
-
-    subgraph ExtServers ["External Servers"]
-        Sqlite["SQLite Server"]
-        WebS["WebSearch Server"]
-    end
-
-    ExtClients <--> MS
-    MS <--> Tools["myclaw.tools"]
-    MC <--> Tools
-    MC <--> ExtServers
 ```
 
-*Generated: 2026-04-21*
-*Last Updated: 2026-04-21 (Mermaid redesign, package structure update)*
-*Part of: ZenSynora Full Implementation*
+---
+
+## 11. Install layout on disk
+
+```mermaid
+flowchart TB
+    base["~/.local/share/zensynora/"]
+    base --> src["source → releases/0.7.0-…<br/>(symlink: the active version)"]
+    base --> rel["releases/"]
+    rel --> r1["0.7.0-20261013T…<br/>code + venv/ + webui/dist"]
+    rel --> r2["0.6.0-…<br/>kept for rollback"]
+    base --> bk["backups/<br/>~/.myclaw snapshots (mode 700)"]
+    base --> lg["logs/update-*.log"]
+    base --> st["updater-state.json"]
+    svc["systemd myclaw.service<br/>and source/venv/bin/activate"] -. "use the path through" .-> src
+```
+
+---
+
+*Diagrams are Mermaid; GitHub renders them directly. Standalone dark-theme
+pages are generated into [`diagrams/`](../diagrams/index.html) with
+`python diagrams/generate.py`.*

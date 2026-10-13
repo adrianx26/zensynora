@@ -1,3 +1,5 @@
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../../README.md).
+
 f:\ANTI\zensynora\plans\LAST_implementation_plan.md
 # LAST Implementation Plan - Detailed Technical Roadmap
 

@@ -7,7 +7,9 @@ setlocal
 :: --- Path Setup ---
 :: Get the directory where this script is located.
 set "BASE_PATH=%~dp0"
+:: Code in .\app (portable layout) or next to this script (git checkout).
 set "APP_PATH=%BASE_PATH%app"
+if not exist "%APP_PATH%\pyproject.toml" set "APP_PATH=%BASE_PATH:~0,-1%"
 set "VENV_PATH=%BASE_PATH%venv"
 set "DATA_PATH=%BASE_PATH%data"
 set "PYTHON_EXEC=%VENV_PATH%\Scripts\python.exe"
@@ -89,40 +91,18 @@ if %errorlevel% neq 0 (
 )
 echo Dependencies are up to date.
 
-:: --- Set Environment Variables for Portability ---
-echo Setting portable environment variables...
-set "MYCLAW_DATA_DIR=%DATA_PATH%"
-set "MYCLAW_PROFILES_DIR=%DATA_PATH%\profiles"
-set "MYCLAW_KNOWLEDGE_DIR=%DATA_PATH%\knowledge"
-set "MYCLAW_MEMORY_DIR=%DATA_PATH%\memory"
-set "MYCLAW_PLUGINS_DIR=%DATA_PATH%\plugins"
-set "MYCLAW_CHECKPOINTS_DIR=%DATA_PATH%\checkpoints"
-set "MYCLAW_LOG_DIR=%DATA_PATH%\logs"
-set "MYCLAW_WORKSPACE_DIR=%DATA_PATH%\workspace"
-set "MYCLAW_TOOLBOX_DIR=%DATA_PATH%\tools"
-set "MYCLAW_SEMANTIC_CACHE_DIR=%DATA_PATH%\semantic_cache"
-set "MYCLAW_AUDIT_DIR=%DATA_PATH%\audit"
-set "MYCLAW_HUB_DIR=%DATA_PATH%\hub"
-
-:: Create the main data directory if it doesn't exist
+:: --- Keep all data on the portable drive ---
+:: Fixed 2026-10-13 (v0.7.0): the old MYCLAW_*_DIR variables were never read,
+:: so data went to %USERPROFILE%\.myclaw on the host computer. ZenSynora keeps
+:: everything in the home folder's .myclaw, so the home is pointed at the drive.
 if not exist "%DATA_PATH%" mkdir "%DATA_PATH%"
-:: Create data subdirectories to prevent runtime errors
-if not exist "%MYCLAW_PROFILES_DIR%" mkdir "%MYCLAW_PROFILES_DIR%"
-if not exist "%MYCLAW_KNOWLEDGE_DIR%" mkdir "%MYCLAW_KNOWLEDGE_DIR%"
-if not exist "%MYCLAW_MEMORY_DIR%" mkdir "%MYCLAW_MEMORY_DIR%"
-if not exist "%MYCLAW_PLUGINS_DIR%" mkdir "%MYCLAW_PLUGINS_DIR%"
-if not exist "%MYCLAW_CHECKPOINTS_DIR%" mkdir "%MYCLAW_CHECKPOINTS_DIR%"
-if not exist "%MYCLAW_LOG_DIR%" mkdir "%MYCLAW_LOG_DIR%"
-if not exist "%MYCLAW_WORKSPACE_DIR%" mkdir "%MYCLAW_WORKSPACE_DIR%"
-if not exist "%MYCLAW_TOOLBOX_DIR%" mkdir "%MYCLAW_TOOLBOX_DIR%"
-if not exist "%MYCLAW_SEMANTIC_CACHE_DIR%" mkdir "%MYCLAW_SEMANTIC_CACHE_DIR%"
-if not exist "%MYCLAW_AUDIT_DIR%" mkdir "%MYCLAW_AUDIT_DIR%"
-if not exist "%MYCLAW_HUB_DIR%" mkdir "%MYCLAW_HUB_DIR%"
+set "USERPROFILE=%DATA_PATH%"
+set "HOME=%DATA_PATH%"
 
 :: --- Launch ZenSynora ---
 echo.
 echo Starting ZenSynora...
-echo All application data will be stored in: %DATA_PATH%
+echo All application data will be stored in: %DATA_PATH%\.myclaw
 echo Press Ctrl+C to exit.
 echo.
 
@@ -130,9 +110,9 @@ echo.
 :: If no arguments are provided, default to 'gateway' to start the messaging bot.
 :: We call the module directly to avoid potential issues with the .exe wrapper on portable drives.
 if "%~1"=="" (
-    "%PYTHON_EXEC%" -m myclaw.cli gateway
+    "%PYTHON_EXEC%" -m myclaw gateway
 ) else (
-    "%PYTHON_EXEC%" -m myclaw.cli %*
+    "%PYTHON_EXEC%" -m myclaw %*
 )
 
 echo.

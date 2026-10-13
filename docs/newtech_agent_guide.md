@@ -1,5 +1,7 @@
 # ZenSynora New Tech Agent Guide
 
+> **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent).
+
 ## Overview
 
 The New Tech Agent monitors AI news and generates technology implementation proposals. It helps identify emerging technologies that could benefit ZenSynora.

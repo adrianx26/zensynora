@@ -17,6 +17,7 @@ import logging
 import re
 import sys
 import os
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Iterable, Optional, Any, Dict
 from functools import wraps
@@ -307,9 +308,14 @@ def configure_logging(
     console_handler.setFormatter(StructuredFormatter(use_json=use_json, use_color=use_color))
     root_logger.addHandler(console_handler)
 
-    # File handler if specified
+    # File handler if specified (size-limited so it can stay on by default)
     if log_file:
-        file_handler = logging.FileHandler(log_file)
+        from logging.handlers import RotatingFileHandler
+
+        Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+        file_handler = RotatingFileHandler(
+            log_file, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8"
+        )
         # Always use JSON for file logs
         file_handler.setFormatter(StructuredFormatter(use_json=True, use_color=False))
         root_logger.addHandler(file_handler)

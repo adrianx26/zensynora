@@ -416,6 +416,25 @@ async def system_health():
     return out
 
 
+# ── Doctor (full diagnostics, same checks as `zensynora doctor`) ────────────
+@router.get("/api/system/doctor", dependencies=guard)
+async def doctor_report(offline: bool = False):
+    from myclaw.doctor import run_checks
+
+    report = await asyncio.to_thread(run_checks, None, offline)
+    return report.to_dict()
+
+
+@router.post("/api/system/doctor/fix", dependencies=guard)
+async def doctor_fix():
+    from myclaw.doctor import apply_fixes, run_checks
+
+    report = await asyncio.to_thread(run_checks)
+    done = await asyncio.to_thread(apply_fixes, report)
+    after = await asyncio.to_thread(run_checks)
+    return {"applied": done, "report": after.to_dict()}
+
+
 # ── Conversation history (server side) ───────────────────────────────────────
 @router.delete("/api/history", dependencies=guard)
 async def clear_history():

@@ -1,5 +1,7 @@
 # MyClaw Application Analysis
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../README.md).
+
 ## 📋 What is MyClaw?
 
 MyClaw is a personal AI agent that combines:

@@ -14,7 +14,6 @@
 #
 # Persistent volumes:
 #   zensynora-data     — Config, memory SQLite DB, knowledge base, TOOLBOX
-#   zensynora-logs     — Application logs
 #   zensynora-redis    — Redis persistence (full profile)
 #   ollama-models      — Ollama model cache (full profile)
 #
@@ -43,6 +42,9 @@ services:
       target: runtime
       args:
         - BUILDKIT_INLINE_CACHE=1
+        # Container user = your user, so ./data stays writable (v0.7.0).
+        - ZENSYNORA_UID=${ZENSYNORA_UID:-1000}
+        - ZENSYNORA_GID=${ZENSYNORA_GID:-1000}
     image: zensynora:latest
     container_name: zensynora
     hostname: zensynora
@@ -61,10 +63,9 @@ services:
       - type: volume
         source: zensynora-data
         target: /data/.myclaw
-      # Application logs
-      - type: volume
-        source: zensynora-logs
-        target: /data/.myclaw/logs
+      # Logs are written to /data/.myclaw/logs inside the data volume.
+      # (v0.7.0: the separate root-owned logs volume was removed — the app
+      # could not write to it.)
       # Optional: mount local config for easier editing (uncomment for dev)
       # - type: bind
       #   source: ./config.json
@@ -84,8 +85,7 @@ services:
       ZENSYNORA_DOCKER: "true"
       # Log to stdout for Docker log collection
       MYCLAW_LOG_LEVEL: ${MYCLAW_LOG_LEVEL:-INFO}
-      # Config directory inside container
-      MYCLAW_CONFIG_DIR: /data/.myclaw
+      # Data and config live in $HOME/.myclaw = /data/.myclaw (set in the Dockerfile).
       # Hostname for service discovery
       ZENSYNORA_HOSTNAME: zensynora
 
@@ -126,7 +126,7 @@ services:
     #   docker compose run --rm zensynora zensynora agent
     #   docker compose run --rm zensynora zensynora gateway
     #   docker compose run --rm zensynora zensynora webui --port 8000
-    command: ["zensynora", "webui", "--port", "8000"]
+    command: ["zensynora", "webui", "--host", "0.0.0.0", "--port", "8000"]
 
   # ── Optional: Redis for multi-worker state sharing ─────────────────────────
   redis:
@@ -240,8 +240,6 @@ volumes:
       type: none
       o: bind
       device: ${ZENSYNORA_DATA_PATH:-./data}
-  zensynora-logs:
-    driver: local
   zensynora-redis:
     driver: local
   ollama-models:
@@ -249,11 +247,9 @@ volumes:
 
 # ── Networks ─────────────────────────────────────────────────────────────────
 networks:
+  # v0.7.0: no fixed subnet any more — 172.20.0.0/16 could collide with an
+  # existing Docker or LAN network and stop the stack from starting.
   zensynora-net:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.20.0.0/16
-          gateway: 172.20.0.1
     labels:
       - "com.zensynora.network=main"

@@ -7,6 +7,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-13
+
+Health checks you can trust, documentation rebuilt from scratch, and every
+install/update/uninstall script reviewed and tested end to end.
+
+### Added
+- **`zensynora doctor`** (`myclaw/doctor/`): one health check for the whole
+  install, with 21 checks in 8 categories (environment, configuration, LLM,
+  data, security, install, runtime, integrity). Every problem comes with a fix
+  hint; `--fix` repairs the safe ones (missing folders, file permissions,
+  pending data migrations). Options `--offline`, `--json`, `--problems`; exit
+  code 0 = healthy, 1 = warnings, 2 = failures.
+- **Doctor page in the Web UI** (`🩺 Doctor`), backed by
+  `GET /api/system/doctor` and `POST /api/system/doctor/fix` (local-only or
+  admin key, like the other settings endpoints).
+- **Rotating log file** `~/.myclaw/logs/zensynora.log` (10 MB × 5, JSON lines)
+  so the doctor and the medic can see recent errors. `MYCLAW_LOG_FILE=off`
+  disables it, `MYCLAW_LOG_FILE=/path` moves it.
+- Environment overrides `MYCLAW_LLAMACPP_BASE_URL`, `MYCLAW_LMSTUDIO_BASE_URL`,
+  `MYCLAW_OPENROUTER_API_KEY`.
+- `python -m myclaw …` works (new `myclaw/__main__.py`); `python -m myclaw.cli`
+  now runs the CLI instead of exiting silently.
+- `zensynora webui --host ADDRESS` (e.g. `127.0.0.1` to keep the UI on this
+  computer) and `--reload` for development.
+- `uninstall.sh --purge`; docs index `docs/README.md`; 10 doctor/medic tests.
+
+### Changed
+- **Medic agent rewritten** (`myclaw/agents/medic_agent.py`). All 15 tools now
+  do real work: health report (shares the doctor's checks), file integrity
+  baseline with SHA-256, per-file backups, recovery that prefers the backup
+  matching the baseline and falls back to the GitHub release tag, file
+  validation, task analytics, and a loop guard over a sliding 60-second window.
+  Recovery refuses paths outside the install folder.
+- **Documentation**: new README; `docs/architecture_diagram.md` redrawn as 11
+  Mermaid diagrams; `docs/ARCHITECTURE.md`, `docs/medic_agent_guide.md`,
+  `webui/README.md`, `CONTRIBUTING.md` and the issue/PR templates rewritten
+  for 0.7.0; every remaining guide has an "applies to" note; `mkdocs.yml`
+  navigation rebuilt (the old one pointed at missing pages).
+- 24 outdated plans, audits and reports moved to `docs/archive/` (with an
+  index); `docs/dev/` notes marked as historical.
+- `zensynora webui` no longer runs with auto-reload: it watched the current
+  directory, restarted on any file change and doubled the processes.
+- Docker: the image runs the web UI by default (was `--help`), uses a fixed
+  user ID that matches yours so `./data` is writable, and ships the data
+  migrations; the compose file no longer pins a subnet that could collide
+  with your network, and logs go into the data folder.
+
+### Fixed
+- **install.sh**: works on Debian/Ubuntu, Fedora/RHEL, Arch and openSUSE
+  (apt-get, dnf, pacman, zypper); picks the newest Python 3.11+ on the system
+  (or `ZENSYNORA_PYTHON`); installs the matching `python3.X-venv`; the
+  systemd service points at the stable `…/zensynora/source` path, so it
+  keeps working after `zensynora update`; removed an unused Docker network.
+- **uninstall.sh**: `--yes` no longer deletes `~/.myclaw` or update backups
+  unless `--purge` is given; process matching narrowed so it cannot stop
+  unrelated Python or Node programs; works when started from another folder;
+  offers to remove the managed program folder.
+- **install-online.sh**: `ZENSYNORA_REF` accepts tags and commits, not only
+  branches.
+- **Portable launchers** (`.sh` / `.bat`): data really stays on the drive
+  (the `MYCLAW_*_DIR` variables they set were never read, so data went to the
+  host's home folder); the app actually starts (`python -m myclaw`); code may
+  sit in `app/` or next to the script.
+- **cleanup.sh**: only touches the project folder (it used to delete
+  `test_*.py`, `*.zip` and `*.tmp` in whatever folder you ran it from) and
+  supports `--dry-run`.
+- **deploy.py**: rewritten without hard-coded host, user and password; refuses
+  unknown host keys unless `--trust-new-host`; never uploads `.env`; uses the
+  safe updater when the target already has an install.
+
+### Security
+- Removed credentials that were committed in `deploy.py`,
+  `docs/dev/scripts/deploy_remote.py`, `docs/dev/scripts/deploy_ssh.ps1` and an
+  audit report. **They remain in git history — change those passwords.**
+
+### Removed
+- `_write_fixplan.py` (a one-off helper with hard-coded Windows paths) and the
+  top-level `archive/` folder (merged into `docs/archive/`).
+
 ## [0.6.0] - 2026-10-13
 
 ### Added
