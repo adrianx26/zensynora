@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Download a GitHub branch of ZenSynora, then run the repository's Linux installer.
+# If ZenSynora is already installed, this performs a safe update instead (see update.sh).
 # Usage: curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-online.sh | bash
 
 set -euo pipefail
@@ -60,6 +61,23 @@ tar -xzf "$ARCHIVE" --strip-components=1 -C "$STAGING_DIR" \
     || error "Could not extract the GitHub source archive."
 [[ -f "$STAGING_DIR/install.sh" && -f "$STAGING_DIR/requirements.txt" ]] \
     || error "The downloaded archive does not contain the expected installer and requirements files."
+
+# ── Existing installation? Update it safely instead of copying over it ──────
+# Copying new files over a working install can leave it half-updated. The
+# updater backs up ~/.myclaw, builds the new version next to the old one,
+# verifies it and only then switches (rolling back on any failure).
+if [[ -L "$INSTALL_DIR" || -x "$INSTALL_DIR/venv/bin/python" ]]; then
+    if [[ "$(basename "$INSTALL_DIR")" == "source" && -f "$STAGING_DIR/update.sh" ]]; then
+        info "Existing installation found — running the safe updater..."
+        # install.sh options (--no-docker, -y …) do not apply to updates; extra
+        # updater options can be passed with ZENSYNORA_UPDATE_ARGS.
+        # shellcheck disable=SC2086
+        bash "$STAGING_DIR/update.sh" update --from-dir "$STAGING_DIR" \
+            --base "$(dirname "$INSTALL_DIR")" ${ZENSYNORA_UPDATE_ARGS:-}
+        exit $?
+    fi
+    error "An installation already exists at $INSTALL_DIR. Run its update.sh, or remove it first."
+fi
 
 mkdir -p "$INSTALL_DIR" || error "Could not create install directory: $INSTALL_DIR"
 cp -a "$STAGING_DIR/." "$INSTALL_DIR/" \

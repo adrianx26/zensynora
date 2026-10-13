@@ -910,6 +910,18 @@ if [[ "$DRY_RUN" == "false" ]]; then
     fi
 fi
 
+# ── 11. DATA MIGRATIONS ──────────────────────────────────────────────────────
+# Record which data migrations this version already satisfies, so the
+# updater only runs newer ones later (see updater/migrations/).
+if [[ "$DRY_RUN" == "false" && -d "$SCRIPT_DIR/updater" ]]; then
+    header "11. Data migrations"
+    if (cd "$SCRIPT_DIR" && "$VENV_PYTHON" -m updater migrate); then
+        success "User data is up to date"
+    else
+        warn "Data migrations reported a problem (see output above)"
+    fi
+fi
+
 # ── DONE ─────────────────────────────────────────────────────────────────────
 header "✅  ZenSynora is ready!"
 
@@ -924,6 +936,10 @@ echo "  ─ CLI Examples ──────────────────�
 echo "  zensynora knowledge sync"
 echo "  zensynora knowledge search 'how to use'"
 echo "  (or, from $SCRIPT_DIR: python cli.py <command>)"
+echo ""
+echo "  ─ Updating later (keeps your settings, backs up first, auto-rollback) ─"
+echo "  zensynora update            # or: bash $SCRIPT_DIR/update.sh"
+echo "  zensynora update rollback   # back to the previous version"
 echo ""
 if [[ -f "$SCRIPT_DIR/.env" ]]; then
     echo "  Remember to edit $SCRIPT_DIR/.env with your API keys."

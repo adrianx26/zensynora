@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-13
+
+### Added
+- **Safe, modular updater** (`update.sh`, `zensynora update`, package `updater/`):
+  - side-by-side releases (`releases/<version>-<time>/`, each with its own venv)
+    with an atomic `source` symlink switch — the running install is never
+    modified in place;
+  - automatic backup of `~/.myclaw` (config, encryption key, databases,
+    knowledge) plus `.env`/`data/` before every update; `backup`/`restore`
+    commands;
+  - verification of the new release against the user's real config before
+    switching; optional `--run-tests`;
+  - step pipeline where every step can undo itself — any failure rolls back
+    (new release removed, data restored if a migration ran, service restarted);
+  - versioned, idempotent data migrations (`updater/migrations/`) tracked in
+    `~/.myclaw/.migrations.json`;
+  - `rollback` (code-only or with data), `status --check`, `prune`;
+  - keeps optional packages the user installed (e.g. `anthropic`), stops and
+    restarts the `myclaw` systemd service, adopts pre-0.6.0 in-place installs;
+  - newer releases can ship a newer updater that takes over (`UPDATER_PROTOCOL`).
+- `zensynora version` command; `docs/UPDATING.md`.
+
+### Changed
+- `install-online.sh` runs the safe updater when ZenSynora is already
+  installed instead of copying files over the working install.
+- `install.sh` records applied data migrations; `uninstall.sh` also offers to
+  remove old releases and update backups.
+
 ## [0.5.0] - 2026-10-13
 
 ### Fixed
