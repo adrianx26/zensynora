@@ -397,6 +397,9 @@ class MetricsMiddleware:
                 status_bucket = "4xx"
             elif status_code >= 500:
                 status_bucket = "5xx"
-            metrics.request_duration.labels(
-                method=method, endpoint=path, status=status_bucket
-            ).observe(duration)
+            # _NoopMetrics (prometheus-client not installed) has no histograms.
+            request_duration = getattr(metrics, "request_duration", None)
+            if request_duration is not None:
+                request_duration.labels(
+                    method=method, endpoint=path, status=status_bucket
+                ).observe(duration)

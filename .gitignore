@@ -5,9 +5,10 @@ __pycache__/
 *.tmp
 *.zip
 putty/
-test*.py
+# scratch test scripts in the repo root only (cleanup.sh removes these);
+# the real suite lives in tests/ and must stay tracked
+/test*.py
 *.sh~
 
 # Exclude local virtual environment and temporary packaging artifact
 venv/
-=0.20.0

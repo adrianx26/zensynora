@@ -330,7 +330,8 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
 
     # ── 2. VIRTUAL ENVIRONMENT ───────────────────────────────────────────────
     header "2. Removing virtual environment"
-    VENV_DIR="$(pwd)/venv"
+    # Use the script directory, not the CWD: running from ~ must never remove ~/venv.
+    VENV_DIR="$SCRIPT_DIR/venv"
     if [[ -d "$VENV_DIR" ]]; then
         run rm -rf "$VENV_DIR"
         success "venv removed."

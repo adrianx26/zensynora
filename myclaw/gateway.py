@@ -197,6 +197,16 @@ def start(config):
 
             loop.run_until_complete(_console_fallback())
     finally:
+        # Close pooled aiosqlite connections (non-daemon threads) so the
+        # process can exit; otherwise it hangs after the channel stops.
+        try:
+            from .memory import cleanup_on_shutdown
+            if loop.is_closed():
+                asyncio.run(cleanup_on_shutdown())
+            else:
+                loop.run_until_complete(cleanup_on_shutdown())
+        except Exception as _ce:
+            logger.debug("Async DB pool cleanup failed: %s", _ce)
         print("\nShutting down global ThreadPoolExecutor gracefully...")
         # Use shutdown(wait=False) to avoid blocking the event loop
         # The executor will finish pending tasks in background

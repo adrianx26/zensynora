@@ -132,7 +132,16 @@ def agent():
             await _sched.shutdown(wait=True)
             logger.info("AsyncScheduler shutdown complete")
 
-    asyncio.run(run_agent_chat(registry, agent_names))
+    async def _run_and_cleanup():
+        try:
+            await run_agent_chat(registry, agent_names)
+        finally:
+            # Pooled aiosqlite connections run on non-daemon threads; if they
+            # are not closed the interpreter waits on them forever at exit.
+            from .memory import cleanup_on_shutdown
+            await cleanup_on_shutdown()
+
+    asyncio.run(_run_and_cleanup())
 
 @cli.command()
 def gateway():
@@ -213,8 +222,11 @@ def read(permalink):
     else:
         click.echo(f"Note not found: {permalink}")
 
-@knowledge.command()
-def list():
+# Named list_cmd so the module-level name does not shadow the builtin list():
+# `agent` calls list(registry.keys()) and crashed with
+# "Got unexpected extra argument (default)".
+@knowledge.command(name="list")
+def list_cmd():
     """List all notes"""
     notes = list_notes("default")
     if notes:
