@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Download a GitHub branch of ZenSynora, then run the repository's Linux installer.
+# Download a GitHub branch or tag of ZenSynora, then run the repository's Linux installer.
 # If ZenSynora is already installed, this performs a safe update instead (see update.sh).
 # Usage: curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-online.sh | bash
 
@@ -31,7 +31,7 @@ if ! command -v curl >/dev/null 2>&1 && ! command -v wget >/dev/null 2>&1; then
 fi
 
 if [[ -z "$REF" ]]; then
-    error "ZENSYNORA_REF must name a GitHub branch."
+    error "ZENSYNORA_REF must name a GitHub branch, tag or commit."
 fi
 
 TEMP_DIR="$(mktemp -d)" || error "Could not create a temporary directory."
@@ -44,7 +44,10 @@ ARCHIVE="$TEMP_DIR/zensynora.tar.gz"
 STAGING_DIR="$TEMP_DIR/source"
 mkdir -p "$STAGING_DIR"
 
-ARCHIVE_URL="https://codeload.github.com/${REPOSITORY}/tar.gz/refs/heads/${REF}"
+# Fixed 2026-10-13 (v0.7.0): the URL used refs/heads/, so a release tag such as
+# ZENSYNORA_REF=v0.7.0 could not be installed. The short form accepts a branch,
+# a tag or a commit SHA.
+ARCHIVE_URL="https://codeload.github.com/${REPOSITORY}/tar.gz/${REF}"
 info "Downloading ${REPOSITORY} (${REF})..."
 if command -v curl >/dev/null 2>&1; then
     curl --fail --location --silent --show-error --retry 3 \

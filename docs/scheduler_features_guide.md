@@ -1,5 +1,7 @@
 # Scheduler Reliability Layer (Phase 6.3)
 
+> **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent).
+
 Adds six capabilities to `AsyncScheduler` and the `schedule` tool family:
 
 | # | Capability                              | Module / API                                |

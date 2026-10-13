@@ -1,73 +1,47 @@
-# React + TypeScript + Vite
+# ZenSynora Web UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+> Replaces the Vite template README (2026-10-13, v0.7.0).
 
-Currently, two official plugins are available:
+React 19 + TypeScript + Vite front end for ZenSynora. The production build in
+`dist/` is served by the Python backend (`myclaw/web/api.py`) on the same
+port, so you normally never run this folder yourself:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+zensynora webui            # http://localhost:8000
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Pages
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+| Page | Component | Backend |
+|---|---|---|
+| Chat (streaming, per-agent history) | `src/App.tsx` | WebSocket `/ws/chat/{agent}` |
+| Settings — model, providers, agents, channels, features, security | `src/components/SettingsView.tsx` | `GET/PUT /api/settings`, `POST /api/settings/probe` |
+| Doctor — health checks and safe fixes | `src/components/DoctorView.tsx` | `GET /api/system/doctor`, `POST /api/system/doctor/fix` |
+| Costs & usage | `src/components/CostDashboard.tsx` | `/api/v1/costs/*` |
+| Tools | `src/components/ToolsView.tsx` | `GET /api/tools` |
+| Sidebar health | `src/App.tsx` | `GET /api/system/health` (every 15 s) |
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Settings, Doctor, Costs and history clearing are answered only for requests
+from the same computer, or with the admin API key (`X-API-Key`; the UI asks
+for it when needed). Secrets are never sent to the browser.
+
+## Development
+
+```bash
+cd webui
+npm ci
+npm run dev        # http://localhost:5173, talks to the backend on :8000
+npm run lint
+npm run build      # writes dist/ — installs and updates do this for you
 ```
+
+Start the backend separately (`zensynora webui`). In dev mode the UI detects
+port 5173 and sends API/WebSocket calls to port 8000 (`src/api.ts`).
+
+## Conventions
+
+* Colours come from CSS variables in `src/index.css` (dark and light theme).
+* New pages: add a component in `src/components/`, a `View` id and a
+  `NavButton` in `App.tsx`, and backend routes in `myclaw/web/settings_api.py`
+  behind the `guard` dependency when they expose settings or data.
+* Keep the bundle dependency-free beyond React (charts are inline SVG).

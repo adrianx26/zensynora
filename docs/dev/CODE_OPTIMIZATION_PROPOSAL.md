@@ -1,5 +1,7 @@
 # Code Optimization Proposal for Zensynora
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../README.md).
+
 ## Executive Summary
 
 This document outlines optimization opportunities for the Zensynora codebase based on a comprehensive analysis of the core modules. The optimizations are categorized by impact (High/Medium/Low) and focus on performance, maintainability, reliability, and security.

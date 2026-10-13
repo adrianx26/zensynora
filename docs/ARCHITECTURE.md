@@ -1,9 +1,11 @@
 # ZenSynora Architecture
 
-> **Status:** reflects v0.4.1 + Sprints 1–12 (2026-04-29 → 2026-04-30)
+> **Status:** reflects **v0.7.0** (2026-10-13). Updated from the v0.4.1
+> version: adds the Web UI settings API, provider routing changes, the safe
+> updater and the doctor/medic rewrite; test inventory recounted.
 > **Audience:** contributors and operators. For end-user docs see
-> [`README.md`](../README.md). For per-sprint narrative see
-> [`docs/SPRINTS_SUMMARY.md`](SPRINTS_SUMMARY.md).
+> [`README.md`](../README.md). Sprint history:
+> [`archive/SPRINTS_SUMMARY.md`](archive/SPRINTS_SUMMARY.md).
 
 This document is a high-level map of the codebase and how the modules
 fit together. It complements [`docs/architecture_diagram.md`](architecture_diagram.md)
@@ -29,6 +31,7 @@ myclaw/
 ├── config.py                # Pydantic config + hot-reload (watchdog)
 ├── cost_tracker.py          # SQLite cost accumulator + dashboard queries
 ├── defaults.py              # Single source of truth for tunable constants [Sprint 10]
+├── doctor/                  # Health checks, integrity baseline, safe fixes [0.7.0]
 ├── evals/                   # Dataset-driven eval harness [Sprint 7]
 ├── knowledge/
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
@@ -51,13 +54,25 @@ myclaw/
 │   ├── shell.py             # Sandboxed allow-list (newline injection blocked)
 │   └── ...
 ├── vector/                  # Pluggable backends: memory / sqlite / qdrant [Sprint 4]
+├── web/
+│   ├── api.py               # Web UI backend: WebSocket chat, agents, static SPA
+│   └── settings_api.py      # Settings, health, doctor, costs, history [0.5.0]
 └── ... (~50 utility modules)
 
-webui/src/components/
-├── CostDashboard.tsx        # Cost dashboard [Sprint 3]
-└── TypewriterText.tsx       # Token-level streaming UI [Sprint 11]
+updater/                     # Safe updates: side-by-side releases, backups,
+                             # migrations, rollback (stdlib only) [0.6.0]
 
-tests/                       # 415 tests across all sprint modules
+webui/src/
+├── App.tsx                  # Shell: chat, navigation, live health
+├── api.ts                   # Backend helpers (API base, admin key)
+└── components/
+    ├── SettingsView.tsx     # Settings page [0.5.0]
+    ├── DoctorView.tsx       # Doctor page [0.7.0]
+    ├── ToolsView.tsx        # Tool list [0.5.0]
+    ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
+    └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
+
+tests/                       # 488 tests (pytest --collect-only, 2026-10-13)
 ```
 
 ---
@@ -69,11 +84,15 @@ The "happy path" for a single user message:
 ```
 gateway (telegram/whatsapp/web/cli)
   → Agent.think()
-      → _route_message()      task timer, guardrails, model selection
+      → _route_message()      task timer, guardrails, model selection,
+                              medic loop guard (working since 0.7.0)
       → _build_context()      memory + knowledge retrieval
       → _provider_chat()      LLM call (provider.py)
                               ─ semantic_cache lookup
-                              ─ retry/backoff
+                              ─ retry/backoff, circuit breaker
+                              ─ offline fallback to another local provider
+                                (never the one that just failed) [0.5.0]
+                              ─ retry without tools if the server rejects them
                               ─ metrics (logged on failure since Sprint 1)
       → _execute_tools()      parallel + sequential tool dispatch
       → _handle_summarization() background memory cleanup
@@ -182,8 +201,13 @@ these commands against Debian/Ubuntu system Python (PEP 668).
 
 Every advanced feature with an external dep degrades gracefully:
 
+Since 0.5.0 the `openai` SDK is a **core** dependency: llama.cpp, LM Studio,
+OpenAI, Groq and OpenRouter all need it, and a missing SDK used to make chat
+silently fall back to Ollama.
+
 | Feature | Optional package | Without it... |
 |---|---|---|
+| Anthropic / Gemini providers | `anthropic` / `google-generativeai` | Provider raises a clear `ProviderUnavailableError`; the doctor and Settings → Test connection report it |
 | Tracing | `opentelemetry-sdk` | All tracing helpers no-op |
 | Browser tools | `playwright` | Tools return structured errors |
 | Jinja2 templates | `jinja2` | Falls back to `string.Template` |
@@ -215,38 +239,46 @@ Install all extras: `python -m pip install 'zensynora[all]'`.
 
 ## 6. Test inventory
 
-| Suite | Count | Module under test |
-|---|---|---|
-| `test_resilience.py` | 16 | circuit breaker + fallback chain |
-| `test_observability.py` | 15 | tracing no-op + PII scrubber |
-| `test_registry.py` | 14 | agent registry structural invariants |
-| `test_prompts.py` | 12 | prompt versioning, persistence, render |
-| `test_structured_output.py` | 18 | extract / validate / repair |
-| `test_cost_tracker.py` | 6 | cost queries used by dashboard |
-| `test_vector_backends.py` | 40 | memory + sqlite + factory |
-| `test_agent_internals.py` | 14 | route_message + medic_proxy |
-| `test_auth.py` | 21 | JWT + OAuth (PKCE) |
-| `test_tenancy.py` | 11 | UserContext + contextvars isolation |
-| `test_tenancy_scoping.py` | 15 | effective_user_id + Memory wiring |
-| `test_discord_channel.py` | 10 | chunking + dep-missing graceful path |
-| `test_evals.py` | 16 | dataset loader + runner + metrics |
-| `test_messaging.py` | 14 | envelope + InProcessBroker |
-| `test_sprint8_perf_quality.py` | 6 | graph batch + composite index + numpy scan |
-| `test_marketplace.py` | 40 | manifest signing + 4 sources + client |
-| `test_agent_classes.py` | 31 | MessageRouter + ContextBuilder + ToolExecutor + ResponseHandler |
-| `test_sprint10_integrations.py` | 17 | breaker/tracing/KB-executor wiring + __all__ |
-| `test_caching_base.py` | 20 | BaseTTLCache + PersistentCacheMixin |
-| `test_registry_yaml.py` | 11 | YAML loader + literal sync invariant |
-| **Total new** | **347** | |
-| (pre-existing) `test_security.py`, `test_tools.py`, … | 68+ | core surface |
-| **Grand total** | **415+** | |
+Counted with `pytest --collect-only` on 2026-10-13 (v0.7.0).
 
-**Run all new suites:**
-```
-pytest tests/test_resilience.py tests/test_observability.py \
-       tests/test_registry.py    tests/test_prompts.py \
-       tests/test_structured_output.py tests/test_cost_tracker.py \
-       tests/test_vector_backends.py
+| Suite | Tests |
+|---|---|
+| `test_agent.py` | 26 |
+| `test_agent_classes.py` | 20 |
+| `test_agent_internals.py` | 10 |
+| `test_auth.py` | 18 |
+| `test_caching_base.py` | 20 |
+| `test_cost_tracker.py` | 6 |
+| `test_discord_channel.py` | 9 |
+| `test_doctor_medic.py` | 10 |
+| `test_evals.py` | 17 |
+| `test_knowledge.py` | 18 |
+| `test_marketplace.py` | 26 |
+| `test_memory.py` | 6 |
+| `test_messaging.py` | 13 |
+| `test_observability.py` | 12 |
+| `test_prompts.py` | 12 |
+| `test_provider_selection.py` | 4 |
+| `test_registry.py` | 64 |
+| `test_registry_yaml.py` | 11 |
+| `test_resilience.py` | 8 |
+| `test_scheduler_features.py` | 30 |
+| `test_security.py` | 8 |
+| `test_sprint10_integrations.py` | 16 |
+| `test_sprint8_perf_quality.py` | 6 |
+| `test_structured_output.py` | 20 |
+| `test_tenancy.py` | 11 |
+| `test_tenancy_scoping.py` | 15 |
+| `test_tools.py` | 35 |
+| `test_updater.py` | 9 |
+| `test_vector_backends.py` | 24 |
+| `test_web_settings.py` | 4 |
+| **Total** | **488** |
+
+Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
+
+```bash
+pytest -q -o addopts=""
 ```
 
 ---
@@ -261,3 +293,8 @@ pytest tests/test_resilience.py tests/test_observability.py \
   `myclaw/vector/`, then teach `factory.make_backend` about its name.
 * **Add a new channel** → match the pattern in `channels/telegram.py`
   (gateway-based dispatch into `Agent.think`).
+* **Add a health check** → one `@check` function in `myclaw/doctor/checks.py`
+  ([guide](medic_agent_guide.md#adding-a-check)).
+* **Change the data format** → add a migration in `updater/migrations/`
+  ([guide](UPDATING.md#add-a-data-migration)).
+* **Change how updates work** → add a `Step` in `updater/steps.py`.

@@ -1,5 +1,7 @@
 # MyClaw Todo List - Non-Implemented Items
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../../README.md).
+
 > Generated from analysis of all Plans folder .md files
 > Date: 2026-04-15
 

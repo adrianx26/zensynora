@@ -151,6 +151,19 @@ isort .
 - **Backward compatibility**: Avoid breaking changes to the config schema
 - **Error handling**: Use the project's custom exception hierarchy in `myclaw/exceptions.py`
 
+## Where to Add Things
+
+| You are adding… | Put it in | Docs |
+|---|---|---|
+| A tool the agents can call | `myclaw/tools/` + register in `myclaw/tools/__init__.py` | below |
+| A health check | one `@check` function in `myclaw/doctor/checks.py` | [docs/medic_agent_guide.md](docs/medic_agent_guide.md#adding-a-check) |
+| A change to stored data (config keys, DB schema, folders) | a migration `updater/migrations/m_NNNN_name.py` | [docs/UPDATING.md](docs/UPDATING.md#add-a-data-migration) |
+| A new update step | a `Step` in `updater/steps.py` | [docs/UPDATING.md](docs/UPDATING.md#add-or-change-an-update-step) |
+| A Web UI page | `webui/src/components/` + navigation in `App.tsx` | [webui/README.md](webui/README.md) |
+| An LLM provider | `myclaw/provider.py` (+ SDK in `requirements.txt` if it is needed at chat time) | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+
+Every user-visible change gets a line in `CHANGELOG.md` under `[Unreleased]`.
+
 ## How to Add a New Tool / Skill
 
 Tools are the primary way to extend ZenSynora's capabilities.
@@ -159,7 +172,7 @@ Tools are the primary way to extend ZenSynora's capabilities.
 Create a new function in `myclaw/tools/` (add to appropriate module or create new one):
 
 ```python
-from myclaw.exceptions import ToolError
+from myclaw.exceptions import ToolExecutionError
 
 def my_new_tool(param1: str, param2: int = 10) -> dict:
     """Brief description of what this tool does.
@@ -178,7 +191,7 @@ def my_new_tool(param1: str, param2: int = 10) -> dict:
         result = do_something(param1, param2)
         return {"success": True, "data": result}
     except Exception as e:
-        raise ToolError(f"my_new_tool failed: {e}")
+        raise ToolExecutionError(f"my_new_tool failed: {e}")
 ```
 
 ### 2. Register the Tool
@@ -202,7 +215,7 @@ TOOL_DESCRIPTIONS = {
 ```
 
 ### 3. Add Tests
-Create tests in `tests/test_tools/` directory or a new test file:
+Add tests to `tests/test_tools.py` or a new `tests/test_<feature>.py`:
 
 ```python
 def test_my_new_tool():
@@ -219,8 +232,8 @@ def test_my_new_tool():
 
 ### Running Tests
 ```bash
-# Run all tests
-pytest
+# Run all tests (addopts="" skips the 60 % coverage gate from pyproject.toml)
+pytest -q -o addopts=""
 
 # Run with coverage
 pytest --cov=myclaw --cov-report=html

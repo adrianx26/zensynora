@@ -1,5 +1,7 @@
 # WhatsApp Channel Implementation Plan
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../../README.md).
+
 ## Overview
 
 This document describes the implementation of WhatsApp as a communication channel for the MyClaw agent framework, mirroring the existing Telegram channel functionality. The implementation uses the **WhatsApp Business Cloud API** (Meta Graph API) with a **FastAPI webhook server** to receive and respond to messages.

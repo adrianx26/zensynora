@@ -1,5 +1,7 @@
 # ZenSynora Implementation Plan — From planx.md Review
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../../README.md).
+
 ## Objective
 Address critical security gaps, performance bottlenecks, and maintainability issues identified in the comprehensive code review. Focus on production hardening before feature expansion.
 

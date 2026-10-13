@@ -1,5 +1,7 @@
 # ZenSynora Agent System Documentation
 
+> **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent). The registry contains 137 agents loaded from `myclaw/agents/data/agents.yaml`.
+
 **Version:** 1.0
 **Date:** 2026-03-29
 **Total Agents:** 136+

@@ -5,6 +5,8 @@ version: 0.4.2
 license: Complete terms in LICENSE.txt
 ---
 
+> **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent). Scrapling is installed with the core requirements; its browsers are installed by `install.sh` / the updater (`scrapling install`).
+
 # Scrapling
 
 Scrapling is an adaptive Web Scraping framework that handles everything from a single request to a full-scale crawl.

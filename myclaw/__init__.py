@@ -21,7 +21,7 @@ Configuration:
 - Thresholds are configurable via TaskThresholdConfig
 - Status updates are printed to console with color coding
 """
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 import logging
 import sys
@@ -64,9 +64,25 @@ def init_app(
         env_level = __import__("os").environ.get("MYCLAW_LOG_LEVEL", "INFO")
         log_level = getattr(logging, env_level.upper(), logging.INFO)
 
-    # 1. Centralised logging (uses structured formatter with PII scrubbing)
+    # 1. Centralised logging (uses structured formatter with PII scrubbing).
+    # Since 0.7.0 a size-limited JSON log is written to ~/.myclaw/logs/
+    # zensynora.log by default so the medic/doctor can analyse recent errors.
+    # Override with MYCLAW_LOG_FILE=<path>, disable with MYCLAW_LOG_FILE=off.
+    if log_file is None:
+        env_file = __import__("os").environ.get("MYCLAW_LOG_FILE", "").strip()
+        if env_file.lower() in ("off", "none", "0", "false"):
+            log_file = None
+        elif env_file:
+            log_file = env_file
+        else:
+            from pathlib import Path as _P
+            log_file = str(_P.home() / ".myclaw" / "logs" / "zensynora.log")
     from .logging_config import configure_logging as _configure_logging
-    _configure_logging(level=log_level, log_file=log_file)
+    try:
+        _configure_logging(level=log_level, log_file=log_file)
+    except OSError:
+        # Read-only home or similar: keep console logging only.
+        _configure_logging(level=log_level, log_file=None)
 
     # 2. Graceful-shutdown handlers
     _install_shutdown_handlers()

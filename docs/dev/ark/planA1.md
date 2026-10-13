@@ -1,3 +1,5 @@
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../../README.md).
+
 **Implementation Plan for ZenSynora (MyClaw) Repository**
 
 **Goal**: Transform the repository from a strong but cluttered personal project into a professional, production-ready open-source AI agent framework that is easy to install, deploy, contribute to, and showcase.

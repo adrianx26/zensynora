@@ -1,5 +1,7 @@
 # Task Timer Integration Summary
 
+> **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent).
+
 ## Overview
 The deployment orchestrator with 300-second timeout has been integrated into the existing MyClaw/Zensynora application.
 

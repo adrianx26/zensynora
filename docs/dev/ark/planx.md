@@ -1,5 +1,7 @@
 # ZenSynora (MyClaw) — Comprehensive Code Review & Optimization Strategy
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../../README.md).
+
 ## Executive Summary
 
 ZenSynora is a sophisticated personal AI agent platform with strong architectural foundations: multi-provider LLM abstraction, async SQLite with FTS5, semantic caching, intelligent routing, agent swarms, and multi-channel delivery (Telegram, WhatsApp, Web UI). The codebase demonstrates mature engineering patterns in many areas.

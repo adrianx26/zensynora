@@ -1,5 +1,7 @@
 # ZenSynora Backends Guide
 
+> **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent).
+
 ## Overview
 
 ZenSynora supports multiple terminal backends for execution across different environments:

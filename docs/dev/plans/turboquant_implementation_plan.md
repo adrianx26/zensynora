@@ -1,5 +1,7 @@
 # TurboQuant Implementation Plan
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../../README.md).
+
 **Document Version:** 1.0
 **Date:** 2026-03-29
 **Status:** Planning

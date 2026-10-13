@@ -26,9 +26,15 @@ assignees: ''
 <!-- Please complete the following information -->
 - **OS**: [e.g. Ubuntu 22.04, macOS 14, Windows 11]
 - **Python Version**: [e.g. 3.11, 3.12]
-- **ZenSynora Version/Commit**: [e.g. v1.2.0 or commit hash]
-- **Installation Method**: [e.g. pip install, git clone + install.sh, Docker]
-- **LLM Provider**: [e.g. Ollama, OpenAI, Anthropic, etc.]
+- **ZenSynora Version**: [output of `zensynora version`, e.g. 0.7.0]
+- **Installation Method**: [install-online.sh, install.sh, Docker, git clone]
+- **LLM Provider**: [e.g. llama.cpp, Ollama, OpenAI, Anthropic]
+
+## Health report
+<!-- Output of `zensynora doctor --problems` (or Web UI → Doctor). It contains no secrets. -->
+```
+
+```
 
 ## Configuration
 <!-- If relevant, provide your config (redact secrets!) -->
@@ -39,7 +45,7 @@ assignees: ''
 ```
 
 ## Logs
-<!-- Paste any relevant error logs or traceback -->
+<!-- Paste relevant lines from ~/.myclaw/logs/zensynora.log or the terminal (redact secrets) -->
 ```python
 Traceback (most recent call last):
   File "...", line ..., in ...

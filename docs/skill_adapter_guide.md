@@ -1,5 +1,7 @@
 # ZenSynora Skill Adapter Guide
 
+> **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent).
+
 ## Overview
 
 The Skill Adapter enables ZenSynora to analyze, convert, and integrate skills from external standards (particularly agentskills.io open standard) into the ZenSynora TOOLBOX system.

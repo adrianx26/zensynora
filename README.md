@@ -1,659 +1,201 @@
+<div align="center">
+
 # ZenSynora
 
-**Privacy-first personal AI agent framework.** Runs locally or in the cloud, integrates with Telegram, WhatsApp, Discord, and the Web — with persistent memory, multi-agent swarms, a dynamic tool-building ecosystem, and a complete observability/resilience/marketplace stack.
+**A private, self-hosted AI agent that runs on your own models.**
 
-**License:** AGPL-3.0 (dual licensing available for enterprise) · **Python:** 3.11+ · **Author:** Adrian Petrescu
+Chat in the browser, the terminal, Telegram or WhatsApp. ZenSynora remembers
+your conversations, builds a personal knowledge base, uses 95 tools, and can
+split work across teams of agents — with a local model like llama.cpp or
+Ollama, or any major cloud provider.
 
-[![CI](https://github.com/adrianx26/zensynora/actions/workflows/ci.yml/badge.svg)](https://github.com/adrianx26/zensynora/actions/workflows/ci.yml)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)](CHANGELOG.md)
+[![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)](#requirements)
+[![Tests](https://img.shields.io/badge/tests-488-brightgreen.svg)](#development)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-415%20passing-brightgreen.svg)](#testing)
-[![Docker](https://img.shields.io/badge/docker-ready-2496ED.svg)](#docker)
 
----
+[Quick start](#quick-start) · [Using it](#using-zensynora) · [Updating](#updating-and-health) ·
+[Configuration](#configuration) · [Architecture](#architecture) · [Docs](docs/README.md)
 
-## What is ZenSynora?
+</div>
 
-A high-performance AI agent framework for developers who want full control over their AI stack. It connects to any LLM provider (local or cloud), persists conversation history and knowledge across sessions, coordinates multiple specialized agents to work together, and ships with the production primitives (tracing, circuit breakers, multi-tenancy, signed plugin marketplace, structured-output validation) most frameworks make you build yourself.
+![ZenSynora Web UI — settings](docs/images/webui-settings.png)
 
-> *"ZenSynora doesn't just execute tasks; it evolves with you, refining its models of your projects and its own capabilities."*
+## Why ZenSynora
 
----
+- **Your models, your data.** Works fully offline with llama.cpp, Ollama or
+  LM Studio. Cloud providers (OpenAI, Anthropic, Gemini, Groq, OpenRouter) are
+  optional. Everything is stored locally in `~/.myclaw`.
+- **Remembers.** Conversation memory per user, plus a Markdown knowledge base
+  with full-text search and a knowledge graph the agents read and write.
+- **Does things.** 95 tools: files, sandboxed shell, web and headless browser,
+  scheduling, knowledge, delegation, and tools the agent writes for itself.
+- **Works in teams.** 137 ready-made agent profiles and swarms (parallel,
+  sequential, hierarchical, voting).
+- **Easy to run.** A web UI with chat, settings, cost tracking and a built-in
+  doctor; updates that back up your data first and roll back on failure.
 
-## Highlights — what's new across the recent sprints
+## Quick start
 
-| Area | Module | Sprint |
-|---|---|---|
-| Distributed tracing (OpenTelemetry, no-op when disabled) | [`myclaw/observability/`](myclaw/observability/) | 2 |
-| Circuit breaker + provider fallback chain | [`myclaw/resilience/`](myclaw/resilience/) | 2 + 10 (wired) |
-| PII scrubber for log records (default-on) | [`myclaw/logging_config.py`](myclaw/logging_config.py) | 2 |
-| Headless browser tools (Playwright) | [`myclaw/tools/browser.py`](myclaw/tools/browser.py) | 3 |
-| Versioned prompt template registry | [`myclaw/prompts/`](myclaw/prompts/) | 3 |
-| Structured-output validation + LLM repair | [`myclaw/structured_output/`](myclaw/structured_output/) | 3 |
-| Cost dashboard (backend + WebUI) | [`myclaw/cost_tracker.py`](myclaw/cost_tracker.py) + [`webui/.../CostDashboard.tsx`](webui/src/components/CostDashboard.tsx) | 3 |
-| Pluggable vector store (memory / sqlite / qdrant) | [`myclaw/vector/`](myclaw/vector/) | 4 |
-| `Agent.complete_structured(messages, schema)` helper | [`agent.py`](myclaw/agent.py) | 4 |
-| `agent.py` decomposition (free-fns + classes + ResponseHandler) | [`myclaw/agent_internals/`](myclaw/agent_internals/) | 5 + 9 |
-| JWT verification + OAuth callback (PKCE) | [`myclaw/auth/`](myclaw/auth/) | 6 |
-| Multi-tenancy primitives + storage wiring | [`myclaw/tenancy/`](myclaw/tenancy/) | 6 + 11 |
-| Discord channel adapter | [`myclaw/channels/discord.py`](myclaw/channels/discord.py) | 6 |
-| Eval harness (datasets + 5 metrics + runner) | [`myclaw/evals/`](myclaw/evals/) | 7 |
-| Inter-agent message broker (asyncio + envelope protocol) | [`myclaw/messaging/`](myclaw/messaging/) | 7 |
-| Knowledge-graph path reasoning (`find_paths`) | [`myclaw/knowledge/path_reasoning.py`](myclaw/knowledge/path_reasoning.py) | 7 |
-| Plugin marketplace (OpenClaw / GitHub / HTTP / Local) | [`myclaw/marketplace/`](myclaw/marketplace/) | 9 |
-| Dedicated KB-search executor | [`agent.py`](myclaw/agent.py) | 10 |
-| `myclaw/defaults.py` — single source of truth | [`myclaw/defaults.py`](myclaw/defaults.py) | 10 |
-| Shared cache primitives (`BaseTTLCache` + `PersistentCacheMixin`) | [`myclaw/caching/`](myclaw/caching/) | 11 |
-| WebUI token-level streaming | [`webui/.../TypewriterText.tsx`](webui/src/components/TypewriterText.tsx) | 11 |
-| Agent registry → YAML data file (137 agents) | [`myclaw/agents/data/agents.yaml`](myclaw/agents/data/agents.yaml) | 12 |
-| Scheduler reliability layer — output validation, retry+fallback, complexity-driven decomposition, sub-task spawn, checkpoints, time budgets | [`myclaw/scheduler_features.py`](myclaw/scheduler_features.py) + [`docs/scheduler_features_guide.md`](docs/scheduler_features_guide.md) | 6.3 |
+### Requirements
 
-The full per-sprint changelog lives in [`CHANGELOG.md`](CHANGELOG.md). The condensed narrative is in [`docs/SPRINTS_SUMMARY.md`](docs/SPRINTS_SUMMARY.md).
+- Linux (or WSL2) or macOS · Python **3.11+** (3.14 tested) · ~2 GB free disk
+- A model: a local server (llama.cpp, Ollama, LM Studio) **or** a cloud API key
+- Node.js is optional (only to rebuild the web UI)
 
----
-
-## Key features
-
-### LLM agnostic
-Connect to any provider — **Ollama**, **OpenAI**, **Anthropic**, **Google Gemini**, **Groq**, **OpenRouter** — or mix and match. An intelligent router automatically selects the right model for each task. Per-provider circuit breakers stop hammering flapping endpoints and fall through to local fallbacks.
-
-### Persistent memory & knowledge
-- **SQLite-backed memory** with per-user isolation, auto-cleanup, FTS5 full-text search, and a composite `(role, timestamp)` index for fast role-filtered queries.
-- **Knowledge base** with FTS5 + entity graph, batched-parallel note reads (7-10× faster searches), dedicated thread-pool executor for FTS5 queries.
-- **Knowledge-graph path reasoning** — `find_paths(a, b, max_hops=3)` for "how is X connected to Y?" queries.
-- **Pluggable vector store** — pick `sqlite` (zero-dep), `qdrant` (production HNSW), or `memory` (tests) via config.
-- **Performance optimizations**: Batched queries, optimized graph traversal, and faster full-sync operations for a more responsive knowledge base.
-- **Gap Researcher** — background agent fills information gaps via web search.
-
-### Multi-agent swarms
-Coordinate **137 specialized agents** across 10 categories using **Parallel**, **Sequential**, **Hierarchical**, or **Voting** strategies. Agent definitions live in [`myclaw/agents/data/agents.yaml`](myclaw/agents/data/agents.yaml) — adding a new agent is a data PR, not a code PR. Inter-agent messaging via [`myclaw/messaging/`](myclaw/messaging/) for distributed swarms.
-
-### Dynamic tool ecosystem
-- Agent can **create, test, and register new Python tools at runtime** through an AST-validated sandbox (forbids `os`, `sys`, `subprocess`, `pathlib`, `ctypes`, `cffi`, `mmap`, `importlib`, `__builtins__` access).
-- Built-in tools: filesystem, shell (sandboxed allow-list, newline-injection blocked), hardware telemetry, knowledge management, scheduling.
-- **Headless browser tools** — Playwright-backed `navigate`, `screenshot`, `fill_form`, `extract_text`, `wait_for`, `close_session` for JS-heavy sites.
-- **MCP Client & Server** — interop with Cursor, Claude Desktop, ClawHub.ai.
-- **Plugin marketplace** with HMAC-signed manifests + multi-source discovery (OpenClaw, GitHub Releases, custom HTTP registries, local hub).
-
-### Channels
-Connect to **Telegram**, **WhatsApp**, **Discord**, **Web UI**, and **CLI** simultaneously through a unified gateway. WebUI streams responses with **character-by-character typewriter reveal**.
-
-### Auth & multi-tenancy
-- **JWT verification** with HS256 secrets *or* JWKS endpoint for RS256/ES256 (issuer/audience/scope claim handling).
-- **OAuth 2.0 authorization-code flow** with PKCE — pre-baked for GitHub & Google, custom providers via `OAuth2Config`.
-- **`UserContext` primitive** propagated via `contextvars.ContextVar` so concurrent asyncio tasks each see their own identity.
-- **Memory** transparently picks up the active user from `UserContext` when available, falls back to legacy single-user mode otherwise.
-
-### Observability & resilience
-- **Medic Agent** — self-healing health monitoring, integrity verification, change management with approval workflows.
-- **Task Timer** — 300-second timeout with progressive status updates and automatic failure handling.
-- **OpenTelemetry tracing** wired into `Agent.think`, `provider.chat`, `kb.search`, `provider.fallback_chat` — no-op when SDK absent.
-- **Circuit breaker** wraps every provider call; configurable thresholds per agent.
-- **Cost dashboard** — per-provider, per-model, and 30-day timeline views via `/api/v1/costs/*` and a self-contained React component (no chart-lib dep).
-
-### Structured output & prompts
-- **`Agent.complete_structured(messages, MyPydanticModel)`** returns a validated instance, automatically asking the model to fix invalid JSON (configurable retry count). Provider-agnostic.
-- **Versioned prompt registry** — JSONL-backed at `~/.myclaw/prompts.jsonl`. Jinja2 when installed (`{{ var }}`), `string.Template` fallback (`$var`).
-
-### Eval harness
-Dataset-driven evals with 5 built-in metrics (`exact_match`, `contains`, `regex_match`, `length_within`, `json_subset`) plus user-defined callables. Runner reports `metric_means`, `latency_p50/p95`, `failure_count`, and `overall_score`.
-
-### Security
-Command sandboxing (allow-list, newline-injection blocked, per-token re-validation), path validation, SSRF protection, **HMAC-signed audit logs**, MFA for admin endpoints, AST-validated dynamic-tool sandbox, explicit CORS allow-list, admin-permission gating on key endpoints, **PII scrubber** for log records (emails, phones, JWTs, API keys redacted; user IDs hashed) on by default. See [`docs/SECURITY_FIXES_2026_04_29.md`](docs/SECURITY_FIXES_2026_04_29.md) for the latest audit round.
-
----
-
-## Quick Start
-
-### Install using the included scripts
-
-The universal `install.sh` script supports Linux, macOS, and Linux under
-WSL2. It installs into the repository's `venv/` directory, never into the
-OS-managed Python. On Linux, it checks for `venv`/`ensurepip` support and
-offers to install `python3-venv` on Debian/Ubuntu if that support is missing.
-If an existing `venv/` is invalid, it asks before recreating it.
-
-**Linux (including Debian/Ubuntu) and WSL2:**
+### Install
 
 ```bash
-# Install directly from GitHub without running git clone:
 curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-online.sh | bash
 ```
 
-The bootstrap downloads the source archive into
-`~/.local/share/zensynora/source` and starts the regular `install.sh`, forwarding
-any installer options. For example, to force a traditional non-Docker install:
+This installs into `~/.local/share/zensynora/source` with its own virtual
+environment. If ZenSynora is already installed, the same command performs a
+[safe update](#updating-and-health) instead.
+
+Prefer to look first? Clone and run the installer yourself:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-online.sh | bash -s -- --no-docker
+git clone https://github.com/adrianx26/zensynora.git && cd zensynora
+bash install.sh --no-docker        # --help for all options (Docker, dry-run, …)
 ```
 
-To run the installer from a cloned checkout instead:
+### Start
 
 ```bash
-git clone https://github.com/adrianx26/zensynora.git
-cd zensynora
-chmod +x install.sh
-./install.sh --no-docker
+source ~/.local/share/zensynora/source/venv/bin/activate
+zensynora webui                     # open http://localhost:8000
 ```
 
-The installer reads core Python dependencies from the repository's
-`requirements.txt`. Optional features are offered separately; choosing the
-Playwright browser tools also downloads Chromium and may take additional time.
+Then open **Settings → Model**, pick your provider, click **Test connection &
+list models**, choose a model and save. (Or run `zensynora onboard` for a
+terminal wizard.)
 
-Use `./install.sh` without `--no-docker` to allow the script to offer Docker
-when Docker and Compose are available. To recreate an invalid or outdated
-virtual environment without a prompt, run:
+> **llama.cpp tip:** start `llama-server` with `--jinja` so agents can use
+> tools; use provider `llamacpp` with the server's `/v1` URL.
+
+## Using ZenSynora
+
+| Command | What it does |
+|---|---|
+| `zensynora webui [--port 8000] [--host 127.0.0.1]` | Web UI: chat, settings, doctor, costs, tools (`--host 127.0.0.1` = this computer only) |
+| `zensynora agent` | Chat in the terminal (`@name` to address an agent) |
+| `zensynora gateway` | Run the Telegram or WhatsApp bot (falls back to terminal chat) |
+| `zensynora mcp-server` | Expose ZenSynora's tools to MCP clients over stdio |
+| `zensynora knowledge sync \| search \| list \| read \| write` | Manage the knowledge base |
+| `zensynora swarm …` · `skills …` · `memory …` | Swarms, tools/skills, conversation memory |
+| `zensynora doctor` | Health check with fix hints (`--fix`, `--offline`, `--json`) |
+| `zensynora update` | Safe update (`status --check`, `rollback`, `backup`) |
+| `zensynora version` | Installed version and location |
+
+Run `zensynora --help` for the full list.
+
+**Background service:** answer *yes* to the systemd question in `install.sh`,
+then `sudo systemctl start myclaw` and `journalctl -u myclaw -f`.
+
+**Uninstall:** `bash ~/.local/share/zensynora/source/uninstall.sh` asks before
+removing anything. Your data in `~/.myclaw` is only deleted when you confirm it
+(or pass `--purge` together with `--yes`); `--dry-run` shows what would happen.
+
+## Updating and health
 
 ```bash
-./install.sh --no-docker --recreate-venv
-```
-
-**macOS:**
-
-```bash
-git clone https://github.com/adrianx26/zensynora.git
-cd zensynora
-chmod +x install.sh
-./install.sh --no-docker
-```
-
-**Windows:**
-
-For a standard Windows install, use WSL2 and follow the Linux commands above.
-For a native Windows portable install, use the included batch launcher from
-PowerShell:
-
-```powershell
-git clone https://github.com/adrianx26/zensynora.git zensynora-source
-New-Item -ItemType Directory -Force .\ZenSynora_Portable\app
-Copy-Item .\zensynora-source\* .\ZenSynora_Portable\app -Recurse -Force
-Copy-Item .\zensynora-source\install_and_run_portable.bat .\ZenSynora_Portable\
-Set-Location .\ZenSynora_Portable
-.\install_and_run_portable.bat
-```
-
-The native Windows launcher creates `venv/` beside the `app/` folder,
-validates an existing environment, asks before recreating a broken one, and
-stores application data in `data/`. The portable Bash launcher provides the
-same flow on Linux and macOS. These portable launchers install core package
-dependencies; use the universal installer or manual instructions below to
-select optional features.
-
-> The repository does not include a native Windows equivalent of the
-> universal `install.sh`. Do not run `install.sh` from native Command Prompt
-> or PowerShell; use WSL2, the Windows portable launcher, or the manual
-> virtual-environment setup.
-
-### Updating
-
-Updates keep your settings and data and never replace a working install in
-place: the new version is built next to the current one, checked against your
-config, and switched in atomically after `~/.myclaw` is backed up. Any failure
-rolls back automatically.
-
-```bash
-zensynora update                  # latest version
+zensynora update                  # newest version from GitHub
 zensynora update status --check   # installed vs. latest
-zensynora update rollback         # previous version
+zensynora update rollback         # back to the previous version
+zensynora doctor --fix            # check everything, repair safe issues
 ```
 
-Installs older than 0.6.0 get the updater by re-running the online installer
-once. Details, layout and how to add migrations: [docs/UPDATING.md](docs/UPDATING.md).
-
-### Manual virtual-environment setup
-
-```bash
-# Clone and install with all optional features
-git clone https://github.com/adrianx26/zensynora.git
-cd zensynora
-
-# Install into a project-local virtual environment (required on Debian/Ubuntu)
-# If `venv` is unavailable on Debian/Ubuntu: sudo apt install python3-venv
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e ".[all,dev]"
-
-# Run the interactive onboarding wizard
-zensynora onboard
-
-# Start the interactive AI console (with readline support + tab-completion)
-zensynora agent
-
-# Start the Telegram/WhatsApp gateway
-zensynora gateway
-
-# Start the Web UI backend
-zensynora webui --port 8000
-
-# Run with worker pool tuning (configurable via env vars)
-MYCLAW_WORKER_POOL_SIZE=4 zensynora agent
-
-# Docker deployment (multi-stage build with healthchecks)
-docker compose up --build
-```
-
-On Windows PowerShell, create and activate the environment with
-`py -m venv .venv` and `.\.venv\Scripts\Activate.ps1`, then run the same
-`python -m pip install` command. Do not install into the OS-managed Python or
-use `--break-system-packages`; Debian/Ubuntu intentionally block system-wide
-pip installs (PEP 668). If `python3 -m venv` reports that `venv` or
-`ensurepip` is missing on Debian/Ubuntu, install `python3-venv` with apt and
-retry.
-
-For all 50+ configuration options, see the [Configuration](#configuration) section and [`.env.example`](.env.example).
-
----
-
-## Optional dependency posture
-
-Every advanced feature degrades gracefully when its package isn't installed (no crash, just a logged warning or a structured error response):
-
-```bash
-python -m pip install 'zensynora[tracing]'      # OpenTelemetry SDK + OTLP exporter
-python -m pip install 'zensynora[browser]'      # Playwright headless browser tools
-python -m pip install 'zensynora[prompts]'      # Jinja2 templates (else string.Template)
-python -m pip install 'zensynora[jsonschema]'   # JSON-schema validation (else Pydantic only)
-python -m pip install 'zensynora[qdrant]'       # Qdrant vector backend (else SQLite)
-python -m pip install 'zensynora[auth]'         # PyJWT[crypto] for OAuth/JWT
-python -m pip install 'zensynora[discord]'      # discord.py adapter
-python -m pip install 'zensynora[slack]'        # slack-bolt (adapter coming next)
-python -m pip install 'zensynora[all]'          # Everything above
-```
-
-Run these commands with the project virtual environment activated.
-
-| Feature | Optional package | Without it |
-|---|---|---|
-| Distributed tracing | `opentelemetry-sdk` | All `@traced` / `span()` are no-ops |
-| Headless browser | `playwright` | Tools return `{"ok": False, "error": ...}` |
-| Jinja2 templates | `jinja2` | Falls back to `string.Template` |
-| JSON-schema dicts | `jsonschema` | Pass Pydantic models instead |
-| Qdrant vector store | `qdrant-client` | Factory falls back to `SQLiteBackend` |
-| JWT verification | `PyJWT[crypto]` | First `.verify()` call raises `RuntimeError` |
-| Discord channel | `discord.py` | `DiscordChannel.run()` raises `RuntimeError` |
-
----
-
-## Architecture
-
-
-
-<p align="center">
-  <img src="diagrams/assets/readme-architecture.svg" alt="ZenSynora Architecture" width="100%" />
-</p>
-
-Detailed module map: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Visual flow: [`docs/architecture_diagram.md`](docs/architecture_diagram.md).
-
----
-
-## Run ZenSynora
-
-Python 3.11+ and at least one LLM provider (Ollama locally or cloud API
-credentials) are required. After installation, activate the environment if
-you used the traditional installer or manual setup: run
-`source venv/bin/activate` for `install.sh`, or
-`source .venv/bin/activate` for the manual `.venv` setup. The Windows portable
-launcher runs the application from its own environment.
-
-| Command | Description |
-|---|---|
-| `zensynora agent` | Interactive CLI chat |
-| `zensynora gateway` | Start Telegram / WhatsApp / Discord bots |
-| `zensynora webui` | Launch the browser dashboard |
-| `zensynora benchmark` | Test model latency and accuracy |
-
-### Portable (USB/External Drive)
-
-For the native Windows portable layout and setup command, follow the Windows
-steps in [Install using the included scripts](#install-using-the-included-scripts).
-For Linux/macOS, put the application source in `app/`, place
-`install_and_run_portable.sh` beside it, then run:
-
-```bash
-chmod +x install_and_run_portable.sh
-./install_and_run_portable.sh
-```
-
-The launcher creates and validates `venv/` next to `app/`, installs the core
-dependencies there, and keeps application data in `data/`. On Debian/Ubuntu,
-if virtual-environment support is missing, it offers to install
-`python3-venv`. If the existing portable environment is broken, it asks before
-recreating it.
-
-### Docker
-
-```bash
-cp .env.example .env
-# Edit .env with your API keys
-docker compose up -d --build
-```
-
----
-
-## Quick recipes
-
-### Structured output with auto-repair
-
-```python
-from pydantic import BaseModel
-from myclaw.agent import Agent
-
-class Issue(BaseModel):
-    title: str
-    severity: int  # 1-5
-
-agent = Agent(config)
-result = await agent.complete_structured(
-    messages=[{"role": "user", "content": "Summarize this bug as an Issue"}],
-    schema=Issue,
-    max_repair_attempts=2,
-)
-if result.ok:
-    issue: Issue = result.data
-    print(issue.title, issue.severity)
-```
-
-### Pluggable vector store
-
-```python
-from myclaw.vector import make_backend, VectorRecord
-
-backend = make_backend("qdrant", {
-    "collection": "my-docs", "url": "http://localhost:6333", "vector_size": 1536,
-})
-await backend.upsert([
-    VectorRecord(id="doc-1", vector=[...], metadata={"category": "design"}),
-])
-hits = await backend.search([...], limit=10, filter_metadata={"category": "design"})
-```
-
-### Plugin marketplace
-
-```python
-from myclaw.marketplace import (
-    MarketplaceClient, OpenClawSource, GitHubReleasesSource, LocalHubSource,
-)
-
-client = MarketplaceClient(
-    sources=[
-        OpenClawSource(api_key=os.environ["OPENCLAW_KEY"]),
-        GitHubReleasesSource("acme/acme-plugins"),
-        LocalHubSource(),
-    ],
-    hmac_secret=b"shared-secret",  # rejects unsigned manifests by default
-)
-results = await client.search("redis")
-path = await client.install("redis-cache", source_name="openclaw")
-```
-
-### Multi-tenant request handling
-
-```python
-from myclaw.tenancy import UserContext, async_user_scope
-from myclaw.memory import Memory
-
-async with async_user_scope(UserContext("alice", scopes={"kb.read"})):
-    mem = Memory()  # automatically resolves to memory_alice.db
-    await mem.add("user", "Hi")
-```
-
-### Eval harness
-
-```python
-from myclaw.evals import Evaluator, EvalCase, exact_match
-
-cases = [EvalCase(case_id=f"c{i}", input=q, expected={"em": a})
-         for i, (q, a) in enumerate(my_dataset)]
-
-ev = Evaluator(target=my_agent_call, metrics={"em": exact_match}, concurrency=4)
-report = await ev.run(cases)
-print(f"Score: {report.overall_score:.3f}, p95={report.latency_p95_ms:.0f}ms")
-```
-
-### Reliable scheduled jobs
-
-Opt-in retry, validation, budget, checkpointing, and sub-task spawn — all on the same `add_job()` call (see [`docs/scheduler_features_guide.md`](docs/scheduler_features_guide.md) for the full walkthrough):
-
-```python
-from myclaw.async_scheduler import AsyncScheduler
-from myclaw.scheduler_features import (
-    ComplexityAnalyzer, RetryPolicy, TaskBudget,
-    Chain, NotEmpty, JSONSchema, JobContext,
-)
-
-c = ComplexityAnalyzer.analyze("1. fetch CVEs  2. correlate  3. write report")
-
-scheduler.add_job(
-    run_security_audit, "interval", hours=6, id="sec-audit",
-    complexity=c,
-    budget=TaskBudget.from_complexity(c),       # 7. smart time budget
-    retry_policy=RetryPolicy(                    # 2. retry + fallback
-        max_attempts=3, backoff="exponential", base_delay=5.0,
-    ),
-    validator=Chain((                            # 1. output validation
-        NotEmpty(), JSONSchema(required_keys=("cves", "matches")),
-    )),
-    checkpoint_enabled=True,                     # 6. checkpoints + progress
-)
-
-# Inside the job:
-async def run_security_audit(ctx: JobContext = None):
-    ctx.progress("fetching", 1, 3)
-    cves = await fetch_cves()
-    ctx.progress("correlating", 2, 3, cve_count=len(cves))
-    if ctx.is_over_soft_budget():
-        return {"cves": cves, "matches": [], "partial": True}
-    matches = correlate(cves)
-    ctx.spawn_subtask(send_alerts, matches, sub_id="alerter")  # 5. sub-task spawn
-    ctx.progress("done", 3, 3)
-    return {"cves": cves, "matches": matches}
-```
-
-Or let the agent handle decomposition automatically:
-
-```python
-from myclaw.tools import auto_schedule
-
-auto_schedule(
-    "1. fetch CVEs\n2. correlate with installed packages\n3. write report",
-    delay=60, user_id="ops",
-)
-# 📊 Complexity: 0.71 (complex, multi-step, explicit-list, decomposition-recommended)
-#    Estimated: 6 tool calls · ~52s · 3 step(s)
-# 🪓 Auto-split into 3 sub-task(s):
-#    • auto_ops_…_sub0: fetch CVEs
-#    • auto_ops_…_sub1: correlate with installed packages
-#    • auto_ops_…_sub2: write report
-```
-
----
-
-## Built-in tools
-
-| Tool | Description |
-|---|---|
-| `read_file` / `write_file` / `download_file` | Filesystem operations |
-| `shell` | Sandboxed command execution (allow-list + newline-injection blocked) |
-| `hardware` | CPU/GPU/NPU telemetry |
-| `search_knowledge` / `write_to_knowledge` / `sync_knowledge_base` | Knowledge base management |
-| `delegate` / `swarm_create` / `swarm_assign` | Multi-agent collaboration |
-| `schedule` / `list_schedules` / `cancel_schedule` | Task scheduling |
-| `nlp_schedule` | Natural-language scheduling ("in 5 minutes", "every Monday at 9pm") |
-| `auto_schedule` / `estimate_complexity` | Pre-flight complexity scoring + automatic decomposition into sub-tasks |
-| `get_checkpoint` / `list_checkpoints` / `clear_checkpoint` | Inspect persisted progress for jobs that opted into `checkpoint_enabled` |
-| `browse` | Static web fetch with Wayback Machine fallback |
-| `browser_navigate` / `browser_screenshot` / `browser_fill_form` / `browser_extract_text` / `browser_wait_for` | Headless browser (Playwright) |
-
-See [`docs/agent_catalog.md`](docs/agent_catalog.md) for the 137-agent registry. Add a new agent by editing [`myclaw/agents/data/agents.yaml`](myclaw/agents/data/agents.yaml).
-
----
-
-## Agent swarms
-
-```python
-from myclaw.swarm import SwarmConfig, SwarmStrategy
-
-swarm = SwarmConfig(
-    name="api-development-team",
-    strategy=SwarmStrategy.HIERARCHICAL,
-    workers=["api-designer", "backend-developer", "code-reviewer"],
-    coordinator="fullstack-developer",
-)
-```
-
-Strategies:
-- **Sequential** — pipeline workflows (Draft → Edit → Publish)
-- **Parallel** — multi-perspective brainstorming
-- **Voting** — consensus-driven decisions
-- **Hierarchical** — coordinator + specialized workers
-
-For distributed swarms across processes, use [`myclaw/messaging/`](myclaw/messaging/) — `AgentMessage` + `InProcessBroker` (or roll your own broker against the abstract base).
-
----
+Updates never overwrite a working install. The new version is built next to
+the current one, checked against **your** configuration, and switched in
+atomically after `~/.myclaw` is backed up; any failure rolls back
+automatically. Details: [docs/UPDATING.md](docs/UPDATING.md).
+
+The doctor checks packages and provider libraries, your settings, the model
+server and model, databases, permissions, code integrity and recent errors —
+also available as the **Doctor** page in the web UI.
+Details: [docs/medic_agent_guide.md](docs/medic_agent_guide.md).
+
+![Doctor page](docs/images/webui-doctor.png)
 
 ## Configuration
 
-ZenSynora is configured via `~/.myclaw/config.yaml` or environment variables.
+The easiest way is **Web UI → Settings** (model, providers and API keys,
+agents, channels, features, security). Everything is stored in
+`~/.myclaw/config.json`; API keys are never sent back to the browser, and
+settings are only reachable from the same computer unless you set an admin
+API key.
 
-Common operator knobs (full list: [`myclaw/defaults.py`](myclaw/defaults.py) — every constant has a parallel `MYCLAW_*` env var):
-
-```bash
-# Provider defaults
-MYCLAW_DEFAULT_PROVIDER=ollama
-MYCLAW_DEFAULT_MODEL=llama3.2
-MYCLAW_OPENAI_API_KEY=sk-...
-
-# Channel tokens
-MYCLAW_TELEGRAM_TOKEN=...
-MYCLAW_DISCORD_BOT_TOKEN=...
-
-# Tracing
-ZENSYNORA_TRACING_ENABLED=true
-OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317
-
-# Resilience
-MYCLAW_PROVIDER_CB_FAILURE_THRESHOLD=5
-MYCLAW_PROVIDER_CB_RESET_TIMEOUT=60.0
-
-# Performance
-MYCLAW_KB_SEARCH_WORKERS=8
-MYCLAW_HTTP_TIMEOUT=60
-
-# Privacy
-MYCLAW_LOG_SCRUB_PII=true
-```
-
-See [`.env.example`](.env.example) for all 50+ configurable variables.
-
----
-
-## Project structure
-
-```
-zensynora/
-├── myclaw/                     # Core Python package
-│   ├── agent.py                # Agent class (think, complete_structured, stream_think)
-│   ├── aiohttp_session.py       # Shared aiohttp.ClientSession singleton (connection pooling)
-│   ├── agent_internals/         # Phase helpers — free fns + classes (ResponseHandler)
-│   ├── agents/                 # Specialized agents
-│   │   ├── data/agents.yaml    # 137 agent definitions (canonical source)
-│   │   └── registry.py         # YAML loader + embedded literal fallback
-│   ├── auth/                   # JWT + OAuth2 callback (PKCE)
-│   ├── caching/                # BaseTTLCache + PersistentCacheMixin
-│   ├── channels/               # Telegram / WhatsApp / Discord adapters
-│   ├── cost_tracker.py         # SQLite cost accumulator + dashboard queries
-│   ├── defaults.py             # Single source of truth for tunable constants
-│   ├── evals/                  # Dataset-driven eval harness
-│   ├── knowledge/              # KB DB, graph, path reasoning, batched reads
-│   ├── logging_config.py       # Structured logger + PII scrubber
-│   ├── marketplace/            # Plugin marketplace (OpenClaw / GH / HTTP / Local)
-│   ├── memory.py               # Per-tenant SQLite memory (UserContext-aware)
-│   ├── messaging/              # Inter-agent envelope + broker
-│   ├── observability/          # OpenTelemetry tracing
-│   ├── prompts/                # Versioned Jinja2 prompt registry
-│   ├── provider.py             # LLM provider abstraction + Message TypedDict
-│   ├── resilience/             # Circuit breaker + fallback chain
-│   ├── structured_output/      # extract_json / validate / repair_json
-│   ├── swarm/                  # Multi-agent orchestrator
-│   ├── tenancy/                # UserContext + scoping helpers
-│   ├── tools/                  # Tool system (incl. Playwright browser)
-│   ├── vector/                 # Pluggable backends: memory / sqlite / qdrant
-│   └── ...                     # mcp/, backends/, etc.
-├── webui/                      # FastAPI + React dashboard
-│   └── src/components/
-│       ├── CostDashboard.tsx   # Sprint 3
-│       └── TypewriterText.tsx  # Sprint 11
-├── docs/
-│   ├── ARCHITECTURE.md         # Module map + request lifecycle
-│   ├── SPRINTS_SUMMARY.md      # Condensed per-sprint narrative
-│   ├── SECURITY_FIXES_2026_04_29.md
-│   └── dev/DECOMPOSITION_PLAN.md
-├── tests/                      # 415 tests across all sprint modules
-├── pyproject.toml
-└── README.md                   # this file
-```
-
----
-
-## Testing
-
-```bash
-# All tests for the new modules (415 passing)
-pytest tests/test_resilience.py tests/test_observability.py tests/test_registry.py \
-       tests/test_prompts.py tests/test_structured_output.py tests/test_cost_tracker.py \
-       tests/test_vector_backends.py tests/test_agent_internals.py tests/test_auth.py \
-       tests/test_tenancy.py tests/test_tenancy_scoping.py tests/test_discord_channel.py \
-       tests/test_evals.py tests/test_messaging.py tests/test_sprint8_perf_quality.py \
-       tests/test_marketplace.py tests/test_agent_classes.py \
-       tests/test_sprint10_integrations.py tests/test_caching_base.py \
-       tests/test_registry_yaml.py
-```
-
-Per-module test counts in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The full sprint narrative is in [`docs/SPRINTS_SUMMARY.md`](docs/SPRINTS_SUMMARY.md).
-
----
-
-## Roadmap
-
-| Phase | Status | Description |
+| Provider | Setting | Notes |
 |---|---|---|
-| v0.4.1 → 0.5.x | ✅ | Security audit, perf overhaul, observability, resilience, marketplace, decomposition, multi-tenancy |
-| Open | 🔄 | Slack channel adapter, LoRA adapter loader, agent_internals explicit DI |
-| Future | ⏳ | Enterprise RBAC, multi-tenant audit log row filters, advanced analytics |
+| llama.cpp | `llamacpp`, `http://localhost:8080/v1` | start with `--jinja` for tools |
+| Ollama | `ollama`, `http://localhost:11434` | the model must be pulled |
+| LM Studio | `lmstudio`, `http://localhost:1234/v1` | |
+| OpenAI · Groq · OpenRouter | API key | OpenAI-compatible |
+| Anthropic · Gemini | API key | install `anthropic` / `google-generativeai` |
 
-See [`CHANGELOG.md`](CHANGELOG.md) for the full release history and [`docs/SPRINTS_SUMMARY.md`](docs/SPRINTS_SUMMARY.md) for a condensed overview.
-
----
-
-## Contributing
-
-Contributions are welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for setup, coding standards, testing guide, and commit conventions.
+Environment variables override the file — useful for Docker and services:
 
 ```bash
-# Install dev dependencies
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
-pre-commit install
-
-# Run tests
-pytest
-
-# Lint & format
-ruff check . --fix
-ruff format .
+MYCLAW_DEFAULT_PROVIDER=llamacpp
+MYCLAW_DEFAULT_MODEL=qwen2.5-7b-instruct
+MYCLAW_LLAMACPP_BASE_URL=http://localhost:8080/v1
+MYCLAW_OPENAI_API_KEY=sk-...
+MYCLAW_TELEGRAM_TOKEN=...
+MYCLAW_LOG_FILE=off                 # disable ~/.myclaw/logs/zensynora.log
 ```
 
-**Adding a new agent:** edit [`myclaw/agents/data/agents.yaml`](myclaw/agents/data/agents.yaml). The sync-invariant test will tell you if the embedded literal is now out of date.
+All supported variables are listed in [.env.example](.env.example).
+Model advice per hardware: [docs/llm_recommendations.md](docs/llm_recommendations.md).
 
-**Adding a new vector backend:** subclass `VectorBackend` in [`myclaw/vector/`](myclaw/vector/), then teach `factory.make_backend` about its name.
+## Architecture
 
-**Adding a new marketplace source:** subclass `MarketplaceSource` in [`myclaw/marketplace/sources.py`](myclaw/marketplace/sources.py); the existing `MarketplaceClient` aggregates without changes.
+```mermaid
+flowchart LR
+    ui["Web UI · terminal · Telegram · WhatsApp · MCP"] --> agent["Agents<br/>router · context · tools"]
+    agent --> llm["LLM providers<br/>local or cloud"]
+    agent --> tools["95 tools<br/>sandboxed"]
+    agent <--> state[("~/.myclaw<br/>memory · knowledge · config")]
+    ops["doctor · updater"] -.-> agent & state
+```
 
----
+| Area | Where |
+|---|---|
+| Agents and the request pipeline | `myclaw/agent.py`, `myclaw/agent_internals/` |
+| LLM providers, fallback, circuit breaker | `myclaw/provider.py`, `myclaw/offline.py`, `myclaw/resilience/` |
+| Tools | `myclaw/tools/` |
+| Memory and knowledge | `myclaw/memory.py`, `myclaw/knowledge/` |
+| Swarms and agent profiles | `myclaw/swarm/`, `myclaw/agents/data/agents.yaml` |
+| Web UI backend / front end | `myclaw/web/`, `webui/` |
+| Doctor and medic | `myclaw/doctor/`, `myclaw/agents/medic_agent.py` |
+| Safe updater | `updater/`, `update.sh` |
+
+Diagrams of every major flow: [docs/architecture_diagram.md](docs/architecture_diagram.md) ·
+module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Other ways to run
+
+- **Docker:** `bash install.sh --docker` (Compose profiles: `default`, `full`, `redis`, `ollama`).
+  Data lives in `./data`; the image is built with your user ID so it stays writable.
+- **Portable (USB drive):** `install_and_run_portable.sh` / `.bat` keep code
+  (in `app/` or next to the script), venv and data (`data/.myclaw`) together on the drive.
+- **Manual venv:** `python3 -m venv venv && venv/bin/pip install -r requirements.txt -e .`
+
+## Development
+
+```bash
+git clone https://github.com/adrianx26/zensynora.git && cd zensynora
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+pytest -q -o addopts=""        # 488 tests
+ruff check .
+```
+
+Where to add a tool, a health check, a data migration or a web page:
+[CONTRIBUTING.md](CONTRIBUTING.md). Release notes: [CHANGELOG.md](CHANGELOG.md).
+All documentation: [docs/README.md](docs/README.md).
 
 ## License
 
-Distributed under **AGPL-3.0**. Dual-licensing available for commercial use. See [`LICENSE`](LICENSE).
-
-**Developed by Adrian Petrescu** · [GitHub](https://github.com/adrianx26)
+AGPL-3.0 — see [LICENSE](LICENSE). Commercial licensing is available on request.
+Created by **Adrian Petrescu** · [github.com/adrianx26](https://github.com/adrianx26)

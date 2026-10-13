@@ -3,17 +3,20 @@ import './index.css';
 import TypewriterText from './components/TypewriterText';
 import SettingsView from './components/SettingsView';
 import ToolsView from './components/ToolsView';
+import DoctorView from './components/DoctorView';
 import CostDashboard from './components/CostDashboard';
 import { api, getApiBase, getWsBase, getAdminKey, type SystemHealth } from './api';
 
-type View = 'chat' | 'settings' | 'costs' | 'tools';
+type View = 'chat' | 'settings' | 'costs' | 'tools' | 'doctor';
 const VIEW_KEY = 'zensynora_view';
-const VIEW_TITLES: Record<View, string> = { chat: 'Chat', settings: 'Settings', costs: 'Costs & usage', tools: 'Tools' };
+const VIEW_TITLES: Record<View, string> = {
+  chat: 'Chat', settings: 'Settings', costs: 'Costs & usage', tools: 'Tools', doctor: 'Doctor',
+};
 
 function getSavedView(): View {
   try {
     const v = localStorage.getItem(VIEW_KEY);
-    if (v === 'chat' || v === 'settings' || v === 'costs' || v === 'tools') return v;
+    if (v === 'chat' || v === 'settings' || v === 'costs' || v === 'tools' || v === 'doctor') return v;
   } catch { /* ignore */ }
   return 'chat';
 }
@@ -404,6 +407,7 @@ function App() {
             <NavButton id="settings" icon="⚙️" label="Settings" />
             <NavButton id="costs" icon="📊" label="Costs & usage" />
             <NavButton id="tools" icon="🧰" label="Tools" />
+            <NavButton id="doctor" icon="🩺" label="Doctor" />
           </nav>
         </div>
 
@@ -441,6 +445,7 @@ function App() {
                 value={[health.channels.telegram && 'Telegram', health.channels.whatsapp && 'WhatsApp'].filter(Boolean).join(', ') || 'none'}
                 state={health.channels.telegram || health.channels.whatsapp ? 'ok' : 'off'}
               />
+              <button className="link-btn" onClick={() => { setView('doctor'); setSidebarOpen(false); }}>Full diagnostics →</button>
               {!health.config_file_exists && (
                 <div className="health-note">Not configured yet — open Settings to pick a model.</div>
               )}
@@ -545,6 +550,7 @@ function App() {
 
           {view === 'settings' && <SettingsView onSaved={onSettingsSaved} />}
           {view === 'tools' && <ToolsView />}
+          {view === 'doctor' && <DoctorView />}
           {view === 'costs' && (
             <div className="settings-view">
               <div className="settings-body">

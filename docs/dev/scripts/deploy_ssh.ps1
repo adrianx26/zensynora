@@ -6,7 +6,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ── Config ────────────────────────────────────────────────────────────────────
-$REMOTE_HOST = "192.168.8.110"
+$REMOTE_HOST = $(if ($env:ZENSYNORA_DEPLOY_HOST) { $env:ZENSYNORA_DEPLOY_HOST } else { Read-Host "Target host" })
 $REMOTE_USER = "adi"
 $REMOTE_DIR  = "/home/adi/zensynora"
 $LOCAL_DIR   = $PSScriptRoot   # directory containing this script

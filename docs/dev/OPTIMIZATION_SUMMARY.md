@@ -1,5 +1,7 @@
 # Zensynora/MyClaw Optimization Summary
 
+> **Developer notes — status as of 2026-10-13 (v0.7.0).** Working plan/report written during development; it may describe planned or superseded work. For current behaviour see [docs/README.md](../README.md).
+
 **Date:** 2026-04-06  
 **Status:** ✅ All 21 Optimizations Completed (100%)  
 **Documentation Version:** 2.0
@@ -268,7 +270,7 @@ Future enhancements that could build on these optimizations:
 
 - [CODE_OPTIMIZATION_PROPOSAL.md](CODE_OPTIMIZATION_PROPOSAL.md) - Detailed technical implementation
 - [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) - Project roadmap with Phase 5
-- [docs/architecture_with_optimizations.md](../architecture_with_optimizations.md) - Architecture diagrams
+- [docs/architecture_with_optimizations.md](../archive/architecture_with_optimizations.md) - Architecture diagrams
 - [CHANGELOG.md](../../CHANGELOG.md) - Change history
 - [CLAUDE.md](CLAUDE.md) - Development workflow
 

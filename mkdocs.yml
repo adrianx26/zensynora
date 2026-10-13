@@ -1,22 +1,39 @@
 site_name: ZenSynora Documentation
 site_url: https://adrianx26.github.io/zensynora
 repo_url: https://github.com/adrianx26/zensynora
+# Navigation rebuilt for v0.7.0 — the previous nav pointed at index.md,
+# api.md and usage.md, which did not exist, so the docs site could not build.
 nav:
-  - Home: index.md
-  - API: api.md
-  - Architecture: architecture_with_optimizations.md
-  - Usage: usage.md
+  - Home: README.md
+  - Using ZenSynora:
+      - Updating: UPDATING.md
+      - Medic & Doctor: medic_agent_guide.md
+      - Choosing an LLM: llm_recommendations.md
+      - Agent catalog: agent_catalog.md
+      - Agent swarms: agent_swarm_guide.md
+      - Scheduler features: scheduler_features_guide.md
+      - Task timer: TASK_TIMER_INTEGRATION.md
+      - Execution backends: backends_guide.md
+      - Web scraping: scrapling_agent_guide.md
+      - External skills: skill_adapter_guide.md
+      - NewTech agent: newtech_agent_guide.md
+  - How it works:
+      - Visual guide: architecture_diagram.md
+      - Reference: ARCHITECTURE.md
+      - Medic change management: MEDIC_CHANGE_MGMT.md
+  - History:
+      - Archive: archive/README.md
+      - Developer notes: dev/README.md
 theme:
   name: material
 plugins:
   - search
-  - mkdocstrings:
-      handlers:
-        python:
-          setup_commands:
-            - import sys; sys.path.append('.')
 markdown_extensions:
   - admonition
-  - codehilite
   - toc:
       permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format

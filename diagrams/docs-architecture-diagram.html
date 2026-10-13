@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>ZenSynora Architecture Diagram</title>
+<title>ZenSynora Architecture — Visual Guide</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -14,9 +14,9 @@
 <a class="back-link" href="index.html">← All diagrams</a>
 <div class="header">
   <span class="dot"></span>
-  <h1 class="title">ZenSynora Architecture Diagram</h1>
+  <h1 class="title">ZenSynora Architecture — Visual Guide</h1>
 </div>
-<p class="subtitle">13 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
+<p class="subtitle">11 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
 <div class="legend">
   <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
   <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
@@ -24,283 +24,281 @@
   <div class="legend-item"><span class="legend-swatch database"></span>Database / Storage</div>
 </div>
 <div class="diagram-card">
-  <h2 class="diagram-title">System Overview</h2>
-  
+  <h2 class="diagram-title">1. System context</h2>
+  <p class="diagram-desc">Who talks to ZenSynora, and what ZenSynora talks to.</p>
+  <div class="mermaid">flowchart LR
+    user([&quot;You&quot;])
+    subgraph entry[&quot;Entry points&quot;]
+        webui[&quot;Web UI&lt;br/&gt;browser · port 8000&quot;]
+        cli[&quot;Terminal&lt;br/&gt;zensynora agent&quot;]
+        tg[&quot;Telegram bot&quot;]
+        wa[&quot;WhatsApp Cloud&quot;]
+        mcpc[&quot;MCP clients&lt;br/&gt;zensynora mcp-server&quot;]
+    end
+    core[&quot;ZenSynora core&lt;br/&gt;agents · tools · memory · knowledge&quot;]
+    subgraph llm[&quot;LLM providers&quot;]
+        local[&quot;Local: llama.cpp · Ollama · LM Studio&quot;]
+        cloud[&quot;Cloud: OpenAI · Anthropic · Gemini · Groq · OpenRouter&quot;]
+    end
+    subgraph ext[&quot;Outside services (optional)&quot;]
+        web[&quot;Web pages / search&quot;]
+        mcps[&quot;External MCP servers&quot;]
+        vt[&quot;VirusTotal&quot;]
+        gh[&quot;GitHub (updates, file recovery)&quot;]
+    end
+    disk[(&quot;~/.myclaw&lt;br/&gt;config · databases · knowledge&quot;)]
+
+    user --&gt; webui &amp; cli &amp; tg &amp; wa
+    mcpc --&gt; core
+    webui &amp; cli &amp; tg &amp; wa --&gt; core
+    core --&gt; local &amp; cloud
+    core --&gt; web &amp; mcps &amp; vt &amp; gh
+    core &lt;--&gt; disk</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">2. Component map</h2>
+  <p class="diagram-desc">The main packages under `myclaw/`, grouped by layer. Arrows point from a layer to the layer it uses.</p>
   <div class="mermaid">flowchart TB
-    subgraph Gateway [&quot;GATEWAY (gateway.py)&quot;]
+    subgraph L1[&quot;Interfaces&quot;]
         direction LR
-        TG[&quot;Telegram Bot&quot;]
-        WA[&quot;WhatsApp Cloud&quot;]
-        CLI[&quot;CLI / Console Chat&quot;]
+        cli2[&quot;cli.py&lt;br/&gt;click commands&quot;]
+        webapi[&quot;web/api.py + web/settings_api.py&lt;br/&gt;Web UI backend · WebSocket chat&quot;]
+        gw[&quot;gateway.py&lt;br/&gt;Telegram / WhatsApp / console&quot;]
+        channels[&quot;channels/&lt;br/&gt;telegram · whatsapp · discord&quot;]
+        mcpsrv[&quot;mcp/server.py&lt;br/&gt;tools over MCP (stdio)&quot;]
+        apisrv[&quot;api_server.py&lt;br/&gt;REST API library (/api/v1)&quot;]
     end
 
-    Gateway --&gt; AgentRouter
-
-    subgraph AgentSystem [&quot;AGENT SYSTEM&quot;]
-        direction TB
-        AgentRouter{Agent Router}
-        Agent[&quot;Agent (agent.py)&quot;]
-        Swarm[&quot;Agent Swarms (swarm/)&quot;]
-    end
-
-    AgentSystem --&gt; Tools
-
-    subgraph Tools [&quot;TOOLS (myclaw/tools/)&quot;]
-        direction TB
-        T_Core[&quot;core.py&quot;]
-        T_Shell[&quot;shell.py&quot;]
-        T_Files[&quot;files.py&quot;]
-        T_Web[&quot;web.py&quot;]
-        T_KB[&quot;kb.py&quot;]
-        T_Sched[&quot;scheduler.py&quot;]
-        T_Swarm[&quot;swarm.py&quot;]
-        T_Toolbox[&quot;toolbox.py&quot;]
-    end
-
-    Tools --&gt; Storage
-
-    subgraph Storage [&quot;PERSISTENCE &amp; STORAGE&quot;]
+    subgraph L2[&quot;Agents&quot;]
         direction LR
-        Memory[&quot;MEMORY (memory.py)&quot;]
-        Knowledge[&quot;KNOWLEDGE (knowledge/)&quot;]
-        Toolbox[&quot;TOOLBOX (~/.myclaw/)&quot;]
-        State[&quot;STATE STORE (state_store.py)&quot;]
-        AsyncSched[&quot;ASYNC SCHEDULER (async_scheduler.py)&quot;]
+        agent[&quot;agent.py&lt;br/&gt;Agent: think · stream_think&quot;]
+        internals[&quot;agent_internals/&lt;br/&gt;router · context_builder · tool_executor&quot;]
+        swarm[&quot;swarm/&lt;br/&gt;orchestrator · strategies&quot;]
+        registry[&quot;agents/registry.py&lt;br/&gt;agents.yaml profiles&quot;]
+        special[&quot;agents/&lt;br/&gt;medic · newtech · skill_adapter&quot;]
+    end
+
+    subgraph L3[&quot;Capabilities&quot;]
+        direction LR
+        tools[&quot;tools/&lt;br/&gt;shell · files · web · browser · kb · scheduler · swarm · toolbox&quot;]
+        provider[&quot;provider.py&lt;br/&gt;8 LLM providers&quot;]
+        resilience[&quot;resilience/ + offline.py&lt;br/&gt;circuit breaker · offline fallback&quot;]
+        prompts[&quot;prompts/ · structured_output/&quot;]
+        sandbox[&quot;sandbox.py · worker_pool.py · backends/&quot;]
+    end
+
+    subgraph L4[&quot;State&quot;]
+        direction LR
+        memory[&quot;memory.py&lt;br/&gt;conversation history (aiosqlite pool)&quot;]
+        knowledge[&quot;knowledge/&lt;br/&gt;notes · FTS5 · graph&quot;]
+        cache[&quot;semantic_cache.py · caching/&quot;]
+        vector[&quot;vector/&lt;br/&gt;sqlite · qdrant · memory&quot;]
+        config[&quot;config.py&lt;br/&gt;pydantic · hot reload&quot;]
+        stats[&quot;cost_tracker.py · metering.py · audit_log.py&quot;]
+    end
+
+    subgraph L5[&quot;Operations&quot;]
+        direction LR
+        doctor[&quot;doctor/&lt;br/&gt;health checks · integrity&quot;]
+        updater[&quot;updater/ (repo root)&lt;br/&gt;safe updates · migrations&quot;]
+        obs[&quot;observability/ · metrics.py · logging_config.py&quot;]
+    end
+
+    L1 --&gt; L2 --&gt; L3 --&gt; L4
+    L5 -.-&gt; L1 &amp; L2 &amp; L3 &amp; L4</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">3. A chat message, end to end</h2>
+  <p class="diagram-desc">What happens when you type in the Web UI (Telegram and the terminal follow the same path from `Agent` onwards).</p>
+  <div class="mermaid">sequenceDiagram
+    autonumber
+    actor U as You
+    participant UI as Web UI (React)
+    participant WS as web/api.py&lt;br/&gt;WebSocket /ws/chat/{agent}
+    participant A as Agent.stream_think
+    participant R as router + medic loop guard
+    participant C as context_builder
+    participant M as memory.py
+    participant K as knowledge/
+    participant P as provider.py
+    participant T as tools/
+
+    U-&gt;&gt;UI: type a message
+    UI-&gt;&gt;WS: send text
+    WS-&gt;&gt;WS: quota + optional MFA check
+    WS-&gt;&gt;A: stream_think(text, user=&quot;webui&quot;)
+    A-&gt;&gt;R: start task timer, depth + loop limits
+    A-&gt;&gt;M: add(user message)
+    A-&gt;&gt;C: build context
+    C-&gt;&gt;M: get_history() (flushes buffered turns)
+    C-&gt;&gt;K: search notes for relevant knowledge
+    C--&gt;&gt;A: system prompt + history + knowledge
+    A-&gt;&gt;P: chat(messages, stream=True)
+    P--&gt;&gt;A: token stream (+ tool calls)
+    A--&gt;&gt;WS: tokens
+    WS--&gt;&gt;UI: __STREAM_START__ … tokens … __STREAM_END__
+    opt the model asked for tools
+        A-&gt;&gt;T: execute (parallel when independent)
+        T--&gt;&gt;A: results
+        A-&gt;&gt;P: chat again with tool results
+        P--&gt;&gt;A: final answer stream
+        A--&gt;&gt;WS: tokens
+    end
+    A-&gt;&gt;M: add(assistant reply)
+    UI--&gt;&gt;U: rendered reply</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">4. Provider selection and fallback</h2>
+  <p class="diagram-desc">How a request reaches a model, and what happens when that fails. Changed in 0.5.0: the agent never silently switches to another provider.</p>
+  <div class="mermaid">flowchart TD
+    start([&quot;Agent needs a reply&quot;]) --&gt; pick[&quot;Provider = agent&#x27;s own, else agents.defaults.provider&quot;]
+    pick --&gt; init{&quot;Provider can start?&lt;br/&gt;(SDK installed, API key set)&quot;}
+    init -- no --&gt; err[&quot;ProviderUnavailableError&lt;br/&gt;clear message shown in chat&quot;]
+    init -- yes --&gt; breaker{&quot;Circuit breaker&lt;br/&gt;open?&quot;}
+    breaker -- closed --&gt; llmcall[&quot;provider.chat()&quot;]
+    llmcall -- ok --&gt; replied([&quot;Stream reply&quot;])
+    llmcall -- &quot;server rejects tool list&lt;br/&gt;(llama.cpp without --jinja)&quot; --&gt; notools[&quot;Retry once without tools&lt;br/&gt;remember for next calls&quot;]
+    notools --&gt; replied
+    llmcall -- &quot;connection error&quot; --&gt; offline{&quot;intelligence.offline_mode?&quot;}
+    breaker -- open --&gt; offline
+    offline -- no --&gt; fail([&quot;Error shown in chat&quot;])
+    offline -- yes --&gt; fb[&quot;Try local providers in order&lt;br/&gt;Ollama → LM Studio → llama.cpp&lt;br/&gt;(skipping the one that just failed)&quot;]
+    fb -- ok --&gt; replied
+    fb -- none reachable --&gt; fail</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">5. Tool execution</h2>
+  
+  <div class="mermaid">flowchart LR
+    llm[&quot;Model returns tool calls&quot;] --&gt; exec[&quot;agent_internals/tool_executor.py&quot;]
+    exec --&gt; indep{&quot;Independent&lt;br/&gt;of each other?&quot;}
+    indep -- yes --&gt; par[&quot;Run in parallel&quot;]
+    indep -- no --&gt; seq[&quot;Run in order&quot;]
+    par &amp; seq --&gt; hooks[&quot;pre/post hooks&lt;br/&gt;tools/core.py&quot;]
+    hooks --&gt; kind{&quot;Tool type&quot;}
+    kind -- shell --&gt; allow[&quot;Allow-list + blocked commands&lt;br/&gt;tools/shell.py&quot;]
+    kind -- generated / external skill --&gt; sb[&quot;Sandbox&lt;br/&gt;sandbox.py · worker_pool.py&quot;]
+    kind -- web / browser --&gt; ssrf[&quot;URL safety checks&lt;br/&gt;tools/web.py · tools/browser.py&quot;]
+    kind -- other --&gt; direct[&quot;Run function&quot;]
+    allow &amp; sb &amp; ssrf &amp; direct --&gt; audit[&quot;audit_log.py · metrics&quot;]
+    audit --&gt; back[&quot;Results back to the model&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">6. Swarms</h2>
+  <p class="diagram-desc">A swarm splits one task across several agents (`swarm/orchestrator.py`).</p>
+  <div class="mermaid">flowchart LR
+    task([&quot;Task&quot;]) --&gt; orch[&quot;SwarmOrchestrator&quot;]
+    orch --&gt; strat{&quot;Strategy&quot;}
+    strat --&gt; p[&quot;Parallel&lt;br/&gt;all agents at once&quot;]
+    strat --&gt; s[&quot;Sequential&lt;br/&gt;each builds on the last&quot;]
+    strat --&gt; h[&quot;Hierarchical&lt;br/&gt;coordinator delegates&quot;]
+    strat --&gt; v[&quot;Voting&lt;br/&gt;agents vote on answers&quot;]
+    p &amp; s &amp; h &amp; v --&gt; agg[&quot;Aggregation&lt;br/&gt;synthesis · best · concatenate&quot;]
+    agg --&gt; store[(&quot;swarm/storage.py&lt;br/&gt;SQLite&quot;)]
+    agg --&gt; result([&quot;Result&quot;])</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">7. Settings from the Web UI</h2>
+  <p class="diagram-desc">Added in 0.5.0 (`web/settings_api.py`).</p>
+  <div class="mermaid">sequenceDiagram
+    actor U as You
+    participant S as Settings page
+    participant API as /api/settings
+    participant G as access guard
+    participant F as ~/.myclaw/config.json
+    participant R as agent registry
+
+    U-&gt;&gt;S: change model / keys / agents
+    S-&gt;&gt;API: PUT {changes, clear_secrets}
+    API-&gt;&gt;G: from localhost, or X-API-Key = admin key?
+    G--&gt;&gt;API: allowed
+    API-&gt;&gt;API: validate against AppConfig schema&lt;br/&gt;(empty secret = keep stored value)
+    API-&gt;&gt;F: save (encrypted if a key exists)
+    API-&gt;&gt;R: rebuild agents, clear provider cache
+    API--&gt;&gt;S: saved (+ which changes need a restart)
+    Note over S,API: GET never returns secrets — only which ones are set</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">8. Where data lives</h2>
+  <p class="diagram-desc">Everything personal is under `~/.myclaw`, shared by every installed version.</p>
+  <div class="mermaid">flowchart TB
+    subgraph data[&quot;~/.myclaw&quot;]
+        direction TB
+        cfgf[&quot;config.json · .config_key&lt;br/&gt;settings + API keys (mode 600)&quot;]
+        mem[&quot;memory_&amp;lt;user&amp;gt;.db&lt;br/&gt;conversation history&quot;]
+        kdb[&quot;knowledge/ + knowledge_&amp;lt;user&amp;gt;.db&lt;br/&gt;Markdown notes + FTS5 index&quot;]
+        tlb[&quot;tools/ · skills/ · plugins/ · hub/&lt;br/&gt;generated tools and installed skills&quot;]
+        misc[&quot;cost · metering · audit · swarm · state DBs&quot;]
+        med[&quot;medic/&lt;br/&gt;integrity baseline · file backups · task log&quot;]
+        logs[&quot;logs/zensynora.log&lt;br/&gt;rotating JSON log (since 0.7.0)&quot;]
+        mig[&quot;.migrations.json&lt;br/&gt;applied data migrations&quot;]
+    end
+    app[&quot;ZenSynora (any version)&quot;] &lt;--&gt; data
+    upd[&quot;updater&quot;] -- &quot;backup before every update&quot; --&gt; data
+    doc[&quot;doctor / medic&quot;] -- &quot;reads + safe fixes&quot; --&gt; data</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">9. Safe updates</h2>
+  <p class="diagram-desc">`zensynora update` (`updater/`, added in 0.6.0). Steps 1–9 never touch the running version; any failure undoes the completed steps in reverse order.</p>
+  <div class="mermaid">flowchart TD
+    s1[&quot;1 Preflight&lt;br/&gt;Python, disk space, service state&quot;] --&gt; s2[&quot;2 Fetch&lt;br/&gt;GitHub, folder or archive&quot;]
+    s2 --&gt; s3[&quot;3 Hand-off&lt;br/&gt;newer updater takes over&quot;]
+    s3 --&gt; s4[&quot;4 Back up ~/.myclaw + .env&quot;]
+    s4 --&gt; s5[&quot;5 Carry over .env, data/&quot;]
+    s5 --&gt; s6[&quot;6 Build side by side&lt;br/&gt;venv · packages · extras · Web UI&quot;]
+    s6 --&gt; s7[&quot;7 Verify&lt;br/&gt;imports new code, loads YOUR config&quot;]
+    s7 --&gt; s8[&quot;8 Stop service&quot;]
+    s8 --&gt; s9[&quot;9 Data migrations&quot;]
+    s9 --&gt; s10[&quot;10 Activate&lt;br/&gt;atomic symlink switch&quot;]
+    s10 --&gt; s11[&quot;11 Start service, confirm up&quot;]
+    s11 --&gt; s12([&quot;12 Record, prune old releases&quot;])
+
+    s2 &amp; s6 &amp; s7 &amp; s9 &amp; s10 &amp; s11 -. &quot;failure&quot; .-&gt; rb[&quot;Roll back&lt;br/&gt;old version stays active,&lt;br/&gt;data restored if migrated&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">10. Doctor and medic</h2>
+  <p class="diagram-desc">`zensynora doctor`, the Web UI **Doctor** page and the medic agent&#x27;s tools share one set of checks (`myclaw/doctor/`, rewritten in 0.7.0).</p>
+  <div class="mermaid">flowchart LR
+    subgraph callers[&quot;Callers&quot;]
+        c1[&quot;zensynora doctor [--fix]&quot;]
+        c2[&quot;Web UI → Doctor&quot;]
+        c3[&quot;Medic tools&lt;br/&gt;check_system_health · get_health_report&quot;]
+        c4[&quot;Gateway startup scan&quot;]
+        c5[&quot;Agent error diagnosis&quot;]
+    end
+    callers --&gt; run[&quot;run_checks()&quot;]
+    subgraph checks[&quot;Checks (doctor/checks.py)&quot;]
+        e[&quot;environment&lt;br/&gt;Python · packages · provider SDKs · disk · RAM · CPU&quot;]
+        cf[&quot;configuration&lt;br/&gt;file valid · providers · API keys&quot;]
+        l[&quot;llm (network)&lt;br/&gt;server reachable · model exists&quot;]
+        d[&quot;data&lt;br/&gt;folders · SQLite quick_check · migrations&quot;]
+        sec[&quot;security&lt;br/&gt;file permissions · Web UI access&quot;]
+        i[&quot;install · runtime · integrity&lt;br/&gt;layout · Web UI build · log errors · service · hashes&quot;]
+    end
+    run --&gt; checks --&gt; rep[&quot;Report&lt;br/&gt;ok / warn / fail + how to fix&quot;]
+    rep -- &quot;--fix&quot; --&gt; fx[&quot;Safe fixes&lt;br/&gt;folders · permissions · migrations&quot;]
+
+    subgraph medicx[&quot;Other medic tools&quot;]
+        m1[&quot;scan_files · verify_file_integrity · recover_file&quot;]
+        m2[&quot;create_backup · list_backups&quot;]
+        m3[&quot;validate_modification · detect_errors_in_file · check_file_virustotal&quot;]
+        m4[&quot;record_task_execution · get_task_analytics&quot;]
+        m5[&quot;prevent_infinite_loop&lt;br/&gt;called by the router on every step&quot;]
     end</div>
 </div>
 <div class="diagram-card">
-  <h2 class="diagram-title">New Tool Categories (Evolution)</h2>
-  
-  <div class="mermaid">flowchart LR
-    subgraph P1 [&quot;Phase 1: Quick Wins&quot;]
-        direction TB
-        T1[&quot;register_hook()&lt;br/&gt;list_hooks()&lt;br/&gt;nlp_schedule()&quot;]
-    end
-
-    subgraph P2 [&quot;Phase 2: Skill System&quot;]
-        direction TB
-        T2[&quot;benchmark_skill()&lt;br/&gt;evaluate_skill()&lt;br/&gt;improve_skill()&quot;]
-    end
-
-    subgraph P3 [&quot;Phase 3: Memory &amp; Learning&quot;]
-        direction TB
-        T3[&quot;generate_session_insights()&lt;br/&gt;extract_user_preferences()&lt;br/&gt;update_user_profile()&quot;]
-    end
-
-    subgraph P4 [&quot;Phase 4: ZenHub Ecosystem&quot;]
-        direction TB
-        T4[&quot;hub_search()&lt;br/&gt;hub_install()&lt;br/&gt;discover_external_skills()&quot;]
-    end
-
-    P1 --&gt; P2 --&gt; P3 --&gt; P4</div>
-</div>
-<div class="diagram-card">
-  <h2 class="diagram-title">Agent Package (myclaw/agents/)</h2>
+  <h2 class="diagram-title">11. Install layout on disk</h2>
   
   <div class="mermaid">flowchart TB
-    subgraph Agents [&quot;Specialized Agents&quot;]
-        direction LR
-        SA[&quot;SkillAdapter&quot;]
-        MA[&quot;MedicAgent&quot;]
-        NTA[&quot;NewTechAgent&quot;]
-    end
-
-    SA --- SA_Tools[&quot;analyze_ext&lt;br/&gt;convert_skill&lt;br/&gt;register_ext&quot;]
-    MA --- MA_Tools[&quot;check_health&lt;br/&gt;verify_integr&lt;br/&gt;recover_file&lt;br/&gt;validate_mod&quot;]
-    NTA --- NTA_Tools[&quot;fetch_ai_news&lt;br/&gt;generate_prop&lt;br/&gt;add_to_roadmap&quot;]
-
-    Agents --&gt; Registry[&quot;Registry &amp; Discovery&quot;]</div>
-</div>
-<div class="diagram-card">
-  <h2 class="diagram-title">Backends Package (myclaw/backends/)</h2>
-  
-  <div class="mermaid">classDiagram
-    class AbstractBackend {
-        &lt;&lt;abstract&gt;&gt;
-        +execute(command)
-        +upload(local, remote)
-        +download(remote, local)
-        +is_available()
-    }
-    class LocalBackend
-    class DockerBackend
-    class SSHBackend
-    class WSL2Backend
-
-    AbstractBackend &lt;|-- LocalBackend
-    AbstractBackend &lt;|-- DockerBackend
-    AbstractBackend &lt;|-- SSHBackend
-    AbstractBackend &lt;|-- WSL2Backend
-
-    class BackendDiscovery {
-        +discover_backends()
-        +get_default_backend()
-    }</div>
-</div>
-<div class="diagram-card">
-  <h2 class="diagram-title">Data Flow: Request Processing</h2>
-  
-  <div class="mermaid">sequenceDiagram
-    participant User
-    participant Gateway
-    participant Agent
-    participant Hooks
-    participant KB as Knowledge Base
-    participant LLM as LLM Provider
-    participant Tools as Tool Executor
-
-    User-&gt;&gt;Gateway: Sends Message
-    Gateway-&gt;&gt;Agent: think(message)
-    Agent-&gt;&gt;Hooks: on_session_start
-    Agent-&gt;&gt;KB: search_knowledge(query)
-    KB--&gt;&gt;Agent: Results found
-    Agent-&gt;&gt;Hooks: pre_llm_call
-    Agent-&gt;&gt;LLM: generate_response(context)
-    LLM--&gt;&gt;Agent: tool_calls (if needed)
-
-    loop Tool Execution
-        Agent-&gt;&gt;Tools: execute(tool_name, args)
-        Tools-&gt;&gt;Agent: tool_output
-    end
-
-    Agent-&gt;&gt;Hooks: post_llm_call
-    Agent-&gt;&gt;Hooks: on_session_end
-    Agent--&gt;&gt;Gateway: final_response
-    Gateway--&gt;&gt;User: Delivers Response</div>
-</div>
-<div class="diagram-card">
-  <h2 class="diagram-title">Tool Execution Pipeline</h2>
-  
-  <div class="mermaid">flowchart TD
-    Req[&quot;Tool Call Request&quot;] --&gt; RL[&quot;Rate Limiter (Token Bucket)&quot;]
-    RL --&gt; SC[&quot;Security Check (Allowlist)&quot;]
-    SC --&gt; TR[&quot;Tool Registry Lookup&quot;]
-    TR --&gt; Exec[&quot;Async Execution&quot;]
-    Exec --&gt; AL[&quot;Audit Logger (duration, status)&quot;]</div>
-</div>
-<div class="diagram-card">
-  <h2 class="diagram-title">Error Handling: Browse Tool</h2>
-  
-  <div class="mermaid">flowchart TD
-    Req[&quot;requests.get(url)&quot;] --&gt; ErrType{Error Type?}
-    ErrType -- Timeout --&gt; Way1[&quot;Wayback Machine Suggestion&quot;]
-    ErrType -- 404 --&gt; Way2[&quot;Wayback + Search Suggestions&quot;]
-    ErrType -- 403 --&gt; KB_S[&quot;Suggest search_knowledge()&quot;]
-    ErrType -- Conn --&gt; Net[&quot;Check Internet/URL Verification&quot;]
-
-    Way1 --&gt; Res[&quot;Structured Response&quot;]
-    Way2 --&gt; Res
-    KB_S --&gt; Res
-    Net --&gt; Res</div>
-</div>
-<div class="diagram-card">
-  <h2 class="diagram-title">Knowledge Gap Handling</h2>
-  
-  <div class="mermaid">flowchart TD
-    Search[&quot;search_knowledge(query)&quot;] --&gt; Found{Results Found?}
-    Found -- Yes --&gt; Return[&quot;Return formatted results&quot;]
-    Found -- No --&gt; Cache{In Gap Cache?}
-
-    Cache -- Yes --&gt; Guidance[&quot;Return guidance + suggestions&quot;]
-    Cache -- No --&gt; Log[&quot;Log to gap_log&quot;]
-    Log --&gt; AddCache[&quot;Add to Gap Cache (300s)&quot;]
-    AddCache --&gt; Guidance</div>
-</div>
-<div class="diagram-card">
-  <h2 class="diagram-title">Skill Lifecycle</h2>
-  
-  <div class="mermaid">flowchart LR
-    Reg[&quot;register_tool()&quot;] --&gt; AST[&quot;AST Validate&quot;]
-    AST --&gt; Compile[&quot;Code Compile&quot;]
-    Compile --&gt; Load[&quot;Load &amp; Test&quot;]
-    Load --&gt; Toolbox[&quot;TOOLBOX REGISTRY&quot;]
-
-    Toolbox --&gt; Eval[&quot;evaluate()&quot;]
-    Toolbox --&gt; Bench[&quot;benchmark()&quot;]
-    Toolbox --&gt; Imp[&quot;improve()&quot;]
-
-    Imp --&gt; Backup[&quot;Auto-backup (.bak)&quot;]
-    Backup --&gt; Rollback[&quot;rollback()&quot;]</div>
-</div>
-<div class="diagram-card">
-  <h2 class="diagram-title">User Profile System</h2>
-  
-  <div class="mermaid">flowchart TB
-    Init[&quot;Agent Initialization&quot;] --&gt; LoadMD[&quot;Load user_dialectic.md&quot;]
-    LoadMD --&gt; Prompt[&quot;Append to System Prompt&quot;]
-
-    subgraph Updates [&quot;Runtime Updates&quot;]
-        direction LR
-        Extract[&quot;extract_preferences()&quot;]
-        Update[&quot;update_user_profile()&quot;]
-        Reflect[&quot;daily_reflection()&quot;]
-    end
-
-    Updates --&gt; KB[&quot;Knowledge Base&quot;]
-    Updates --&gt; ProfileMD[&quot;user_dialectic.md&quot;]</div>
-</div>
-<div class="diagram-card">
-  <h2 class="diagram-title">ZenHub Registry</h2>
-  
-  <div class="mermaid">flowchart TD
-    subgraph FS [&quot;File System (~/.myclaw/)&quot;]
-        Hub[&quot;hub/&quot;]
-        Hub --- Index[&quot;index.json&quot;]
-        Hub --- H_Skills[&quot;skills/ (Published)&quot;]
-        Skills[&quot;skills/ (External)&quot;]
-    end
-
-    subgraph Ops [&quot;ZenHub Operations&quot;]
-        direction TB
-        Search[&quot;hub_search()&quot;]
-        Publish[&quot;hub_publish()&quot;]
-        Install[&quot;hub_install()&quot;]
-        Discover[&quot;discover_external()&quot;]
-    end
-
-    Search --&gt; Index
-    Publish --&gt; H_Skills
-    Install --&gt; Toolbox[&quot;TOOLBOX&quot;]
-    Discover --&gt; Skills</div>
-</div>
-<div class="diagram-card">
-  <h2 class="diagram-title">File Structure Summary (myclaw/)</h2>
-  
-  <div class="mermaid">flowchart TD
-    Root[&quot;myclaw/&quot;]
-    Root --- Core[&quot;agent.py&lt;br/&gt;tools/ (pkg)&lt;br/&gt;memory.py&lt;br/&gt;config.py&lt;br/&gt;state_store.py&quot;]
-    Root --- Agents[&quot;agents/ (pkg)&lt;br/&gt;medic, newtech, adapter&quot;]
-    Root --- Backends[&quot;backends/ (pkg)&lt;br/&gt;local, docker, ssh, wsl2&quot;]
-    Root --- Knowledge[&quot;knowledge/ (pkg)&lt;br/&gt;db, graph, sync, researcher&quot;]
-    Root --- Swarm[&quot;swarm/ (pkg)&lt;br/&gt;orchestrator, strategies&quot;]
-    Root --- Channels[&quot;channels/ (pkg)&lt;br/&gt;telegram, whatsapp&quot;]</div>
-</div>
-<div class="diagram-card">
-  <h2 class="diagram-title">Model Context Protocol (MCP)</h2>
-  
-  <div class="mermaid">flowchart LR
-    subgraph ExtClients [&quot;External Clients&quot;]
-        Cursor[&quot;Cursor&quot;]
-        Claude[&quot;Claude Desktop&quot;]
-    end
-
-    subgraph ZenServer [&quot;MCP Server&quot;]
-        MS[&quot;mcp/server.py&quot;]
-    end
-
-    subgraph ZenClient [&quot;MCP Client&quot;]
-        MC[&quot;mcp/client.py&quot;]
-    end
-
-    subgraph ExtServers [&quot;External Servers&quot;]
-        Sqlite[&quot;SQLite Server&quot;]
-        WebS[&quot;WebSearch Server&quot;]
-    end
-
-    ExtClients &lt;--&gt; MS
-    MS &lt;--&gt; Tools[&quot;myclaw.tools&quot;]
-    MC &lt;--&gt; Tools
-    MC &lt;--&gt; ExtServers</div>
+    base[&quot;~/.local/share/zensynora/&quot;]
+    base --&gt; src[&quot;source → releases/0.7.0-…&lt;br/&gt;(symlink: the active version)&quot;]
+    base --&gt; rel[&quot;releases/&quot;]
+    rel --&gt; r1[&quot;0.7.0-20261013T…&lt;br/&gt;code + venv/ + webui/dist&quot;]
+    rel --&gt; r2[&quot;0.6.0-…&lt;br/&gt;kept for rollback&quot;]
+    base --&gt; bk[&quot;backups/&lt;br/&gt;~/.myclaw snapshots (mode 700)&quot;]
+    base --&gt; lg[&quot;logs/update-*.log&quot;]
+    base --&gt; st[&quot;updater-state.json&quot;]
+    svc[&quot;systemd myclaw.service&lt;br/&gt;and source/venv/bin/activate&quot;] -. &quot;use the path through&quot; .-&gt; src</div>
 </div>
 
 <div class="footer">

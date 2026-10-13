@@ -117,7 +117,7 @@ done
 # Logging & Utility Functions
 # ─────────────────────────────────────────────────────────────────────────────
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
-CYAN='\033[0;36m'; BLUE='\033[0;34m'; BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
+CYAN='\033[0;36m'; BOLD='\033[1m'; DIM='\033[2m'; RESET='\033[0m'
 
 info()    { echo -e "${CYAN}  [INFO]${RESET}  $*"; }
 success() { echo -e "${GREEN}  [ OK ]${RESET}  $*"; }
@@ -329,21 +329,18 @@ if [[ "$DEPLOYMENT_MODE" == "docker" ]]; then
         success "Created: $DATA_DIR"
     fi
 
-    # ── 2. Docker Network ────────────────────────────────────────────────────
-    info "Ensuring Docker network exists..."
-    if ! docker network ls --format '{{.Name}}' | grep -q '^zensynora-net$'; then
-        run docker network create zensynora-net >/dev/null 2>&1 || true
-        success "Created Docker network: zensynora-net"
-    else
-        skip "Docker network zensynora-net already exists"
-    fi
+    # ── 2. Data folder ownership ─────────────────────────────────────────────
+    # Fixed 2026-10-13 (v0.7.0): a zensynora-net network was created here but
+    # docker compose makes its own (<project>_zensynora-net), so it was unused.
+    # Instead, build the image with your UID so the container can write ./data.
+    export ZENSYNORA_UID="${ZENSYNORA_UID:-$(id -u)}" ZENSYNORA_GID="${ZENSYNORA_GID:-$(id -g)}"
 
     # ── 3. Build Image ───────────────────────────────────────────────────────
     header "Building Docker Image"
     info "Image tag: $DOCKER_TAG"
     info "Platform:  ${DOCKER_DEFAULT_PLATFORM:-$(docker system info --format '{{.OSType}}/{{.Architecture}}' 2>/dev/null || echo 'auto')}"
 
-    BUILD_CMD="docker build -t $DOCKER_TAG"
+    BUILD_CMD="docker build -t $DOCKER_TAG --build-arg ZENSYNORA_UID=$ZENSYNORA_UID --build-arg ZENSYNORA_GID=$ZENSYNORA_GID"
     if [[ -n "${DOCKER_DEFAULT_PLATFORM:-}" ]]; then
         BUILD_CMD="$BUILD_CMD --platform $DOCKER_DEFAULT_PLATFORM"
     fi
@@ -394,7 +391,7 @@ if [[ "$DEPLOYMENT_MODE" == "docker" ]]; then
             info "Waiting for health checks (max 60s)..."
 
             HEALTHY=false
-            for i in {1..12}; do
+            for _ in {1..12}; do
                 if docker inspect --format='{{.State.Health.Status}}' zensynora 2>/dev/null | grep -q "healthy"; then
                     HEALTHY=true
                     break
@@ -436,87 +433,116 @@ fi
 header "Traditional Deployment"
 
 # ── 1. SYSTEM PACKAGES ───────────────────────────────────────────────────────
+# Rewritten 0.7.0: supports apt, dnf, pacman and zypper (before, any non-Debian
+# Linux failed here because dpkg/apt-get were assumed), installs only what is
+# actually missing, and never needs sudo when everything is already present.
 header "1. System packages"
 
-if [ "$PLATFORM" = "linux" ] || [ "$PLATFORM" = "wsl" ]; then
-    APT_UPDATED=0
-    # Keep debconf and needrestart (Ubuntu 22.04+) from opening interactive
-    # dialogs mid-install; passed through `env` so sudo's env_reset keeps them.
-    APT_ENV=(DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a)
-    ensure_apt() {
-        local pkg="$1"
-        if dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null | grep -q "install ok installed"; then
-            skip "apt: $pkg already installed"
-        else
-            if [[ "$APT_UPDATED" -eq 0 ]]; then
-                info "Running apt-get update..."
-                run sudo env "${APT_ENV[@]}" apt-get update -qq
-                APT_UPDATED=1
-            fi
-            info "Installing apt package: $pkg"
-            run sudo env "${APT_ENV[@]}" apt-get install -y -qq "$pkg"
-            success "apt: $pkg installed"
-        fi
-    }
-    ensure_apt "python3"
-    PYTHON_BIN=$(command -v python3 || true)
-    if [[ -z "$PYTHON_BIN" ]]; then
-        error "python3 could not be found after installation."
-    fi
-    if ! "$PYTHON_BIN" -c "import venv, ensurepip" >/dev/null 2>&1; then
-        warn "Python virtual-environment support is missing (python3-venv)."
-        if prompt_yes "  Install python3-venv now to enable the isolated install?" "Y"; then
-            ensure_apt "python3-venv"
-            "$PYTHON_BIN" -c "import venv, ensurepip" >/dev/null 2>&1 \
-                || error "python3-venv was installed, but this Python still lacks venv/ensurepip support. Install the matching python3.X-venv package."
-        else
-            error "A virtual environment is required. Install python3-venv with apt, then rerun install.sh."
-        fi
-    else
-        skip "Python virtual-environment support is available"
-    fi
-    ensure_apt "python3-dev"
-    ensure_apt "git"
-    ensure_apt "curl"
-    ensure_apt "sqlite3"
-    ensure_apt "build-essential"
-    # jq is useful for config manipulation (optional, don't fail if unavailable)
-    (ensure_apt "jq") || skip "jq not available (optional)"
+PKG_MGR=""
+for m in apt-get dnf pacman zypper; do
+    if command -v "$m" >/dev/null 2>&1; then PKG_MGR="$m"; break; fi
+done
+PKG_REFRESHED=0
 
-elif [ "$PLATFORM" = "macos" ]; then
+pkg_install() {  # pkg_install <package>...
+    [[ $# -gt 0 ]] || return 0
+    case "$PKG_MGR" in
+        apt-get)
+            if [[ "$PKG_REFRESHED" -eq 0 ]]; then
+                info "Running apt-get update..."
+                # Keep debconf/needrestart from opening dialogs (env survives sudo's env_reset)
+                run sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get update -qq
+                PKG_REFRESHED=1
+            fi
+            run sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get install -y -qq "$@" ;;
+        dnf)    run sudo dnf install -y -q "$@" ;;
+        pacman) run sudo pacman -S --needed --noconfirm "$@" ;;
+        zypper) run sudo zypper --non-interactive install "$@" ;;
+        *)      return 1 ;;
+    esac
+}
+
+pkg_installed() {  # true if the distro package is installed (apt only; others use commands)
+    [[ "$PKG_MGR" == "apt-get" ]] && dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q "install ok installed"
+}
+
+if [[ "$PLATFORM" == "linux" || "$PLATFORM" == "wsl" ]]; then
+    # command needed -> package name per package manager (apt|dnf|pacman|zypper)
+    declare -A NEED=(
+        [python3]="python3|python3|python|python3"
+        [git]="git|git|git|git"
+        [curl]="curl|curl|curl|curl"
+        [sqlite3]="sqlite3|sqlite|sqlite|sqlite3"
+        [cc]="build-essential|gcc gcc-c++ make|base-devel|gcc gcc-c++ make"
+    )
+    case "$PKG_MGR" in apt-get) col=1 ;; dnf) col=2 ;; pacman) col=3 ;; zypper) col=4 ;; *) col=0 ;; esac
+    missing=()
+    for cmd in python3 git curl sqlite3 cc; do
+        if command -v "$cmd" >/dev/null 2>&1; then
+            skip "$cmd already available"
+        elif [[ "$col" -gt 0 ]]; then
+            # Package names for this manager (space-separated, e.g. "gcc gcc-c++ make").
+            read -r -a pkgs <<< "$(cut -d'|' -f"$col" <<< "${NEED[$cmd]}")"
+            missing+=("${pkgs[@]}")
+        else
+            warn "$cmd is missing and no supported package manager was found — install it yourself."
+        fi
+    done
+    # Python headers are needed to build a few wheels on new Python versions.
+    if [[ "$PKG_MGR" == "apt-get" ]] && ! pkg_installed python3-dev; then missing+=(python3-dev); fi
+    if [[ "$PKG_MGR" == "dnf" || "$PKG_MGR" == "zypper" ]] && ! rpm -q python3-devel >/dev/null 2>&1; then
+        missing+=(python3-devel)
+    fi
+    if [[ ${#missing[@]} -gt 0 ]]; then
+        info "Installing system packages with $PKG_MGR: ${missing[*]}"
+        pkg_install "${missing[@]}" || warn "Could not install: ${missing[*]} (continuing; see messages above)"
+    fi
+    if ! command -v jq >/dev/null 2>&1; then
+        (pkg_install jq >/dev/null 2>&1) || skip "jq not available (optional)"
+    fi
+
+elif [[ "$PLATFORM" == "macos" ]]; then
     if ! command -v brew >/dev/null 2>&1; then
         error "Homebrew not found. Please install it first: https://brew.sh"
     fi
-    ensure_brew() {
-        local pkg="$1"
-        if brew list "$pkg" >/dev/null 2>&1; then
-            skip "brew: $pkg already installed"
-        else
-            info "Installing brew package: $pkg"
-            run brew install "$pkg"
-        fi
-    }
-    ensure_brew "python3"
-    ensure_brew "git"
-    ensure_brew "sqlite3"
+    for pkg in python3 git sqlite3; do
+        if brew list "$pkg" >/dev/null 2>&1; then skip "brew: $pkg already installed"
+        else info "Installing brew package: $pkg"; run brew install "$pkg"; fi
+    done
 fi
 
-# ── 2. PYTHON VERSION CHECK ──────────────────────────────────────────────────
+# ── 2. PYTHON VERSION ────────────────────────────────────────────────────────
+# Pick the newest Python >= 3.11 available (ZENSYNORA_PYTHON overrides), not
+# just whatever `python3` is — e.g. Ubuntu 22.04 has python3 = 3.10 but may
+# also have python3.11/3.12 installed.
 header "2. Python version"
 
-PYTHON_BIN=$(command -v python3 || true)
+PYTHON_BIN=""
+for cand in "${ZENSYNORA_PYTHON:-}" python3.14 python3.13 python3.12 python3.11 python3; do
+    [[ -n "$cand" ]] || continue
+    if command -v "$cand" >/dev/null 2>&1 \
+        && "$cand" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' 2>/dev/null; then
+        PYTHON_BIN="$(command -v "$cand")"
+        break
+    fi
+done
 if [[ -z "$PYTHON_BIN" ]]; then
-    error "python3 not found. Please install Python 3.11 or newer."
+    error "Python 3.11 or newer was not found. Install it (e.g. sudo apt install python3.12) and rerun."
 fi
+PY_VERSION="$("$PYTHON_BIN" -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+success "Python $PY_VERSION — OK ($PYTHON_BIN)"
 
-PY_MAJOR=$($PYTHON_BIN -c "import sys; print(sys.version_info.major)")
-PY_MINOR=$($PYTHON_BIN -c "import sys; print(sys.version_info.minor)")
-PY_VERSION="${PY_MAJOR}.${PY_MINOR}"
-
-if [[ "$PY_MAJOR" -lt 3 ]] || [[ "$PY_MAJOR" -eq 3 && "$PY_MINOR" -lt 11 ]]; then
-    error "Python $PY_VERSION is too old. ZenSynora requires 3.11+."
+# venv/ensurepip support (Debian/Ubuntu ship it separately as python3.X-venv)
+if ! "$PYTHON_BIN" -c "import venv, ensurepip" >/dev/null 2>&1; then
+    warn "Python $PY_VERSION lacks virtual-environment support."
+    if [[ "$PKG_MGR" == "apt-get" ]] && prompt_yes "  Install python${PY_VERSION}-venv now?" "Y"; then
+        pkg_install "python${PY_VERSION}-venv" || pkg_install python3-venv || true
+    fi
+    "$PYTHON_BIN" -c "import venv, ensurepip" >/dev/null 2>&1 \
+        || error "Install the venv package for Python $PY_VERSION (Debian/Ubuntu: python${PY_VERSION}-venv), then rerun install.sh."
+else
+    skip "Python virtual-environment support is available"
 fi
-success "Python $PY_VERSION — OK"
 
 # ── 3. VIRTUAL ENVIRONMENT ───────────────────────────────────────────────────
 header "3. Virtual environment"
@@ -542,7 +568,7 @@ if [[ ! -d "$VENV_DIR" ]]; then
     if ! run "$PYTHON_BIN" -m venv "$VENV_DIR"; then
         if { [[ "$PLATFORM" == "linux" ]] || [[ "$PLATFORM" == "wsl" ]]; } \
             && prompt_yes "  Virtual environment creation failed. Install python3-venv and retry?" "Y"; then
-            ensure_apt "python3-venv"
+            pkg_install "python${PY_VERSION}-venv" || pkg_install python3-venv
             run "$PYTHON_BIN" -m venv "$VENV_DIR" \
                 || error "Could not create the virtual environment. Install the matching python3.X-venv package and retry."
         else
@@ -769,12 +795,17 @@ if [[ "$SKIP_OPTIONAL" == "false" && "$PLATFORM" != "macos" && "$PLATFORM" != "w
     header "8. systemd service"
     SERVICE_FILE="/etc/systemd/system/myclaw.service"
     if [[ ! -f "$SERVICE_FILE" ]] && prompt_yes "  Install systemd service?"; then
-        # Determine which CLI to use
-        if [[ -f "$SCRIPT_DIR/cli.py" ]]; then
-            CLI_PATH="$SCRIPT_DIR/cli.py"
-        else
-            CLI_PATH="$VENV_DIR/bin/zensynora"
+        # Fixed 2026-10-13 (v0.7.0): a managed install lives in
+        # releases/<version>-<stamp>/ and is reached through the stable
+        # "source" symlink. The service must use that symlink, otherwise it
+        # keeps running the old release after `zensynora update`.
+        SERVICE_DIR="$SCRIPT_DIR"
+        if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "releases" ]]; then
+            SERVICE_DIR="$(dirname "$(dirname "$SCRIPT_DIR")")/source"
         fi
+        SERVICE_VENV="$SERVICE_DIR/venv"
+        [[ -x "$SERVICE_VENV/bin/python" ]] || SERVICE_VENV="$VENV_DIR"
+        CLI_PATH="$SERVICE_VENV/bin/zensynora"
 
         run sudo tee "$SERVICE_FILE" > /dev/null <<EOF
 [Unit]
@@ -784,10 +815,9 @@ After=network.target
 [Service]
 Type=simple
 User=$USER
-WorkingDirectory=$SCRIPT_DIR
-Environment="PATH=$VENV_DIR/bin:/usr/local/bin:/usr/bin:/bin"
-Environment="MYCLAW_CONFIG_DIR=$HOME/.myclaw"
-ExecStart=$VENV_DIR/bin/python $CLI_PATH gateway
+WorkingDirectory=$SERVICE_DIR
+Environment="PATH=$SERVICE_VENV/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=$CLI_PATH gateway
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal

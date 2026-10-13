@@ -21,10 +21,12 @@ Fixes # (issue number)
 
 ## Testing
 <!-- Describe the tests you ran and how to reproduce them -->
-- [ ] Tested locally with `python cli.py agent`
+- [ ] Tested locally with `zensynora agent`
 - [ ] Tested Telegram gateway
 - [ ] Tested WhatsApp gateway
-- [ ] Tested WebUI (`python cli.py webui`)
+- [ ] Tested WebUI (`zensynora webui`)
+- [ ] `zensynora doctor` reports no new problems
+- [ ] Data format changed? Added a migration in `updater/migrations/`
 - [ ] Added / updated unit tests (`pytest`)
 - [ ] Tested with multiple LLM providers
 

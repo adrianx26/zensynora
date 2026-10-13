@@ -333,6 +333,34 @@ def update(updater_args):
 
 
 @cli.command()
+@click.option("--fix", is_flag=True, help="Apply safe automatic fixes (folders, permissions, migrations).")
+@click.option("--offline", is_flag=True, help="Skip checks that need the network (LLM server).")
+@click.option("--json", "as_json", is_flag=True, help="Machine-readable output.")
+@click.option("--problems", is_flag=True, help="Only show warnings and failures.")
+def doctor(fix, offline, as_json, problems):
+    """Check this installation and explain how to fix problems.
+
+    \b
+    Exit code: 0 = healthy, 1 = warnings, 2 = failures.
+    """
+    import json as _json
+
+    from .doctor import apply_fixes, run_checks
+
+    report = run_checks(offline=offline)
+    if fix:
+        done = apply_fixes(report)
+        if done and not as_json:
+            click.echo("Fixes applied:\n  " + "\n  ".join(done) + "\n")
+        report = run_checks(offline=offline) if done else report
+    if as_json:
+        click.echo(_json.dumps(report.to_dict(), indent=2))
+    else:
+        click.echo(report.to_text(show_ok=not problems))
+    sys.exit({"ok": 0, "warn": 1, "fail": 2}[report.overall])
+
+
+@cli.command()
 def version():
     """Show the installed ZenSynora version."""
     from . import __version__
@@ -343,11 +371,18 @@ def version():
 ### WEB UI COMMANDS ###
 @cli.command()
 @click.option('--port', default=8000, help='Port to run the FastAPI proxy server')
-def webui(port):
+@click.option('--host', default="0.0.0.0", show_default=True,
+              help='Address to listen on (127.0.0.1 = this computer only)')
+@click.option('--reload', is_flag=True, help='Auto-restart on code changes (development only)')
+def webui(port, host, reload):
     """Start the Web UI Backend Server"""
+    # Changed 2026-10-13 (v0.7.0): auto-reload used to be always on. It watches
+    # the current directory, restarts the server on any file change and doubles
+    # the processes — wrong for normal use, services and Docker. It is now
+    # opt-in (--reload), and --host lets you keep the UI on this computer only.
     import uvicorn
-    click.echo(f"Starting ZenSynora Web UI Backend on port {port}...")
-    uvicorn.run("myclaw.web.api:app", host="0.0.0.0", port=port, reload=True)
+    click.echo(f"Starting ZenSynora Web UI Backend on http://{host}:{port} ...")
+    uvicorn.run("myclaw.web.api:app", host=host, port=port, reload=reload)
 
 
 @cli.command()
@@ -760,3 +795,9 @@ def spaces_delete(space_id: str, owner: str):
         click.echo(f"✅ Space {space_id} deleted.")
     else:
         click.echo("❌ Failed to delete space (not found or not owner).")
+
+
+# Added 2026-10-13 (v0.7.0): `python -m myclaw.cli …` used to import the module
+# and exit silently (the portable launchers relied on it). It now runs the CLI.
+if __name__ == "__main__":
+    cli()
