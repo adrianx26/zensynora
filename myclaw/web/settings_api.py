@@ -40,6 +40,34 @@ _CLOUD_DEFAULT_URLS = {
     "gemini": "https://generativelanguage.googleapis.com/v1beta",
 }
 
+# Python SDK each provider needs at chat time (the probe below uses plain
+# HTTP, so without this check "Test connection" could pass while chat fails).
+_PROVIDER_SDK = {
+    "lmstudio": ("openai", "openai"),
+    "llamacpp": ("openai", "openai"),
+    "openai": ("openai", "openai"),
+    "groq": ("openai", "openai"),
+    "openrouter": ("openai", "openai"),
+    "anthropic": ("anthropic", "anthropic"),
+    "gemini": ("google.generativeai", "google-generativeai"),
+}
+
+
+def _missing_sdk(provider: str) -> Optional[str]:
+    """Return the pip package to install if the provider's SDK is missing."""
+    spec = _PROVIDER_SDK.get(provider)
+    if not spec:
+        return None
+    import importlib.util
+
+    module, pip_name = spec
+    try:
+        found = importlib.util.find_spec(module) is not None
+    except (ImportError, ValueError):
+        found = False
+    return None if found else pip_name
+
+
 # Callback set by web.api so a settings change rebuilds the agent registry.
 _on_config_changed = None
 
@@ -267,6 +295,18 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str])
         if key:
             headers["Authorization"] = f"Bearer {key}"
 
+    missing = _missing_sdk(provider)
+    if missing:
+        return {
+            "ok": False,
+            "error": (
+                f"Python package '{missing}' is not installed, so chat cannot use "
+                f"this provider. Run: pip install {missing} (or re-run install.sh)."
+            ),
+            "models": [],
+            "url": url,
+        }
+
     if provider not in ("ollama", "lmstudio", "llamacpp") and not key:
         return {"ok": False, "error": "API key is not set.", "models": [], "url": url}
 
@@ -368,6 +408,7 @@ async def system_health():
         },
         "tools": tool_count,
         "config_file_exists": CONFIG_FILE.exists(),
+        "version": __import__("myclaw").__version__,
     }
     _health_cache.update(at=now, data=data)
     out = dict(data)

@@ -455,6 +455,7 @@ function App() {
           <button className={`control-btn danger ${confirmClear ? 'confirm' : ''}`} onClick={clearHistory}>
             {confirmClear ? '⚠️ Click again to clear all history' : '🗑️ Clear History'}
           </button>
+          {health?.version && <div className="app-version">ZenSynora v{health.version}</div>}
         </div>
       </div>
 

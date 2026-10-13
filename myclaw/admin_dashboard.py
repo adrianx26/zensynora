@@ -189,7 +189,7 @@ def build_dashboard_data() -> Dict[str, Any]:
 
     return {
         "timestamp": datetime.utcnow().isoformat(),
-        "version": "0.4.1",
+        "version": __import__("myclaw").__version__,
         "sessions": {
             "active_websocket_count": get_active_session_count(),
             "avg_response_time_ms": round(get_avg_response_time() * 1000, 1),

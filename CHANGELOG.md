@@ -7,7 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-13
+
 ### Fixed
+- **Chat sent to Ollama instead of the selected provider** (`404 Not Found
+  for url http://localhost:11434/api/chat`): the `openai` SDK used by every
+  OpenAI-compatible provider (llama.cpp, LM Studio, OpenAI, Groq,
+  OpenRouter) was an optional extra, and when it was missing the agent
+  silently switched to Ollama. `openai` is now a core dependency, the agent
+  raises a clear `ProviderUnavailableError` instead of switching providers,
+  and the offline fallback never "falls back" to the provider that just failed.
+- **llama.cpp without `--jinja`**: when a server rejects tool definitions the
+  OpenAI-compatible provider retries once without tools and remembers it, so
+  plain chat keeps working.
+- **Settings → Test connection** now reports a missing provider SDK instead
+  of passing while chat fails.
+- **Linux install (Python 3.13/3.14)**: numpy `<3.0` (binary wheels),
+  `httpx[http2]`, `uvicorn[standard]` (WebSocket support for the Web UI chat),
+  `zensynora` command actually installed, stricter verification,
+  `uninstall.sh` no longer removes `$(pwd)/venv`, `.gitignore` no longer hides
+  `tests/`.
+- **Runtime**: `zensynora agent` crash (`list` shadowed the builtin), metrics
+  middleware error without prometheus-client, `knowledge sync --force` crash,
+  `build_context` crash, history missing buffered messages, process hang on
+  exit (pooled aiosqlite connections).
+
+### Added
+- **Web UI Settings** page: provider/model with connection test and model
+  list, provider URLs and API keys, named agents, channels, feature toggles,
+  security. Local-only unless an admin API key is set; secrets never returned.
+- Web UI navigation (Chat, Settings, Costs & usage, Tools), live System Health,
+  server-side Clear History, Reconnect button, app version in the sidebar.
+
+### Fixed (earlier, unreleased)
 - **Virtual environment setup**: `install.sh` now checks whether Python has
   `venv`/`ensurepip` support, offers to install Debian/Ubuntu's
   `python3-venv` package when missing, verifies existing environments, and

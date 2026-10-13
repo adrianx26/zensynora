@@ -41,7 +41,9 @@ async def _check_provider_alive(provider: BaseLLMProvider) -> bool:
         return False
 
 
-def get_fallback_provider(config, prefer_cloud: bool = True) -> Optional[BaseLLMProvider]:
+def get_fallback_provider(
+    config, prefer_cloud: bool = True, exclude: Optional[str] = None
+) -> Optional[BaseLLMProvider]:
     """Get a fallback local provider if cloud providers are unavailable.
 
     Args:
@@ -57,6 +59,9 @@ def get_fallback_provider(config, prefer_cloud: bool = True) -> Optional[BaseLLM
         pass
 
     for name in _LOCAL_PROVIDERS:
+        if exclude and name == exclude:
+            # Never "fall back" to the provider that just failed.
+            continue
         try:
             provider = get_provider(config, name)
             logger.info(f"Offline fallback: using local provider '{name}'")
@@ -77,8 +82,9 @@ class FallbackChatWrapper:
         response, tool_calls = await wrapper.chat(messages, model)
     """
 
-    def __init__(self, primary_provider: BaseLLMProvider, config):
+    def __init__(self, primary_provider: BaseLLMProvider, config, primary_name: Optional[str] = None):
         self.primary = primary_provider
+        self.primary_name = primary_name
         self.config = config
         self._fallback: Optional[BaseLLMProvider] = None
         self._used_fallback = False
@@ -104,7 +110,9 @@ class FallbackChatWrapper:
     async def _try_fallback(self, messages, model, stream: bool = False):
         """Try fallback local providers."""
         if self._fallback is None:
-            self._fallback = get_fallback_provider(self.config, prefer_cloud=False)
+            self._fallback = get_fallback_provider(
+                self.config, prefer_cloud=False, exclude=self.primary_name
+            )
 
         if self._fallback is None:
             raise ConnectionError(
@@ -123,7 +131,8 @@ class FallbackChatWrapper:
         except Exception as e:
             logger.error(f"Fallback provider also failed: {e}")
             raise ConnectionError(
-                f"Primary provider unreachable. Fallback also failed: {e}\n"
+                f"Primary provider '{self.primary_name or 'configured'}' unreachable. "
+                f"Fallback also failed: {e}\n"
                 f"Ensure a local LLM server is running (Ollama: http://localhost:11434, "
                 f"LM Studio: http://localhost:1234, llama.cpp: http://localhost:8080)"
             )

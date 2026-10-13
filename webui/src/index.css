@@ -769,3 +769,5 @@ select.field-input { cursor: pointer; }
   .save-bar { left: 8px; right: 8px; bottom: 8px; }
   .connection-banner { margin: 12px 12px 0; }
 }
+
+.app-version { font-size: 0.72rem; color: var(--text-secondary); text-align: center; margin-top: 4px; }

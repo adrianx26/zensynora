@@ -835,6 +835,7 @@ if [[ "$DRY_RUN" == "false" ]]; then
     check_import "mcp"
     check_import "aiosqlite"
     check_import "paramiko"
+    check_import "openai (llama.cpp / LM Studio / OpenAI providers)" "openai"
     check_import "psutil"
     check_import "numpy"
     check_import "pydantic"
