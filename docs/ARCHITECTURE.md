@@ -1,6 +1,6 @@
 # ZenSynora Architecture
 
-> **Status:** reflects **v0.7.2** (2026-10-14). Updated from the v0.4.1
+> **Status:** reflects **v0.7.3** (2026-10-14). Updated from the v0.4.1
 > version: adds the Web UI settings API, provider routing changes, the safe
 > updater and the doctor/medic rewrite (0.7.0); chat channels, agent-to-agent
 > events, jobs, backups, model rotation, custom providers and approval-gated
@@ -39,6 +39,7 @@ myclaw/
 ├── evals/                   # Dataset-driven eval harness [Sprint 7]
 ├── events.py                # Agent-to-agent activity events (delegation, tools, jobs) [0.7.1]
 ├── jobs/                    # Jobs: store (jobs.db) + runner (schedule, evaluate, benchmark) [0.7.1]
+├── llm_errors.py            # Readable model-server errors + rotation cooldowns [0.7.3]
 ├── knowledge/
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
 │   ├── path_reasoning.py    # find_paths / shortest_path [Sprint 7]
@@ -85,13 +86,14 @@ webui/src/
     ├── JobsView.tsx         # Jobs, runs, evaluation, benchmark [0.7.1]
     ├── BackupsView.tsx      # Backups [0.7.1]
     ├── ProposalsPanel.tsx   # Change proposals + lessons (Doctor page) [0.7.1]
+    ├── ChannelsView.tsx     # Create / rename / manage channels [0.7.3]
     ├── SettingsView.tsx     # Settings page [0.5.0]
     ├── DoctorView.tsx       # Doctor page [0.7.0]
     ├── ToolsView.tsx        # Tool list [0.5.0]
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 514 tests (pytest --collect-only, 2026-10-14)
+tests/                       # 525 tests (pytest --collect-only, 2026-10-14)
 ```
 
 ---
@@ -292,9 +294,10 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_tools.py` | 35 |
 | `test_updater.py` | 9 |
 | `test_v071_features.py` | 17 |
+| `test_v073_reliability.py` | 11 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **514** |
+| **Total** | **525** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

@@ -29,6 +29,7 @@ class CacheEntry:
     timestamp: float
     access_count: int = 0
     query_hash: str = ""
+    model: str = ""  # v0.7.3: similarity matches only within the same model
 
 
 class SemanticCache:
@@ -100,6 +101,7 @@ class SemanticCache:
                     timestamp=entry_data["timestamp"],
                     access_count=entry_data.get("access_count", 0),
                     query_hash=entry_data.get("query_hash", ""),
+                    model=entry_data.get("model", ""),
                 )
                 self._cache[key] = entry
 
@@ -119,6 +121,7 @@ class SemanticCache:
                     "timestamp": entry.timestamp,
                     "access_count": entry.access_count,
                     "query_hash": entry.query_hash,
+                    "model": entry.model,
                 }
 
             with open(self.cache_file, "w", encoding="utf-8") as f:
@@ -203,18 +206,26 @@ class SemanticCache:
             logger.error(f"Failed to get embedding: {e}")
             return None
 
-    def _compute_hash(self, messages: List[Dict]) -> str:
-        """Compute a hash of the messages for exact matching."""
-        # Normalize messages by removing timestamps and extra whitespace
+    def _compute_hash(self, messages: List[Dict], model: str = "") -> str:
+        """Compute a hash of the request for exact matching.
+
+        Fixed 2026-10-14 (v0.7.3): the key used to ignore the model, the
+        system prompt and tool calls/results. Different agents and models got
+        each other's cached answers, and a job re-run with the same prompt got
+        the previous run's reply (including failed ones) instead of trying
+        again. The key now covers all of them.
+        """
         normalized = []
         for m in messages:
-            if m.get("role") == "system":
-                continue  # Skip system prompts for hashing
-            normalized.append(
-                {"role": m.get("role", ""), "content": " ".join(m.get("content", "").split())}
-            )
+            entry = {"role": m.get("role", ""),
+                     "content": " ".join(str(m.get("content") or "").split())}
+            if m.get("tool_calls"):
+                entry["tool_calls"] = json.dumps(m["tool_calls"], sort_keys=True, default=str)
+            if m.get("tool_call_id"):
+                entry["tool_call_id"] = m["tool_call_id"]
+            normalized.append(entry)
 
-        content = json.dumps(normalized, sort_keys=True)
+        content = json.dumps({"model": model or "", "messages": normalized}, sort_keys=True)
         return hashlib.sha256(content.encode()).hexdigest()[:32]
 
     def _compute_similarity(self, emb1: np.ndarray, emb2: np.ndarray) -> float:
@@ -243,7 +254,7 @@ class SemanticCache:
         Returns:
             Tuple of (response, tool_calls) if found, None otherwise
         """
-        query_hash = self._compute_hash(messages)
+        query_hash = self._compute_hash(messages, model)
 
         # First, try exact hash match
         if query_hash in self._cache:
@@ -291,6 +302,8 @@ class SemanticCache:
                         break
                     if self._is_expired(entry):
                         entries_to_remove.append(key)
+                        continue
+                    if entry.model != (model or ""):
                         continue
                     scan_keys.append(key)
                     scan_vectors.append(entry.query_embedding)
@@ -375,7 +388,10 @@ class SemanticCache:
             response: The LLM response text
             tool_calls: Optional list of tool calls
         """
-        query_hash = self._compute_hash(messages)
+        # v0.7.3: never cache an empty answer (it would be served again).
+        if not (response or "").strip() and not tool_calls:
+            return
+        query_hash = self._compute_hash(messages, model)
         query_text = self._extract_query_text(messages)
 
         # Get embedding if model available
@@ -387,6 +403,7 @@ class SemanticCache:
             tool_calls=tool_calls,
             timestamp=time.time(),
             query_hash=query_hash,
+            model=model or "",
         )
 
         # Evict oldest if at capacity

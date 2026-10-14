@@ -63,6 +63,8 @@ from .defaults import GAP_FILE  # noqa: E402
 
 # v0.7.1: shared counter for the "round_robin" rotation strategy.
 _ROUND_ROBIN = itertools.count()
+# v0.7.3: (provider, model) -> time until which rotation skips it (recent hard failure).
+_MODEL_COOLDOWN: Dict[tuple, float] = {}
 
 # v0.7.1: conversation-memory scope (set by the chat engine per channel/agent).
 import contextvars  # noqa: E402
@@ -252,7 +254,7 @@ async def _load_profile_cached_async(name: str, profile_path: Path) -> str:
 
 
 SYSTEM_PROMPT = (
-    "You are MyClaw, a personal AI agent with access to a knowledge base, TOOLBOX, and Agent Swarms. "
+    "You are ZenSynora, a personal AI agent with access to a knowledge base, TOOLBOX, and Agent Swarms. "
     "Use the provided function-calling tools. If you cannot call functions natively, call a tool "
     "by responding ONLY with JSON, nothing else: "
     '{"tool": "<name>", "args": {<key>: <value>}} — you then get the result and answer in normal text. '
@@ -839,9 +841,22 @@ class Agent:
         return pairs
 
     async def _rotating_chat(self, candidates: List[tuple], messages, stream: bool):
-        """Try each (provider, model) until one answers; remember which one did."""
+        """Try each (provider, model) until one answers; remember which one did.
+
+        v0.7.3: a model that just failed in a way that will not fix itself soon
+        (refused for this app, unknown, bad key) or is rate-limited is skipped
+        for a while (see llm_errors.cooldown_for), so every request does not
+        first wait for the same failure again.
+        """
+        from .llm_errors import cooldown_for, describe_llm_error
+
+        now = time.time()
+        usable = [c for c in candidates if _MODEL_COOLDOWN.get(c, 0) <= now]
+        if usable and len(usable) < len(candidates):
+            logger.info("Rotation: skipping %s (failed recently)",
+                        ", ".join(f"{p}/{m}" for p, m in candidates if (p, m) not in usable))
         errors: List[str] = []
-        for prov_name, model in candidates:
+        for prov_name, model in (usable or candidates):
             try:
                 prov = get_provider(self._config, prov_name)
                 if not stream:
@@ -866,7 +881,10 @@ class Agent:
                     logger.warning("Rotation: answered by %s/%s after: %s", prov_name, model, "; ".join(errors))
                 return _chained(), collector
             except Exception as e:  # rate limit, server down, missing model, bad key…
-                errors.append(f"{prov_name}/{model}: {str(e)[:160]}")
+                wait = cooldown_for(e)
+                if wait:
+                    _MODEL_COOLDOWN[(prov_name, model)] = time.time() + wait
+                errors.append(describe_llm_error(e, f"{prov_name}/{model}"))
                 logger.info("Rotation: %s/%s failed (%s); trying the next model", prov_name, model, e)
         raise ProviderUnavailableError("All models in the rotation failed — " + " | ".join(errors))
 
@@ -911,21 +929,36 @@ class Agent:
             if not to_summarize:
                 return
 
+            # Fixed 2026-10-14 (v0.7.3): entries without text (tool steps) made
+            # this crash ("'NoneType' object is not subscriptable"), and the
+            # model was asked WITH the agent's tools, so it often answered with
+            # a tool call — an empty "Session Summary" note was then saved.
+            # Only user/assistant text is summarized, without tools, and an
+            # empty summary is not stored.
+            turns = [m for m in to_summarize
+                     if m.get("role") in ("user", "assistant") and str(m.get("content") or "").strip()]
+            if not turns:
+                return
             summary_parts = [
                 "Summarize the following conversation context. Focus on key decisions, "
                 "important facts, and user preferences. Preserve information that would be "
                 "important for future context:\n"
             ]
-            for m in to_summarize:
-                summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
+            for m in turns:
+                summary_parts.append(f"{m['role']}: {str(m.get('content') or '')[:200]}\n")
             summary_prompt = "".join(summary_parts)
             summary_msgs = [
                 {"role": "system", "content": "You summarize conversations concisely."},
                 {"role": "user", "content": summary_prompt},
             ]
 
-            summary_text, _ = await self._provider_chat(summary_msgs, self.model)
-            original_len = sum(len(m["content"]) for m in to_summarize)
+            from .provider import complete_text
+
+            summary_text = await complete_text(self.provider, summary_msgs, self.model)
+            if not (summary_text or "").strip():
+                logger.info("Background summarization: the model returned no summary; nothing stored.")
+                return
+            original_len = sum(len(str(m.get("content") or "")) for m in turns)
             compressed_len = len(summary_text)
             compression_ratio = (1 - compressed_len / original_len) * 100 if original_len > 0 else 0
             logger.debug(
@@ -1330,11 +1363,11 @@ class Agent:
             "Your previous response was empty. "
             "Please provide a helpful, non-empty answer to the user's request."
         )
-        recovery_messages = messages + [
-            {"role": "assistant", "content": ""},
-            {"role": "user", "content": recovery_prompt},
-        ]
+        # v0.7.3: no empty assistant turn here — several providers reject
+        # messages with empty content.
+        recovery_messages = messages + [{"role": "user", "content": recovery_prompt}]
 
+        last_error = None
         try:
             recovered, _ = await self._provider_chat(recovery_messages, self.model)
             if not self._is_empty_response(recovered):
@@ -1342,6 +1375,12 @@ class Agent:
                 return recovered
         except Exception as e:
             logger.error(f"Recovery LLM call failed: {e}")
+            last_error = e
+        if last_error is not None:
+            # v0.7.3: say what really went wrong instead of "empty answer".
+            from .llm_errors import describe_llm_error
+
+            return f"[Error] {describe_llm_error(last_error)}"
 
         # Build a meaningful fallback.
         # Changed 2026-10-13 (v0.7.1): the old text blamed the knowledge base
@@ -1557,7 +1596,9 @@ class Agent:
             # NEW: Run medic diagnosis
             user_summary, _ = await self._run_medic_diagnosis(e, user_id)
 
-            error_msg = f"Sorry, an unexpected error occurred. Please try again later.{user_summary}"
+            from .llm_errors import describe_llm_error  # v0.7.3: say what went wrong
+
+            error_msg = f"[Error] {describe_llm_error(e)}{user_summary}"
 
             if self._current_task_id:
                 await self._task_timer.complete_task(
@@ -1577,7 +1618,7 @@ class Agent:
             final_response = await self._execute_tools(
                 tool_calls, messages, user_message, user_id, mem, _depth, had_kb_results
             )
-            if final_response.startswith("Tool executed but error"):
+            if final_response.startswith(("Tool executed but error", "[Error] The tool ran")):
                 return final_response
             # 5. Handle summarization & cleanup
             await self._handle_summarization(
@@ -1690,7 +1731,9 @@ class Agent:
                 yield head
         except Exception as e:
             logger.error(f"Error in initial streaming: {e}")
-            yield f"\n\n[Error streaming response: {e}]"
+            from .llm_errors import describe_llm_error  # v0.7.3: readable reason
+
+            yield f"\n\n[Error] {describe_llm_error(e)}"
             trigger_hook("on_session_end", user_id, self.name, len(await mem.get_history()))
             return
 

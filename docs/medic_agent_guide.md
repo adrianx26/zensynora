@@ -267,3 +267,6 @@ still review proposals but install them by rebuilding / copying.
 |---|---|
 | The Web UI still shows the old version after `zensynora update` | The old server is still running. Stop it (Ctrl+C), start `zensynora webui` again (from 0.7.2 on, an old terminal switches to the new version by itself) and reload the page. |
 | The chat shows `{"tool": "…", "args": …}` as the answer | The model writes tool calls as text. Fixed in 0.7.2 — such calls now run. |
+| A job or chat ends with "[Error] … only available to specific apps" | OpenRouter refuses that model for ZenSynora. Pick another model; use **Test** on the Models page. (v0.7.3) |
+| "[Error] … rate-limited" | Free models are often busy. Wait a minute or turn on rotation with a second model. (v0.7.3) |
+| LM Studio answers nothing / "Unexpected endpoint" | Load a model in LM Studio; the URL needs `/v1` (added automatically since 0.7.3). |

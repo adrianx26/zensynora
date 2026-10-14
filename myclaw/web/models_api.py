@@ -165,3 +165,38 @@ async def generate_agent_prompt(req: PromptRequest):
     if not text:
         raise HTTPException(status_code=502, detail="The model returned an empty answer. Try again or pick another model.")
     return {"prompt": text, "provider": provider, "model": model}
+
+
+# ── Real test of a model (v0.7.3) ────────────────────────────────────────────
+class TestRequest(BaseModel):
+    provider: str
+    model: str
+
+
+@router.post("/api/models/test", dependencies=guard)
+async def test_model(req: TestRequest):
+    """Send a tiny real chat request and report whether the model answers.
+
+    Listing a provider's models only proves the server is reachable; a model
+    can still refuse ZenSynora (e.g. OpenRouter's "only available on agentic
+    harnesses"), need credits, be rate-limited or not be loaded.
+    """
+    import asyncio
+    import time
+
+    from myclaw.llm_errors import describe_llm_error
+    from myclaw.provider import complete_text, get_provider
+
+    cfg = load_config()
+    started = time.monotonic()
+    try:
+        text = await asyncio.wait_for(complete_text(
+            get_provider(cfg, req.provider),
+            [{"role": "user", "content": "Reply with the single word: OK"}], req.model), timeout=60)
+    except Exception as e:
+        return {"ok": False, "error": describe_llm_error(e), "ms": int((time.monotonic() - started) * 1000)}
+    ms = int((time.monotonic() - started) * 1000)
+    if not (text or "").strip():
+        return {"ok": False, "error": "The model answered with nothing. It may not be loaded, or it "
+                "only works through other apps.", "ms": ms}
+    return {"ok": True, "reply": text.strip()[:200], "ms": ms}

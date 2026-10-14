@@ -205,7 +205,7 @@ class PreferenceLearner:
         
         for pattern_key, patterns in self.PREFERENCE_PATTERNS.items():
             for pattern in patterns:
-                if any(pattern in m.get("content", "").lower() for m in user_messages):
+                if any(pattern in str(m.get("content") or "").lower() for m in user_messages):
                     self._update_preference(profile, pattern_key, pattern, source="auto")
                     break
     

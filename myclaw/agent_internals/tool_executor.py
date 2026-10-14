@@ -25,8 +25,25 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# v0.7.2: follow-up rounds allowed for tool calls written as text.
-MAX_TEXT_ROUNDS = 3
+# Follow-up rounds after the first tool call (v0.7.2 text calls, v0.7.3 also native).
+MAX_TEXT_ROUNDS = 4
+
+
+def _usage_hint(tool_name: str, args: Dict) -> str:
+    """'browse needs url (required) …' for a call with wrong or missing arguments."""
+    try:
+        from ..provider import _get_tool_schemas
+
+        schema = next(s["function"]["parameters"] for s in _get_tool_schemas()
+                      if s["function"]["name"] == tool_name)
+    except Exception:
+        return ""
+    req = set(schema.get("required", []))
+    params = ", ".join(f"{k} ({v.get('type', 'any')}{', required' if k in req else ''})"
+                       for k, v in schema.get("properties", {}).items())
+    sent = ", ".join(_public_args(args)) or "no arguments"
+    return (f"\nHow to call {tool_name}: arguments {params or 'none'}. You sent {sent}. "
+            f"Call {tool_name} again with the required arguments filled in.")
 
 
 def _public_args(args: Dict) -> Dict:
@@ -205,6 +222,10 @@ async def execute_tools(
             logger.error(f"Tool execution error ({tool_name}): {e}")
             logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
             content = f"Tool error: {e}"
+            if isinstance(e, TypeError) and "argument" in str(e):
+                # v0.7.3: tell the model exactly how to call the tool, so the
+                # next round can retry instead of giving up.
+                content += _usage_hint(tool_name, args)
             tool_results_by_id[tool_call_id] = content
             await mem.add("tool", content)
             _emit_tool(agent, tool_name, args, False, str(e), time.time() - start_time)
@@ -254,14 +275,19 @@ async def execute_tools(
             followup = result
 
     try:
-        final_response, _ = await agent._provider_chat(followup, agent.model)
+        final_response, native_calls = await agent._provider_chat(followup, agent.model)
 
-        trigger_hook("post_llm_call", final_response, None)
+        trigger_hook("post_llm_call", final_response, native_calls)
 
-        # v0.7.2: the follow-up itself may be another tool call written as text.
+        # v0.7.3: the model may need another tool after seeing a result (search,
+        # then read; retry a call with corrected arguments …). Native tool calls
+        # in the follow-up used to be thrown away, the reply looked empty and
+        # the run ended with "returned an empty answer" — no multi-step task
+        # (most jobs) could finish. Both native and text tool calls now get
+        # up to MAX_TEXT_ROUNDS more rounds.
         from .text_tools import parse_text_tool_calls
 
-        more = parse_text_tool_calls(final_response)
+        more = native_calls or parse_text_tool_calls(final_response)
         if more and _round < MAX_TEXT_ROUNDS:
             return await execute_tools(agent, more, followup, user_message, user_id, mem,
                                        _depth, had_kb_results, _round=_round + 1)
@@ -279,4 +305,6 @@ async def execute_tools(
         return final_response
     except Exception as e:
         logger.error(f"LLM second call error: {e}")
-        return f"Tool executed but error getting response: {e}"
+        from ..llm_errors import describe_llm_error
+
+        return f"[Error] The tool ran, but the model could not continue: {describe_llm_error(e)}"

@@ -28,6 +28,28 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [pick, setPick] = useState<ModelChoice>({ provider: '', model: '' });
   const [probe, setProbe] = useState<Record<string, ProbeResult & { loading?: boolean }>>({});
+  // v0.7.3: results of a real chat test per "provider/model"
+  const [tests, setTests] = useState<Record<string, { ok?: boolean; error?: string; reply?: string; ms?: number; loading?: boolean }>>({});
+
+  const testModel = async (m: ModelChoice) => {
+    const key = `${m.provider}/${m.model}`;
+    setTests(t => ({ ...t, [key]: { loading: true } }));
+    try {
+      const r = await api<{ ok: boolean; error?: string; reply?: string; ms: number }>('/api/models/test', { method: 'POST', body: JSON.stringify(m) });
+      setTests(t => ({ ...t, [key]: r }));
+    } catch (e) {
+      setTests(t => ({ ...t, [key]: { ok: false, error: (e as Error).message } }));
+    }
+  };
+
+  const testResult = (m: ModelChoice) => {
+    const r = tests[`${m.provider}/${m.model}`];
+    if (!r) return null;
+    if (r.loading) return <span className="muted small"> testing…</span>;
+    return r.ok
+      ? <span className="probe-ok small"> ✔ answers ({r.ms} ms)</span>
+      : <span className="probe-err small" title={r.error}> ✘ {r.error}</span>;
+  };
   const [edit, setEdit] = useState<{ index: number | null; p: CustomProvider } | null>(null);
   const [rotAdd, setRotAdd] = useState<ModelChoice>({ provider: '', model: '' });
 
@@ -140,6 +162,10 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
           <p className="muted">Now: <b>{label(ov.default.provider)}</b> · <code>{ov.default.model}</code>. Used by the default agent and every agent without its own model.</p>
           {modelPicker('pick', pick, setPick)}
           <div className="save-actions">
+            <span>{testResult(pick)}</span>
+            <button className="ghost-btn" disabled={!pick.model || tests[`${pick.provider}/${pick.model}`]?.loading}
+              title="Send a tiny real request — a listed model can still refuse to answer"
+              onClick={() => testModel(pick)}>Test</button>
             <button className="primary-btn" disabled={!pick.model || (pick.provider === ov.default.provider && pick.model === ov.default.model)}
               onClick={() => run(() => api('/api/models/default', { method: 'POST', body: JSON.stringify(pick) }), `Default model is now ${pick.provider}/${pick.model}. The previous one was added to the rotation list.`)}>
               Make default
@@ -150,8 +176,12 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
         <div className="settings-card">
           <div className="card-head">
             <h3>Rotation</h3>
-            <button className="ghost-btn" disabled={!rot.entries.length}
-              onClick={() => run(() => api('/api/models/rotate', { method: 'POST' }), 'Switched to the next model in the list.')}>⟳ Rotate now</button>
+            <span className="row-actions">
+              <button className="ghost-btn" title="Send a tiny real request to every model in the list"
+                onClick={() => [ov.default, ...rot.entries].forEach(testModel)}>Test all</button>
+              <button className="ghost-btn" disabled={!rot.entries.length}
+                onClick={() => run(() => api('/api/models/rotate', { method: 'POST' }), 'Switched to the next model in the list.')}>⟳ Rotate now</button>
+            </span>
           </div>
           <p className="muted">Other models to use with the default one. <b>Fallback</b>: if the default fails (rate limit, server down, missing model) the next one answers. <b>Round-robin</b>: spread requests across all of them.</p>
           <div className="field field-inline">
@@ -167,7 +197,9 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
             ))}
           </div>
           <ol className="rotation-list">
-            <li><b>{ov.default.provider}/{ov.default.model}</b> <span className="badge default-badge">default</span></li>
+            <li><b>{ov.default.provider}/{ov.default.model}</b> <span className="badge default-badge">default</span>
+              <span className="row-actions"><button className="icon-btn" title="Test" onClick={() => testModel(ov.default)}>✓?</button></span>
+              {testResult(ov.default)}</li>
             {rot.entries.map((e, i) => (
               <li key={`${e.provider}/${e.model}`}>
                 {e.provider}/{e.model}
@@ -176,7 +208,9 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
                   <button className="icon-btn" onClick={() => move(i, 1)} title="Down">↓</button>
                   <button className="icon-btn" title="Make default" onClick={() => run(() => api('/api/models/default', { method: 'POST', body: JSON.stringify(e) }), `Default is now ${e.provider}/${e.model}.`)}>★</button>
                   <button className="icon-btn" onClick={() => setRotation(rot.entries.filter((_, j) => j !== i))} title="Remove">×</button>
+                  <button className="icon-btn" title="Test" onClick={() => testModel(e)}>✓?</button>
                 </span>
+                {testResult(e)}
               </li>
             ))}
           </ol>

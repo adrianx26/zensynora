@@ -56,6 +56,7 @@ def test_semantic_cache_vectorized_scan_finds_best_match(monkeypatch, tmp_path):
             timestamp=time.time(),
             access_count=0,
             query_hash=key,
+            model="m",  # v0.7.3: similarity matches only within the same model
         )
 
     # Query with a message list — content goes through the same path

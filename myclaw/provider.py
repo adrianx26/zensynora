@@ -527,6 +527,39 @@ def _ensure_tool_messages(messages: List[Message]) -> List[Message]:
     return result
 
 
+def _fill_empty_content(messages: List[Message]) -> List[Message]:
+    """No message may have empty content (v0.7.3).
+
+    Several providers reject a request when any message has empty content —
+    Cohere via OpenRouter answers "invalid message provided at index N: must
+    have non-empty content". ZenSynora produced such messages: the assistant
+    turn that carries tool calls (content ""), empty replies kept in the
+    conversation history, and the recovery prompt. This broke every follow-up
+    after a tool call with those models. Now:
+
+    * assistant + tool_calls, no text → a short note naming the tools;
+    * assistant / user / system with no text and no tool calls → dropped;
+    * tool result with no text → "(no output)".
+    """
+    out: List[Message] = []
+    for msg in messages:
+        content = msg.get("content")
+        empty = content is None or (isinstance(content, str) and not content.strip())
+        if not empty:
+            out.append(msg)
+            continue
+        role = msg.get("role")
+        if role == "assistant" and msg.get("tool_calls"):
+            names = ", ".join(
+                (tc.get("function") or {}).get("name", "?") for tc in msg["tool_calls"]
+            )
+            out.append({**msg, "content": f"(calling {names})"})
+        elif role == "tool":
+            out.append({**msg, "content": "(no output)"})
+        # empty assistant / user / system messages carry nothing: drop them
+    return out
+
+
 # ── Abstract Base ──────────────────────────────────────────────────────────────
 
 
@@ -726,11 +759,26 @@ class OpenAICompatProvider(BaseLLMProvider):
 
     @staticmethod
     def _is_tools_rejection(err: Exception) -> bool:
+        """True only when the server says it cannot handle tool definitions.
+
+        Fixed 2026-10-14 (v0.7.3): any 400 whose text contained "tool" counted,
+        e.g. "invalid message … must have non-empty content" from a request
+        that merely *contained* tool messages — tools were then switched off
+        for that provider until restart, so agents silently lost their tools.
+        """
         status = getattr(err, "status_code", None)
         if status not in (400, 422, 500, 501):
             return False
         text = str(err).lower()
-        return any(k in text for k in ("tool", "jinja", "function call", "functions"))
+        if any(k in text for k in ("invalid message", "non-empty content", "rate limit", "rate-limited",
+                                   "context length", "maximum context", "too many tokens")):
+            return False
+        return any(k in text for k in (
+            "jinja", "tools are not supported", "does not support tools", "tool use is not supported",
+            "tool calling is not supported", "function calling is not supported", "tools not supported",
+            "unsupported parameter: 'tools'", "unrecognized request argument supplied: tools",
+            "unknown field \"tools\"", "'tools' is not supported", "tool_choice",
+        ))
 
     async def _create_completion(self, **kwargs):
         """chat.completions.create() that retries once without `tools` when
@@ -755,6 +803,7 @@ class OpenAICompatProvider(BaseLLMProvider):
         # Sanitize messages to ensure OpenAI API compatibility
         messages = _sanitize_messages_for_openai(messages)
         messages = _ensure_tool_messages(messages)
+        messages = _fill_empty_content(messages)  # v0.7.3
 
         # Check semantic cache first (skip for streaming)
         if not stream:
@@ -882,13 +931,31 @@ class OpenAICompatProvider(BaseLLMProvider):
             yield chunk
 
 
+def _with_v1(url: str) -> str:
+    """LM Studio / llama.cpp serve the OpenAI API under /v1 (v0.7.3).
+
+    A URL without a path (``http://host:1234``) made every request fail with
+    "Unexpected endpoint or method (POST /chat/completions)". When the URL
+    has no path, /v1 is added; any explicit path is kept as it is.
+    """
+    from urllib.parse import urlparse
+
+    url = (url or "").rstrip("/")
+    try:
+        if url and urlparse(url).path in ("", "/"):
+            return url + "/v1"
+    except ValueError:
+        pass
+    return url
+
+
 class LMStudioProvider(OpenAICompatProvider):
     """LM Studio local server (OpenAI-compat, default http://localhost:1234/v1)."""
 
     def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
         try:
             cfg = config.providers.lmstudio
-            base_url = cfg.base_url
+            base_url = _with_v1(cfg.base_url)
             api_key = cfg.api_key.get_secret_value()
         except Exception:
             base_url = "http://localhost:1234/v1"
@@ -902,7 +969,7 @@ class LlamaCppProvider(OpenAICompatProvider):
     def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
         try:
             cfg = config.providers.llamacpp
-            base_url = cfg.base_url
+            base_url = _with_v1(cfg.base_url)
             api_key = cfg.api_key.get_secret_value()
         except Exception:
             base_url = "http://localhost:8080/v1"
@@ -1409,6 +1476,8 @@ def provider_endpoint(config, name: str) -> Optional[Dict[str, Any]]:
         key = pcfg.api_key.get_secret_value() if pcfg is not None and hasattr(pcfg, "api_key") else ""
         kind = name if name in ("ollama", "anthropic", "gemini") else "openai"
         url = getattr(pcfg, "base_url", "") or _CLOUD_DEFAULT_URLS.get(name, "")
+        if name in ("lmstudio", "llamacpp"):
+            url = _with_v1(url)  # v0.7.3: same URL the provider really uses
         return {"kind": kind, "base_url": url.rstrip("/"), "api_key": key,
                 "local": name in LOCAL_BUILTIN_PROVIDERS, "label": name, "custom": False}
     cp = find_custom_provider(config, name)
@@ -1445,6 +1514,9 @@ async def complete_text(provider: BaseLLMProvider, messages: List[Dict], model: 
     """
     if isinstance(provider, OpenAICompatProvider):
         resp = await provider.client.chat.completions.create(model=model, messages=messages)
+        err = (getattr(resp, "model_extra", None) or {}).get("error")  # v0.7.3: gateway errors in a 200 reply
+        if err or not getattr(resp, "choices", None):
+            raise RuntimeError(f"{model}: {err.get('message') if isinstance(err, dict) else err or 'no answer'}")
         return (resp.choices[0].message.content or "").strip()
     if isinstance(provider, OllamaProvider):
         client = HTTPClientPool.get_client(provider.timeout)

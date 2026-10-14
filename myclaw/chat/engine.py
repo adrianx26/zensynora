@@ -164,6 +164,8 @@ class ChatEngine:
         lines = [f"[Group chat #{ch['name']}. You are @{agent}. Other agents here: "
                  f"{', '.join('@' + o for o in others)}. Reply as @{agent} only; don't repeat what "
                  f"others said. To hand a task to another agent use the delegate tool.]"]
+        if ch.get("topic"):  # v0.7.3: the channel's purpose guides every member
+            lines.append(f"Channel topic: {ch['topic']}")
         # What other agents said since this agent last spoke (earlier turns).
         recent: list[str] = []
         for m in reversed(history):
@@ -214,8 +216,10 @@ class ChatEngine:
             raise
         except Exception as e:
             logger.exception("Agent %s failed in channel %s", agent_name, channel_id)
-            error = str(e)
-            parts.append(f"\n\n[Error: {e}]")
+            from ..llm_errors import describe_llm_error  # v0.7.3
+
+            error = describe_llm_error(e)
+            parts.append(f"\n\n[Error] {error}")
         finally:
             for var, tok in zip((events.CURRENT_CHANNEL, events.CURRENT_AGENT, MEMORY_SCOPE), tokens):
                 var.reset(tok)

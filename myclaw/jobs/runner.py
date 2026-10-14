@@ -148,7 +148,11 @@ class JobRunner:
             output = await asyncio.wait_for(agent.think(job["prompt"], user_id="webui"),
                                             timeout=int(job.get("timeout_s") or 300))
             status = "ok"
-            if output.startswith("Sorry, this task took too long") or output.startswith("[Error"):
+            # v0.7.3: failure texts are runs that failed, not "ok" (the job page
+            # showed every failed run as successful).
+            if output.startswith(("Sorry, this task took too long", "[Error", "I'm sorry — the model",
+                                  "I needed more tool steps", "Tool executed but error")) \
+                    or not output.strip():
                 status, error = "error", output[:500]
         except TimeoutError:
             status, error = "timeout", f"No answer within {job.get('timeout_s')} s"
