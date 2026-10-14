@@ -34,3 +34,43 @@ def install_base() -> Path | None:
     if root.name == "source":
         return root.parent
     return None
+
+
+# ── Running vs. installed version (v0.7.2) ───────────────────────────────────
+# After `zensynora update` the `source` symlink points at the new release, but
+# a process started earlier (or from a terminal whose PATH still holds the old
+# release's venv) keeps running the old code. These helpers detect that.
+
+
+def active_release() -> Path | None:
+    """The release folder that ``<base>/source`` points at now, if managed."""
+    base = install_base()
+    if base is None:
+        return None
+    src = base / "source"
+    return src.resolve() if src.exists() else None
+
+
+def release_version(folder: Path) -> str | None:
+    """Version from a release folder's pyproject.toml (no import needed)."""
+    import re
+
+    try:
+        text = (folder / "pyproject.toml").read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    return m.group(1) if m else None
+
+
+def stale_release() -> dict | None:
+    """``{"running": …, "installed": …, "folder": …}`` when this process runs
+    an older release than the one installed now; otherwise None."""
+    active = active_release()
+    root = install_root()
+    if active is None or active == root.resolve():
+        return None
+    from myclaw import __version__
+
+    return {"running": __version__, "installed": release_version(active) or "?",
+            "folder": str(active)}

@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-10-14
+
+Makes sure you actually see the version you installed, and makes models
+that write tool calls as text work.
+
+### Fixed
+- **The Web UI kept showing the previous version after `zensynora update`.**
+  The update installs the new version next to the old one; a terminal that
+  activated the virtual environment before the update still had the old
+  release on its PATH, so `zensynora webui` started there ran the old code
+  (version shown: the old one, old pages). Now:
+  - a command started from an older release switches to the installed one by
+    itself and says so (`ZENSYNORA_NO_REEXEC=1` turns this off);
+  - `zensynora version` says when a newer version is installed than the one
+    the terminal uses;
+  - the Web UI shows a banner when the running server is older than the
+    installed version (`update_installed` in `/api/system/health`);
+  - the updater's final message explains how to restart (Ctrl+C, new
+    terminal or `source …/source/venv/bin/activate`, reload the page);
+  - `index.html` is served with `Cache-Control: no-cache`, so the browser
+    loads the new build after an update.
+- **Tool calls written as text were shown instead of run.** The system prompt
+  tells models they may answer with `{"tool": "<name>", "args": {...}}`, but
+  only native tool calls were executed — models that follow the prompt
+  literally (e.g. `cohere/north-mini-code:free` on OpenRouter) showed the raw
+  JSON. Such answers are now recognised (also in a ```json fence, as a list,
+  or with `name`/`arguments` keys; only names of real tools), executed, and
+  the result is sent back in plain messages; up to 3 follow-up tool rounds.
+  While streaming, an answer that starts like JSON is held back until it is
+  clear whether it is a tool call, so the JSON never flashes on screen.
+- Unknown `/api/…` and `/ws/…` addresses return 404 instead of the Web UI page
+  with status 200; files such as `favicon.svg` are served as files.
+
+### Changed
+- The Web UI removes the per-agent chat history that versions before 0.7.1
+  kept in the browser (history now lives on the server).
+- Tests: 514 (new: stale-release detection, page serving, text tool calls).
+
 ## [0.7.1] - 2026-10-13
 
 A real multi-agent chat, model switching and your own providers, a Jobs

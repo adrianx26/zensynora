@@ -78,6 +78,13 @@ function App() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { setThemeDoc(theme); }, [theme]);
+  // v0.7.2: chat history now lives on the server (chat channels). Remove the
+  // per-agent copies the pre-0.7.1 chat kept in this browser.
+  useEffect(() => {
+    try {
+      Object.keys(localStorage).filter(k => k.startsWith('zensynora_chat_history_')).forEach(k => localStorage.removeItem(k));
+    } catch { /* storage may be blocked */ }
+  }, []);
   useEffect(() => { store(VIEW_KEY, view); }, [view]);
   useEffect(() => { store(CHANNEL_KEY, channelId); }, [channelId]);
 
@@ -268,6 +275,14 @@ function App() {
               <h2 className="text-gradient">ZenSynora</h2>
               <span className="view-title">{VIEW_TITLES[view]}</span>
               <div className="header-actions"><button className="ghost-btn" onClick={() => go('chat')}>← Back to chat</button></div>
+            </div>
+          )}
+          {/* v0.7.2: the server still runs an older version than the one installed */}
+          {health?.update_installed && (
+            <div className="update-banner">
+              <b>ZenSynora {health.update_installed.installed} is installed</b>, but this server still runs {health.update_installed.running}.
+              Stop <code>zensynora webui</code> (Ctrl+C), open a new terminal, run{' '}
+              <code>source ~/.local/share/zensynora/source/venv/bin/activate</code> and start it again — then reload this page.
             </div>
           )}
           {error && <div className="notice error">{error} <button className="ghost-btn" onClick={() => setError(null)}>×</button></div>}

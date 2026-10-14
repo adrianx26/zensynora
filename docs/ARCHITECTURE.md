@@ -1,6 +1,6 @@
 # ZenSynora Architecture
 
-> **Status:** reflects **v0.7.1** (2026-10-13). Updated from the v0.4.1
+> **Status:** reflects **v0.7.2** (2026-10-14). Updated from the v0.4.1
 > version: adds the Web UI settings API, provider routing changes, the safe
 > updater and the doctor/medic rewrite (0.7.0); chat channels, agent-to-agent
 > events, jobs, backups, model rotation, custom providers and approval-gated
@@ -91,7 +91,7 @@ webui/src/
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 508 tests (pytest --collect-only, 2026-10-13)
+tests/                       # 514 tests (pytest --collect-only, 2026-10-14)
 ```
 
 ---
@@ -258,7 +258,7 @@ Install all extras: `python -m pip install 'zensynora[all]'`.
 
 ## 6. Test inventory
 
-Counted with `pytest --collect-only` on 2026-10-13 (v0.7.1).
+Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 
 | Suite | Tests |
 |---|---|
@@ -291,10 +291,10 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.1).
 | `test_tenancy_scoping.py` | 15 |
 | `test_tools.py` | 35 |
 | `test_updater.py` | 9 |
-| `test_v071_features.py` | 11 |
+| `test_v071_features.py` | 17 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **508** |
+| **Total** | **514** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

@@ -1,3 +1,4 @@
+import os
 import sys
 import asyncio
 import logging
@@ -36,10 +37,52 @@ def _build_registry(config) -> dict:
     return registry
 
 
+def _switch_to_active_release() -> None:
+    """Re-run this command with the installed version if we are an old one.
+
+    Added 2026-10-14 (v0.7.2). `zensynora update` installs the new version
+    next to the old one and repoints ``~/.local/share/zensynora/source``. A
+    terminal that activated the venv *before* the update still has the old
+    release's ``venv/bin`` on its PATH, so `zensynora webui` started there
+    ran the old version — the Web UI kept showing the previous release.
+    Now the command notices and hands over to the installed version.
+    Set ZENSYNORA_NO_REEXEC=1 to disable.
+    """
+    if os.environ.get("ZENSYNORA_NO_REEXEC"):
+        return
+    try:
+        from .doctor.paths import active_release, install_root, stale_release
+
+        stale = stale_release()
+        if not stale:
+            return
+        active = active_release()
+        py = active / "venv" / "bin" / "python"
+        if not py.exists():
+            return
+    except Exception:
+        return
+    old_bin = str(install_root() / "venv" / "bin")
+    new_bin = str(active / "venv" / "bin")
+    click.echo(f"ZenSynora {stale['installed']} is installed; this terminal still points at "
+               f"{stale['running']} — switching to {stale['installed']}.", err=True)
+    click.echo("  (Open a new terminal, or run `source ~/.local/share/zensynora/source/venv/bin/activate`, "
+               "to stop seeing this.)", err=True)
+    env = dict(os.environ)
+    env["ZENSYNORA_NO_REEXEC"] = "1"
+    env["VIRTUAL_ENV"] = str(active / "venv")
+    env.pop("PYTHONPATH", None)
+    env["PATH"] = os.pathsep.join([new_bin] + [p for p in env.get("PATH", "").split(os.pathsep) if p and p != old_bin])
+    os.execve(str(py), [str(py), "-m", "myclaw", *sys.argv[1:]], env)
+
+
 @click.group()
-def cli():
+@click.pass_context
+def cli(ctx):
     """ZenSynora (MyClaw) CLI"""
-    pass
+    # `update` must run from wherever it was started (it manages releases).
+    if ctx.invoked_subcommand not in (None, "update", "version"):
+        _switch_to_active_release()
 
 @cli.command()
 def onboard():
@@ -543,6 +586,17 @@ def version():
     from . import __version__
 
     click.echo(f"ZenSynora {__version__}  ({Path(__file__).resolve().parent.parent})")
+    # v0.7.2: say so when a newer version is installed than the one running here.
+    try:
+        from .doctor.paths import stale_release
+
+        stale = stale_release()
+    except Exception:
+        stale = None
+    if stale:
+        click.echo(f"Installed: {stale['installed']} ({stale['folder']}) — this terminal still uses "
+                   f"{stale['running']}. Open a new terminal or run: "
+                   "source ~/.local/share/zensynora/source/venv/bin/activate")
 
 
 ### WEB UI COMMANDS ###

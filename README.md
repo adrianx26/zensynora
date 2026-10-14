@@ -9,9 +9,9 @@ your conversations, builds a personal knowledge base, uses 95 tools, and can
 split work across teams of agents — with a local model like llama.cpp or
 Ollama, or any major cloud provider.
 
-[![Version](https://img.shields.io/badge/version-0.7.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.2-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)](#requirements)
-[![Tests](https://img.shields.io/badge/tests-508-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-514-brightgreen.svg)](#development)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 
 [Quick start](#quick-start) · [Using it](#using-zensynora) · [Updating](#updating-and-health) ·
@@ -115,6 +115,9 @@ zensynora update rollback         # back to the previous version
 zensynora doctor --fix            # check everything, repair safe issues
 ```
 
+After updating, restart `zensynora webui` and reload the page (a terminal
+opened before the update switches to the new version by itself).
+
 Updates never overwrite a working install. Your data **and the whole
 installed program folder** are backed up first; the new version is built
 next to the current one, checked against **your** configuration and switched
@@ -214,7 +217,7 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 git clone https://github.com/adrianx26/zensynora.git && cd zensynora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q -o addopts=""        # 508 tests
+pytest -q -o addopts=""        # 514 tests
 ruff check .
 ```
 

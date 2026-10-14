@@ -25,6 +25,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# v0.7.2: follow-up rounds allowed for tool calls written as text.
+MAX_TEXT_ROUNDS = 3
+
 
 def _public_args(args: Dict) -> Dict:
     """Tool arguments without internal keys (``_depth``…) for display."""
@@ -49,8 +52,14 @@ async def execute_tools(
     mem: "Memory",
     _depth: int,
     had_kb_results: bool,
+    _round: int = 0,
 ) -> str:
-    """Execute tool calls (parallel + sequential) and return final response."""
+    """Execute tool calls (parallel + sequential) and return final response.
+
+    ``_round`` counts follow-up rounds for tool calls written as text
+    (v0.7.2): a model that answers a tool result with another text tool call
+    gets up to ``MAX_TEXT_ROUNDS`` more rounds.
+    """
     from ..tools import (
         TOOLS,
         trigger_hook,
@@ -215,13 +224,28 @@ async def execute_tools(
         for tc in tool_calls
     ]
 
-    followup = messages + [
-        {"role": "assistant", "content": "", "tool_calls": openai_tool_calls}
-    ]
-    for tc in tool_calls:
-        tool_call_id = tc.get("id", "call_default")
-        content = tool_results_by_id.get(tool_call_id, "Tool was not executed.")
-        followup.append({"role": "tool", "tool_call_id": tool_call_id, "content": content})
+    if all(tc.get("text_call") for tc in tool_calls):
+        # v0.7.2: the model wrote the call as text (see text_tools.py). Answer
+        # in plain messages — models without native tool support may reject
+        # "tool" role messages.
+        results = "\n\n".join(
+            f"Result of {tc['function']['name']}:\n{tool_results_by_id.get(tc.get('id'), 'Tool was not executed.')}"
+            for tc in tool_calls
+        )
+        followup = messages + [
+            {"role": "assistant", "content": tool_calls[0].get("raw_text", "")},
+            {"role": "user", "content": (
+                f"{results}\n\nUse these results to answer my request. Reply in normal text; "
+                "only if you really need another tool, reply with the tool JSON again.")},
+        ]
+    else:
+        followup = messages + [
+            {"role": "assistant", "content": "", "tool_calls": openai_tool_calls}
+        ]
+        for tc in tool_calls:
+            tool_call_id = tc.get("id", "call_default")
+            content = tool_results_by_id.get(tool_call_id, "Tool was not executed.")
+            followup.append({"role": "tool", "tool_call_id": tool_call_id, "content": content})
 
     # Hooks may rewrite the followup before the second LLM call.
     hook_results = trigger_hook("pre_llm_call", followup, agent.model)
@@ -233,6 +257,17 @@ async def execute_tools(
         final_response, _ = await agent._provider_chat(followup, agent.model)
 
         trigger_hook("post_llm_call", final_response, None)
+
+        # v0.7.2: the follow-up itself may be another tool call written as text.
+        from .text_tools import parse_text_tool_calls
+
+        more = parse_text_tool_calls(final_response)
+        if more and _round < MAX_TEXT_ROUNDS:
+            return await execute_tools(agent, more, followup, user_message, user_id, mem,
+                                       _depth, had_kb_results, _round=_round + 1)
+        if more:
+            final_response = ("I needed more tool steps than allowed for one message. "
+                              "Please ask again with a narrower request.")
 
         # Empty-response recovery after tool-use followup.
         if agent._is_empty_response(final_response):

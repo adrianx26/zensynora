@@ -110,7 +110,11 @@ def cmd_update(args) -> int:
     for n in ctx.notes:
         log.info("  note: %s", n)
     if not ctx.service_was_active:
-        log.info("  If ZenSynora is running (webui/agent/gateway), restart it to use the new version.")
+        # v0.7.2: be explicit — restarting from an old terminal used to start the old version.
+        log.info("  If ZenSynora is running (webui/agent/gateway): stop it (Ctrl+C) and start it again.")
+        log.info("  Terminals opened before this update: run  source %s/venv/bin/activate  first",
+                 ctx.layout.source)
+        log.info("  (or open a new terminal). Then reload the browser page.")
     log.info("  Undo with      : %s rollback", _self_cmd())
     log.info("  Log            : %s", logfile)
     return 0
