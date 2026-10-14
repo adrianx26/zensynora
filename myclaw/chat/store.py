@@ -99,7 +99,10 @@ def list_channels() -> list[dict[str, Any]]:
         rows = c.execute(
             "SELECT ch.*, (SELECT MAX(id) FROM messages m WHERE m.channel_id = ch.id) AS last_id, "
             "(SELECT text FROM messages m WHERE m.channel_id = ch.id AND m.role IN ('user','agent') "
-            " ORDER BY id DESC LIMIT 1) AS last_text "
+            " ORDER BY id DESC LIMIT 1) AS last_text, "
+            "(SELECT COUNT(*) FROM messages m WHERE m.channel_id = ch.id AND m.role IN ('user','agent')) "
+            " AS message_count, "
+            "(SELECT MAX(created) FROM messages m WHERE m.channel_id = ch.id) AS last_activity "
             "FROM channels ch ORDER BY ch.kind, ch.name").fetchall()
     out = []
     for r in rows:
@@ -138,6 +141,12 @@ def update_channel(channel_id: str, **fields: Any) -> dict[str, Any] | None:
     for k, v in fields.items():
         if k not in allowed or v is None:
             continue
+        if k == "name":  # v0.7.3: renaming from the Channels page
+            v = str(v).strip()
+            if not v:
+                raise ValueError("A channel needs a name.")
+        if k == "topic":
+            v = str(v).strip()[:500]
         if k == "reply_mode" and v not in REPLY_MODES:
             raise ValueError(f"reply_mode must be one of {', '.join(REPLY_MODES)}")
         if k == "members":

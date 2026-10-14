@@ -9,9 +9,9 @@ your conversations, builds a personal knowledge base, uses 95 tools, and can
 split work across teams of agents — with a local model like llama.cpp or
 Ollama, or any major cloud provider.
 
-[![Version](https://img.shields.io/badge/version-0.7.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.3-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)](#requirements)
-[![Tests](https://img.shields.io/badge/tests-514-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-524-brightgreen.svg)](#development)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 
 [Quick start](#quick-start) · [Using it](#using-zensynora) · [Updating](#updating-and-health) ·
@@ -217,7 +217,7 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 git clone https://github.com/adrianx26/zensynora.git && cd zensynora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q -o addopts=""        # 514 tests
+pytest -q -o addopts=""        # 524 tests
 ruff check .
 ```
 

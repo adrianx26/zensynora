@@ -7,6 +7,57 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-10-14
+
+Agents can finish multi-step tasks and jobs again, errors say what is really
+wrong, and channels can be managed from one page. Found by reading a real
+install's log, where every job ended with "the model returned an empty answer
+twice".
+
+### Fixed
+- **Jobs and multi-step requests never finished.** After a tool ran, a
+  further tool call from the model (search → read, or a retry with corrected
+  arguments) was thrown away; the reply looked empty and the run ended with
+  "returned an empty answer". Follow-up tool calls (native or written as text)
+  now run, up to 4 more rounds.
+- **Cohere models via OpenRouter rejected every follow-up** ("invalid message
+  … must have non-empty content"): ZenSynora sent messages with empty content
+  (the turn carrying tool calls, empty replies in history, the recovery
+  prompt). No message with empty content is sent any more.
+- **Tools were silently switched off**: that 400 error was mistaken for "this
+  server cannot handle tools", which disabled tools for the provider until
+  restart. Only real "tools not supported" errors do that now.
+- **Real errors were reported as "empty answer twice".** A model refused for
+  this kind of app (OpenRouter 403 "only available on agentic harnesses"), rate
+  limits (429), wrong keys, unknown models, wrong URLs and too-long
+  conversations now get a one-line explanation with what to do
+  (`myclaw/llm_errors.py`).
+- **Rotation kept retrying broken models**: a model that was refused, unknown
+  or rate-limited is skipped for a while (30 min / 1 min).
+- **Failed job runs were shown as successful**; they are now "error".
+- **Response cache mixed up answers**: its key ignored the model, the agent's
+  instructions and tool calls, so agents could get each other's answers and a
+  re-run job got the previous (failed) reply. The key covers all of them;
+  empty answers are never cached; similarity matches stay within one model.
+- **LM Studio / llama.cpp URLs without `/v1`** failed with "Unexpected endpoint
+  or method"; `/v1` is added when the URL has no path.
+- A tool called with wrong or missing arguments now tells the model exactly
+  how to call it (for example `browse` needs a `url`), so it can retry.
+- Agents introduced themselves as "MyClaw"; they are ZenSynora now.
+
+### Added
+- **Channels page** (sidebar ⚙ next to Channels, or Navigate → Channels):
+  create channels with a topic, members and reply mode; rename, edit, clear
+  history and delete them; message counts and last activity; direct messages
+  listed too. The channel topic is given to the agents as the channel's
+  purpose.
+- **Test a model for real** on the Models page (Test, Test all, ✓? per entry,
+  `POST /api/models/test`): a tiny chat request, because a model that is
+  listed can still refuse to answer.
+
+### Changed
+- Tests: 524 (new `test_v073_reliability.py`).
+
 ## [0.7.2] - 2026-10-14
 
 Makes sure you actually see the version you installed, and makes models

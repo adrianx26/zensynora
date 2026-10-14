@@ -1,6 +1,7 @@
 # Web UI Guide — chat, models, jobs, backups
 
-> **Applies to:** v0.7.1 · **Added:** 2026-10-13
+> **Applies to:** v0.7.3 · **Added:** 2026-10-13 · **v0.7.3:** Channels page,
+> real model tests
 
 Start the Web UI with `zensynora webui` and open <http://localhost:8000>
 (`--host 127.0.0.1` keeps it on this computer only). This guide covers the
@@ -15,6 +16,12 @@ pages added in 0.7.1. Settings, Costs, Tools and Doctor are described in the
 |---|---|
 | **Channels** (`#general`, `＋` for more) | Group rooms. Pick the members when you create one; change them with ⚙ in the channel bar. |
 | **Agents** (sidebar) | Click an agent for a private conversation (direct message) with it alone. |
+
+**Managing channels** (v0.7.3): the **Channels** page (⚙ next to *Channels*
+in the sidebar) creates channels with a name, a **topic** (the agents are told
+it is the channel's purpose), members and reply mode, and renames, edits,
+clears or deletes them. It shows message counts and last activity, and lists
+the direct-message conversations too.
 
 **Who answers.** In a channel, `@name` addresses an agent (type `@` for a
 list; an agent that is not a member yet is added), `@all` asks every
@@ -53,7 +60,12 @@ channel; *inline activity* hides them from the conversation.
   * *Round-robin*: requests are spread over all models.
   * *Rotate now* makes the next model the default.
   Rotation applies to the default agent and to agents that use the default
-  model; agents with their own model keep it.
+  model; agents with their own model keep it. A model that was just refused,
+  unknown or rate-limited is skipped for a while.
+* **Test / Test all** (v0.7.3) sends a tiny real request. A model can be
+  listed and still refuse to work with ZenSynora (OpenRouter answers some
+  free models with "only available on agentic harnesses"), need credits or not
+  be loaded — test before you rely on it.
 * **Your providers** — *Add provider* for any OpenAI-compatible server
   (local: vLLM, LocalAI, Jan, KoboldCpp, text-generation-webui; online:
   DeepSeek, Mistral, Cerebras, Together, GitHub Models, Hugging Face, NVIDIA

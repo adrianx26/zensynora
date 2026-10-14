@@ -15,15 +15,16 @@ import CostDashboard from './components/CostDashboard';
 import ModelsView from './components/ModelsView';
 import JobsView from './components/JobsView';
 import BackupsView from './components/BackupsView';
+import ChannelsView from './components/ChannelsView';
 import { api, getAdminKey, getApiBase, type AgentInfo, type Channel, type SystemHealth } from './api';
 
-type View = 'chat' | 'models' | 'jobs' | 'backups' | 'settings' | 'costs' | 'tools' | 'doctor';
-const VIEWS: View[] = ['chat', 'models', 'jobs', 'backups', 'settings', 'costs', 'tools', 'doctor'];
+type View = 'chat' | 'channels' | 'models' | 'jobs' | 'backups' | 'settings' | 'costs' | 'tools' | 'doctor';
+const VIEWS: View[] = ['chat', 'channels', 'models', 'jobs', 'backups', 'settings', 'costs', 'tools', 'doctor'];
 const VIEW_KEY = 'zensynora_view';
 const CHANNEL_KEY = 'zensynora_channel';
 const THEME_KEY = 'zensynora_theme';
 const VIEW_TITLES: Record<View, string> = {
-  chat: 'Chat', models: 'Models', jobs: 'Jobs', backups: 'Backups', settings: 'Settings',
+  chat: 'Chat', channels: 'Channels', models: 'Models', jobs: 'Jobs', backups: 'Backups', settings: 'Settings',
   costs: 'Costs & usage', tools: 'Tools', doctor: 'Doctor',
 };
 
@@ -175,7 +176,10 @@ function App() {
         <div className="sidebar-section">
           <div className="sidebar-title">
             <span>Channels</span>
-            <button className="icon-btn" title="New channel" onClick={() => setNewChannel(n => (n ? null : { name: '', members: ['default'] }))}>＋</button>
+            <span className="row-actions">
+              <button className="icon-btn" title="New channel" onClick={() => setNewChannel(n => (n ? null : { name: '', members: ['default'] }))}>＋</button>
+              <button className="icon-btn" title="Manage channels" onClick={() => go('channels')}>⚙</button>
+            </span>
           </div>
           {newChannel && (
             <form className="new-channel" onSubmit={createChannel}>
@@ -227,6 +231,7 @@ function App() {
           <div className="sidebar-title">Navigate</div>
           <nav className="nav-list">
             <NavButton id="chat" icon="💬" label="Chat" view={view} go={go} />
+            <NavButton id="channels" icon="#" label="Channels" view={view} go={go} />
             <NavButton id="models" icon="🧠" label="Models" view={view} go={go} />
             <NavButton id="jobs" icon="⏱" label="Jobs" view={view} go={go} />
             <NavButton id="backups" icon="💾" label="Backups" view={view} go={go} />
@@ -292,6 +297,7 @@ function App() {
           )}
           {view === 'models' && <ModelsView onChanged={onSettingsSaved} />}
           {view === 'jobs' && <JobsView agents={agents} channels={channels} />}
+          {view === 'channels' && <ChannelsView agents={agents} onChanged={loadChannels} onOpen={openChannel} />}
           {view === 'backups' && <BackupsView onRestored={() => { loadAgents(); loadChannels(); loadHealth(); }} />}
           {view === 'settings' && <SettingsView onSaved={onSettingsSaved} />}
           {view === 'tools' && <ToolsView />}
