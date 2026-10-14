@@ -260,3 +260,10 @@ still review proposals but install them by rebuilding / copying.
   what it learned. The run is scored like any job, so the Jobs page shows how
   useful the reviews are. Other agents can join through the chat (for
   example `@coder review proposal …`) and by delegation.
+
+### Troubleshooting (v0.7.2)
+
+| Symptom | Cause / fix |
+|---|---|
+| The Web UI still shows the old version after `zensynora update` | The old server is still running. Stop it (Ctrl+C), start `zensynora webui` again (from 0.7.2 on, an old terminal switches to the new version by itself) and reload the page. |
+| The chat shows `{"tool": "…", "args": …}` as the answer | The model writes tool calls as text. Fixed in 0.7.2 — such calls now run. |

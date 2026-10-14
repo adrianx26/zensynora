@@ -30,6 +30,12 @@ If the `zensynora` command isn't available, use the script directly:
 | `restore --backup NAME` | Restore `~/.myclaw` from a backup (current data is saved first). |
 | `prune` | Delete old releases/backups (defaults: keep 3 releases, 5 backups). |
 
+**After an update, restart ZenSynora** if it was running: stop `zensynora
+webui` (Ctrl+C) and start it again. A terminal opened *before* the update
+still points at the old version — since 0.7.2 commands started there switch
+to the installed version by themselves, and the Web UI shows a banner while an
+older server is still running. Reload the browser page afterwards.
+
 **Upgrading from an install made before 0.6.0** (no `update.sh` yet): run the
 online installer once — it detects the existing install and runs the updater:
 

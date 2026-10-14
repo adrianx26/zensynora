@@ -370,3 +370,154 @@ def test_scheduler_reads_the_job_queue_set_later(home):
         assert "not available" not in scheduler.list_schedules().lower()
     finally:
         core.set_job_queue(old)
+
+
+# ── v0.7.2: tool calls written as text ───────────────────────────────────────
+
+def test_parse_text_tool_calls_recognises_only_real_tool_json():
+    from myclaw.agent_internals.text_tools import parse_text_tool_calls
+
+    known = {"search_knowledge", "list_tools"}
+    calls = parse_text_tool_calls('{"tool": "search_knowledge", "args": {"query": "hello", "limit": 10}}', known)
+    assert calls and calls[0]["function"]["name"] == "search_knowledge"
+    assert calls[0]["function"]["arguments"] == {"query": "hello", "limit": 10} and calls[0]["text_call"]
+    assert parse_text_tool_calls('```json\n{"name": "list_tools", "arguments": "{}"}\n```', known)
+    assert len(parse_text_tool_calls('[{"tool": "list_tools"}, {"tool": "search_knowledge", "args": {}}]', known)) == 2
+    for not_a_call in ['Hello! {"tool": "list_tools"}', '{"tool": "rm_rf", "args": {}}',
+                       '{"a": 1}', "plain text", "", None, '{"tool": "list_tools", "args": [1]}']:
+        assert parse_text_tool_calls(not_a_call, known) is None
+
+
+def test_stream_runs_a_tool_call_written_as_text(home, monkeypatch):
+    """The model writes {"tool": …} as text: it must run, not be shown."""
+    import myclaw.agent as agent_mod
+    from myclaw.config import load_config
+
+    a = agent_mod.Agent(load_config(), name="default")
+    seen = {}
+
+    async def fake_chat(messages, model, stream=False):
+        async def gen():
+            for part in ['{"tool": "search_', 'knowledge", "args": {"query": "hello"}}']:
+                yield part
+        return gen(), []
+
+    async def fake_tools(tool_calls, *args, **kwargs):
+        seen["calls"] = tool_calls
+        return "Nothing about hello in your notes yet."
+
+    async def no_kb(*a, **k):
+        return ""
+
+    monkeypatch.setattr(a, "_provider_chat", fake_chat)
+    monkeypatch.setattr(a, "_execute_tools", fake_tools)
+    monkeypatch.setattr(a, "_search_knowledge_context", no_kb)
+
+    async def collect():
+        return [c async for c in a.stream_think("hello", user_id="t3")]
+
+    chunks = asyncio.run(collect())
+    text = "".join(c for c in chunks if not c.startswith("__") and not c.startswith('{"tool"'))
+    assert seen["calls"][0]["function"]["name"] == "search_knowledge"
+    assert '"args"' not in text and "Nothing about hello" in text
+
+
+def test_stream_json_answer_that_is_not_a_tool_is_still_shown(home, monkeypatch):
+    import myclaw.agent as agent_mod
+    from myclaw.config import load_config
+
+    a = agent_mod.Agent(load_config(), name="default")
+
+    async def fake_chat(messages, model, stream=False):
+        async def gen():
+            yield '{"name": "Ana", '
+            yield '"age": 30}'
+        return gen(), []
+
+    async def no_kb(*a, **k):
+        return ""
+
+    monkeypatch.setattr(a, "_provider_chat", fake_chat)
+    monkeypatch.setattr(a, "_search_knowledge_context", no_kb)
+
+    async def collect():
+        return "".join([c async for c in a.stream_think("give me json", user_id="t4")])
+
+    assert '{"name": "Ana", "age": 30}' in asyncio.run(collect())
+
+
+def test_text_tool_followup_uses_plain_messages_and_allows_more_rounds(home, monkeypatch):
+    from myclaw.agent_internals import tool_executor
+    from myclaw.agent_internals.text_tools import parse_text_tool_calls
+    from myclaw.tools import TOOLS
+
+    calls_seen = []
+    monkeypatch.setitem(TOOLS, "echo_tool", {"func": lambda text="": f"echo:{text}", "desc": "echo"})
+    replies = iter(['{"tool": "echo_tool", "args": {"text": "two"}}', "Final answer: echo two"])
+
+    class FakeAgent:
+        model = "m"
+        name = "default"
+        _kb_auto_extract = False
+        _current_task_id = None
+        _task_timer = None
+
+        def _detect_browse_failure(self, *a, **k):
+            return False
+
+        def _browse_alternative_hint(self, *a, **k):
+            return ""
+
+        def _record_kb_gap(self, *a, **k):
+            pass
+
+        async def _provider_chat(self, msgs, model):
+            calls_seen.append(msgs)
+            return next(replies), None
+
+        def _is_empty_response(self, t):
+            return not t
+
+    class Mem:
+        async def add(self, *a):
+            pass
+
+    first = parse_text_tool_calls('{"tool": "echo_tool", "args": {"text": "one"}}')
+    out = asyncio.run(tool_executor.execute_tools(FakeAgent(), first, [{"role": "user", "content": "x"}],
+                                                  "x", "u", Mem(), 0, True))
+    assert out == "Final answer: echo two"
+    assert all(m["role"] != "tool" for m in calls_seen[0])          # plain messages only
+    assert "echo:one" in calls_seen[0][-1]["content"] and "echo:two" in calls_seen[1][-1]["content"]
+
+
+# ── v0.7.2: old server / old terminal after an update ────────────────────────
+
+def test_stale_release_is_detected(tmp_path, monkeypatch):
+    from myclaw.doctor import paths
+
+    base = tmp_path / "zensynora"
+    old, new = base / "releases" / "0.7.0-a", base / "releases" / "9.9.9-b"
+    for d, v in ((old, "0.7.0"), (new, "9.9.9")):
+        d.mkdir(parents=True)
+        (d / "pyproject.toml").write_text(f'[project]\nname = "x"\nversion = "{v}"\n')
+    (base / "source").symlink_to(new)
+    monkeypatch.setattr(paths, "install_root", lambda: old)
+    monkeypatch.setattr(paths, "install_base", lambda: base)
+    info = paths.stale_release()
+    assert info and info["installed"] == "9.9.9" and info["folder"] == str(new.resolve())
+    monkeypatch.setattr(paths, "install_root", lambda: new)
+    assert paths.stale_release() is None
+
+
+def test_spa_serving_no_cache_and_api_404():
+    from pathlib import Path
+
+    import myclaw.web.api as api_mod
+
+    if not (Path(api_mod.__file__).parent.parent.parent / "webui" / "dist" / "index.html").exists():
+        pytest.skip("web UI not built")
+    c = TestClient(api_mod.app)
+    r = c.get("/")
+    assert r.status_code == 200 and "no-cache" in r.headers.get("cache-control", "")
+    assert c.get("/api/does-not-exist").status_code == 404
+    assert c.get("/some/page").status_code == 200  # client-side routes still get the app

@@ -92,7 +92,11 @@ def test_execute_tools_accepts_expected_signature():
         "agent", "tool_calls", "messages", "user_message",
         "user_id", "mem", "_depth", "had_kb_results",
     ]
-    assert list(sig.parameters) == expected
+    # v0.7.2 adds an optional trailing ``_round`` (text tool-call follow-ups);
+    # the positional contract callers rely on is unchanged.
+    assert list(sig.parameters)[:len(expected)] == expected
+    assert [p for p in list(sig.parameters)[len(expected):]] == ["_round"]
+    assert sig.parameters["_round"].default == 0
 
 
 # ── Stub-driven route_message integration ─────────────────────────────────

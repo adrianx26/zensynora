@@ -72,6 +72,8 @@ export interface SystemHealth {
   config_file_exists: boolean;
   websocket_clients: number;
   version?: string;
+  /** v0.7.2: set when a newer version was installed than the one this server runs. */
+  update_installed?: { running: string; installed: string; folder: string } | null;
 }
 
 // ── v0.7.1: channels, jobs, models, backups, medic proposals ─────────────────

@@ -894,3 +894,6 @@ textarea.chat-input { resize: none; line-height: 1.4; min-height: 52px; padding:
   .event-row { padding-left: 0; }
 }
 .channel-actions .ghost-btn.active { color: var(--accent-color); border-color: var(--accent-color); background: var(--chat-user-bg); }
+/* v0.7.2: "newer version installed — restart" banner */
+.update-banner { margin: 12px 20px 0; padding: 10px 14px; border-radius: 8px; border: 1px solid #d29922; background: rgba(210, 153, 34, 0.12); font-size: 0.88rem; line-height: 1.5; }
+.update-banner code { font-size: 0.8rem; }

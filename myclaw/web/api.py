@@ -411,9 +411,25 @@ if _DIST_DIR.exists():
 
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
-        """Serve the React SPA — return index.html for all non-API routes."""
-        # API routes are handled above; this catch-all serves the frontend
+        """Serve the React SPA — return index.html for all non-API routes.
+
+        Changed 2026-10-14 (v0.7.2):
+        * index.html is sent with ``Cache-Control: no-cache`` so the browser
+          picks up a new build after an update (the hashed /assets files can
+          still be cached forever) — before, an updated Web UI could keep
+          showing the previous version;
+        * unknown ``/api/…`` and ``/ws/…`` paths answer 404 instead of the
+          HTML page with status 200, which hid missing endpoints;
+        * real files in dist/ (favicon.svg, icons.svg) are served as files.
+        """
+        from fastapi.responses import JSONResponse
+
+        if full_path.startswith(("api/", "ws/")) or full_path in ("api", "ws"):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        candidate = (_DIST_DIR / full_path).resolve()
+        if full_path and candidate.is_file() and _DIST_DIR.resolve() in candidate.parents:
+            return FileResponse(str(candidate))
         index_file = _DIST_DIR / "index.html"
         if index_file.exists():
-            return FileResponse(str(index_file))
+            return FileResponse(str(index_file), headers={"Cache-Control": "no-cache, must-revalidate"})
         return {"error": "Frontend not built. Run `cd webui && npm run build`."}

@@ -253,8 +253,9 @@ async def _load_profile_cached_async(name: str, profile_path: Path) -> str:
 
 SYSTEM_PROMPT = (
     "You are MyClaw, a personal AI agent with access to a knowledge base, TOOLBOX, and Agent Swarms. "
-    "You can call tools by responding ONLY with JSON: "
-    '{"tool": "<name>", "args": {<key>: <value>}}. '
+    "Use the provided function-calling tools. If you cannot call functions natively, call a tool "
+    "by responding ONLY with JSON, nothing else: "
+    '{"tool": "<name>", "args": {<key>: <value>}} — you then get the result and answer in normal text. '
     "Core tools: shell(cmd), read_file(path), write_file(path, content), "
     "browse(url, max_length), download_file(url, path), delegate(agent_name, task). "
     "Tool management: list_tools(), register_tool(name, code, documentation), "
@@ -1518,6 +1519,11 @@ class Agent:
             import httpx
 
             response, tool_calls = await self._provider_chat(messages, request_model)
+            if not tool_calls:
+                # v0.7.2: a tool call written as text ({"tool": …, "args": …}).
+                from .agent_internals.text_tools import parse_text_tool_calls
+
+                tool_calls = parse_text_tool_calls(response)
         except httpx.TimeoutException as e:
             logger.error(f"LLM provider timeout: {e}")
             error_msg = "Sorry, the LLM service timed out. Please try again."
@@ -1657,12 +1663,31 @@ class Agent:
             tool_calls_collector = []
 
         response_parts = []
+        # v0.7.2: an answer that starts like JSON may be a tool call written
+        # as text — hold it back until the stream ends instead of showing it.
+        from .agent_internals.text_tools import looks_like_text_tool_call, parse_text_tool_calls
+
+        held: List[str] = []
+        holding: Optional[bool] = None  # None = undecided, True = holding, False = passing through
 
         try:
             async for chunk in stream_iterator:
-                if chunk:
-                    response_parts.append(chunk)
+                if not chunk:
+                    continue
+                response_parts.append(chunk)
+                if holding is False:
                     yield chunk
+                    continue
+                held.append(chunk)
+                head = "".join(held)
+                if not head.strip():
+                    continue
+                if looks_like_text_tool_call(head):
+                    holding = True
+                    continue
+                holding = False
+                held = []
+                yield head
         except Exception as e:
             logger.error(f"Error in initial streaming: {e}")
             yield f"\n\n[Error streaming response: {e}]"
@@ -1673,6 +1698,10 @@ class Agent:
         # The provider fills the collector while the stream is consumed, so it
         # is complete only now.
         tool_calls = tool_calls_collector if tool_calls_collector else None
+        if not tool_calls:
+            tool_calls = parse_text_tool_calls(full_response)
+        if held and not tool_calls:
+            yield "".join(held)  # it was ordinary text after all (e.g. JSON you asked for)
 
         # Empty-response recovery for streaming.
         # Fixed 2026-10-13 (v0.7.1): this ran before the tool-call check, so a

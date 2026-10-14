@@ -498,6 +498,14 @@ async def system_health():
         "config_file_exists": CONFIG_FILE.exists(),
         "version": __import__("myclaw").__version__,
     }
+    # v0.7.2: tell the UI when a newer version was installed while this
+    # server kept running the old one ("updated — restart ZenSynora").
+    try:
+        from myclaw.doctor.paths import stale_release
+
+        data["update_installed"] = stale_release()
+    except Exception:  # pragma: no cover - informational only
+        data["update_installed"] = None
     _health_cache.update(at=now, data=data)
     out = dict(data)
     out["websocket_clients"] = _active_ws["count"]
