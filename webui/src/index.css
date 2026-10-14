@@ -899,3 +899,11 @@ textarea.chat-input { resize: none; line-height: 1.4; min-height: 52px; padding:
 .update-banner code { font-size: 0.8rem; }
 /* v0.7.3: Channels page */
 .member-chip.small-chip { font-size: 0.72rem; padding: 0 7px; margin: 0 4px 4px 0; display: inline-flex; }
+
+/* v0.7.5: medic diagnosis of a failed job run */
+.medic-panel { border: 1px solid var(--panel-border); border-left: 3px solid var(--accent-color); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.medic-panel p { margin: 0; }
+.medic-panel ul { margin: 4px 0 0 18px; padding: 0; }
+.medic-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.chip.danger { border-color: var(--danger-color); color: var(--danger-color); }
+td.pre { white-space: pre-wrap; word-break: break-word; max-width: 420px; }

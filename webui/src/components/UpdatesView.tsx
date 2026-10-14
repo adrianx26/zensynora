@@ -151,8 +151,8 @@ const UpdatesView: React.FC = () => {
                       : `✖ The ${st.action || 'update'} did not finish${st.exit_code != null ? ` (exit code ${st.exit_code})` : ''}. ${st.action === 'update' ? 'The previous version was kept.' : ''}`}
                 </div>
                 {st.update_running && (
-                  <div className="progress-bar" style={{ height: 6, background: 'var(--border, #444)', borderRadius: 3, overflow: 'hidden', margin: '6px 0' }}>
-                    <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent, #6c8cff)', transition: 'width .4s' }} />
+                  <div className="progress-bar" style={{ height: 6, background: 'var(--panel-border)', borderRadius: 3, overflow: 'hidden', margin: '6px 0' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent-color)', transition: 'width .4s' }} />
                   </div>
                 )}
                 {st.tail && <pre className="log-tail" style={{ maxHeight: 260, overflow: 'auto', fontSize: 12, whiteSpace: 'pre-wrap' }}>{st.tail}</pre>}

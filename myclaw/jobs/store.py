@@ -76,7 +76,27 @@ CREATE INDEX IF NOT EXISTS ix_runs_job ON runs(job_id, id);
 
 EDITABLE = ("name", "prompt", "agent", "schedule", "every_minutes", "at_time", "days", "run_at",
             "enabled", "channel_id", "success_criteria", "auto_evaluate", "fresh_context",
-            "timeout_s", "retries")
+            "timeout_s", "retries", "on_failure", "max_steps")
+ON_FAILURE = ("", "diagnose", "fix")  # v0.7.5: what the medic does when a run fails
+
+# Columns added after 0.7.1 (older jobs.db files get them on first use).
+_ADDED_COLUMNS = {
+    "jobs": [("on_failure", "TEXT NOT NULL DEFAULT ''"), ("max_steps", "INTEGER NOT NULL DEFAULT 8")],
+    "runs": [("diagnosis", "TEXT NOT NULL DEFAULT ''")],
+}
+_migrated: set[str] = set()
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    key = str(db_path())
+    if key in _migrated:
+        return
+    for table, cols in _ADDED_COLUMNS.items():
+        have = {r[1] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for name, decl in cols:
+            if name not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {decl}")
+    _migrated.add(key)
 
 
 def db_path() -> Path:
@@ -91,6 +111,7 @@ def _conn() -> Iterator[sqlite3.Connection]:
     conn.row_factory = sqlite3.Row
     try:
         conn.executescript(_SCHEMA)
+        _migrate(conn)
         yield conn
         conn.commit()
     finally:
@@ -135,6 +156,10 @@ def validate(job: dict[str, Any]) -> None:
         raise ValueError("Pick the date and time for a one-time job.")
     if int(job.get("timeout_s") or 0) < 10:
         raise ValueError("Timeout must be at least 10 seconds.")
+    if (job.get("on_failure") or "") not in ON_FAILURE:
+        raise ValueError("When a run fails: choose nothing, diagnose or fix.")
+    if not 1 <= int(job.get("max_steps") or 8) <= 30:
+        raise ValueError("Tool steps must be between 1 and 30.")
 
 
 def compute_next_run(job: dict[str, Any], after: float | None = None) -> float | None:
@@ -194,7 +219,7 @@ def create_job(data: dict[str, Any]) -> dict[str, Any]:
     job = {"agent": "default", "schedule": "manual", "every_minutes": 60, "at_time": "09:00", "days": "",
            "run_at": None, "enabled": True, "channel_id": "", "success_criteria": "",
            "auto_evaluate": False, "fresh_context": True, "timeout_s": 300, "retries": 0,
-           "created_by": "you"}
+           "on_failure": "", "max_steps": 8, "created_by": "you"}
     job.update({k: v for k, v in data.items() if k in EDITABLE or k == "created_by"})
     validate(job)
     now = time.time()
@@ -288,11 +313,18 @@ def get_run(run_id: int) -> dict[str, Any] | None:
 
 def _run(row: sqlite3.Row) -> dict[str, Any]:
     d = dict(row)
-    try:
-        d["evaluation"] = json.loads(d["evaluation"]) if d.get("evaluation") else None
-    except ValueError:
-        d["evaluation"] = {"text": d["evaluation"]}
+    for k in ("evaluation", "diagnosis"):
+        try:
+            d[k] = json.loads(d[k]) if d.get(k) else None
+        except ValueError:
+            d[k] = {"text": d[k]}
     return d
+
+
+def set_diagnosis(run_id: int, diagnosis: dict[str, Any]) -> None:
+    """The medic's diagnosis of a failed run (v0.7.5)."""
+    with _conn() as c:
+        c.execute("UPDATE runs SET diagnosis = ? WHERE id = ?", (json.dumps(diagnosis), run_id))
 
 
 def list_runs(job_id: str, limit: int = 50, kind: str | None = None) -> list[dict[str, Any]]:

@@ -71,6 +71,8 @@ class JobIn(BaseModel):
     fresh_context: bool | None = None
     timeout_s: int | None = None
     retries: int | None = None
+    on_failure: str | None = None   # v0.7.5: "" | "diagnose" | "fix"
+    max_steps: int | None = None    # v0.7.5: tool rounds per run
 
 
 class BenchIn(BaseModel):
@@ -179,3 +181,48 @@ async def evaluate(run_id: int, body: EvalIn = EvalIn()):
 @router.post("/api/jobs/runs/{run_id}/cancel", dependencies=guard)
 async def cancel(run_id: int):
     return {"cancelled": runner().cancel_run(run_id)}
+
+
+# ── v0.7.5: the medic for failed runs ───────────────────────────────────────
+@router.post("/api/jobs/runs/{run_id}/diagnose", dependencies=guard)
+async def diagnose(run_id: int):
+    """Why did this run fail, and what would fix it?"""
+    from myclaw.jobs import medic
+
+    try:
+        return await medic.diagnose(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No such run")
+
+
+class FixIn(BaseModel):
+    run_again: bool = True
+
+
+@router.post("/api/jobs/runs/{run_id}/fix", dependencies=guard)
+async def apply_fix(run_id: int, body: FixIn = FixIn()):
+    """Apply the medic's suggested job changes (and run the job again)."""
+    from myclaw.jobs import medic
+
+    try:
+        job = await medic.apply_fix(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No such run")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    if body.run_again:
+        runner().run_in_background(job["id"], trigger="medic")
+    return {"job": _with_state(job), "running": body.run_again}
+
+
+@router.post("/api/jobs/runs/{run_id}/code-fix", dependencies=guard)
+async def code_fix(run_id: int):
+    """Let the medic look for a bug in ZenSynora's code and propose a fix."""
+    from myclaw.jobs import medic
+
+    try:
+        job = await medic.code_fix_job(run_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No such run")
+    runner().run_in_background(job["id"], trigger="medic")
+    return {"job_id": job["id"], "name": job["name"]}

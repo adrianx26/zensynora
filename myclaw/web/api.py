@@ -92,6 +92,12 @@ async def _reset_agent_registry() -> None:
             await agent.close()
         except Exception as exc:  # pragma: no cover - best effort
             logger.debug("Error closing agent during registry reset: %s", exc)
+    # v0.7.5: an agent renamed or deleted in Settings leaves its channels at once
+    # (it used to stay a "zombie" member that blocked every member change).
+    try:
+        _chat_api.sync_channels()
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Could not update channels after the settings change: %s", exc)
 
 
 from myclaw.web import settings_api as _settings_api  # noqa: E402

@@ -115,6 +115,9 @@ class JobRunner:
                 if status in ("ok", "cancelled"):
                     break
         await asyncio.to_thread(store.mark_ran, job_id, status, time.time())
+        # v0.7.5: the medic looks at failed runs when the job asks for it.
+        if run_id and status not in ("ok", "cancelled") and job.get("on_failure") and trigger != "medic":
+            return await self._medic_after_failure(job, run_id)
         if run_id and status == "ok" and job.get("auto_evaluate"):
             try:
                 await self.evaluate_run(run_id)
@@ -122,9 +125,34 @@ class JobRunner:
                 logger.warning("auto-evaluate of run %s failed: %s", run_id, e)
         return run_id
 
+    async def _medic_after_failure(self, job: dict[str, Any], run_id: int) -> int:
+        """Diagnose; with on_failure="fix" apply the job changes and run once more."""
+        from . import medic
+
+        try:
+            diag = await medic.diagnose(run_id)
+        except Exception as e:
+            logger.warning("medic could not diagnose run %s: %s", run_id, e)
+            return run_id
+        if job.get("on_failure") != "fix" or not diag.get("job_changes"):
+            return run_id
+        try:
+            await medic.apply_fix(run_id)
+        except Exception as e:
+            logger.warning("medic could not apply the fix for run %s: %s", run_id, e)
+            return run_id
+        logger.info("medic changed job %s (%s) and runs it again", job["id"], ", ".join(diag["job_changes"]))
+        rerun = await self.run_job(job["id"], trigger="medic")  # trigger "medic": no second round
+        if rerun:
+            d = (await asyncio.to_thread(store.get_run, run_id) or {}).get("diagnosis") or {}
+            d["rerun_id"] = rerun
+            await asyncio.to_thread(store.set_diagnosis, run_id, d)
+        return rerun or run_id
+
     async def _execute(self, job: dict[str, Any], run_id: int, agent: Any = None,
                        kind: str = "run") -> str:
         from ..agent import MEMORY_SCOPE
+        from ..agent_internals.tool_executor import MAX_ROUNDS
 
         agent = agent or self._registry().get(job["agent"]) or self._registry().get("default")
         if agent is None:
@@ -134,6 +162,7 @@ class JobRunner:
         scope = f"job-{job['id']}" if kind == "run" else f"bench-{job['id']}-{run_id}"
         tokens = (events.CURRENT_CHANNEL.set(channel), events.CURRENT_AGENT.set(agent.name),
                   MEMORY_SCOPE.set(scope))
+        steps_token = MAX_ROUNDS.set(int(job.get("max_steps") or 8))  # v0.7.5
         status, output, error = "error", "", ""
         try:
             if job.get("fresh_context", True) or kind != "run":
@@ -169,6 +198,7 @@ class JobRunner:
                              "run_id": run_id, "result": events.short(output or error, 4000)})
             for var, tok in zip((events.CURRENT_CHANNEL, events.CURRENT_AGENT, MEMORY_SCOPE), tokens):
                 var.reset(tok)
+            MAX_ROUNDS.reset(steps_token)
         if channel and status == "ok" and self._chat:
             try:
                 await self._chat().post_as_agent(channel, agent.name, output,

@@ -301,7 +301,10 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
 
   const toggleMember = (name: string) => {
     if (!channel) return;
-    const members = channel.members.includes(name) ? channel.members.filter(m => m !== name) : [...channel.members, name];
+    // v0.7.5: only send agents that exist — a deleted agent left in the list made every change fail
+    const known = new Set(agents.map(a => a.name));
+    const current = channel.members.filter(m => known.has(m));
+    const members = current.includes(name) ? current.filter(m => m !== name) : [...current, name];
     if (members.length) patchChannel({ members });
   };
 

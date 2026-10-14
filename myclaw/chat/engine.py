@@ -90,6 +90,9 @@ class ChatEngine:
         ch = await asyncio.to_thread(store.get_channel, channel_id)
         if ch is None:
             raise KeyError(channel_id)
+        if ch["kind"] == "dm" and ch["members"][0] not in self._registry():  # v0.7.5
+            raise ValueError(f"@{ch['members'][0]} no longer exists (renamed or deleted in Settings). "
+                             "Delete this conversation on the Channels page.")
         msg = await asyncio.to_thread(store.add_message, channel_id, "user", sender, text)
         events.publish(channel_id, {"type": "message", "message": msg})
         task = asyncio.create_task(self._run_turn(channel_id, text))
@@ -117,7 +120,8 @@ class ChatEngine:
         mentioned = [m for m in _MENTION.findall(text)]
         if any(m.lower() in ("all", "everyone", "channel") for m in mentioned):
             return members
-        picked = [m for m in dict.fromkeys(mentioned) if m in known]
+        # v0.7.5: @executor finds "Executor" (mentions ignore upper/lower case)
+        picked, _ = store.canonical_members(list(dict.fromkeys(mentioned)), list(known))
         if picked:
             return picked
         if ch["kind"] == "dm" or ch["reply_mode"] == "lead":

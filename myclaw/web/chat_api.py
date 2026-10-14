@@ -52,6 +52,24 @@ def set_registry_getter(fn: Callable[[], dict[str, Any]]) -> None:
     global _registry_getter, _engine
     _registry_getter = fn
     _engine = ChatEngine(fn)
+    try:  # v0.7.5: answers cut off by a stop/restart no longer stay "typing…" forever
+        n = store.close_interrupted()
+        if n:
+            logger.info("Closed %d chat answer(s) interrupted by the last stop", n)
+    except Exception as e:  # pragma: no cover - never block start-up
+        logger.warning("Could not close interrupted answers: %s", e)
+
+
+def sync_channels() -> list[dict[str, Any]]:
+    """Drop agents that no longer exist from channels (after settings change)."""
+    changes = store.repair_channels(engine().agents())
+    for c in changes:
+        ch = store.get_channel(c["id"])
+        if ch:
+            events.publish(c["id"], {"type": "channel", "channel": ch})
+    if changes:
+        logger.info("Channels repaired: %s", changes)
+    return changes
 
 
 def engine() -> ChatEngine:
@@ -68,11 +86,14 @@ def _get_channel(channel_id: str) -> dict[str, Any] | None:
     return ch
 
 
-def _check_agents(names: list[str]) -> None:
-    known = set(engine().agents())
-    unknown = [n for n in names if n not in known]
-    if unknown:
-        raise HTTPException(status_code=400, detail=f"Unknown agent(s): {', '.join(unknown)}")
+def _check_agents(names: list[str], already: list[str] | None = None) -> list[str]:
+    """Agent names as they exist (any case). Unknown names that were already
+    members are dropped quietly (deleted agents); new unknown names are an error."""
+    members, unknown = store.canonical_members(names, engine().agents())
+    new_unknown = [n for n in unknown if n not in (already or [])]
+    if new_unknown:
+        raise HTTPException(status_code=400, detail=f"Unknown agent(s): {', '.join(new_unknown)}")
+    return members
 
 
 class ChannelIn(BaseModel):
@@ -96,33 +117,37 @@ class PostIn(BaseModel):
 @router.get("/api/channels")
 async def list_channels():
     await asyncio.to_thread(store.ensure_default_channel)
+    await asyncio.to_thread(sync_channels)
     chans = await asyncio.to_thread(store.list_channels)
+    known = set(engine().agents())
     for c in chans:
         c["busy"] = engine().busy(c["id"])
+        c["orphan"] = c["kind"] == "dm" and c["members"][0] not in known  # agent deleted
     return {"channels": chans, "agents": engine().agents(), "reply_modes": list(store.REPLY_MODES)}
 
 
 @router.post("/api/channels")
 async def create_channel(body: ChannelIn):
-    _check_agents(body.members)
+    members = _check_agents(body.members)
     try:
-        return await asyncio.to_thread(store.create_channel, body.name, body.members, body.topic, body.reply_mode)
+        return await asyncio.to_thread(store.create_channel, body.name, members, body.topic, body.reply_mode)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/api/channels/dm/{agent}")
 async def dm_channel(agent: str):
-    _check_agents([agent])
-    return await asyncio.to_thread(store.dm_channel, agent)
+    return await asyncio.to_thread(store.dm_channel, _check_agents([agent])[0])
 
 
 @router.patch("/api/channels/{channel_id}")
 async def update_channel(channel_id: str, body: ChannelPatch):
+    fields = body.model_dump()
     if body.members is not None:
-        _check_agents(body.members)
+        current = await asyncio.to_thread(store.get_channel, channel_id)
+        fields["members"] = _check_agents(body.members, current["members"] if current else [])
     try:
-        ch = await asyncio.to_thread(store.update_channel, channel_id, **body.model_dump())
+        ch = await asyncio.to_thread(store.update_channel, channel_id, **fields)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     if ch is None:

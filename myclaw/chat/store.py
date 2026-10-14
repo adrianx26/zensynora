@@ -94,6 +94,85 @@ def slug(name: str) -> str:
 
 
 # ── Channels ─────────────────────────────────────────────────────────────────
+def clean_name(name: str) -> str:
+    """'#house ' -> 'house' (the UI adds the # itself; v0.7.5)."""
+    return (name or "").strip().lstrip("#").strip()
+
+
+def canonical_members(names: list[str], known: list[str]) -> tuple[list[str], list[str]]:
+    """Match names to existing agents ignoring case. Returns (members, unknown)."""
+    by_lower = {k.lower(): k for k in known}
+    members, unknown = [], []
+    for n in names:
+        k = by_lower.get((n or "").strip().lstrip("@").lower())
+        if k:
+            if k not in members:
+                members.append(k)
+        elif n:
+            unknown.append(n)
+    return members, unknown
+
+
+def repair_channels(known: list[str], default: str = "default") -> list[dict[str, Any]]:
+    """Remove agents that no longer exist from group channels (v0.7.5).
+
+    An agent that was renamed or deleted in Settings stayed a member of its
+    channels; every later member change was then refused ("Unknown agent"),
+    so the "zombie" could neither be removed nor new agents added. Also
+    strips a leading '#' from channel names. Returns what was changed.
+    """
+    changes: list[dict[str, Any]] = []
+    with _conn() as c:
+        rows = c.execute("SELECT * FROM channels").fetchall()
+        for r in rows:
+            ch = _channel(r)
+            sets: dict[str, Any] = {}
+            if ch["kind"] == "channel":
+                members, gone = canonical_members(ch["members"], known)
+                if gone or members != ch["members"]:
+                    sets["members"] = json.dumps(members or [default])
+            name = clean_name(ch["name"])
+            if name and name != ch["name"]:
+                sets["name"] = name
+            if not sets:
+                continue
+            c.execute(f"UPDATE channels SET {', '.join(k + ' = ?' for k in sets)}, updated = ? WHERE id = ?",
+                      (*sets.values(), time.time(), ch["id"]))
+            removed = [m for m in ch["members"] if m not in json.loads(sets.get("members", "[]") or "[]")] \
+                if "members" in sets else []
+            if removed:
+                c.execute("INSERT INTO messages (channel_id, role, sender, text, meta, created) "
+                          "VALUES (?, 'system', '', ?, '{}', ?)",
+                          (ch["id"], f"Removed {', '.join('@' + m for m in removed)} from this channel — "
+                                     f"{'that agent no longer exists' if len(removed) == 1 else 'those agents no longer exist'}.",
+                           time.time()))
+            changes.append({"id": ch["id"], "removed": removed, **({"name": sets["name"]} if "name" in sets else {})})
+    return changes
+
+
+def close_interrupted() -> int:
+    """Answers left "typing…" because the server stopped mid-answer (v0.7.5)."""
+    n = 0
+    with _conn() as c:
+        rows = c.execute("SELECT id, text, meta FROM messages WHERE role = 'agent' "
+                         "AND meta LIKE '%\"streaming\": true%'").fetchall()
+        for r in rows:
+            try:
+                meta = json.loads(r["meta"] or "{}")
+            except ValueError:
+                meta = {}
+            if not meta.get("streaming"):
+                continue
+            meta.pop("streaming", None)
+            meta["interrupted"] = True
+            text = (r["text"] or "").strip()
+            text = f"{text} …[interrupted]" if text else \
+                "(No answer — ZenSynora stopped or restarted while this answer was being written. Ask again.)"
+            c.execute("UPDATE messages SET text = ?, meta = ? WHERE id = ?", (text, json.dumps(meta), r["id"]))
+            n += 1
+    return n
+
+
 def list_channels() -> list[dict[str, Any]]:
     with _conn() as c:
         rows = c.execute(
@@ -125,13 +204,14 @@ def create_channel(name: str, members: list[str], topic: str = "", reply_mode: s
     members = list(dict.fromkeys(m for m in members if m))  # unique, keep order
     if not members:
         raise ValueError("A channel needs at least one agent.")
+    name = clean_name(name)
     cid = channel_id or f"{slug(name)}-{secrets.token_hex(3)}"
     now = time.time()
     with _conn() as c:
         c.execute(
             "INSERT INTO channels (id, name, kind, topic, members, reply_mode, created, updated) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (cid, name.strip() or cid, kind, topic, json.dumps(members), reply_mode, now, now))
+            (cid, name or cid, kind, topic, json.dumps(members), reply_mode, now, now))
     return get_channel(cid)  # type: ignore[return-value]
 
 
@@ -142,7 +222,7 @@ def update_channel(channel_id: str, **fields: Any) -> dict[str, Any] | None:
         if k not in allowed or v is None:
             continue
         if k == "name":  # v0.7.3: renaming from the Channels page
-            v = str(v).strip()
+            v = clean_name(str(v))
             if not v:
                 raise ValueError("A channel needs a name.")
         if k == "topic":

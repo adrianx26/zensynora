@@ -27,6 +27,7 @@ const ChannelsView: React.FC<Props> = ({ agents, onChanged, onOpen }) => {
   const [rows, setRows] = useState<ChannelRow[]>([]);
   const [editing, setEditing] = useState<string | null>(null); // channel id, or "new"
   const [draft, setDraft] = useState<Draft>(EMPTY);
+  const draftRaw = draft;
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
   const load = useCallback(async () => {
@@ -60,6 +61,8 @@ const ChannelsView: React.FC<Props> = ({ agents, onChanged, onOpen }) => {
   };
 
   const save = () => {
+    const known = new Set(agents.map(a => a.name));
+    const draft = { ...draftRaw, members: draftRaw.members.filter(m => known.has(m)) };
     if (editing === 'new') {
       act(async () => {
         const ch = await api<Channel>('/api/channels', { method: 'POST', body: JSON.stringify(draft) });
@@ -83,6 +86,8 @@ const ChannelsView: React.FC<Props> = ({ agents, onChanged, onOpen }) => {
   const toggleMember = (name: string) =>
     setDraft(d => ({ ...d, members: d.members.includes(name) ? d.members.filter(m => m !== name) : [...d.members, name] }));
 
+  const knownNames = new Set(agents.map(a => a.name));
+  const missing = draft.members.filter(m => !knownNames.has(m));
   const editor = editing && (
     <div className="agent-editor">
       <div className="agent-editor-grid">
@@ -100,6 +105,10 @@ const ChannelsView: React.FC<Props> = ({ agents, onChanged, onOpen }) => {
               title={a.description || `${a.provider} · ${a.model}`}>
               <span className="member-dot" style={{ background: agentColor(a.name) }} /> @{a.name}
             </button>
+          ))}
+          {missing.map(m => (
+            <button key={m} className="chip danger" title="This agent no longer exists — it is removed when you save"
+              onClick={() => toggleMember(m)}>@{m} (deleted) ✕</button>
           ))}
         </div>
       </div>
@@ -171,7 +180,8 @@ const ChannelsView: React.FC<Props> = ({ agents, onChanged, onOpen }) => {
               <tbody>
                 {dms.map(c => (
                   <tr key={c.id} onClick={() => onOpen(c.id)}>
-                    <td><span className="member-dot" style={{ background: agentColor(c.members[0]) }} /> <b>@{c.members[0]}</b></td>
+                    <td><span className="member-dot" style={{ background: agentColor(c.members[0]) }} /> <b>@{c.members[0]}</b>
+                      {c.orphan && <span className="badge" title="This agent was renamed or deleted in Settings">agent deleted</span>}</td>
                     <td>{c.message_count ?? '—'}</td>
                     <td>{ago(c.last_activity)}</td>
                     <td className="row-actions" onClick={e => e.stopPropagation()}>
