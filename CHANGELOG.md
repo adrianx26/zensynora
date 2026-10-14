@@ -47,6 +47,28 @@ longer keep deleted agents.
   tool steps".
 
 ### Fixed
+- **Agents could not use the knowledge base.** Three faults together:
+  - the Web UI saved and searched notes as user `webui` (delegated tasks as
+    `__delegate__`) while the knowledge tools agents call themselves
+    (`search_knowledge`, `read_knowledge`, `list_knowledge`, …) and the medic's
+    lessons used `default` — agents never found what was saved;
+  - search only looked at note names and observations, never the note text
+    (the index stored the file path instead), so plain notes — most notes
+    agents and the automatic extraction write — were unfindable;
+  - a `user_id` passed by the model could point the tools at another, empty
+    knowledge base.
+  Now there is one shared knowledge base for the Web UI, the terminal, jobs
+  and delegations (separate chat users, e.g. Telegram, keep their own), the
+  tools follow the knowledge base of the current conversation, and note text
+  and tags are searchable. Notes saved under `webui` are moved into it and
+  existing notes are indexed automatically on first start.
+- **External MCP servers in the Web UI.** Servers set in `mcp.servers` (for
+  example a memo/notes server) were only started by `zensynora agent` and the
+  gateway; the Web UI starts them too now. Their tools reached the models
+  without parameters (the proxy had none) and only after a restart of the
+  tool list; they now carry the server's input schema and appear as soon as
+  the server connects. Stopping no longer hangs on an MCP connection that kept
+  reconnecting after being cancelled.
 - **"Zombie" agents in channels.** An agent renamed or deleted in Settings
   stayed a member of its channels; every later member change was refused
   ("Unknown agent(s): agent3"), so it could not be removed and no agent could

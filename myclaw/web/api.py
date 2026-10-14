@@ -138,13 +138,31 @@ app.include_router(_update_api.router)  # check / update / rollback / restart (v
 app.include_router(_skills_api.router)  # agent skills (v0.7.5)
 
 
+_mcp_manager = None
+
+
 async def _start_background_runner() -> None:
     """Job scheduler + automatic backups run inside the Web UI process."""
     _jobs_api.start_runner()
+    # v0.7.5: external MCP servers (settings mcp.servers — e.g. a memory/notes
+    # server) used to be started only by `zensynora agent` and the gateway, so
+    # their tools were missing in the Web UI.
+    global _mcp_manager
+    try:
+        cfg = load_config()
+        if cfg.mcp.enabled and cfg.mcp.servers:
+            from myclaw.mcp import MCPClientManager
+
+            _mcp_manager = MCPClientManager(cfg.model_dump())
+            await _mcp_manager.start_all()
+    except Exception as exc:  # an MCP server must never stop the Web UI
+        logger.warning("Could not start MCP servers: %s", exc)
 
 
 async def _stop_background_runner() -> None:
     await _jobs_api.stop_runner()
+    if _mcp_manager is not None:
+        await _mcp_manager.stop_all()
 
 
 app.router.add_event_handler("startup", _start_background_runner)

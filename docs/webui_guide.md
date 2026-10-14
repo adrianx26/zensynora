@@ -133,6 +133,37 @@ job on up to 8 models at once and compares time and score — a quick way to
 choose a model for a task. Templates: morning briefing, weekly knowledge
 clean-up, medic self-review.
 
+## Knowledge base
+
+All agents share one knowledge base (notes in `~/.myclaw/knowledge/default`,
+Markdown files you can also edit yourself). Before answering, an agent
+searches it automatically; agents can also use these tools themselves:
+
+| Tool | What it does |
+|---|---|
+| `search_knowledge` | Full-text search over titles, note text, tags and observations |
+| `read_knowledge` / `list_knowledge` | Read one note / list the notes |
+| `write_to_knowledge` | Save a note (title, text, tags, observations, relations) |
+| `get_knowledge_context` / `get_related_knowledge` | Follow relations between notes (knowledge graph) |
+| `list_knowledge_tags` / `sync_knowledge_base` | Tags; re-read files you edited by hand |
+| `record_lesson` | The medic's lessons (note `medic-lessons`) |
+
+With *auto extract* on (Settings → Features → `knowledge.auto_extract`),
+useful facts from conversations and tool results are saved by themselves. The
+**knowledge-keeper** skill teaches an agent when to save and how. Telegram or
+WhatsApp users each keep their own knowledge base.
+
+**MCP memory servers.** Any MCP server (a memo/notes server, a database, a
+file system …) can be added in `~/.myclaw/config.json`:
+
+```json
+"mcp": {"servers": {"memo": {"command": "npx", "args": ["-y", "<memo-mcp-package>"]}}}
+```
+
+Its tools appear for all agents as `mcp_<server>_<tool>` when the Web UI (or
+`zensynora agent`) starts. In the other direction, `zensynora mcp-server`
+offers ZenSynora's tools — knowledge base included — to other MCP clients.
+
 ## Skills: instructions agents load when needed
 
 **Skills** in the sidebar. A skill is a Markdown file of instructions for one

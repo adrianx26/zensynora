@@ -449,3 +449,111 @@ def test_an_agent_can_create_an_agent(team):
     save_config(cfg.model_dump(mode="json"))
     load_config(force_reload=True)
     assert "turned off" in create_agent("Another", "x")
+
+
+# ── Knowledge base: one shared base for agents, tools and the Web UI ────────
+def test_agents_find_what_was_saved_in_the_web_ui(home):  # noqa: F811
+    """Before: Web UI turns saved as 'webui', the tools searched 'default' → nothing found."""
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.scope import KB_USER, for_turn
+    from myclaw.tools import TOOLS
+
+    write_note(name="Bucharest weather source", title="Bucharest weather source",
+               content="Use wttr.in for Bucharest weather", user_id="webui")    # automatic extraction
+    tok = KB_USER.set(for_turn("webui"))                                         # a Web UI turn
+    try:
+        found = TOOLS["search_knowledge"]["func"](query="wttr")   # a word from the note text
+        assert "bucharest-weather-source" in found
+        # a made-up user_id from the model does not lead to another, empty knowledge base
+        assert "bucharest-weather-source" in TOOLS["search_knowledge"]["func"](query="wttr", user_id="john")
+        assert "created" in TOOLS["write_to_knowledge"]["func"](title="LM Studio URL", content="needs /v1")
+    finally:
+        KB_USER.reset(tok)
+    assert "lm-studio-url" in TOOLS["list_knowledge"]["func"]()                   # no turn → shared base
+    assert (home / ".myclaw" / "knowledge" / "default" / "lm-studio-url.md").exists()
+    assert not (home / ".myclaw" / "knowledge" / "webui").exists()
+
+
+def test_separate_people_keep_separate_knowledge(home):  # noqa: F811
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.scope import KB_USER, for_turn
+    from myclaw.tools import TOOLS
+
+    write_note(name="secret plan", title="secret plan", content="tg user note", user_id="123456789")
+    tok = KB_USER.set(for_turn("123456789"))
+    inner = KB_USER.set(for_turn("__delegate__"))   # a delegated task keeps the person's base
+    try:
+        assert "secret-plan" in TOOLS["search_knowledge"]["func"](query="plan")
+    finally:
+        KB_USER.reset(inner)
+        KB_USER.reset(tok)
+    assert "secret-plan" not in TOOLS["search_knowledge"]["func"](query="plan")
+
+
+def test_old_notes_move_into_the_shared_knowledge_base(home):  # noqa: F811
+    from myclaw.knowledge import scope
+    from myclaw.knowledge.storage import search_notes
+
+    old = home / ".myclaw" / "knowledge" / "webui"
+    old.mkdir(parents=True)
+    (old / "bucharest-weather-data.md").write_text(
+        "---\ntitle: Bucharest weather data\npermalink: bucharest-weather-data\ntags: [weather]\n---\n\n"
+        "# Bucharest weather data\n\nClear, 21 C from wttr.in\n")
+    (old / "empty.md").write_text("{}")
+    scope._migrated.clear()
+    moved = scope.migrate_internal_scopes()
+    assert moved == {"webui": 1}
+    assert [n.title for n in search_notes("wttr", "default")] == ["Bucharest weather data"]
+
+
+def test_mcp_server_tools_reach_the_models(home):  # noqa: F811
+    """A memo MCP server: its tools appear with their real parameters."""
+    import sys
+    from pathlib import Path
+
+    from myclaw.mcp import MCPClientManager
+    from myclaw.tools import TOOL_SCHEMAS, TOOLS, ensure_tool_schemas
+
+    ensure_tool_schemas()
+    server = Path(__file__).parent / "fixtures" / "memo_mcp_server.py"
+    mgr = MCPClientManager({"mcp": {"servers": {"memo": {"command": sys.executable, "args": [str(server)]}}}})
+
+    async def run():
+        await mgr.start_all()
+        for _ in range(100):
+            if "mcp_memo_find_memo" in TOOLS:
+                break
+            await asyncio.sleep(0.1)
+        saved = await TOOLS["mcp_memo_save_memo"]["func"](title="weather", text="use wttr.in")
+        found = await TOOLS["mcp_memo_find_memo"]["func"](query="wttr")
+        schema = next(s for s in TOOL_SCHEMAS if s["function"]["name"] == "mcp_memo_find_memo")["function"]
+        await mgr.stop_all()
+        return saved, found, schema
+
+    try:
+        saved, found, schema = asyncio.run(run())
+        assert saved == "saved weather" and "use wttr.in" in found
+        assert not any(k.startswith("mcp_memo_") for k in TOOLS)        # removed on stop
+        assert set(schema["parameters"]["properties"]) == {"query", "limit"}
+        assert schema["parameters"]["required"] == ["query"]
+    finally:
+        for k in [k for k in TOOLS if k.startswith("mcp_memo_")]:
+            TOOLS.pop(k)
+
+
+def test_notes_written_before_the_text_index_become_searchable(home):  # noqa: F811
+    import sqlite3
+
+    from myclaw.knowledge import db as kdb
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.storage import search_notes
+
+    write_note(name="old note", title="old note", content="The router password is in the drawer", user_id="default")
+    path = home / ".myclaw" / "knowledge_default.db"
+    con = sqlite3.connect(path)
+    con.execute("DELETE FROM notes_text_fts")          # = a knowledge DB from before 0.7.5
+    con.commit()
+    con.close()
+    assert search_notes("drawer", "default") == []
+    kdb._TEXT_BACKFILLED.clear()
+    assert [n.permalink for n in search_notes("drawer", "default")] == ["old-note"]

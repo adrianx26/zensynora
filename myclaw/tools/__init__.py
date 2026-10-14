@@ -267,6 +267,15 @@ for _tool_name, (_mod, _func, _desc) in _LAZY_AGENT_TOOLS.items():
 _TOOL_SCHEMAS_INITIALIZED = False
 
 
+def refresh_tool_schemas() -> None:
+    """Rebuild the tool list the models see (after tools were added at runtime,
+    e.g. by an MCP server that connected after start-up; v0.7.5)."""
+    global _TOOL_SCHEMAS_INITIALIZED
+    TOOL_SCHEMAS.clear()
+    TOOL_SCHEMAS.extend(_generate_schemas())
+    _TOOL_SCHEMAS_INITIALIZED = True
+
+
 def ensure_tool_schemas() -> None:
     """Populate TOOL_SCHEMAS on first call. Safe to call repeatedly."""
     global _TOOL_SCHEMAS_INITIALIZED

@@ -28,6 +28,7 @@ class MCPClientManager:
         self.config = config.get("mcp", {}).get("servers", {})
         # Track background tasks so exceptions are not silently swallowed
         self._tasks: set[asyncio.Task] = set()
+        self._stopping = False
         # Reconnect configuration
         self._max_reconnect_delay = 60.0
         self._reconnect_backoff_base = 2.0
@@ -48,6 +49,20 @@ class MCPClientManager:
                 continue
 
             self._start_server_task(server_name, cmd, args, env)
+
+    async def stop_all(self, timeout: float = 5.0) -> None:
+        """Disconnect from all servers and remove their tools (v0.7.5)."""
+        self._stopping = True
+        tasks = list(self._tasks)
+        for t in tasks:
+            t.cancel()
+        if tasks:
+            await asyncio.wait(tasks, timeout=timeout)
+        for name in list(m_tools.TOOLS):
+            if any(name.startswith(f"mcp_{server}_") for server in self.config):
+                m_tools.TOOLS.pop(name, None)
+        m_tools.refresh_tool_schemas()
+        self.sessions.clear()
 
     def _start_server_task(self, name: str, cmd: str, args: list, env: dict | None):
         """Create a tracked background task for an MCP server connection."""
@@ -81,9 +96,18 @@ class MCPClientManager:
                         # Keep the session alive indefinitely
                         while True:
                             await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                self.sessions.pop(name, None)
+                raise
             except Exception as e:
                 if name in self.sessions:
                     del self.sessions[name]
+                # v0.7.5: when stopping, the MCP library can turn the cancellation
+                # into an ordinary error; reconnecting then kept the task (and the
+                # Web UI shutdown) alive forever.
+                task = asyncio.current_task()
+                if self._stopping or (task is not None and task.cancelling()):
+                    return
                 delay = min(self._reconnect_backoff_base**attempt, self._max_reconnect_delay)
                 attempt += 1
                 logger.warning(
@@ -105,9 +129,14 @@ class MCPClientManager:
                 # Python late-binding requires us to capture these variables properly
                 proxy_func = self._create_proxy(session, t.name)
 
-                # Register in MyClaw's TOOL list
-                m_tools.register_mcp_tool(t.name, server_name, proxy_func, desc)
+                # Register in MyClaw's TOOL list, with the tool's own input schema so
+                # the model knows its parameters (v0.7.5: it saw none before).
+                m_tools.register_mcp_tool(t.name, server_name, proxy_func, desc,
+                                          getattr(t, "inputSchema", None))
                 logger.debug(f"Registered external tool: mcp_{server_name}_{t.name}")
+            m_tools.refresh_tool_schemas()  # v0.7.5: make them visible to the models now
+            logger.info("MCP server '%s': %d tool(s) available to agents", server_name,
+                        len(tools_response.tools))
         except Exception as e:
             logger.error(f"Error fetching tools from '{server_name}': {e}")
 

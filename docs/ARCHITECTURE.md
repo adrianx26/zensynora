@@ -44,7 +44,7 @@ myclaw/
 ├── jobs/                    # Jobs: store (jobs.db) + runner (schedule, evaluate, benchmark) [0.7.1]
 │                            #   + medic.py: diagnose / fix failed runs [0.7.5]
 ├── llm_errors.py            # Readable model-server errors + rotation cooldowns [0.7.3]
-├── knowledge/
+├── knowledge/               # scope.py: one shared knowledge base for internal ids [0.7.5]
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
 │   ├── path_reasoning.py    # find_paths / shortest_path [Sprint 7]
 │   ├── storage.py           # Batched parallel note reads [Sprint 1 + 8]
@@ -102,7 +102,7 @@ webui/src/
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 553 tests (pytest --collect-only, 2026-10-14)
+tests/                       # 558 tests (pytest --collect-only, 2026-10-14)
 ```
 
 ---
@@ -305,10 +305,10 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_v071_features.py` | 17 |
 | `test_v073_reliability.py` | 11 |
 | `test_v074_update_and_prompt.py` | 8 |
-| `test_v075_channels_medic_skills.py` | 20 |
+| `test_v075_channels_medic_skills.py` | 25 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **553** |
+| **Total** | **558** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

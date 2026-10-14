@@ -39,8 +39,14 @@ def get_file_metadata(file_path: Path) -> Dict[str, Any]:
 
 
 def get_knowledge_dir(user_id: str = "default") -> Path:
-    """Get the knowledge directory for a user."""
-    knowledge_dir = Path.home() / ".myclaw" / "knowledge" / user_id
+    """Get the knowledge directory for a user (internal ids share 'default', v0.7.5)."""
+    from .scope import kb_user, migrate_internal_scopes
+
+    try:
+        migrate_internal_scopes()
+    except Exception as e:  # never block reading notes
+        logger.warning("Knowledge: could not move old notes: %s", e)
+    knowledge_dir = Path.home() / ".myclaw" / "knowledge" / kb_user(user_id)
     knowledge_dir.mkdir(parents=True, exist_ok=True)
     return knowledge_dir
 

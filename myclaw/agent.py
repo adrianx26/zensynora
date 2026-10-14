@@ -1546,9 +1546,15 @@ class Agent:
         the full request fan-out into provider/tool/KB child spans. The
         span is a no-op when OpenTelemetry is not installed/enabled.
         """
+        from .knowledge.scope import KB_USER, for_turn
         from .observability import span as _span
-        with _span("agent.think", agent=self.name, user=user_id, depth=_depth):
-            return await self._think_impl(user_message, user_id, _depth)
+
+        kb_token = KB_USER.set(for_turn(user_id))  # v0.7.5: tools use this turn's knowledge base
+        try:
+            with _span("agent.think", agent=self.name, user=user_id, depth=_depth):
+                return await self._think_impl(user_message, user_id, _depth)
+        finally:
+            KB_USER.reset(kb_token)
 
     async def _think_impl(
         self, user_message: str, user_id: str = "default", _depth: int = 0
@@ -1656,6 +1662,22 @@ class Agent:
         return response
 
     async def stream_think(
+        self, user_message: str, user_id: str = "default", _depth: int = 0
+    ) -> AsyncIterator[str]:
+        """Streaming answer; the tools it calls use this turn's knowledge base (v0.7.5)."""
+        from .knowledge.scope import KB_USER, for_turn
+
+        kb_token = KB_USER.set(for_turn(user_id))
+        try:
+            async for chunk in self._stream_think_impl(user_message, user_id, _depth):
+                yield chunk
+        finally:
+            try:
+                KB_USER.reset(kb_token)
+            except ValueError:  # generator closed from another context
+                pass
+
+    async def _stream_think_impl(
         self, user_message: str, user_id: str = "default", _depth: int = 0
     ) -> AsyncIterator[str]:
         """Process a user message and yield response chunks in real-time.
