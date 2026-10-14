@@ -345,6 +345,8 @@ class ProvidersConfig(BaseModel):
 class AgentDefaults(BaseModel):
     model: str = "llama3.2"
     provider: str = "ollama"  # which provider to use by default
+    # v0.7.5: skills of the default agent (names from the Skills page)
+    skills: list[str] = []
 
 
 class NamedAgentConfig(BaseModel):
@@ -357,6 +359,8 @@ class NamedAgentConfig(BaseModel):
     # v0.7.1: short "what this agent does"; shown in the Web UI and used by
     # the prompt generator (Settings → Agents → ✨ Generate prompt).
     description: str = ""
+    # v0.7.5: skills this agent knows about (see myclaw/agent_skills.py)
+    skills: list[str] = []
 
 
 class ModelChoice(BaseModel):

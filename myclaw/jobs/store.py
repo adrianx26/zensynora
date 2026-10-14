@@ -248,6 +248,12 @@ def update_job(job_id: str, data: dict[str, Any]) -> dict[str, Any] | None:
     return get_job(job_id)
 
 
+def rename_agent(old: str, new: str) -> int:
+    """Jobs follow an agent that was renamed in Settings (v0.7.5)."""
+    with _conn() as c:
+        return c.execute("UPDATE jobs SET agent = ? WHERE agent = ?", (new, old)).rowcount
+
+
 def delete_job(job_id: str) -> bool:
     with _conn() as c:
         c.execute("DELETE FROM runs WHERE job_id = ?", (job_id,))

@@ -341,12 +341,29 @@ def skills():
     pass
 
 @skills.command(name='list')
-def list_skills():
-    """List all registered tools in ZenSynora"""
+@click.option("--tools", "show_tools", is_flag=True, help="Also list every tool")
+def list_skills(show_tools):
+    """List agent skills (and, with --tools, all tools)"""
+    from .agent_skills import list_skills as _skills, user_dir
+    from .config import load_config
     from .tools import TOOLS
-    click.echo(f"🛠 Registered Tools ({len(TOOLS)}):")
-    for name, metadata in TOOLS.items():
-        click.echo(f" - {name}")
+
+    cfg = load_config()
+    used = {}
+    for a in ["default"] + [n.name for n in cfg.agents.named]:
+        from .agent_skills import skills_for
+        for s in skills_for(cfg, a):
+            used.setdefault(s, []).append(a)
+    rows = _skills()
+    click.echo(f"📚 Skills ({len(rows)}) — yours are in {user_dir()}:")
+    for s in rows:
+        who = f"  [{', '.join('@' + a for a in used.get(s['name'], []))}]" if used.get(s["name"]) else ""
+        click.echo(f" - {s['name']} ({'built-in' if s['source'] == 'builtin' else 'yours'}): {s['description']}{who}")
+    click.echo("Give skills to agents in the Web UI (Skills page or Settings → Agents).")
+    if show_tools:
+        click.echo(f"\n🛠 Tools ({len(TOOLS)}):")
+        for name in TOOLS:
+            click.echo(f" - {name}")
 
 ### UPDATE / VERSION ###
 @cli.command(

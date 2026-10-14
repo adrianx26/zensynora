@@ -124,6 +124,9 @@ _LAZY_AGENT_TOOLS = {
     "convert_skill":             ("myclaw.agents.skill_adapter", "convert_skill",             "Convert an external skill to ZenSynora format"),
     "list_compatible_skills":    ("myclaw.agents.skill_adapter", "list_compatible_skills",    "List all skills from external sources compatible with ZenSynora"),
     "register_external_skill":   ("myclaw.agents.skill_adapter", "register_external_skill",   "Register an externally sourced skill file in the TOOLBOX"),
+    # Agent skills (v0.7.5): instructions an agent loads when a task needs them
+    "use_skill":                 ("myclaw.agent_skills",         "use_skill",                 "Load a skill's full instructions by name before a task that matches it"),
+    "list_skills":               ("myclaw.agent_skills",         "list_agent_skills",         "List all skills (name and what each is for)"),
     # Medic Agent
     "check_system_health":       ("myclaw.agents.medic_agent",   "check_system_health",       "Check overall system health status"),
     "check_memory_usage":        ("myclaw.agents.medic_agent",   "check_memory_usage",        "Checks current system memory usage and logs a warning if it exceeds a threshold."),

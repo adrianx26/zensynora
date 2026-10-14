@@ -113,6 +113,7 @@ from myclaw.web import jobs_api as _jobs_api  # noqa: E402
 from myclaw.web import backup_api as _backup_api  # noqa: E402
 from myclaw.web import medic_api as _medic_api  # noqa: E402
 from myclaw.web import update_api as _update_api  # noqa: E402
+from myclaw.web import skills_api as _skills_api  # noqa: E402
 
 _chat_api.set_registry_getter(_ensure_registry)
 _jobs_api.set_registry_getter(_ensure_registry, _chat_api.engine)
@@ -123,6 +124,7 @@ app.include_router(_jobs_api.router)
 app.include_router(_backup_api.router)
 app.include_router(_medic_api.router)  # self-update proposals (v0.7.1)
 app.include_router(_update_api.router)  # check / update / rollback / restart (v0.7.4)
+app.include_router(_skills_api.router)  # agent skills (v0.7.5)
 
 
 async def _start_background_runner() -> None:
@@ -194,11 +196,6 @@ async def get_agents():
             "description": getattr(na, "description", "") or "",
         })
     return {"agents": agents}
-
-
-@app.get("/api/skills")
-async def get_skills():
-    return {"skills": list(TOOLS.keys())}
 
 
 # ── Admin Dashboard API ─────────────────────────────────────────────────────

@@ -134,6 +134,26 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
   const [probe, setProbe] = useState<Record<string, ProbeResult & { loading?: boolean }>>({});
   // v0.7.1: index of the named agent whose prompt is being generated
   const [generating, setGenerating] = useState<number | null>(null);
+  // v0.7.5: skills that can be given to agents (names + descriptions)
+  const [skillList, setSkillList] = useState<{ name: string; description: string }[]>([]);
+  useEffect(() => {
+    api<{ skills: { name: string; description: string }[] }>('/api/skills').then(r => setSkillList(r.skills)).catch(() => { /* optional */ });
+  }, []);
+  const skillChips = (current: string[], onChange: (next: string[]) => void) => (
+    <div className="field">
+      <span className="field-label">Skills <span className="muted small">— instructions this agent can load (manage them on the Skills page)</span></span>
+      <div className="chip-row">
+        {skillList.map(s => {
+          const on = current.includes(s.name);
+          return (
+            <button type="button" key={s.name} className={`chip small-chip ${on ? 'active' : ''}`} title={s.description}
+              onClick={() => onChange(on ? current.filter(x => x !== s.name) : [...current, s.name])}>{s.name}</button>
+          );
+        })}
+        {skillList.length === 0 && <span className="muted small">No skills found.</span>}
+      </div>
+    </div>
+  );
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -405,11 +425,14 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
 
         {tab === 'Agents' && (
           <div className="settings-card">
+            <h3>Default agent</h3>
+            <p className="muted">Uses the default model (Models page).</p>
+            {skillChips(getPath(draft, 'agents.defaults.skills') || [], next => update('agents.defaults.skills', next))}
             <h3>Named agents</h3>
             <p className="muted">Extra agents appear in the sidebar and can be addressed in chat with <code>@name</code>.</p>
             {named.length === 0 && <div className="muted">No named agents yet.</div>}
             {named.map((a: Json, i: number) => {
-              const setAgent = (key: string, val: string) => {
+              const setAgent = (key: string, val: Json) => {
                 const next = named.map((x: Json, j: number) => (j === i ? { ...x, [key]: val } : x));
                 update('agents.named', next);
               };
@@ -448,6 +471,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
                     </div>
                     <textarea className="field-input" rows={a.system_prompt ? 8 : 3} value={a.system_prompt || ''} onChange={e => setAgent('system_prompt', e.target.value)} />
                   </div>
+                  {skillChips(a.skills || [], next => setAgent('skills', next))}
                   <button type="button" className="ghost-btn danger" onClick={() => update('agents.named', named.filter((_: Json, j: number) => j !== i))}>
                     Remove agent
                   </button>
@@ -455,7 +479,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
               );
             })}
             <button type="button" className="ghost-btn" onClick={() => update('agents.named', [...named, {
-              name: `agent${named.length + 1}`, provider: '', model: getPath(draft, 'agents.defaults.model') || '', system_prompt: '', description: '',
+              name: `agent${named.length + 1}`, provider: '', model: getPath(draft, 'agents.defaults.model') || '', system_prompt: '', description: '', skills: [],
             }])}>+ Add agent</button>
           </div>
         )}

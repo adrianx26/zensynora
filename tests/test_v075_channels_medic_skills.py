@@ -230,3 +230,112 @@ def test_old_jobs_db_gets_the_new_columns(home):  # noqa: F811
     con.close()
     store._migrated.clear()
     assert store.get_job("j1")["max_steps"] == 8 and store.get_job("j1")["on_failure"] == ""
+
+
+# ── Agent skills ────────────────────────────────────────────────────────────
+def test_builtin_skills_ship_with_the_app(home):  # noqa: F811
+    from myclaw import agent_skills
+
+    names = {s["name"] for s in agent_skills.list_skills()}
+    assert {"web-research", "python-pro", "code-reviewer", "powershell-scripting", "knowledge-keeper"} <= names
+    assert all(s["description"] for s in agent_skills.list_skills())
+
+
+def test_skill_files_parse_and_yours_replace_builtin(home):  # noqa: F811
+    from myclaw import agent_skills
+
+    sk = agent_skills.parse("---\nname: My Skill\ndescription: Does x\nalways: true\n---\n# Title\nStep 1")
+    assert sk == {"name": "my-skill", "description": "Does x", "always": True, "body": "# Title\nStep 1"}
+    assert agent_skills.parse("# Weather helper\nUse wttr.in", "weather")["description"] == "Weather helper"
+    agent_skills.save_skill("web-research", "My own way", "Always use example.org")
+    sk = agent_skills.get_skill("web-research")
+    assert sk["source"] == "yours" and sk["body"] == "Always use example.org"
+    assert agent_skills.delete_skill("web-research")
+    assert agent_skills.get_skill("web-research")["source"] == "builtin"   # the built-in one is back
+    with pytest.raises(ValueError):
+        agent_skills.save_skill("x", "", "   ")
+
+
+def test_agents_see_their_skills_and_can_load_them(home):  # noqa: F811
+    import myclaw.config as cfg_mod
+    from myclaw import agent_skills
+    from myclaw.agent import Agent
+    from myclaw.tools import TOOLS
+
+    agent_skills.save_skill("house-rules", "How we name files", "Use kebab-case.", always=True)
+    cfg = cfg_mod.load_config()
+    cfg.agents.defaults.skills = ["web-research", "house-rules", "deleted-one"]
+    prompt = asyncio.run(Agent(cfg, name="default")._load_system_prompt())
+    assert "## Your skills" in prompt and "- web-research: Look up current facts" in prompt
+    assert "Use kebab-case." in prompt                      # always: true → full text included
+    assert "deleted-one" not in prompt                     # unknown names are ignored
+    assert "wttr.in" not in prompt                         # on-demand skills are not inlined
+    assert "wttr.in" in TOOLS["use_skill"]["func"]("web-research")
+    from myclaw.tools import TOOL_SCHEMAS, ensure_tool_schemas
+
+    ensure_tool_schemas()
+    schema = next(s for s in TOOL_SCHEMAS if s["function"]["name"] == "use_skill")
+    assert "name" in schema["function"]["parameters"]["properties"]
+    assert "No skill named" in agent_skills.use_skill("nope")
+
+
+def test_skills_api_assign_and_import(home):  # noqa: F811
+    from myclaw.config import load_config, save_config
+    from myclaw.web import settings_api, skills_api
+
+    save_config({"agents": {"defaults": {"model": "m", "provider": "ollama"},
+                            "named": [{"name": "Executor", "model": "x", "provider": ""}]}})
+    load_config(force_reload=True)
+    reloads = []
+
+    async def hook():
+        reloads.append(1)
+
+    settings_api.set_config_changed_hook(hook)
+    app = FastAPI()
+    app.include_router(skills_api.router)
+    app.dependency_overrides[settings_api.require_local_or_admin] = lambda: None
+    with TestClient(app) as c:
+        r = c.put("/api/skills/web-research/agents", json={"agents": ["default", "Executor"]})
+        assert r.status_code == 200, r.text
+        assert r.json()["agents"] == ["default", "Executor"]
+        cfg = load_config(force_reload=True)
+        assert cfg.agents.defaults.skills == ["web-research"] and cfg.agents.named[0].skills == ["web-research"]
+        c.put("/api/skills/web-research/agents", json={"agents": ["Executor"]})
+        assert load_config(force_reload=True).agents.defaults.skills == []
+        assert c.put("/api/skills/web-research/agents", json={"agents": ["ghost"]}).status_code == 400
+
+        r = c.post("/api/skills/import", json={"text": "---\nname: weather\ndescription: Weather for a city\n"
+                                                       "---\nUse https://wttr.in/<City>?format=3"})
+        assert r.status_code == 200 and r.json()["source"] == "yours"
+        listing = c.get("/api/skills").json()
+        row = next(s for s in listing["skills"] if s["name"] == "web-research")
+        assert row["agents"] == ["Executor"] and "browse" in listing["tools"]
+        assert c.post("/api/skills/python-pro/copy").json()["source"] == "yours"
+        assert c.delete("/api/skills/code-reviewer").status_code == 404     # built-in stays
+        assert c.delete("/api/skills/weather").status_code == 200
+    assert reloads  # agents were rebuilt so they see the change
+
+
+def test_renaming_an_agent_keeps_its_channels_and_jobs(home):  # noqa: F811
+    from myclaw.chat import store as chat
+    from myclaw.config import load_config, save_config
+    from myclaw.jobs import store as jobs
+    from myclaw.web import settings_api
+
+    save_config({"agents": {"defaults": {"model": "m", "provider": "ollama"},
+                            "named": [{"name": "agent3", "model": "x", "provider": ""}]}})
+    load_config(force_reload=True)
+    chat.create_channel("general", ["default", "agent3"], channel_id="general")
+    dm = chat.dm_channel("agent3")
+    chat.add_message(dm["id"], "user", "you", "hello")
+    job = jobs.create_job({"name": "w", "prompt": "p", "agent": "agent3"})
+    asyncio.run(settings_api.update_settings(settings_api.SettingsUpdate(
+        changes={"agents.named": [{"name": "Coder", "model": "x", "provider": ""}]})))
+    assert chat.get_channel("general")["members"] == ["default", "Coder"]
+    assert chat.get_channel("dm-coder")["members"] == ["Coder"] and chat.list_messages("dm-coder")[0]["text"] == "hello"
+    assert jobs.get_job(job["id"])["agent"] == "Coder"
+    with pytest.raises(Exception) as e:
+        asyncio.run(settings_api.update_settings(settings_api.SettingsUpdate(
+            changes={"agents.named": [{"name": "Coder", "model": "x"}, {"name": "coder", "model": "y"}]})))
+    assert "names must differ" in str(e.value.detail)

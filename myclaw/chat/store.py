@@ -150,6 +150,23 @@ def repair_channels(known: list[str], default: str = "default") -> list[dict[str
     return changes
 
 
+def rename_member(old: str, new: str) -> None:
+    """An agent was renamed: channels keep it, its direct messages move along."""
+    with _conn() as c:
+        for r in c.execute("SELECT id, kind, members FROM channels").fetchall():
+            members = json.loads(r["members"] or "[]")
+            if old not in members:
+                continue
+            members = list(dict.fromkeys(new if m == old else m for m in members))
+            c.execute("UPDATE channels SET members = ?, updated = ? WHERE id = ?",
+                      (json.dumps(members), time.time(), r["id"]))
+        old_dm, new_dm = f"dm-{slug(old)}", f"dm-{slug(new)}"
+        if old_dm != new_dm and c.execute("SELECT 1 FROM channels WHERE id = ?", (old_dm,)).fetchone() \
+                and not c.execute("SELECT 1 FROM channels WHERE id = ?", (new_dm,)).fetchone():
+            c.execute("UPDATE channels SET id = ?, name = ? WHERE id = ?", (new_dm, new, old_dm))
+            c.execute("UPDATE messages SET channel_id = ? WHERE channel_id = ?", (new_dm, old_dm))
+
+
 def close_interrupted() -> int:
     """Answers left "typing…" because the server stopped mid-answer (v0.7.5)."""
     n = 0

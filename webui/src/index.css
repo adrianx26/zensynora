@@ -907,3 +907,14 @@ textarea.chat-input { resize: none; line-height: 1.4; min-height: 52px; padding:
 .medic-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .chip.danger { border-color: var(--danger-color); color: var(--danger-color); }
 td.pre { white-space: pre-wrap; word-break: break-word; max-width: 420px; }
+
+/* v0.7.5: Skills page */
+.skill-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.skill-card { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.skill-card .card-head { align-items: flex-start; }
+.skill-name { cursor: pointer; font-family: ui-monospace, monospace; font-size: 1rem; }
+.skill-name:hover { color: var(--accent-color); }
+.skill-body { white-space: pre-wrap; word-break: break-word; font-size: 0.82rem; max-height: 480px; overflow: auto; }
+textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; }
+.skill-card .chip:not(.active) { opacity: 0.55; }
+.skill-card .chip:not(.active):hover { opacity: 1; }

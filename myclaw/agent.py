@@ -675,6 +675,16 @@ class Agent:
         if dialectic_content and dialectic_content != prompt:
             prompt = f"{prompt}\n\n## User Profile\n{dialectic_content}"
 
+        # v0.7.5: the agent's skills (names + descriptions; use_skill loads one)
+        try:
+            from .agent_skills import prompt_section, skills_for
+
+            section = await asyncio.to_thread(prompt_section, skills_for(self.config, self.name))
+            if section:
+                prompt = f"{prompt}\n\n{section}"
+        except Exception as exc:  # a broken skill file must not stop the agent
+            logger.warning("Could not load skills for agent %s: %s", self.name, exc)
+
         self._system_prompt = prompt
         self._system_prompt_loaded = True
         return prompt
