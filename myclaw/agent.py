@@ -64,7 +64,8 @@ from .defaults import GAP_FILE  # noqa: E402
 # v0.7.1: shared counter for the "round_robin" rotation strategy.
 _ROUND_ROBIN = itertools.count()
 # v0.7.3: (provider, model) -> time until which rotation skips it (recent hard failure).
-_MODEL_COOLDOWN: Dict[tuple, float] = {}
+# Shared with utility calls (provider.complete_with_fallback).
+from .llm_errors import MODEL_COOLDOWN as _MODEL_COOLDOWN  # noqa: E402
 
 # v0.7.1: conversation-memory scope (set by the chat engine per channel/agent).
 import contextvars  # noqa: E402

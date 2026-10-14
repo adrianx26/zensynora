@@ -144,9 +144,9 @@
     "semantic_hash": ""
   },
   "myclaw/agent.py": {
-    "mtime": 1791997805.9319115,
-    "seen": 1791998114.7122943,
-    "ast_hash": "bfdea4988086442f351e49ba763d3098",
+    "mtime": 1791998288.1217148,
+    "seen": 1791998348.9061716,
+    "ast_hash": "81ea28bfcec633115b18575187d67c2a",
     "semantic_hash": ""
   },
   "myclaw/agent_internals/__init__.py": {
@@ -774,9 +774,9 @@
     "semantic_hash": ""
   },
   "myclaw/semantic_memory.py": {
-    "mtime": 1791907182.0604043,
-    "seen": 1791916693.3169281,
-    "ast_hash": "8b125cf8480b557e1f8d8bef633e3006",
+    "mtime": 1791998298.107074,
+    "seen": 1791998348.9063685,
+    "ast_hash": "5cb50764d328e4ac432729d5db06e23e",
     "semantic_hash": ""
   },
   "myclaw/skill_generator.py": {
@@ -1002,9 +1002,9 @@
     "semantic_hash": ""
   },
   "myclaw/web/api.py": {
-    "mtime": 1791997410.4758873,
-    "seen": 1791998114.7125103,
-    "ast_hash": "69ccad6c2771e1ccbcb06833133166e1",
+    "mtime": 1791998310.5582414,
+    "seen": 1791998348.906433,
+    "ast_hash": "a87b0ebef8b9af3ae4ca52d88b0ca3b6",
     "semantic_hash": ""
   },
   "myclaw/web/auth.py": {
@@ -1446,9 +1446,9 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1791998072.7143023,
-    "seen": 1791998114.7126238,
-    "ast_hash": "2231f5397f31a1103331e892d3128419",
+    "mtime": 1791998318.7623596,
+    "seen": 1791998348.9065711,
+    "ast_hash": "816e2672e6d94c26ee9106dc2f1953e9",
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
@@ -1458,9 +1458,9 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1791998072.7176437,
-    "seen": 1791998114.7126262,
-    "ast_hash": "2b0d8ff12c92c52f8d0e44013b156a2a",
+    "mtime": 1791998318.7633014,
+    "seen": 1791998348.9065735,
+    "ast_hash": "c76f7d72d0c85d82e834aff3d5f6b8e1",
     "semantic_hash": ""
   },
   "diagrams/assets/palette.md": {
@@ -1554,9 +1554,9 @@
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
-    "mtime": 1791998072.730165,
-    "seen": 1791998114.7126489,
-    "ast_hash": "82e6b70a1621af21f506bd002329eddf",
+    "mtime": 1791998318.7630084,
+    "seen": 1791998348.9065974,
+    "ast_hash": "591b7810a3a46c05608e8f647a43198d",
     "semantic_hash": ""
   },
   "docs/MEDIC_CHANGE_MGMT.md": {
@@ -2370,9 +2370,9 @@
     "semantic_hash": ""
   },
   "tests/test_v073_reliability.py": {
-    "mtime": 1791998016.5079234,
-    "seen": 1791998114.7125664,
-    "ast_hash": "aeefbeb543877611eba16a606ca5c222",
+    "mtime": 1791998298.1079402,
+    "seen": 1791998348.9065034,
+    "ast_hash": "dc7902d03dbc46021c075e9f02c54e85",
     "semantic_hash": ""
   },
   "webui/src/components/ChannelsView.tsx": {

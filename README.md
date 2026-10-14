@@ -9,7 +9,7 @@ your conversations, builds a personal knowledge base, uses 95 tools, and can
 split work across teams of agents — with a local model like llama.cpp or
 Ollama, or any major cloud provider.
 
-[![Version](https://img.shields.io/badge/version-0.7.3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.4-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)](#requirements)
 [![Tests](https://img.shields.io/badge/tests-525-brightgreen.svg)](#development)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
@@ -115,8 +115,11 @@ zensynora update rollback         # back to the previous version
 zensynora doctor --fix            # check everything, repair safe issues
 ```
 
-After updating, restart `zensynora webui` and reload the page (a terminal
-opened before the update switches to the new version by itself).
+Or use the Web UI **Updates** page (v0.7.4): check, update with live
+progress, roll back, and **Restart** into the new version with one click.
+After a terminal update, click *Restart now* in the Web UI banner (or restart
+`zensynora webui`); a terminal opened before the update switches to the new
+version by itself.
 
 Updates never overwrite a working install. Your data **and the whole
 installed program folder** are backed up first; the new version is built

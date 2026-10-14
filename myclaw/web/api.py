@@ -106,6 +106,7 @@ from myclaw.web import chat_api as _chat_api  # noqa: E402
 from myclaw.web import jobs_api as _jobs_api  # noqa: E402
 from myclaw.web import backup_api as _backup_api  # noqa: E402
 from myclaw.web import medic_api as _medic_api  # noqa: E402
+from myclaw.web import update_api as _update_api  # noqa: E402
 
 _chat_api.set_registry_getter(_ensure_registry)
 _jobs_api.set_registry_getter(_ensure_registry, _chat_api.engine)
@@ -115,6 +116,7 @@ app.include_router(_chat_api.router)
 app.include_router(_jobs_api.router)
 app.include_router(_backup_api.router)
 app.include_router(_medic_api.router)  # self-update proposals (v0.7.1)
+app.include_router(_update_api.router)  # check / update / rollback / restart (v0.7.4)
 
 
 async def _start_background_runner() -> None:

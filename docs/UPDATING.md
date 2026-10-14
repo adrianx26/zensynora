@@ -12,6 +12,19 @@ any failure puts the previous version back exactly as it was.
 
 ## Everyday use
 
+**From the Web UI** (v0.7.4): open **Updates** (or click the version at the
+bottom of the sidebar). *Check for updates* compares the installed version
+with GitHub; *Update now* runs the same safe update described below and shows
+each step and the log while it runs (it keeps going if you close the page);
+*Roll back* returns to the previous version. When it is done, click
+**Restart ZenSynora** — the server restarts with the new version and the page
+reloads by itself. *Branch or tag* and *Reinstall even if up to date* match
+`--ref` and `--force` below. Updating from the Web UI needs a standard install
+(`~/.local/share/zensynora`); it is available from this computer or with the
+admin key, like Settings.
+
+**From a terminal:**
+
 ```bash
 zensynora update                  # update to the latest version (GitHub main)
 zensynora update status --check   # what's installed, is a newer version out?
@@ -30,8 +43,8 @@ If the `zensynora` command isn't available, use the script directly:
 | `restore --backup NAME` | Restore `~/.myclaw` from a backup (current data is saved first). |
 | `prune` | Delete old releases/backups (defaults: keep 3 releases, 5 backups). |
 
-**After an update, restart ZenSynora** if it was running: stop `zensynora
-webui` (Ctrl+C) and start it again. A terminal opened *before* the update
+**After an update, restart ZenSynora** if it was running: click *Restart
+now* in the Web UI banner, or stop `zensynora webui` (Ctrl+C) and start it again. A terminal opened *before* the update
 still points at the old version — since 0.7.2 commands started there switch
 to the installed version by themselves, and the Web UI shows a banner while an
 older server is still running. Reload the browser page afterwards.

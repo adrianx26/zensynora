@@ -16,15 +16,17 @@ import ModelsView from './components/ModelsView';
 import JobsView from './components/JobsView';
 import BackupsView from './components/BackupsView';
 import ChannelsView from './components/ChannelsView';
+import UpdatesView from './components/UpdatesView';
+import { restartServer } from './updates';
 import { api, getAdminKey, getApiBase, type AgentInfo, type Channel, type SystemHealth } from './api';
 
-type View = 'chat' | 'channels' | 'models' | 'jobs' | 'backups' | 'settings' | 'costs' | 'tools' | 'doctor';
-const VIEWS: View[] = ['chat', 'channels', 'models', 'jobs', 'backups', 'settings', 'costs', 'tools', 'doctor'];
+type View = 'chat' | 'channels' | 'models' | 'jobs' | 'backups' | 'updates' | 'settings' | 'costs' | 'tools' | 'doctor';
+const VIEWS: View[] = ['chat', 'channels', 'models', 'jobs', 'backups', 'updates', 'settings', 'costs', 'tools', 'doctor'];
 const VIEW_KEY = 'zensynora_view';
 const CHANNEL_KEY = 'zensynora_channel';
 const THEME_KEY = 'zensynora_theme';
 const VIEW_TITLES: Record<View, string> = {
-  chat: 'Chat', channels: 'Channels', models: 'Models', jobs: 'Jobs', backups: 'Backups', settings: 'Settings',
+  chat: 'Chat', channels: 'Channels', models: 'Models', jobs: 'Jobs', backups: 'Backups', updates: 'Updates', settings: 'Settings',
   costs: 'Costs & usage', tools: 'Tools', doctor: 'Doctor',
 };
 
@@ -73,6 +75,7 @@ function App() {
   const [view, setView] = useState<View>(() => load(VIEW_KEY, VIEWS, 'chat'));
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [health, setHealth] = useState<SystemHealth | null>(null);
+  const [restarting, setRestarting] = useState<string | null>(null);
   const [healthError, setHealthError] = useState(false);
   const [newChannel, setNewChannel] = useState<{ name: string; members: string[] } | null>(null);
   const [pending, setPending] = useState(0); // proposals waiting for approval
@@ -235,6 +238,7 @@ function App() {
             <NavButton id="models" icon="🧠" label="Models" view={view} go={go} />
             <NavButton id="jobs" icon="⏱" label="Jobs" view={view} go={go} />
             <NavButton id="backups" icon="💾" label="Backups" view={view} go={go} />
+            <NavButton id="updates" icon="⬆️" label="Updates" count={health?.update_installed ? 1 : undefined} view={view} go={go} />
             <NavButton id="settings" icon="⚙️" label="Settings" view={view} go={go} />
             <NavButton id="costs" icon="📊" label="Costs & usage" view={view} go={go} />
             <NavButton id="tools" icon="🧰" label="Tools" view={view} go={go} />
@@ -269,7 +273,9 @@ function App() {
           <button className="control-btn" onClick={() => setTheme(t => (t === 'dark' ? 'light' : 'dark'))}>
             {theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode'}
           </button>
-          {health?.version && <div className="app-version">ZenSynora v{health.version}</div>}
+          {health?.version && (
+            <button className="app-version link-btn" onClick={() => go('updates')} title="Check for updates">ZenSynora v{health.version}</button>
+          )}
         </div>
       </div>
 
@@ -283,11 +289,14 @@ function App() {
             </div>
           )}
           {/* v0.7.2: the server still runs an older version than the one installed */}
-          {health?.update_installed && (
+          {health?.update_installed && view !== 'updates' && (
             <div className="update-banner">
-              <b>ZenSynora {health.update_installed.installed} is installed</b>, but this server still runs {health.update_installed.running}.
-              Stop <code>zensynora webui</code> (Ctrl+C), open a new terminal, run{' '}
-              <code>source ~/.local/share/zensynora/source/venv/bin/activate</code> and start it again — then reload this page.
+              {health.update_installed.installed === health.update_installed.running
+                ? <><b>A new copy of ZenSynora {health.update_installed.installed} is installed</b>; restart to use it.</>
+                : <><b>ZenSynora {health.update_installed.installed} is installed</b>, but this server still runs {health.update_installed.running}.</>}
+              {' '}<button className="primary-btn" disabled={!!restarting} onClick={async () => {
+                try { await restartServer(setRestarting); } catch (e) { setRestarting(null); setError((e as Error).message); }
+              }}>{restarting || 'Restart now'}</button>
             </div>
           )}
           {error && <div className="notice error">{error} <button className="ghost-btn" onClick={() => setError(null)}>×</button></div>}
@@ -298,6 +307,7 @@ function App() {
           {view === 'models' && <ModelsView onChanged={onSettingsSaved} />}
           {view === 'jobs' && <JobsView agents={agents} channels={channels} />}
           {view === 'channels' && <ChannelsView agents={agents} onChanged={loadChannels} onOpen={openChannel} />}
+          {view === 'updates' && <UpdatesView />}
           {view === 'backups' && <BackupsView onRestored={() => { loadAgents(); loadChannels(); loadHealth(); }} />}
           {view === 'settings' && <SettingsView onSaved={onSettingsSaved} />}
           {view === 'tools' && <ToolsView />}

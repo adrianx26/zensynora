@@ -1,6 +1,6 @@
 # ZenSynora Architecture
 
-> **Status:** reflects **v0.7.3** (2026-10-14). Updated from the v0.4.1
+> **Status:** reflects **v0.7.4** (2026-10-14). Updated from the v0.4.1
 > version: adds the Web UI settings API, provider routing changes, the safe
 > updater and the doctor/medic rewrite (0.7.0); chat channels, agent-to-agent
 > events, jobs, backups, model rotation, custom providers and approval-gated
@@ -69,7 +69,8 @@ myclaw/
 │   ├── models_api.py        # Default model, rotation, prompt generator [0.7.1]
 │   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
 │   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
-│   └── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
+│   ├── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
+│   └── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
 └── ... (~50 utility modules)
 
 updater/                     # Safe updates: side-by-side releases, backups,
@@ -80,6 +81,7 @@ webui/src/
 ├── App.tsx                  # Shell: channels + agents sidebar, navigation, live health
 ├── api.ts                   # Backend helpers and shared types
 ├── colors.ts                # Stable colour per agent [0.7.1]
+├── updates.ts               # Update status type, restart-and-wait helper [0.7.4]
 └── components/
     ├── ChatView.tsx         # Channel chat, @mentions, activity panel [0.7.1]
     ├── ModelsView.tsx       # Default model, rotation, your providers [0.7.1]
@@ -87,6 +89,7 @@ webui/src/
     ├── BackupsView.tsx      # Backups [0.7.1]
     ├── ProposalsPanel.tsx   # Change proposals + lessons (Doctor page) [0.7.1]
     ├── ChannelsView.tsx     # Create / rename / manage channels [0.7.3]
+    ├── UpdatesView.tsx      # Check for updates, update, roll back, restart [0.7.4]
     ├── SettingsView.tsx     # Settings page [0.5.0]
     ├── DoctorView.tsx       # Doctor page [0.7.0]
     ├── ToolsView.tsx        # Tool list [0.5.0]
@@ -295,9 +298,10 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_updater.py` | 9 |
 | `test_v071_features.py` | 17 |
 | `test_v073_reliability.py` | 11 |
+| `test_v074_update_and_prompt.py` | 8 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **525** |
+| **Total** | **533** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 
