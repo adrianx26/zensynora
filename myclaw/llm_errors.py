@@ -10,7 +10,11 @@ says how long rotation should skip a model after such an error.
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Dict, Optional, Tuple
+
+# (provider, model) -> time until which it is skipped after a hard failure.
+# Shared by agent rotation and utility calls (prompt writer, job judge). v0.7.3
+MODEL_COOLDOWN: Dict[Tuple[str, str], float] = {}
 
 _RULES = [
     # (pattern in the lower-cased error, explanation, cooldown seconds)

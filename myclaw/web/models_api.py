@@ -144,23 +144,24 @@ def _clean_prompt(text: str) -> str:
 
 @router.post("/api/agents/generate-prompt", dependencies=guard)
 async def generate_agent_prompt(req: PromptRequest):
-    from myclaw.provider import complete_text, get_provider
+    from myclaw.provider import complete_with_fallback
 
     name = req.name.strip()
     if not name and not req.description.strip():
         raise HTTPException(status_code=400, detail="Give the agent a name or a short description first.")
     cfg = load_config()
-    provider = req.provider or cfg.agents.defaults.provider
-    model = req.model or cfg.agents.defaults.model
     messages = [
         {"role": "system", "content": PROMPT_WRITER},
         {"role": "user", "content": f"Agent name: {name or '(none)'}\nDescription: {req.description.strip() or '(none — infer the role from the name)'}"},
     ]
+    # v0.7.4: the main model first, then the rotation list (it only ever used
+    # the main model — a refused or rate-limited one made the button fail).
     try:
-        text = await complete_text(get_provider(cfg, provider), messages, model)
+        text, provider, model = await complete_with_fallback(cfg, messages, req.provider, req.model)
     except Exception as e:
         logger.warning("Prompt generation failed: %s", e)
-        raise HTTPException(status_code=502, detail=f"The model ({provider}/{model}) could not write the prompt: {str(e)[:200]}")
+        raise HTTPException(status_code=502, detail=f"No model could write the prompt — {str(e)[:600]}. "
+                            "Test your models on the Models page.")
     text = _clean_prompt(text)
     if not text:
         raise HTTPException(status_code=502, detail="The model returned an empty answer. Try again or pick another model.")

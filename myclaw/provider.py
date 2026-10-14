@@ -1505,6 +1505,47 @@ def _build_custom_provider(cp) -> BaseLLMProvider:
     )
 
 
+async def complete_with_fallback(config, messages: List[Dict], provider: Optional[str] = None,
+                                 model: Optional[str] = None) -> Tuple[str, str, str]:
+    """A plain completion for utility work, trying fallbacks (added in v0.7.4).
+
+    Writing an agent's prompt and scoring a job used ONLY the default model;
+    when that model fails (e.g. OpenRouter refuses it with "only available on
+    agentic harnesses") they failed even though the rotation list had working
+    models. Now: an explicit provider+model is used as given; otherwise the
+    default model, then every rotation entry, skipping models that failed
+    recently. Returns (text, provider, model); raises with all reasons.
+    """
+    import time as _t
+
+    from .llm_errors import MODEL_COOLDOWN, cooldown_for, describe_llm_error
+
+    if provider and model:
+        candidates = [(provider, model)]
+    else:
+        d = config.agents.defaults
+        candidates = [(d.provider, d.model)]
+        for e in getattr(getattr(config.agents, "rotation", None), "entries", []) or []:
+            if (e.provider, e.model) not in candidates and e.provider and e.model:
+                candidates.append((e.provider, e.model))
+    now = _t.time()
+    usable = [c for c in candidates if MODEL_COOLDOWN.get(c, 0) <= now] or candidates
+    errors: List[str] = []
+    for prov_name, mdl in usable:
+        try:
+            text = await complete_text(get_provider(config, prov_name), messages, mdl)
+        except Exception as e:
+            wait = cooldown_for(e)
+            if wait:
+                MODEL_COOLDOWN[(prov_name, mdl)] = _t.time() + wait
+            errors.append(describe_llm_error(e, f"{prov_name}/{mdl}"))
+            continue
+        if (text or "").strip():
+            return text, prov_name, mdl
+        errors.append(f"{prov_name}/{mdl}: empty answer")
+    raise RuntimeError(" | ".join(errors) or "no model configured")
+
+
 async def complete_text(provider: BaseLLMProvider, messages: List[Dict], model: str) -> str:
     """One plain completion WITHOUT tool definitions (v0.7.1).
 

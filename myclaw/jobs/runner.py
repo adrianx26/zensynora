@@ -182,8 +182,6 @@ class JobRunner:
                            model: str | None = None) -> dict[str, Any]:
         """Ask an LLM (default: the main model) to score a run from 0 to 10."""
         from ..config import load_config
-        from ..provider import complete_text, get_provider
-
         run = await asyncio.to_thread(store.get_run, run_id)
         if run is None:
             raise KeyError(run_id)
@@ -196,13 +194,14 @@ class JobRunner:
             await asyncio.to_thread(store.set_evaluation, run_id, 0, result)
             return result
         cfg = load_config()
-        provider = provider or cfg.agents.defaults.provider
-        model = model or cfg.agents.defaults.model
         content = (f"TASK:\n{job['prompt']}\n\nSUCCESS CRITERIA:\n{job.get('success_criteria') or '(none given)'}"
                    f"\n\nRESULT:\n{run['output'][:12000]}")
-        text = await complete_text(get_provider(cfg, provider),
-                                   [{"role": "system", "content": JUDGE_PROMPT},
-                                    {"role": "user", "content": content}], model)
+        # v0.7.4: main model, then the rotation list (see complete_with_fallback).
+        from ..provider import complete_with_fallback
+
+        text, provider, model = await complete_with_fallback(
+            cfg, [{"role": "system", "content": JUDGE_PROMPT}, {"role": "user", "content": content}],
+            provider, model)
         result = parse_judgement(text)
         result["judge"] = f"{provider}/{model}"
         await asyncio.to_thread(store.set_evaluation, run_id, result.get("score"), result)
