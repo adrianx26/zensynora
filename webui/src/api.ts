@@ -87,6 +87,7 @@ export interface Channel {
   reply_mode: 'lead' | 'all' | 'parallel';
   last_text?: string;
   last_id?: number | null;
+  orphan?: boolean; // v0.7.5: DM whose agent was deleted
 }
 
 /** A stored chat message. role "event" = agent-to-agent activity (meta.type says which). */
@@ -125,6 +126,8 @@ export interface Job {
   fresh_context: boolean;
   timeout_s: number;
   retries: number;
+  on_failure?: '' | 'diagnose' | 'fix'; // v0.7.5: what the medic does when a run fails
+  max_steps?: number;                    // v0.7.5: tool rounds per run
   created_by: string;
   next_run: number | null;
   last_run: number | null;
@@ -149,6 +152,23 @@ export interface JobRun {
   score: number | null;
   evaluation: Record<string, any> | null; // eslint-disable-line @typescript-eslint/no-explicit-any
   attempt: number;
+  diagnosis?: Diagnosis | null;
+}
+
+/** The medic's look at a failed run (v0.7.5). */
+export interface Diagnosis {
+  cause: string;
+  category: string;
+  explanation: string;
+  job_changes: Partial<Pick<Job, 'prompt' | 'agent' | 'timeout_s' | 'retries' | 'max_steps' | 'success_criteria' | 'fresh_context'>>;
+  current?: Record<string, unknown>;
+  manual_steps: string[];
+  code_fix_needed: boolean;
+  confidence: number;
+  by?: string;
+  note?: string;
+  applied?: boolean;
+  rerun_id?: number;
 }
 
 export interface ModelChoice { provider: string; model: string }

@@ -110,6 +110,9 @@ class EntityWithData:
     relations: List[Relation] = field(default_factory=list)
 
 
+_TEXT_BACKFILLED: set = set()  # db files whose old notes were indexed (v0.7.5)
+
+
 class KnowledgeDB:
     """
     SQLite database for knowledge storage with FTS5 search.
@@ -119,6 +122,14 @@ class KnowledgeDB:
     """
 
     def __init__(self, user_id: str = "default", db_path: Optional[Path] = None):
+        from .scope import kb_user, migrate_internal_scopes
+
+        user_id = kb_user(user_id)  # v0.7.5: internal ids share one knowledge base
+        if db_path is None:
+            try:
+                migrate_internal_scopes()  # once: old 'webui' notes into the shared base
+            except Exception as e:
+                logger.warning("Knowledge: could not move old notes: %s", e)
         self.user_id = user_id
         self.db_path = db_path or (Path.home() / ".myclaw" / f"knowledge_{user_id}.db")
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
@@ -298,6 +309,19 @@ class KnowledgeDB:
             END
         """)
 
+        # v0.7.5: the note text itself. entities_fts indexes the name and the
+        # file path only, so a note could be found by its title or its
+        # observations but never by what it says (most notes agents write are
+        # plain text) — agents concluded the knowledge base was empty.
+        conn.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS notes_text_fts USING fts5(title, body, tags)
+        """)
+        conn.execute("""
+            CREATE TRIGGER IF NOT EXISTS entities_text_ad AFTER DELETE ON entities BEGIN
+                DELETE FROM notes_text_fts WHERE rowid = old.id;
+            END
+        """)
+
         # Triggers to keep observations FTS index in sync (optimization 3.1)
         conn.execute("""
             CREATE TRIGGER IF NOT EXISTS observations_ai AFTER INSERT ON observations BEGIN
@@ -355,6 +379,13 @@ class KnowledgeDB:
         """)
 
         conn.commit()
+        # v0.7.5: index the text of notes written before the text index existed
+        key = str(self.db_path)
+        if key not in _TEXT_BACKFILLED:
+            _TEXT_BACKFILLED.add(key)
+            n = self.backfill_note_text()
+            if n:
+                logger.info(f"Knowledge: indexed the text of {n} existing note(s)")
         logger.info(f"Knowledge DB initialized: {self.db_path}")
 
     def get_sync_meta(self, key: str) -> Optional[str]:
@@ -931,10 +962,17 @@ class KnowledgeDB:
                 JOIN observations_fts fts ON o.id = fts.rowid
                 WHERE observations_fts MATCH ?
 
+                UNION
+
+                SELECT e.*, fts.rank AS match_rank
+                FROM entities e
+                JOIN notes_text_fts fts ON e.id = fts.rowid
+                WHERE notes_text_fts MATCH ?
+
                 ORDER BY match_rank
                 LIMIT ?
                 """,
-                (q, q, limit),
+                (q, q, q, limit),
             ).fetchall()
         except sqlite3.OperationalError:
             # Fall back to entities-only search for existing databases
@@ -1152,4 +1190,48 @@ class KnowledgeDB:
                 # Create placeholder for missing target
                 logger.warning(f"Relation target not found: {rel.target}")
 
+        self.index_note_text(entity_id, note.title or note.name, note.content or "", note.tags or [])
         return entity_id
+
+    # ── v0.7.5: full-text index of the note text ─────────────────────────────
+    @staticmethod
+    def _strip_frontmatter(text: str) -> str:
+        if text.startswith("---"):
+            end = text.find("\n---", 3)
+            if end != -1:
+                return text[end + 4:].lstrip("\n")
+        return text
+
+    def index_note_text(self, entity_id: int, title: str, body: str, tags: List[str]) -> None:
+        conn = self._get_connection()
+        try:
+            conn.execute("DELETE FROM notes_text_fts WHERE rowid = ?", (entity_id,))
+            conn.execute("INSERT INTO notes_text_fts(rowid, title, body, tags) VALUES (?, ?, ?, ?)",
+                         (entity_id, title or "", self._strip_frontmatter(body or "")[:200_000],
+                          " ".join(tags or [])))
+            conn.commit()
+        except sqlite3.OperationalError as e:  # FTS5 missing: names/observations still work
+            logger.debug("note text not indexed: %s", e)
+
+    def backfill_note_text(self) -> int:
+        """Index the text of notes saved before 0.7.5 (once)."""
+        conn = self._get_connection()
+        try:
+            missing = conn.execute(
+                "SELECT e.id, e.name, e.file_path FROM entities e "
+                "WHERE e.id NOT IN (SELECT rowid FROM notes_text_fts)").fetchall()
+        except sqlite3.OperationalError:
+            return 0
+        n = 0
+        for row in missing:
+            try:
+                text = Path(row["file_path"]).read_text(encoding="utf-8")
+            except (OSError, TypeError, ValueError):
+                text = ""
+            title = row["name"]
+            m = re.search(r"^title:\s*(.+)$", text[:2000], re.MULTILINE)
+            if m:
+                title = m.group(1).strip().strip('"')
+            self.index_note_text(row["id"], title, text, [])
+            n += 1
+        return n

@@ -9,7 +9,7 @@ your conversations, builds a personal knowledge base, uses 95 tools, and can
 split work across teams of agents — with a local model like llama.cpp or
 Ollama, or any major cloud provider.
 
-[![Version](https://img.shields.io/badge/version-0.7.4-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.5-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)](#requirements)
 [![Tests](https://img.shields.io/badge/tests-525-brightgreen.svg)](#development)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
@@ -75,7 +75,9 @@ zensynora webui                     # open http://localhost:8000
 
 Then open **Models**, pick your provider and a model and click *Make
 default* (or run `zensynora onboard` for a terminal wizard). Chat in
-`#general`, or click an agent for a private conversation. Tour of the pages:
+`#general`, or click an agent for a private conversation. Agents hand work to
+each other, can create new specialist agents, and load **skills** (instructions
+for a kind of task, Skills page) when a task needs them. Tour of the pages:
 [docs/webui_guide.md](docs/webui_guide.md).
 
 > **llama.cpp tip:** start `llama-server` with `--jinja` so agents can use
@@ -90,7 +92,7 @@ default* (or run `zensynora onboard` for a terminal wizard). Chat in
 | `zensynora gateway` | Run the Telegram or WhatsApp bot (falls back to terminal chat) |
 | `zensynora mcp-server` | Expose ZenSynora's tools to MCP clients over stdio |
 | `zensynora knowledge sync \| search \| list \| read \| write` | Manage the knowledge base |
-| `zensynora swarm …` · `skills …` · `memory …` | Swarms, tools/skills, conversation memory |
+| `zensynora swarm …` · `skills list [--tools]` · `memory …` | Swarms, agent skills (and tools), conversation memory |
 | `zensynora doctor` | Health check with fix hints (`--fix`, `--offline`, `--json`) |
 | `zensynora backup create \| list \| restore` | Back up / restore settings, API keys, knowledge, conversations, jobs |
 | `zensynora medic proposals \| show \| approve` | Review code changes proposed by agents |

@@ -18,6 +18,7 @@ interface Props {
   agents: AgentInfo[];
   onChannelChanged: () => void;
   onOpenSettings: () => void;
+  onAgentsChanged?: () => void;
 }
 
 const REPLY_MODES: { id: Channel['reply_mode']; label: string; help: string }[] = [
@@ -44,6 +45,8 @@ function eventSummary(m: Record<string, any>): { icon: string; title: string; bo
       return { icon: m.ok === false ? '✘' : '↩', title: `@${m.to} answered @${m.from}${m.ms ? ` · ${(m.ms / 1000).toFixed(1)} s` : ''}`, body: m.result, ok: m.ok !== false };
     case 'tool_end':
       return { icon: m.ok ? '🔧' : '⚠️', title: `@${m.agent} used ${m.tool}${m.ms != null ? ` · ${m.ms} ms` : ''}`, body: m.result, ok: !!m.ok };
+    case 'agent_created':
+      return { icon: '✨', title: `@${m.from} created a new agent @${m.to}`, body: m.task, ok: true };
     case 'job_run':
       return {
         icon: '⏱', title: `Job “${m.job}” ${m.status === 'started' ? 'started' : m.status}`,
@@ -69,7 +72,7 @@ function EventCard({ meta, compact }: { meta: Record<string, any>; compact?: boo
   );
 }
 
-const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpenSettings }) => {
+const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpenSettings, onAgentsChanged }) => {
   const [channel, setChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [live, setLive] = useState<Record<string, any>[]>([]); // transient tool_start etc.
@@ -186,6 +189,8 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
         case 'delegation_end':
         case 'tool_end':
         case 'job_run':
+        case 'agent_created':
+          if (e.type === 'agent_created') onAgentsChanged?.(); // v0.7.5: show the new agent in the sidebar
           if (e.type === 'tool_end') setLive(prev => prev.filter(x => !(x.type === 'tool_start' && x.tool === e.tool && x.agent === e.agent)));
           if (e.message_id) {
             const meta = { ...e };
@@ -301,7 +306,10 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
 
   const toggleMember = (name: string) => {
     if (!channel) return;
-    const members = channel.members.includes(name) ? channel.members.filter(m => m !== name) : [...channel.members, name];
+    // v0.7.5: only send agents that exist — a deleted agent left in the list made every change fail
+    const known = new Set(agents.map(a => a.name));
+    const current = channel.members.filter(m => known.has(m));
+    const members = current.includes(name) ? current.filter(m => m !== name) : [...current, name];
     if (members.length) patchChannel({ members });
   };
 
@@ -407,6 +415,10 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
                       <b style={{ color: agentColor(m.sender) }}>@{m.sender}</b>
                       {m.meta?.job && <span className="badge">job: {m.meta.job}</span>}
                       {m.meta?.model && !streaming && <span className="muted"> · {m.meta.provider}/{m.meta.model}{m.meta.ms ? ` · ${(m.meta.ms / 1000).toFixed(1)} s` : ''}</span>}
+                      {!streaming && m.meta?.tps != null && (
+                        <span className="muted token-speed" title={`≈${m.meta.tokens} tokens · first token after ${((m.meta.ttft_ms || 0) / 1000).toFixed(1)} s (token counts are estimated)`}>
+                          {' '}· ⚡ {m.meta.tps} tok/s</span>
+                      )}
                     </div>
                   )}
                   {mine ? m.text : <TypewriterText text={m.text} active={streaming} />}

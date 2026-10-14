@@ -6,7 +6,7 @@
 // prompt on several models side by side.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ago, api, fmtTime, type AgentInfo, type Channel, type Job, type JobRun, type ModelChoice, type ModelsOverview,
+  ago, api, fmtTime, type AgentInfo, type Channel, type Diagnosis, type Job, type JobRun, type ModelChoice, type ModelsOverview,
 } from '../api';
 
 interface Props {
@@ -19,6 +19,7 @@ type Draft = Partial<Job> & { name: string; prompt: string };
 const EMPTY: Draft = {
   name: '', prompt: '', agent: 'default', schedule: 'manual', every_minutes: 60, at_time: '09:00', days: 'mon,tue,wed,thu,fri',
   enabled: true, channel_id: '', success_criteria: '', auto_evaluate: false, fresh_context: true, timeout_s: 300, retries: 0,
+  on_failure: '', max_steps: 8,
 };
 
 const TEMPLATES: { label: string; job: Draft }[] = [
@@ -53,6 +54,51 @@ function scheduleText(j: Partial<Job>): string {
   }
 }
 
+const FIELD_LABEL: Record<string, string> = {
+  prompt: 'Instruction', agent: 'Agent', timeout_s: 'Timeout (s)', retries: 'Retries', max_steps: 'Tool steps',
+  success_criteria: 'Success criteria', fresh_context: 'Clean memory',
+};
+const fmtVal = (v: unknown) => (typeof v === 'boolean' ? (v ? 'yes' : 'no') : v == null || v === '' ? '—' : String(v));
+
+/** The medic's diagnosis of a failed run, with the fix buttons (v0.7.5). */
+function DiagnosisPanel({ d, busy, onFix, onCode }: {
+  d: Diagnosis; busy: boolean; onFix: (runAgain: boolean) => void; onCode: () => void;
+}) {
+  const changes = Object.entries(d.job_changes || {});
+  return (
+    <div className="medic-panel">
+      <div className="medic-head">🩺 <b>{d.cause}</b> <span className="badge">{d.category.replace('_', ' ')}</span>
+        <span className="muted small"> · {d.by === 'rules' ? 'known problem' : `by ${d.by}`} · confidence {Math.round(d.confidence * 100)}%</span></div>
+      {d.explanation && <p>{d.explanation}</p>}
+      {d.note && <p className="muted small">{d.note}</p>}
+      {changes.length > 0 && (
+        <table className="data-table">
+          <thead><tr><th>Change</th><th>Now</th><th>Medic suggests</th></tr></thead>
+          <tbody>{changes.map(([k, v]) => (
+            <tr key={k}><td>{FIELD_LABEL[k] || k}</td><td className="pre small">{fmtVal(d.current?.[k])}</td><td className="pre small"><b>{fmtVal(v)}</b></td></tr>
+          ))}</tbody>
+        </table>
+      )}
+      {d.manual_steps?.length > 0 && (
+        <div><b>You need to:</b><ul>{d.manual_steps.map((s, i) => <li key={i}>{s}</li>)}</ul></div>
+      )}
+      <div className="row-actions">
+        {d.applied
+          ? <span className="muted">✔ Fix applied{d.rerun_id ? ` — run #${d.rerun_id}` : ''}.</span>
+          : changes.length > 0 && <>
+            <button className="primary-btn" disabled={busy} onClick={() => onFix(true)}>Apply fix &amp; run again</button>
+            <button className="ghost-btn" disabled={busy} onClick={() => onFix(false)}>Apply only</button>
+          </>}
+        {(d.code_fix_needed || d.category === 'code' || d.category === 'unknown') && (
+          <button className="ghost-btn" disabled={busy} onClick={onCode}
+            title="The medic reads ZenSynora's code and files a change proposal; you approve it on the Doctor page">
+            🛠 Ask the medic to fix the code</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function ScoreBadge({ score }: { score: number | null | undefined }) {
   if (score == null) return <span className="muted">—</span>;
   const cls = score >= 7 ? 'ok' : score >= 4 ? 'warn' : 'err';
@@ -71,6 +117,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
   const [bench, setBench] = useState<ModelChoice[]>([]);
   const [benchInput, setBenchInput] = useState<ModelChoice>({ provider: '', model: '' });
   const [tab, setTab] = useState<'runs' | 'bench'>('runs');
+  const [medicBusy, setMedicBusy] = useState<number | null>(null);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -142,6 +189,22 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
     act(async () => { await api(`/api/jobs/${j.id}`, { method: 'DELETE' }); setSelected(null); }, 'Job deleted.');
   };
   const evaluate = (r: JobRun) => act(() => api(`/api/jobs/runs/${r.id}/evaluate`, { method: 'POST', body: '{}' }), 'Evaluated with the main model.');
+  const askMedic = async (r: JobRun) => {
+    setOpenRun(r.id);
+    setMedicBusy(r.id);
+    await act(() => api(`/api/jobs/runs/${r.id}/diagnose`, { method: 'POST' }));
+    setMedicBusy(null);
+  };
+  const applyFix = async (r: JobRun, runAgain: boolean) => {
+    setMedicBusy(r.id);
+    await act(() => api(`/api/jobs/runs/${r.id}/fix`, { method: 'POST', body: JSON.stringify({ run_again: runAgain }) }),
+      runAgain ? 'Fix applied — the job is running again.' : 'Fix applied to the job.');
+    setMedicBusy(null);
+  };
+  const codeFix = (r: JobRun) => act(async () => {
+    const res = await api<{ name: string }>(`/api/jobs/runs/${r.id}/code-fix`, { method: 'POST' });
+    return res;
+  }, 'The medic is looking at the code (job “Medic code fix”). A fix appears in Doctor → Change proposals for you to approve.');
   const cancel = (r: JobRun) => act(() => api(`/api/jobs/runs/${r.id}/cancel`, { method: 'POST' }));
   const runBench = () => job && act(() => api(`/api/jobs/${job.id}/benchmark`, { method: 'POST', body: JSON.stringify({ models: bench, evaluate: true }) }),
     `Benchmark started on ${bench.length} model(s).`);
@@ -218,6 +281,14 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
           <input className="field-input narrow" type="number" value={draft.timeout_s} onChange={e => set('timeout_s', Number(e.target.value))} /></div>
         <div className="field"><label className="field-label">Retries on failure</label>
           <input className="field-input narrow" type="number" min={0} max={5} value={draft.retries} onChange={e => set('retries', Number(e.target.value))} /></div>
+        <div className="field"><label className="field-label" title="How many extra tool rounds (search, read, retry…) the agent may use per run">Tool steps</label>
+          <input className="field-input narrow" type="number" min={1} max={30} value={draft.max_steps ?? 8} onChange={e => set('max_steps', Number(e.target.value))} /></div>
+        <div className="field"><label className="field-label">When a run fails</label>
+          <select className="field-input" value={draft.on_failure ?? ''} onChange={e => set('on_failure', e.target.value as Job['on_failure'])}>
+            <option value="">do nothing</option>
+            <option value="diagnose">the medic diagnoses it</option>
+            <option value="fix">the medic diagnoses, fixes the job and runs it again</option>
+          </select></div>
       </div>
       {([['enabled', 'Enabled'], ['auto_evaluate', 'Score every run with the main model'], ['fresh_context', 'Start each run with a clean memory']] as const).map(([k, label]) => (
         <div className="field field-inline" key={k}>
@@ -295,7 +366,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                 {normalRuns.map(r => (
                   <div className="run-row" key={r.id}>
                     <div className="run-head" onClick={() => setOpenRun(openRun === r.id ? null : r.id)}>
-                      <span>{STATUS_ICON[r.status] || r.status}</span>
+                      <span>{STATUS_ICON[r.status] || r.status}{r.diagnosis && <span title="Diagnosed by the medic"> 🩺</span>}</span>
                       <span>{fmtTime(r.started)}</span>
                       <span className="muted">{r.trigger}{r.attempt > 1 ? ` · attempt ${r.attempt}` : ''}</span>
                       <span className="muted">{r.ms != null ? `${(r.ms / 1000).toFixed(1)} s` : ''}</span>
@@ -305,12 +376,21 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                         {r.status === 'running'
                           ? <button className="ghost-btn" onClick={() => cancel(r)}>Stop</button>
                           : <button className="ghost-btn" onClick={() => evaluate(r)}>{r.score == null ? 'Evaluate' : 'Re-evaluate'}</button>}
+                        {['error', 'timeout', 'interrupted'].includes(r.status) && (
+                          <button className="ghost-btn" disabled={medicBusy === r.id} onClick={() => askMedic(r)}
+                            title="The medic finds why this run failed and suggests a fix">
+                            {medicBusy === r.id ? '🩺 Diagnosing…' : r.diagnosis ? '🩺 Diagnose again' : '🩺 Ask the medic'}</button>
+                        )}
                       </span>
                     </div>
                     {openRun === r.id && (
                       <div className="run-body">
                         {r.error && <div className="probe-err">{r.error}</div>}
                         {r.output && <pre>{r.output}</pre>}
+                        {r.diagnosis && (
+                          <DiagnosisPanel d={r.diagnosis} busy={medicBusy === r.id}
+                            onFix={runAgain => applyFix(r, runAgain)} onCode={() => codeFix(r)} />
+                        )}
                         {r.evaluation && Object.keys(r.evaluation).length > 0 && (
                           <div className="notice"><b>Evaluation{r.evaluation.judge ? ` (${r.evaluation.judge})` : ''}:</b> {r.evaluation.verdict} — {r.evaluation.reasons || r.evaluation.error}</div>
                         )}

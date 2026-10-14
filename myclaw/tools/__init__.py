@@ -124,6 +124,10 @@ _LAZY_AGENT_TOOLS = {
     "convert_skill":             ("myclaw.agents.skill_adapter", "convert_skill",             "Convert an external skill to ZenSynora format"),
     "list_compatible_skills":    ("myclaw.agents.skill_adapter", "list_compatible_skills",    "List all skills from external sources compatible with ZenSynora"),
     "register_external_skill":   ("myclaw.agents.skill_adapter", "register_external_skill",   "Register an externally sourced skill file in the TOOLBOX"),
+    # Agent skills (v0.7.5): instructions an agent loads when a task needs them
+    "use_skill":                 ("myclaw.agent_skills",         "use_skill",                 "Load a skill's full instructions by name before a task that matches it"),
+    "list_skills":               ("myclaw.agent_skills",         "list_agent_skills",         "List all skills (name and what each is for)"),
+    "create_agent":              ("myclaw.agent_team",           "create_agent",              "Create a new named agent (specialist) that can then be talked to and given tasks with delegate"),
     # Medic Agent
     "check_system_health":       ("myclaw.agents.medic_agent",   "check_system_health",       "Check overall system health status"),
     "check_memory_usage":        ("myclaw.agents.medic_agent",   "check_memory_usage",        "Checks current system memory usage and logs a warning if it exceeds a threshold."),
@@ -261,6 +265,15 @@ for _tool_name, (_mod, _func, _desc) in _LAZY_AGENT_TOOLS.items():
 # agent modules are not imported until a tool is actually invoked.
 
 _TOOL_SCHEMAS_INITIALIZED = False
+
+
+def refresh_tool_schemas() -> None:
+    """Rebuild the tool list the models see (after tools were added at runtime,
+    e.g. by an MCP server that connected after start-up; v0.7.5)."""
+    global _TOOL_SCHEMAS_INITIALIZED
+    TOOL_SCHEMAS.clear()
+    TOOL_SCHEMAS.extend(_generate_schemas())
+    _TOOL_SCHEMAS_INITIALIZED = True
 
 
 def ensure_tool_schemas() -> None:

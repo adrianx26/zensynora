@@ -776,11 +776,16 @@ def validate_path(path: str) -> Path:
         raise ValueError(f"Invalid path: {path}") from e
 
 
-def register_mcp_tool(name: str, server_name: str, func, documentation: str = "") -> str:
-    """Register a remote tool retrieved via MCP."""
+def register_mcp_tool(name: str, server_name: str, func, documentation: str = "",
+                      parameters: dict | None = None) -> str:
+    """Register a remote tool retrieved via MCP (with its input schema, v0.7.5)."""
     global TOOLS
     local_name = f"mcp_{server_name}_{name}"
-    TOOLS[local_name] = {"func": func, "desc": f"[{server_name} MCP] {documentation}"}
+    entry = {"func": func, "desc": f"[{server_name} MCP] {documentation}"}
+    if isinstance(parameters, dict) and parameters.get("type") == "object":
+        entry["parameters"] = {"type": "object", "properties": parameters.get("properties") or {},
+                               "required": list(parameters.get("required") or [])}
+    TOOLS[local_name] = entry
     return f"MCP tool '{local_name}' registered successfully."
 
 
@@ -794,6 +799,10 @@ def _generate_schemas() -> list[dict]:
     schemas = []
     for name, info in TOOLS.items():
         func = info["func"]
+        if isinstance(info.get("parameters"), dict):  # v0.7.5: MCP tools bring their own schema
+            schemas.append({"type": "function", "function": {
+                "name": name, "description": info["desc"] or "", "parameters": info["parameters"]}})
+            continue
         try:
             sig = inspect.signature(func)
         except ValueError:
@@ -803,6 +812,8 @@ def _generate_schemas() -> list[dict]:
         required = []
         for param_name, param in sig.parameters.items():
             if param_name in ("user_id", "_depth", "context"):
+                continue
+            if param.kind in (inspect.Parameter.VAR_KEYWORD, inspect.Parameter.VAR_POSITIONAL):
                 continue
 
             ptype = "string"

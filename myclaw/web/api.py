@@ -92,6 +92,12 @@ async def _reset_agent_registry() -> None:
             await agent.close()
         except Exception as exc:  # pragma: no cover - best effort
             logger.debug("Error closing agent during registry reset: %s", exc)
+    # v0.7.5: an agent renamed or deleted in Settings leaves its channels at once
+    # (it used to stay a "zombie" member that blocked every member change).
+    try:
+        _chat_api.sync_channels()
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Could not update channels after the settings change: %s", exc)
 
 
 from myclaw.web import settings_api as _settings_api  # noqa: E402
@@ -107,8 +113,20 @@ from myclaw.web import jobs_api as _jobs_api  # noqa: E402
 from myclaw.web import backup_api as _backup_api  # noqa: E402
 from myclaw.web import medic_api as _medic_api  # noqa: E402
 from myclaw.web import update_api as _update_api  # noqa: E402
+from myclaw.web import skills_api as _skills_api  # noqa: E402
 
 _chat_api.set_registry_getter(_ensure_registry)
+
+
+def _add_created_agent(name: str, agent) -> None:
+    """v0.7.5: an agent made with create_agent joins the Web UI at once."""
+    if _agent_registry:
+        _agent_registry[name] = agent
+
+
+from myclaw import agent_team as _agent_team  # noqa: E402
+
+_agent_team.on_agent_created(_add_created_agent)
 _jobs_api.set_registry_getter(_ensure_registry, _chat_api.engine)
 _backup_api.set_restore_hook(_reset_agent_registry)  # restored settings take effect at once
 app.include_router(_models_api.router)
@@ -117,15 +135,34 @@ app.include_router(_jobs_api.router)
 app.include_router(_backup_api.router)
 app.include_router(_medic_api.router)  # self-update proposals (v0.7.1)
 app.include_router(_update_api.router)  # check / update / rollback / restart (v0.7.4)
+app.include_router(_skills_api.router)  # agent skills (v0.7.5)
+
+
+_mcp_manager = None
 
 
 async def _start_background_runner() -> None:
     """Job scheduler + automatic backups run inside the Web UI process."""
     _jobs_api.start_runner()
+    # v0.7.5: external MCP servers (settings mcp.servers — e.g. a memory/notes
+    # server) used to be started only by `zensynora agent` and the gateway, so
+    # their tools were missing in the Web UI.
+    global _mcp_manager
+    try:
+        cfg = load_config()
+        if cfg.mcp.enabled and cfg.mcp.servers:
+            from myclaw.mcp import MCPClientManager
+
+            _mcp_manager = MCPClientManager(cfg.model_dump())
+            await _mcp_manager.start_all()
+    except Exception as exc:  # an MCP server must never stop the Web UI
+        logger.warning("Could not start MCP servers: %s", exc)
 
 
 async def _stop_background_runner() -> None:
     await _jobs_api.stop_runner()
+    if _mcp_manager is not None:
+        await _mcp_manager.stop_all()
 
 
 app.router.add_event_handler("startup", _start_background_runner)
@@ -188,11 +225,6 @@ async def get_agents():
             "description": getattr(na, "description", "") or "",
         })
     return {"agents": agents}
-
-
-@app.get("/api/skills")
-async def get_skills():
-    return {"skills": list(TOOLS.keys())}
 
 
 # ── Admin Dashboard API ─────────────────────────────────────────────────────

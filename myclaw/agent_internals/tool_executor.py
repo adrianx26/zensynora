@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 
 # Follow-up rounds after the first tool call (v0.7.2 text calls, v0.7.3 also native).
 MAX_TEXT_ROUNDS = 4
+# v0.7.5: jobs can allow more rounds (job setting "max tool steps"); chat keeps 4.
+from contextvars import ContextVar as _ContextVar  # noqa: E402
+
+MAX_ROUNDS: "_ContextVar[int]" = _ContextVar("max_tool_rounds", default=MAX_TEXT_ROUNDS)
 
 
 def _usage_hint(tool_name: str, args: Dict) -> str:
@@ -288,7 +292,7 @@ async def execute_tools(
         from .text_tools import parse_text_tool_calls
 
         more = native_calls or parse_text_tool_calls(final_response)
-        if more and _round < MAX_TEXT_ROUNDS:
+        if more and _round < MAX_ROUNDS.get():
             return await execute_tools(agent, more, followup, user_message, user_id, mem,
                                        _depth, had_kb_results, _round=_round + 1)
         if more:

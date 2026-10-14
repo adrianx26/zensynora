@@ -328,3 +328,34 @@ def list_knowledge_tags(user_id: str = "default") -> str:
         return f"Error listing tags: {e}"
 
 
+
+
+# ── v0.7.5: every knowledge tool uses the knowledge base of the current turn ──
+# The tools defaulted to user "default" while the automatic search and saving
+# in the Web UI used "webui", so agents could not find their own notes. A
+# user_id the model passes no longer picks another (empty) knowledge base.
+def _scoped(fn):
+    import functools
+    import inspect
+
+    sig = inspect.signature(fn)
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        from myclaw.knowledge.scope import for_tool
+
+        bound = sig.bind_partial(*args, **kwargs)
+        bound.arguments["user_id"] = for_tool(bound.arguments.get("user_id"))
+        return fn(*bound.args, **bound.kwargs)
+
+    return wrapper
+
+
+write_to_knowledge = _scoped(write_to_knowledge)
+search_knowledge = _scoped(search_knowledge)
+read_knowledge = _scoped(read_knowledge)
+get_knowledge_context = _scoped(get_knowledge_context)
+list_knowledge = _scoped(list_knowledge)
+sync_knowledge_base = _scoped(sync_knowledge_base)
+get_related_knowledge = _scoped(get_related_knowledge)
+list_knowledge_tags = _scoped(list_knowledge_tags)

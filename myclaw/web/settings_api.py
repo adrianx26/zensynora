@@ -90,6 +90,20 @@ PROVIDER_PRESETS: List[Dict[str, Any]] = [
 _on_config_changed = None
 
 
+def _carry_over_renames(renames: Dict[str, str]) -> None:
+    """Channels, direct messages and jobs follow an agent that was renamed (v0.7.5)."""
+    try:
+        from myclaw.chat import store as chat_store
+        from myclaw.jobs import store as job_store
+
+        for old, new in renames.items():
+            chat_store.rename_member(old, new)
+            job_store.rename_agent(old, new)
+            logger.info("Agent renamed %s -> %s: channels and jobs updated", old, new)
+    except Exception as e:  # pragma: no cover - never block a settings save
+        logger.warning("Could not carry over agent rename: %s", e)
+
+
 def set_config_changed_hook(fn) -> None:
     global _on_config_changed
     _on_config_changed = fn
@@ -266,6 +280,7 @@ async def update_settings(update: SettingsUpdate):
     cfg = load_config()
     secret_paths = set(_secret_paths(cfg))
     raw = copy.deepcopy(_read_raw_config())
+    old_names = [(a or {}).get("name", "") for a in (_get_path(raw, "agents.named") or [])] if raw else []
 
     if not raw:
         # First save (no onboarding yet): start from the full defaults,
@@ -311,6 +326,17 @@ async def update_settings(update: SettingsUpdate):
             raise HTTPException(status_code=400, detail="Every named agent needs a name.")
         if named["name"] == "default":
             raise HTTPException(status_code=400, detail="'default' is reserved for the main agent.")
+    new_names = [(a or {}).get("name", "") for a in (_get_path(raw, "agents.named") or [])]
+    lowered = [n.lower() for n in new_names]
+    dupes = sorted({n for n in new_names if lowered.count(n.lower()) > 1})
+    if dupes:  # v0.7.5: two agents with one name made channels and @mentions ambiguous
+        raise HTTPException(status_code=400, detail=f"Two agents are called {', '.join(dupes)} — names must differ.")
+    # v0.7.5: an agent renamed in the editor (same position, new name) keeps its
+    # channels, conversation and jobs instead of leaving a "zombie" behind.
+    renames = {}
+    if "agents.named" in update.changes and len(old_names) == len(new_names):
+        renames = {o: n for o, n in zip(old_names, new_names)
+                   if o and n and o != n and o not in new_names and n not in old_names}
 
     try:
         AppConfig(**raw)
@@ -319,6 +345,8 @@ async def update_settings(update: SettingsUpdate):
 
     save_config(raw)
     load_config(force_reload=True)
+    if renames:
+        _carry_over_renames(renames)
     try:
         from myclaw.provider import clear_provider_cache
 

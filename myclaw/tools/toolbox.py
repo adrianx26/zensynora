@@ -147,12 +147,12 @@ def list_tools() -> str:
     return "Available tools: " + ", ".join(sorted(TOOLS.keys()))
 
 
-def register_mcp_tool(name: str, server_name: str, func, documentation: str = "") -> str:
-    """Register a remote tool retrieved via MCP."""
-    global TOOLS
-    local_name = f"mcp_{server_name}_{name}"
-    TOOLS[local_name] = {"func": func, "desc": f"[{server_name} MCP] {documentation}"}
-    return f"MCP tool '{local_name}' registered successfully."
+def register_mcp_tool(name: str, server_name: str, func, documentation: str = "",
+                      parameters: dict | None = None) -> str:
+    """Register a remote tool retrieved via MCP (same as tools.core.register_mcp_tool)."""
+    from .core import register_mcp_tool as _register
+
+    return _register(name, server_name, func, documentation, parameters)
 
 
 def register_tool(name: str, code: str, documentation: str = "") -> str:

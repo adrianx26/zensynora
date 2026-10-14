@@ -675,6 +675,22 @@ class Agent:
         if dialectic_content and dialectic_content != prompt:
             prompt = f"{prompt}\n\n## User Profile\n{dialectic_content}"
 
+        # v0.7.5: the agent's skills (names + descriptions; use_skill loads one)
+        try:
+            from .agent_skills import prompt_section, skills_for
+
+            section = await asyncio.to_thread(prompt_section, skills_for(self.config, self.name))
+            if section:
+                prompt = f"{prompt}\n\n{section}"
+            from .agent_team import team_section
+            from .config import load_config as _load_config
+
+            team = team_section(_load_config(), self.name)  # v0.7.5: who else can do the work
+            if team:
+                prompt = f"{prompt}\n\n{team}"
+        except Exception as exc:  # a broken skill file must not stop the agent
+            logger.warning("Could not load skills for agent %s: %s", self.name, exc)
+
         self._system_prompt = prompt
         self._system_prompt_loaded = True
         return prompt
@@ -1530,9 +1546,15 @@ class Agent:
         the full request fan-out into provider/tool/KB child spans. The
         span is a no-op when OpenTelemetry is not installed/enabled.
         """
+        from .knowledge.scope import KB_USER, for_turn
         from .observability import span as _span
-        with _span("agent.think", agent=self.name, user=user_id, depth=_depth):
-            return await self._think_impl(user_message, user_id, _depth)
+
+        kb_token = KB_USER.set(for_turn(user_id))  # v0.7.5: tools use this turn's knowledge base
+        try:
+            with _span("agent.think", agent=self.name, user=user_id, depth=_depth):
+                return await self._think_impl(user_message, user_id, _depth)
+        finally:
+            KB_USER.reset(kb_token)
 
     async def _think_impl(
         self, user_message: str, user_id: str = "default", _depth: int = 0
@@ -1640,6 +1662,22 @@ class Agent:
         return response
 
     async def stream_think(
+        self, user_message: str, user_id: str = "default", _depth: int = 0
+    ) -> AsyncIterator[str]:
+        """Streaming answer; the tools it calls use this turn's knowledge base (v0.7.5)."""
+        from .knowledge.scope import KB_USER, for_turn
+
+        kb_token = KB_USER.set(for_turn(user_id))
+        try:
+            async for chunk in self._stream_think_impl(user_message, user_id, _depth):
+                yield chunk
+        finally:
+            try:
+                KB_USER.reset(kb_token)
+            except ValueError:  # generator closed from another context
+                pass
+
+    async def _stream_think_impl(
         self, user_message: str, user_id: str = "default", _depth: int = 0
     ) -> AsyncIterator[str]:
         """Process a user message and yield response chunks in real-time.
