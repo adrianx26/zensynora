@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _STEP = re.compile(r"^\[(\d+)/(\d+)\]\s+(.*)$")
-_DONE = re.compile(r"✔ (Updated|Rolled back) (.*)")
+_DONE = re.compile(r"✔ (Updated|Rolled back|Already on) (.*?)(?:\. Use --force.*)?$")
 _proc: Optional[subprocess.Popen] = None
 
 
@@ -164,6 +164,7 @@ async def update_status(check: bool = False):
 
 class StartIn(BaseModel):
     ref: str = "main"
+    force: bool = False  # reinstall even when the version is the same (repair)
 
 
 def _spawn(action: str, args: list) -> Dict[str, Any]:
@@ -203,7 +204,10 @@ async def start_update(body: StartIn = StartIn()):
     ref = (body.ref or "main").strip()
     if not re.fullmatch(r"[A-Za-z0-9._/-]{1,100}", ref):
         raise HTTPException(status_code=400, detail="Invalid branch or tag name.")
-    return _spawn("update", [] if ref == "main" else ["--ref", ref])
+    args = [] if ref == "main" else ["--ref", ref]
+    if body.force:
+        args.append("--force")
+    return _spawn("update", args)
 
 
 @router.post("/api/update/rollback", dependencies=guard)

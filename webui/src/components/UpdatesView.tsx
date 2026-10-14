@@ -11,6 +11,7 @@ const UpdatesView: React.FC = () => {
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [ref, setRef] = useState('main');
+  const [force, setForce] = useState(false);
   const [restarting, setRestarting] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
 
@@ -52,7 +53,7 @@ const UpdatesView: React.FC = () => {
     if (!window.confirm(what)) return;
     setNotice(null);
     try {
-      await api(`/api/update/${action}`, { method: 'POST', body: JSON.stringify(action === 'start' ? { ref } : {}) });
+      await api(`/api/update/${action}`, { method: 'POST', body: JSON.stringify(action === 'start' ? { ref, force } : {}) });
       await load(false);
     } catch (e) {
       setNotice({ kind: 'error', text: (e as Error).message });
@@ -130,6 +131,11 @@ const UpdatesView: React.FC = () => {
                 Branch or tag
                 <input className="field-input" style={{ width: 140 }} value={ref} disabled={st.update_running}
                   onChange={e => setRef(e.target.value.trim() || 'main')} />
+              </label>
+              <label className="muted small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+                title="Install again even if this version is already installed — repairs a damaged install">
+                <input type="checkbox" checked={force} disabled={st.update_running} onChange={e => setForce(e.target.checked)} />
+                Reinstall even if up to date
               </label>
             </div>
 

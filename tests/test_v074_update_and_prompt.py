@@ -123,7 +123,7 @@ def test_update_runs_in_the_background_and_reports_progress(upd):
     s = c.get("/api/update/status").json()
     assert s["managed"] and not s["update_running"] and s["installed_version"] == "0.7.2"
 
-    r = c.post("/api/update/start", json={"ref": "feature/x"})
+    r = c.post("/api/update/start", json={"ref": "feature/x", "force": True})
     assert r.status_code == 200, r.text
     assert c.post("/api/update/start", json={}).status_code == 409   # one at a time
     running = c.get("/api/update/status").json()
@@ -132,7 +132,7 @@ def test_update_runs_in_the_background_and_reports_progress(upd):
     done = _wait_done(c)
     assert done["finished_ok"] and done["result"] == "Updated 0.7.2 → 0.7.4"
     assert done["step"] == 3 and done["steps"] == 14
-    assert "args: update --base" in done["tail"] and "--ref feature/x" in done["tail"]
+    assert "args: update --base" in done["tail"] and "--ref feature/x --force" in done["tail"]
     assert Path(done["log"]).parent == base / "logs"
     assert json.loads((base / "webui-update.json").read_text())["exit_code"] == 0
 
@@ -190,3 +190,11 @@ def test_restart_is_refused_outside_webui_and_during_an_update(upd, monkeypatch)
         time.sleep(0.05)
     argv, env = execs[0][1], execs[0][2]
     assert argv[1:] == ["-m", "myclaw", "webui", "--port", "8000"] and env["ZENSYNORA_NO_REEXEC"] == "1"
+
+
+def test_already_up_to_date_counts_as_success(tmp_path):
+    from myclaw.web.update_api import _progress
+
+    log = tmp_path / "u.log"
+    log.write_text("[1/14] Checking\n[2/14] Getting the new version\n✔ Already on 0.7.4. Use --force to reinstall it.\n")
+    assert _progress(str(log))["result"] == "Already on 0.7.4"
