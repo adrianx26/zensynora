@@ -93,7 +93,7 @@ webui/src/
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 524 tests (pytest --collect-only, 2026-10-14)
+tests/                       # 525 tests (pytest --collect-only, 2026-10-14)
 ```
 
 ---
@@ -294,10 +294,10 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_tools.py` | 35 |
 | `test_updater.py` | 9 |
 | `test_v071_features.py` | 17 |
-| `test_v073_reliability.py` | 10 |
+| `test_v073_reliability.py` | 11 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **524** |
+| **Total** | **525** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

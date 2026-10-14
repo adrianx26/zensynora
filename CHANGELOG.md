@@ -44,6 +44,13 @@ twice".
 - A tool called with wrong or missing arguments now tells the model exactly
   how to call it (for example `browse` needs a `url`), so it can retry.
 - Agents introduced themselves as "MyClaw"; they are ZenSynora now.
+- **Background summaries**: crashed on conversation entries without text
+  ("'NoneType' object is not subscriptable") and, because the model was asked
+  with the agent's tools, often stored empty "Session Summary" notes. Only
+  user/assistant text is summarized now, without tools, and an empty summary is
+  not stored.
+- The per-agent chat socket no longer logs an error when the browser tab is
+  closed while an answer is streaming.
 
 ### Added
 - **Channels page** (sidebar ⚙ next to Channels, or Navigate → Channels):
@@ -56,7 +63,7 @@ twice".
   listed can still refuse to answer.
 
 ### Changed
-- Tests: 524 (new `test_v073_reliability.py`).
+- Tests: 525 (new `test_v073_reliability.py`).
 
 ## [0.7.2] - 2026-10-14
 

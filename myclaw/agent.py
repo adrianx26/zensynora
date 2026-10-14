@@ -929,21 +929,36 @@ class Agent:
             if not to_summarize:
                 return
 
+            # Fixed 2026-10-14 (v0.7.3): entries without text (tool steps) made
+            # this crash ("'NoneType' object is not subscriptable"), and the
+            # model was asked WITH the agent's tools, so it often answered with
+            # a tool call — an empty "Session Summary" note was then saved.
+            # Only user/assistant text is summarized, without tools, and an
+            # empty summary is not stored.
+            turns = [m for m in to_summarize
+                     if m.get("role") in ("user", "assistant") and str(m.get("content") or "").strip()]
+            if not turns:
+                return
             summary_parts = [
                 "Summarize the following conversation context. Focus on key decisions, "
                 "important facts, and user preferences. Preserve information that would be "
                 "important for future context:\n"
             ]
-            for m in to_summarize:
-                summary_parts.append(f"{m['role']}: {m['content'][:200]}\n")
+            for m in turns:
+                summary_parts.append(f"{m['role']}: {str(m.get('content') or '')[:200]}\n")
             summary_prompt = "".join(summary_parts)
             summary_msgs = [
                 {"role": "system", "content": "You summarize conversations concisely."},
                 {"role": "user", "content": summary_prompt},
             ]
 
-            summary_text, _ = await self._provider_chat(summary_msgs, self.model)
-            original_len = sum(len(m["content"]) for m in to_summarize)
+            from .provider import complete_text
+
+            summary_text = await complete_text(self.provider, summary_msgs, self.model)
+            if not (summary_text or "").strip():
+                logger.info("Background summarization: the model returned no summary; nothing stored.")
+                return
+            original_len = sum(len(str(m.get("content") or "")) for m in turns)
             compressed_len = len(summary_text)
             compression_ratio = (1 - compressed_len / original_len) * 100 if original_len > 0 else 0
             logger.debug(

@@ -383,15 +383,28 @@ async def chat_websocket(websocket: WebSocket, agent_name: str):
                 record_response_time(time.time() - start_time)
 
             except Exception as e:
+                # v0.7.3: a browser that closed the tab mid-answer is not an
+                # error (it also logged "Cannot call send once a close message
+                # has been sent"); and real errors get a readable reason.
+                from starlette.websockets import WebSocketState
+
+                if websocket.client_state != WebSocketState.CONNECTED or "close message" in str(e):
+                    logger.debug("Client left during streaming for %s", agent_name)
+                    break
+                from myclaw.llm_errors import describe_llm_error
+
                 logger.error(f"Error during streaming for {agent_name}: {e}")
-                await websocket.send_text(f"\n\n[Error: {e}]")
+                await websocket.send_text(f"\n\n[Error] {describe_llm_error(e)}")
                 await websocket.send_text("__STREAM_END__")
                 record_response_time(time.time() - start_time)
 
     except WebSocketDisconnect:
         logger.debug("WebSocket client disconnected (%s)", agent_name)
     except Exception as e:
-        logger.error(f"WebSocket Error: {e}")
+        if "close message" in str(e):  # client already gone (v0.7.3)
+            logger.debug("WebSocket closed by the client (%s)", agent_name)
+        else:
+            logger.error(f"WebSocket Error: {e}")
         try:
             await websocket.close()
         except Exception:

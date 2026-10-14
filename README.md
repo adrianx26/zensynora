@@ -11,7 +11,7 @@ Ollama, or any major cloud provider.
 
 [![Version](https://img.shields.io/badge/version-0.7.3-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)](#requirements)
-[![Tests](https://img.shields.io/badge/tests-524-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-525-brightgreen.svg)](#development)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 
 [Quick start](#quick-start) · [Using it](#using-zensynora) · [Updating](#updating-and-health) ·
@@ -217,7 +217,7 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 git clone https://github.com/adrianx26/zensynora.git && cd zensynora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q -o addopts=""        # 524 tests
+pytest -q -o addopts=""        # 525 tests
 ruff check .
 ```
 

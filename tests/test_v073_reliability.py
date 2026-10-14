@@ -207,3 +207,36 @@ def test_channels_can_be_renamed_and_the_topic_reaches_the_agents(tmp_path, monk
     assert row["message_count"] == 0
     prompt = ChatEngine(lambda: {})._prompt(ch, "writer", "draft it", {}, [])
     assert "Channel topic: Plan the weekly blog post" in prompt
+
+
+def test_background_summary_skips_tool_steps_and_empty_summaries(tmp_path, monkeypatch):
+    """'NoneType' object is not subscriptable + empty session-summary notes."""
+    import myclaw.agent as agent_mod
+    import myclaw.provider as prov_mod
+    from myclaw.config import load_config
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    a = agent_mod.Agent(load_config(), name="default")
+    a._provider = object()
+    written = []
+    import myclaw.knowledge as kn
+    monkeypatch.setattr(kn, "write_note", lambda **kw: written.append(kw))
+    history = [{"role": "user", "content": "plan the trip"},
+               {"role": "assistant", "content": None, "tool_calls": [{"id": "1"}]},
+               {"role": "tool", "content": None},
+               {"role": "assistant", "content": "Booked."}] + [{"role": "user", "content": f"m{i}"} for i in range(5)]
+
+    async def empty(*a, **k):
+        return ""
+
+    monkeypatch.setattr(prov_mod, "complete_text", empty)
+    asyncio.run(a._background_summarize_context(history, "u", None))
+    assert written == []  # nothing stored, no crash
+
+    async def summary(provider, msgs, model):
+        assert "None" not in msgs[1]["content"]
+        return "User planned a trip; booking done."
+
+    monkeypatch.setattr(prov_mod, "complete_text", summary)
+    asyncio.run(a._background_summarize_context(history, "u", None))
+    assert written and written[0]["content"].startswith("User planned")
