@@ -289,9 +289,11 @@ function App() {
             </div>
           )}
           {/* v0.7.2: the server still runs an older version than the one installed */}
-          {health?.update_installed && (
+          {health?.update_installed && view !== 'updates' && (
             <div className="update-banner">
-              <b>ZenSynora {health.update_installed.installed} is installed</b>, but this server still runs {health.update_installed.running}.
+              {health.update_installed.installed === health.update_installed.running
+                ? <><b>A new copy of ZenSynora {health.update_installed.installed} is installed</b>; restart to use it.</>
+                : <><b>ZenSynora {health.update_installed.installed} is installed</b>, but this server still runs {health.update_installed.running}.</>}
               {' '}<button className="primary-btn" disabled={!!restarting} onClick={async () => {
                 try { await restartServer(setRestarting); } catch (e) { setRestarting(null); setError((e as Error).message); }
               }}>{restarting || 'Restart now'}</button>

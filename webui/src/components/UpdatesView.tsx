@@ -105,7 +105,9 @@ const UpdatesView: React.FC = () => {
           )}
           {st.restart_needed && !st.update_running && (
             <div className="update-banner">
-              <b>{st.installed_version} is installed</b>, but this server still runs {st.running_version}.{' '}
+              {st.installed_version === st.running_version
+                ? <><b>A new copy of {st.installed_version} is installed</b>; restart to use it.</>
+                : <><b>{st.installed_version} is installed</b>, but this server still runs {st.running_version}.</>}{' '}
               <button className="primary-btn" disabled={!!restarting} onClick={restart}>{restarting || 'Restart ZenSynora now'}</button>
             </div>
           )}
@@ -163,7 +165,11 @@ const UpdatesView: React.FC = () => {
         {st.managed && (releases.length > 0 || history.length > 0) && (
           <div className="settings-card">
             <h3>History</h3>
-            {releases.length > 0 && <p className="muted">Versions kept for rollback: {releases.map(r => (r === st.active_release ? `${r.split('-')[0]} (active)` : r.split('-')[0])).join(', ')}</p>}
+            {releases.length > 0 && <p className="muted">Versions kept for rollback: {releases.map(r => {
+              const m = r.match(/^(.+)-\d{4}(\d\d)(\d\d)T(\d\d)(\d\d)/);
+              const label = m ? `${m[1]} (${m[2]}-${m[3]} ${m[4]}:${m[5]})` : r;
+              return r === st.active_release ? `${label} — active` : label;
+            }).join(', ')}</p>}
             {history.length > 0 && (
               <table className="data-table">
                 <thead><tr><th>When</th><th>What</th><th>Version</th></tr></thead>

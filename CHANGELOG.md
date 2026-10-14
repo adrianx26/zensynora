@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.4] - 2026-10-14
+
+Update ZenSynora from the Web UI, and the prompt writer works again when the
+main model is unavailable.
+
+### Added
+- **Updates page** in the Web UI (also opened by clicking the version at the
+  bottom of the sidebar): shows the version this server runs, the installed
+  version and the latest one on GitHub; **Check for updates**; **Update now**
+  runs the safe updater in the background with live step-by-step progress and
+  the log; **Roll back**; optional branch/tag and *Reinstall even if up to
+  date* (repairs an install); history of updates and the versions kept for
+  rollback. The update keeps running if the page is closed.
+- **Restart ZenSynora** button (on the Updates page and in the "newer version
+  installed" banner): the server restarts itself with the installed version
+  and the page reloads when it is back — no terminal needed.
+- API: `GET /api/update/status[?check=true]`, `POST /api/update/start`
+  `{ref, force}`, `POST /api/update/rollback`, `POST /api/update/restart`
+  (localhost or admin key, like Settings).
+
+### Fixed
+- **✨ Generate prompt (Settings → Agents) failed** with a server error when
+  the default model was refused or busy (OpenRouter answers some free models
+  with "only available on agentic harnesses"). It now tries the rotation
+  models in turn, skips models that just failed, and names the model it used;
+  if none works, the message says why for each one. Job scoring uses the same
+  fallback.
+
 ## [0.7.3] - 2026-10-14
 
 Agents can finish multi-step tasks and jobs again, errors say what is really

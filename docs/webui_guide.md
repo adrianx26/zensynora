@@ -1,7 +1,7 @@
 # Web UI Guide — chat, models, jobs, backups
 
-> **Applies to:** v0.7.3 · **Added:** 2026-10-13 · **v0.7.3:** Channels page,
-> real model tests
+> **Applies to:** v0.7.4 · **Added:** 2026-10-13 · **v0.7.3:** Channels page,
+> real model tests · **v0.7.4:** Updates page, Restart button
 
 Start the Web UI with `zensynora webui` and open <http://localhost:8000>
 (`--host 127.0.0.1` keeps it on this computer only). This guide covers the
@@ -77,7 +77,8 @@ channel; *inline activity* hides them from the conversation.
 **Writing agent prompts.** In Settings → Agents, give a new agent a name and a
 short description and click **✨ Generate prompt**: the default model writes
 a system prompt (role, how to work, tools to prefer, limits). Review it and
-save.
+save. If the default model is refused or busy, the rotation models are tried
+in turn (v0.7.4); the message under the button names the model that wrote it.
 
 ![Generate prompt](images/webui-generate-prompt.png)
 
@@ -132,6 +133,23 @@ zensynora backup restore NAME [-p knowledge]
 ```
 
 Updates make their own backups automatically — see [UPDATING.md](UPDATING.md).
+
+## Updates: check, update, roll back, restart
+
+Open **Updates** in the sidebar (or click the version at the bottom).
+
+| Part | What it does |
+|---|---|
+| Version | The version this server runs, the installed one and the latest on GitHub. **↻ Check for updates** asks GitHub again. |
+| Update now | Runs the safe updater: backups of your data and the program folder, side-by-side install, checks, switch, automatic rollback on failure. Shows the step (*step 7 of 14 …*), a progress bar and the log. It keeps running if you close the page. |
+| Roll back | Back to the previous installed version. |
+| Branch or tag / Reinstall | Install a branch or tag instead of `main`; reinstall the same version to repair an install. |
+| Restart ZenSynora | After an update or rollback the server still runs the old code. This restarts it with the installed version; the page reloads when it is back (a few seconds). The same button appears in the yellow banner on every page. |
+| History | Recent updates and rollbacks, and the versions kept for rollback. |
+
+Works for standard installs (`~/.local/share/zensynora`); a git checkout
+shows why it cannot update itself. Restart works when the server was started
+with `zensynora webui`. Details: [UPDATING.md](UPDATING.md).
 
 ## Doctor: change proposals
 
