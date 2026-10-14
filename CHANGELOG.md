@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.5] - 2026-10-14
+
+Agents get skills and work as a team; failed jobs get a medic; channels no
+longer keep deleted agents.
+
+### Added
+- **Skills.** A skill is a Markdown instruction file (`SKILL.md`) for one kind
+  of task. 10 built-in skills (web-research, knowledge-keeper,
+  powershell-scripting, python-pro, code-reviewer, backend-developer,
+  frontend-developer, devops-engineer, llm-architect,
+  multi-agent-coordinator); your own live in `~/.myclaw/skills`. New
+  **Skills** page: view, create, edit, import a `SKILL.md`, copy a built-in
+  skill to change it, and give skills to agents (also in Settings → Agents).
+  Agents see their skills' names and descriptions and load one with the new
+  `use_skill` tool (`list_skills` lists them); a skill marked *always* is
+  included in full (for small models). `zensynora skills list` shows them.
+  The skill files existed before (agent profiles, an empty skills folder, a
+  hub) but nothing connected them to agents.
+- **Agents create agents.** New `create_agent` tool: an agent can add a
+  specialist (name, description, prompt, model, skills). It appears at once in
+  the sidebar, in chat and for delegation; change or remove it in Settings →
+  Agents. Turn off with `agents.allow_agent_creation`.
+- **Team-aware agents.** Every agent's prompt now lists the other agents and
+  what they do, and when to `delegate` to them — before, agents did not know
+  who else existed and rarely delegated.
+- **Token speed in chat.** Each answer shows tokens per second (hover: tokens
+  and time to first token). Token counts are estimated from the text.
+- **Medic for failed jobs.** *🩺 Ask the medic* on a failed run: cause, plain
+  explanation, suggested job changes (shown as now → suggested), things only
+  you can do. Known failures are recognised without a model (tool steps,
+  timeouts, unreachable or rate-limited models, refused keys); a model
+  refines the diagnosis. *Apply fix & run again*, *Apply only*, and *Ask the
+  medic to fix the code* (files a change proposal you approve on the Doctor
+  page). New job setting *When a run fails*: nothing / diagnose / diagnose,
+  fix the job and run once more. Fixes are recorded as medic lessons.
+- **Tool steps per job** (default 8, 1–30). Chat keeps 4 extra tool rounds;
+  jobs that search and read several pages used to stop with "I needed more
+  tool steps".
+
+### Fixed
+- **"Zombie" agents in channels.** An agent renamed or deleted in Settings
+  stayed a member of its channels; every later member change was refused
+  ("Unknown agent(s): agent3"), so it could not be removed and no agent could
+  be added. Such agents are now removed (with a note in the channel) when the
+  channel list loads and right after settings are saved; member changes skip
+  them; renaming an agent in Settings carries its channels, direct messages
+  and jobs to the new name; two agents with the same name are refused.
+- Answers cut off by a stop or restart no longer stay "typing…" forever.
+- `@mentions` ignore upper/lower case (`@executor` reaches `Executor`).
+- Channel names keep no leading `#` (`##house` → `#house`).
+- Direct messages with a deleted agent say so instead of being answered by
+  the default agent.
+- Delegation could loop: the depth limit never increased, so two agents could
+  pass a task back and forth until the request timed out. Hand-overs are now
+  counted (max 2), an agent cannot delegate to itself, names match in any case.
+
 ## [0.7.4] - 2026-10-14
 
 Update ZenSynora from the Web UI, and the prompt writer works again when the

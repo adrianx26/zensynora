@@ -397,6 +397,8 @@ class AgentsConfig(BaseModel):
     # Local profiles are loaded from: myclaw/profiles/{agent_name}.md
     # Fallback profiles are loaded from: profiles_dir/{agent_name}.md
     profiles_dir: str = "~/.myclaw/profiles"
+    # v0.7.5: agents may create new named agents with the create_agent tool
+    allow_agent_creation: bool = True
 
 
 class ChannelsConfig(BaseModel):

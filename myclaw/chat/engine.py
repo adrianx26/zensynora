@@ -44,7 +44,7 @@ _MENTION = re.compile(r"(?<![\w@])@([A-Za-z0-9_.-]+)")
 _MARKERS = {"[TOOL_CALLS_NONE]", "__TOOL_CALLS_START__", "__TOOL_CALLS_END__",
             "__STREAM_START__", "__STREAM_END__"}
 # Event types worth keeping in the channel history (tool_start is transient).
-_PERSIST = {"delegation_start", "delegation_end", "tool_end", "job_run"}
+_PERSIST = {"delegation_start", "delegation_end", "tool_end", "job_run", "agent_created"}
 
 
 def _persist_event(ev: dict[str, Any]) -> None:
@@ -208,11 +208,15 @@ class ChatEngine:
                   MEMORY_SCOPE.set(memory_scope(channel_id, agent_name)))
         parts: list[str] = []
         started = time.monotonic()
+        first_at = last_at = None  # v0.7.5: token speed
         error = None
         try:
             async for chunk in agent.stream_think(prompt, user_id=USER_ID):
                 if not chunk or chunk in _MARKERS or chunk.startswith('{"tool":'):
                     continue
+                last_at = time.monotonic()
+                if first_at is None:
+                    first_at = last_at
                 parts.append(chunk)
                 events.publish(channel_id, {"type": "chunk", "id": msg["id"], "text": chunk})
         except asyncio.CancelledError:
@@ -230,11 +234,37 @@ class ChatEngine:
             full = "".join(parts).strip()
             used = getattr(agent, "last_model_used", None) or (getattr(agent, "_provider_name", ""), agent.model)
             meta = {"model": used[1], "provider": used[0], "ms": int((time.monotonic() - started) * 1000)}
+            meta.update(token_speed(full, len(parts), started, first_at, last_at))
             if error:
                 meta["error"] = error
             await asyncio.to_thread(store.update_message, msg["id"], full, meta)
             events.publish(channel_id, {"type": "stream_end", "id": msg["id"], "text": full, "meta": meta})
         return full
+
+
+def estimate_tokens(text: str) -> int:
+    """About how many tokens a text is: a short word or a punctuation mark is
+    one token, longer words one per ~4 characters (close to common tokenizers)."""
+    if not text:
+        return 0
+    return max(1, sum(1 if not w[0].isalnum() else -(-len(w) // 5) for w in re.findall(r"\w+|[^\w\s]", text)))
+
+
+def token_speed(text: str, chunks: int, started: float, first_at: float | None,
+                last_at: float | None) -> dict[str, Any]:
+    """Tokens, tokens per second and time to the first token of an answer (v0.7.5).
+
+    Speed is measured from the first to the last streamed piece, so waiting for
+    the model to start (and tool calls before it) do not lower it.
+    """
+    if not text or first_at is None:
+        return {}
+    tokens = estimate_tokens(text)
+    span = (last_at or first_at) - first_at
+    out: dict[str, Any] = {"tokens": tokens, "ttft_ms": int((first_at - started) * 1000)}
+    if span >= 0.2 and tokens > 1:
+        out["tps"] = round(tokens / span, 1)
+    return out
 
 
 def to_json(event: dict[str, Any]) -> str:

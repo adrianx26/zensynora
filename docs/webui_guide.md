@@ -1,7 +1,8 @@
 # Web UI Guide — chat, models, jobs, backups
 
-> **Applies to:** v0.7.4 · **Added:** 2026-10-13 · **v0.7.3:** Channels page,
-> real model tests · **v0.7.4:** Updates page, Restart button
+> **Applies to:** v0.7.5 · **Added:** 2026-10-13 · **v0.7.3:** Channels page,
+> real model tests · **v0.7.4:** Updates page, Restart button · **v0.7.5:**
+> Skills, agents that create and delegate, medic for failed jobs, token speed
 
 Start the Web UI with `zensynora webui` and open <http://localhost:8000>
 (`--host 127.0.0.1` keeps it on this computer only). This guide covers the
@@ -40,7 +41,22 @@ you see it as a small card in the conversation — *@default asked @writer*,
 away. The **Activity** panel on the right lists the same events for the
 channel; *inline activity* hides them from the conversation.
 
+**Agents as a team** (v0.7.5). Every agent knows the other agents and what
+they do, and hands work to them with `delegate` when another one fits better —
+you see the hand-over as a card. An agent can also **create a new agent**
+(`create_agent`) when a task needs a specialist nobody is; it appears in the
+sidebar at once (✨ card in the channel) and can be changed or removed in
+Settings → Agents. A task is handed over at most twice, so agents cannot pass
+it back and forth forever. Switch creation off with
+`agents.allow_agent_creation` (Settings → Features).
+
+**Deleted agents.** When you rename an agent in Settings, its channels,
+direct messages and jobs move to the new name. An agent you delete is removed
+from its channels (the channel says so).
+
 **Good to know.**
+* Under each answer: model, time and **⚡ tokens per second** (hover for the
+  token count and the time to the first token; counts are estimates).
 * Answers stream; ■ stops the agents. Messages you send meanwhile wait their turn.
 * Enter sends, Shift+Enter starts a new line.
 * Every agent keeps its own memory per channel; the knowledge base is shared.
@@ -99,12 +115,44 @@ A job is an instruction an agent carries out on a schedule or when you click
 | Retries / timeout | Retry failed runs; stop runs that take too long |
 | Clean memory | Each run starts without the previous runs' conversation |
 
+**When a run fails** (v0.7.5): click **🩺 Ask the medic** on the run. The
+medic says what went wrong, explains it, and suggests changes to the job
+(shown as *now → suggested*) and anything only you can do (start a model
+server, add credits). **Apply fix & run again** changes the job and runs it;
+**Ask the medic to fix the code** is offered when ZenSynora itself is at fault —
+the medic reads the code and files a proposal you approve on the Doctor page.
+Common failures are recognised even when no model answers. In the job's
+settings, *When a run fails* can do this automatically (diagnose, or diagnose,
+fix the job and run once more). **Tool steps** sets how many extra tool rounds
+(search, read, retry…) the agent may use per run — raise it for research jobs.
+
 **Monitor** in the table: running state, last and next run, success rate,
 average score. **Runs** shows each run's output, model, duration and
 evaluation (*Evaluate* scores a run on demand). **Benchmark** runs the same
 job on up to 8 models at once and compares time and score — a quick way to
 choose a model for a task. Templates: morning briefing, weekly knowledge
 clean-up, medic self-review.
+
+## Skills: instructions agents load when needed
+
+**Skills** in the sidebar. A skill is a Markdown file of instructions for one
+kind of task — how to research the web and cite sources, how to write a
+PowerShell script, how to review code.
+
+* **Give a skill to an agent**: click the agent's chip under the skill
+  (bright = has it). The same chips are in Settings → Agents.
+* The agent's prompt lists its skills by name and description; when a task
+  matches, it reads the full text with the `use_skill` tool. *Always include
+  the full instructions* puts the whole text in the prompt instead — better
+  for small local models that rarely call tools, but it costs tokens.
+* **+ New skill** writes one; **Import…** adds a `SKILL.md` made elsewhere
+  (the same format other agent tools use: a `name:` and `description:` header,
+  then Markdown). Built-in skills are read-only: **Copy to change** makes your
+  own version (deleting it brings the built-in one back).
+
+Your skills are files in `~/.myclaw/skills/<name>/SKILL.md` and are included
+in backups (*Jobs, own tools & skills*). `zensynora skills list` shows all
+skills and which agents have them.
 
 ## Backups: settings, API keys, knowledge
 

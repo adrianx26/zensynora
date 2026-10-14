@@ -270,3 +270,6 @@ still review proposals but install them by rebuilding / copying.
 | A job or chat ends with "[Error] … only available to specific apps" | OpenRouter refuses that model for ZenSynora. Pick another model; use **Test** on the Models page. (v0.7.3) |
 | "[Error] … rate-limited" | Free models are often busy. Wait a minute or turn on rotation with a second model. (v0.7.3) |
 | LM Studio answers nothing / "Unexpected endpoint" | Load a model in LM Studio; the URL needs `/v1` (added automatically since 0.7.3). |
+| A job ends with "I needed more tool steps" | Raise the job's *Tool steps* (default 8), or name the website in the prompt. **🩺 Ask the medic** on the run suggests both. (v0.7.5) |
+| A job keeps failing and you don't know why | **🩺 Ask the medic** on the failed run (Jobs page), or set the job's *When a run fails* to *diagnose* or *fix*. (v0.7.5) |
+| A channel member can't be removed / no agent can be added ("Unknown agent") | An agent was renamed or deleted. Fixed in 0.7.5: open the Web UI once and the channel is repaired. |

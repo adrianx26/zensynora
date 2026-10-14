@@ -304,7 +304,7 @@ function App() {
           {error && <div className="notice error">{error} <button className="ghost-btn" onClick={() => setError(null)}>×</button></div>}
 
           {view === 'chat' && (
-            <ChatView key={channelId} channelId={channelId} agents={agents} onChannelChanged={loadChannels} onOpenSettings={() => go('settings')} />
+            <ChatView key={channelId} channelId={channelId} agents={agents} onChannelChanged={loadChannels} onOpenSettings={() => go('settings')} onAgentsChanged={loadAgents} />
           )}
           {view === 'models' && <ModelsView onChanged={onSettingsSaved} />}
           {view === 'jobs' && <JobsView agents={agents} channels={channels} />}

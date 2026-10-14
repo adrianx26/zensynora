@@ -339,3 +339,113 @@ def test_renaming_an_agent_keeps_its_channels_and_jobs(home):  # noqa: F811
         asyncio.run(settings_api.update_settings(settings_api.SettingsUpdate(
             changes={"agents.named": [{"name": "Coder", "model": "x"}, {"name": "coder", "model": "y"}]})))
     assert "names must differ" in str(e.value.detail)
+
+
+# ── Token speed, creating agents, delegation ────────────────────────────────
+def test_token_speed_is_measured_from_the_first_token():
+    from myclaw.chat.engine import estimate_tokens, token_speed
+
+    text = "word " * 100
+    assert estimate_tokens(text) == 100
+    assert 5 <= estimate_tokens("Internationalization, please!") <= 8  # long word split, punctuation counted
+    m = token_speed(text, 100, started=10.0, first_at=12.0, last_at=14.0)   # 2 s waiting, 2 s writing
+    assert m["ttft_ms"] == 2000 and m["tokens"] == 100 and m["tps"] == 50.0
+    assert token_speed("", 0, 0, None, None) == {}
+    assert "tps" not in token_speed("hi", 1, 0.0, 0.1, 0.1)                 # too short to measure
+
+
+def test_chat_answers_carry_token_speed(chat_app):
+    c, _ = chat_app
+    c.post("/api/channels/general/messages", json={"text": "hello"})
+    msgs = _wait_turn(c, "general", 1)
+    meta = [m for m in msgs if m["role"] == "agent"][-1]["meta"]
+    assert meta["tokens"] >= 3 and "ttft_ms" in meta
+
+
+@pytest.fixture
+def team(home):  # noqa: F811
+    from myclaw.config import load_config, save_config
+    from myclaw.tools import core
+
+    save_config({"agents": {"defaults": {"model": "m", "provider": "ollama"},
+                            "named": [{"name": "Executor", "model": "x", "provider": "", "description": "Runs tasks"}]}})
+    cfg = load_config(force_reload=True)
+    calls = []
+
+    class A:
+        def __init__(self, name, delegate_to=None):
+            self.name = name
+            self.delegate_to = delegate_to
+
+        async def think(self, task, user_id="default", _depth=0):
+            calls.append((self.name, task))
+            if self.delegate_to:  # the helper tries to hand it on again
+                from myclaw.tools.swarm import delegate
+                return await delegate(self.delegate_to, task)
+            return f"{self.name} did: {task}"
+
+    reg = {"default": A("default"), "Executor": A("Executor")}
+    core.set_registry(reg)
+    yield cfg, reg, calls, A
+    core.set_registry({})
+
+
+def test_agents_know_their_team(team):
+    from myclaw.agent_team import team_section
+
+    cfg, *_ = team
+    s = team_section(cfg, "default")
+    assert "- @Executor: Runs tasks" in s and "delegate(agent_name, task)" in s and "create_agent" in s
+    assert "@default" in team_section(cfg, "Executor") and "@Executor:" not in team_section(cfg, "Executor")
+    cfg.agents.allow_agent_creation = False
+    assert "create_agent" not in team_section(cfg, "default")
+
+
+def test_delegation_finds_any_case_and_cannot_loop(team):
+    from myclaw.events import CURRENT_AGENT
+    from myclaw.tools import core
+    from myclaw.tools.swarm import delegate
+
+    cfg, reg, calls, A = team
+    assert asyncio.run(delegate("executor", "check the weather")) == "Executor did: check the weather"
+    tok = CURRENT_AGENT.set("Executor")
+    assert "yourself" in asyncio.run(delegate("Executor", "x"))
+    CURRENT_AGENT.reset(tok)
+    # ping-pong: A asks B, B asks A, A asks B … used to run until the timeout
+    core.set_registry({"default": A("default", delegate_to="Executor"), "Executor": A("Executor", delegate_to="default")})
+    calls.clear()
+    out = asyncio.run(delegate("Executor", "loop"))
+    assert "handed over 2 times" in out and len(calls) == 2
+
+
+def test_an_agent_can_create_an_agent(team):
+    from myclaw import events
+    from myclaw.agent_team import create_agent, on_agent_created
+    from myclaw.config import load_config
+    from myclaw.tools import TOOLS, core
+
+    created, seen = [], []
+    on_agent_created(lambda n, a: created.append(n))
+    events.add_listener(lambda ev: seen.append(ev))
+    tok = events.CURRENT_AGENT.set("Executor")
+    ch = events.CURRENT_CHANNEL.set("general")
+    try:
+        out = create_agent("Weather Bot", "Reports the weather for a city", skills="web-research")
+    finally:
+        events.CURRENT_AGENT.reset(tok)
+        events.CURRENT_CHANNEL.reset(ch)
+    assert out.startswith("Created agent @Weather_Bot"), out
+    cfg = load_config(force_reload=True)
+    bot = next(a for a in cfg.agents.named if a.name == "Weather_Bot")
+    assert bot.skills == ["web-research"] and "Reports the weather" in bot.system_prompt and bot.model == "m"
+    assert "Weather_Bot" in core._agent_registry and created == ["Weather_Bot"]
+    assert any(e.get("type") == "agent_created" and e["from"] == "Executor" for e in seen)
+    assert "already exists" in create_agent("weather_bot", "dup")
+    assert "unknown skill" in create_agent("Other", "x", skills="nope")
+    assert "Error" in create_agent("1bad", "x")
+    assert "create_agent" in TOOLS
+    cfg.agents.allow_agent_creation = False
+    from myclaw.config import save_config
+    save_config(cfg.model_dump(mode="json"))
+    load_config(force_reload=True)
+    assert "turned off" in create_agent("Another", "x")

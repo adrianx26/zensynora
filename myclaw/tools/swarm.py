@@ -21,23 +21,37 @@ async def delegate(agent_name: str, task: str, _depth: int = 0) -> str:
     agent_name: name of the agent (see /agents for available names)
     task: the instruction to send to that agent
     """
-    if _depth >= 2:
-        return "Error: Maximum delegation depth (2) reached — cannot delegate further."
-    if not _agent_registry:
-        return "Error: Agent registry not initialized."
-    if agent_name not in _agent_registry:
-        available = ", ".join(_agent_registry.keys())
-        return f"Error: Unknown agent '{agent_name}'. Available: {available}"
-    # v0.7.1: show the hand-over in the Web UI chat as agent-to-agent talk.
+    from ..agent_team import DELEGATION_DEPTH, MAX_DELEGATION_DEPTH
     from ..events import CURRENT_AGENT, emit, short
     import time as _time
 
+    # v0.7.5: the depth is counted per hand-over chain. It used to stay 0 (the
+    # helper's own delegate call started again at 0), so two agents could pass
+    # a task back and forth until the request timed out.
+    depth = max(_depth, DELEGATION_DEPTH.get())
+    if depth >= MAX_DELEGATION_DEPTH:
+        return (f"Error: this task was already handed over {depth} times — do it yourself instead of "
+                "delegating again.")
+    if not _agent_registry:
+        return "Error: Agent registry not initialized."
+    agent_name = (agent_name or "").strip().lstrip("@")
+    match = next((n for n in _agent_registry if n.lower() == agent_name.lower()), None)  # any case
+    if match is None:
+        available = ", ".join(_agent_registry.keys())
+        return f"Error: Unknown agent '{agent_name}'. Available: {available}"
+    agent_name = match
     sender = CURRENT_AGENT.get() or "default"
+    if agent_name == sender:
+        return "Error: you cannot delegate to yourself — do the task, or pick another agent."
+    if not (task or "").strip():
+        return "Error: say what the other agent should do (task)."
+    # v0.7.1: show the hand-over in the Web UI chat as agent-to-agent talk.
     started = _time.monotonic()
     emit({"type": "delegation_start", "from": sender, "to": agent_name, "task": short(task, 1500)})
     token = CURRENT_AGENT.set(agent_name)  # tools the helper uses are attributed to it
+    depth_token = DELEGATION_DEPTH.set(depth + 1)
     try:
-        result = await _agent_registry[agent_name].think(task, user_id="__delegate__", _depth=_depth)
+        result = await _agent_registry[agent_name].think(task, user_id="__delegate__", _depth=depth + 1)
         emit({"type": "delegation_end", "from": sender, "to": agent_name, "ok": True,
               "result": short(result, 4000), "ms": int((_time.monotonic() - started) * 1000)})
         return result
@@ -47,6 +61,7 @@ async def delegate(agent_name: str, task: str, _depth: int = 0) -> str:
               "result": short(str(e), 500), "ms": int((_time.monotonic() - started) * 1000)})
         return f"Delegation failed: {e}"
     finally:
+        DELEGATION_DEPTH.reset(depth_token)
         CURRENT_AGENT.reset(token)
 
 

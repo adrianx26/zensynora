@@ -116,6 +116,17 @@ from myclaw.web import update_api as _update_api  # noqa: E402
 from myclaw.web import skills_api as _skills_api  # noqa: E402
 
 _chat_api.set_registry_getter(_ensure_registry)
+
+
+def _add_created_agent(name: str, agent) -> None:
+    """v0.7.5: an agent made with create_agent joins the Web UI at once."""
+    if _agent_registry:
+        _agent_registry[name] = agent
+
+
+from myclaw import agent_team as _agent_team  # noqa: E402
+
+_agent_team.on_agent_created(_add_created_agent)
 _jobs_api.set_registry_getter(_ensure_registry, _chat_api.engine)
 _backup_api.set_restore_hook(_reset_agent_registry)  # restored settings take effect at once
 app.include_router(_models_api.router)

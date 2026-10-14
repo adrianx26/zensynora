@@ -682,6 +682,12 @@ class Agent:
             section = await asyncio.to_thread(prompt_section, skills_for(self.config, self.name))
             if section:
                 prompt = f"{prompt}\n\n{section}"
+            from .agent_team import team_section
+            from .config import load_config as _load_config
+
+            team = team_section(_load_config(), self.name)  # v0.7.5: who else can do the work
+            if team:
+                prompt = f"{prompt}\n\n{team}"
         except Exception as exc:  # a broken skill file must not stop the agent
             logger.warning("Could not load skills for agent %s: %s", self.name, exc)
 

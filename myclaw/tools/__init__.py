@@ -127,6 +127,7 @@ _LAZY_AGENT_TOOLS = {
     # Agent skills (v0.7.5): instructions an agent loads when a task needs them
     "use_skill":                 ("myclaw.agent_skills",         "use_skill",                 "Load a skill's full instructions by name before a task that matches it"),
     "list_skills":               ("myclaw.agent_skills",         "list_agent_skills",         "List all skills (name and what each is for)"),
+    "create_agent":              ("myclaw.agent_team",           "create_agent",              "Create a new named agent (specialist) that can then be talked to and given tasks with delegate"),
     # Medic Agent
     "check_system_health":       ("myclaw.agents.medic_agent",   "check_system_health",       "Check overall system health status"),
     "check_memory_usage":        ("myclaw.agents.medic_agent",   "check_memory_usage",        "Checks current system memory usage and logs a warning if it exceeds a threshold."),

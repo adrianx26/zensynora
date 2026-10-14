@@ -1,6 +1,6 @@
 # ZenSynora Architecture
 
-> **Status:** reflects **v0.7.4** (2026-10-14). Updated from the v0.4.1
+> **Status:** reflects **v0.7.5** (2026-10-14). Updated from the v0.4.1
 > version: adds the Web UI settings API, provider routing changes, the safe
 > updater and the doctor/medic rewrite (0.7.0); chat channels, agent-to-agent
 > events, jobs, backups, model rotation, custom providers and approval-gated
@@ -20,6 +20,9 @@ fit together. It complements [`docs/architecture_diagram.md`](architecture_diagr
 ```
 myclaw/
 ├── agent.py                 # Agent — orchestrator (think, complete_structured, stream_think)
+├── agent_skills.py          # Skills: SKILL.md files, per-agent lists, use_skill tool [0.7.5]
+├── agent_team.py            # Team prompt section, create_agent tool, delegation depth [0.7.5]
+├── skills_builtin/          # Built-in skills, one folder with SKILL.md each [0.7.5]
 ├── agent_internals/         # Phase helpers — Sprint 5 (free fns) + Sprint 9 (classes + ResponseHandler)
 ├── agents/
 │   ├── data/agents.yaml     # 137 agent defs — canonical source [Sprint 12]
@@ -39,6 +42,7 @@ myclaw/
 ├── evals/                   # Dataset-driven eval harness [Sprint 7]
 ├── events.py                # Agent-to-agent activity events (delegation, tools, jobs) [0.7.1]
 ├── jobs/                    # Jobs: store (jobs.db) + runner (schedule, evaluate, benchmark) [0.7.1]
+│                            #   + medic.py: diagnose / fix failed runs [0.7.5]
 ├── llm_errors.py            # Readable model-server errors + rotation cooldowns [0.7.3]
 ├── knowledge/
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
@@ -70,7 +74,8 @@ myclaw/
 │   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
 │   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
 │   ├── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
-│   └── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
+│   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
+│   └── skills_api.py        # Skills page: list, edit, import, assign [0.7.5]
 └── ... (~50 utility modules)
 
 updater/                     # Safe updates: side-by-side releases, backups,
@@ -90,13 +95,14 @@ webui/src/
     ├── ProposalsPanel.tsx   # Change proposals + lessons (Doctor page) [0.7.1]
     ├── ChannelsView.tsx     # Create / rename / manage channels [0.7.3]
     ├── UpdatesView.tsx      # Check for updates, update, roll back, restart [0.7.4]
+    ├── SkillsView.tsx       # Skills page [0.7.5]
     ├── SettingsView.tsx     # Settings page [0.5.0]
     ├── DoctorView.tsx       # Doctor page [0.7.0]
     ├── ToolsView.tsx        # Tool list [0.5.0]
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 525 tests (pytest --collect-only, 2026-10-14)
+tests/                       # 553 tests (pytest --collect-only, 2026-10-14)
 ```
 
 ---
@@ -299,9 +305,10 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_v071_features.py` | 17 |
 | `test_v073_reliability.py` | 11 |
 | `test_v074_update_and_prompt.py` | 8 |
+| `test_v075_channels_medic_skills.py` | 20 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **533** |
+| **Total** | **553** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 
