@@ -242,7 +242,13 @@ class TelegramConfig(BaseModel):
     enabled: bool = False
     max_workers: int = 20  # 7.1: Configurable ThreadPoolExecutor size
     token: SecretStr = SecretStr("")
+    # Telegram user ids (numbers, see /whoami) or @usernames allowed to use the bot
     allowFrom: list[str] = []
+    # Run the bot inside `zensynora webui` (no separate `zensynora gateway` needed)
+    run_in_webui: bool = True
+    # Allowed users share the main knowledge base with the Web UI (conversation
+    # memory stays per user). False = every Telegram user has their own.
+    shared_knowledge: bool = True
 
 
 class WhatsAppConfig(BaseModel):

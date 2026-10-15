@@ -82,8 +82,11 @@ def _run_research_if_idle():
     else:
         logger.debug(f"System busy (last active {idle_duration/60:.1f} mins ago). Skipping research.")
 
-def start(config):
-    """Build agent registry, initialize tools, and start the active channel."""
+def start(config, webhook_url: str | None = None, port: int = 8443):
+    """Build agent registry, initialize tools, and start the active channel.
+
+    webhook_url: run the Telegram bot in webhook mode (default: polling).
+    """
 
     max_workers = config.channels.telegram.max_workers if hasattr(config.channels, 'telegram') else 20
     executor = ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="MyClawWorker")
@@ -124,16 +127,22 @@ def start(config):
         # Inject registry into tools module (enables delegation, scheduling)
         tool_module.set_registry(registry)
 
+        # 2026-10-16: agents created with create_agent can be addressed at once
+        from .agent_team import on_agent_created
+        on_agent_created(lambda name, agent: registry.__setitem__(name, agent))
+
         # Inject config into tools module (enables timeout configuration)
         tool_module.set_config(config)
         set_medic_config(config)
         set_newtech_config(config)
 
-        # ── Start MCP Client ──────────────────────────────────────────────────────
-        if hasattr(config, 'mcp') and config.mcp.enabled:
+        # ── MCP Client ────────────────────────────────────────────────────────────
+        # 2026-10-16: started on the event loop that actually runs (the bot's);
+        # it used to be scheduled on a loop that the Telegram library never ran.
+        mcp_manager = None
+        if hasattr(config, 'mcp') and config.mcp.enabled and config.mcp.servers:
             from .mcp import MCPClientManager
             mcp_manager = MCPClientManager(config.model_dump())
-            loop.create_task(mcp_manager.start_all())
 
         # ── Start Background Research Scheduler ───────────────────────────────────
         if config.intelligence.research_enabled:
@@ -157,8 +166,16 @@ def start(config):
 
         # ── Start channel ─────────────────────────────────────────────────────────
         if config.channels.telegram.enabled:
-            TelegramChannel(config, registry).run()
+            if getattr(config.channels.telegram, "run_in_webui", False):
+                print("ℹ️  The Telegram bot is also set to run inside the Web UI "
+                      "(channels.telegram.run_in_webui). Run only one of them — Telegram allows one copy.")
+            channel = TelegramChannel(config, registry)
+            if mcp_manager is not None:
+                channel.on_start(mcp_manager.start_all)
+            channel.run(webhook_url=webhook_url, port=port)
         elif config.channels.whatsapp.enabled:
+            if mcp_manager is not None:
+                loop.create_task(mcp_manager.start_all())
             WhatsAppChannel(config, registry).run()
         else:
             # No messaging channel configured — fall back to interactive console

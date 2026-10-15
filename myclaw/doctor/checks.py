@@ -345,6 +345,24 @@ def _fix_permissions(ctx):
     return "permissions tightened"
 
 
+@check("telegram", "Telegram bot", "configuration")
+def _telegram(ctx):
+    """2026-10-16: a token without allowed users = a bot that ignores everyone."""
+    tg = ctx.get_config().channels.telegram
+    if not tg.enabled:
+        return OK, "off"
+    if not tg.token.get_secret_value():
+        return FAIL, "enabled but no bot token", "Add the token from @BotFather in Web UI → Settings → Channels."
+    from ..channels.telegram import allow_list_problem
+
+    problem = allow_list_problem(tg.allowFrom)
+    if problem:
+        return WARN, "nobody is allowed to use the bot", \
+            "Send /whoami to the bot and add the number to Settings → Channels → Allowed Telegram users."
+    where = "inside the Web UI" if getattr(tg, "run_in_webui", True) else "with `zensynora gateway`"
+    return OK, f"{len(tg.allowFrom)} allowed user(s); runs {where}"
+
+
 @check("webui_exposure", "Web UI access control", "security")
 def _webui_exposure(ctx):
     cfg = ctx.get_config()

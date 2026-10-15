@@ -187,10 +187,12 @@ def agent():
     asyncio.run(_run_and_cleanup())
 
 @cli.command()
-def gateway():
-    """Start the messaging gateway (Telegram/WhatsApp)"""
+@click.option("--webhook-url", default=None, help="Telegram webhook mode: the public HTTPS URL Telegram calls")
+@click.option("--port", default=8443, show_default=True, help="Port for the webhook server")
+def gateway(webhook_url, port):
+    """Start the messaging gateway (Telegram/WhatsApp) without the Web UI"""
     config = load_config()
-    start(config)
+    start(config, webhook_url=webhook_url, port=port)
 
 @cli.command(name="mcp-server")
 def mcp_server():
