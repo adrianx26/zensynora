@@ -16,7 +16,7 @@
   <span class="dot"></span>
   <h1 class="title">ZenSynora Architecture — Visual Guide</h1>
 </div>
-<p class="subtitle">14 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
+<p class="subtitle">16 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
 <div class="legend">
   <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
   <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
@@ -31,7 +31,7 @@
     subgraph entry[&quot;Entry points&quot;]
         webui[&quot;Web UI&lt;br/&gt;browser · port 8000&quot;]
         cli[&quot;Terminal&lt;br/&gt;zensynora agent&quot;]
-        tg[&quot;Telegram bot&quot;]
+        tg[&quot;Telegram bot&lt;br/&gt;inside zensynora webui&lt;br/&gt;or zensynora gateway&quot;]
         wa[&quot;WhatsApp Cloud&quot;]
         mcpc[&quot;MCP clients&lt;br/&gt;zensynora mcp-server&quot;]
     end
@@ -62,8 +62,8 @@
     subgraph L1[&quot;Interfaces&quot;]
         direction LR
         cli2[&quot;cli.py&lt;br/&gt;click commands&quot;]
-        webapi[&quot;web/&lt;br/&gt;api · settings · models · chat · jobs · backup · medic&quot;]
-        gw[&quot;gateway.py&lt;br/&gt;Telegram / WhatsApp / console&quot;]
+        webapi[&quot;web/&lt;br/&gt;api · settings · models · chat · jobs · backup · medic · telegram&quot;]
+        gw[&quot;gateway.py&lt;br/&gt;zensynora gateway: Telegram / WhatsApp / console&quot;]
         channels[&quot;channels/&lt;br/&gt;telegram · whatsapp · discord&quot;]
         mcpsrv[&quot;mcp/server.py&lt;br/&gt;tools over MCP (stdio)&quot;]
         apisrv[&quot;api_server.py&lt;br/&gt;REST API library (/api/v1)&quot;]
@@ -114,7 +114,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">3. A chat message, end to end</h2>
-  <p class="diagram-desc">What happens inside one agent when it answers (Telegram and the terminal follow the same path from `Agent` onwards). Since 0.7.1 the Web UI reaches `Agent.stream_think` through chat channels — see [§12](#12-chat-channels-and-agent-to-agent-</p>
+  <p class="diagram-desc">What happens inside one agent when it answers (Telegram and the terminal follow the same path from `Agent` onwards; the Telegram steps before `Agent` are in [§15](#15-telegram-bot)). Since 0.7.1 the Web UI reaches `Agent.stream_think` throu</p>
   <div class="mermaid">sequenceDiagram
     autonumber
     actor U as You
@@ -386,6 +386,57 @@
     upd -- failure --&gt; rb[&quot;rolled back · running version unchanged&quot;]
     agent -- record_lesson --&gt; kb[(&quot;knowledge note&lt;br/&gt;medic-lessons&quot;)]
     kb -. &quot;found by later searches&quot; .-&gt; agent</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">15. Telegram bot</h2>
+  <p class="diagram-desc">`myclaw/channels/telegram.py`, started by `myclaw/web/telegram_api.py` (inside `zensynora webui`) or by `myclaw/gateway.py` (`zensynora gateway`). User guide: [telegram_guide.md](telegram_guide.md).</p>
+  <div class="mermaid">flowchart LR
+    tgapp([&quot;Telegram app&lt;br/&gt;you, on your phone&quot;]) &lt;--&gt; tgsrv[&quot;Telegram servers&quot;]
+    subgraph webproc[&quot;zensynora webui · one process&quot;]
+        tapi[&quot;web/telegram_api.py&lt;br/&gt;status · test · restart&quot;]
+        tch1[&quot;TelegramChannel&quot;]
+        reg1[&quot;agent registry&lt;br/&gt;same agents as the Web UI&quot;]
+        tapi --&gt; tch1 --&gt; reg1
+    end
+    subgraph gwproc[&quot;zensynora gateway · alternative&quot;]
+        tch2[&quot;TelegramChannel&quot;]
+        reg2[&quot;agent registry&quot;]
+        tch2 --&gt; reg2
+    end
+    tch1 -- &quot;polling&quot; --&gt; tgsrv
+    tch2 -. &quot;polling, only if the Web UI copy is off&quot; .-&gt; tgsrv
+    reg1 &amp; reg2 --&gt; kb[(&quot;main knowledge base&lt;br/&gt;shared with the Web UI&quot;)]
+    reg1 &amp; reg2 --&gt; mem[(&quot;conversation memory&lt;br/&gt;one per Telegram user&quot;)]
+    settings[&quot;Settings → Channels&lt;br/&gt;Test bot · Restart bot&quot;] --&gt; tapi</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">15. Telegram bot</h2>
+  <p class="diagram-desc">`myclaw/channels/telegram.py`, started by `myclaw/web/telegram_api.py` (inside `zensynora webui`) or by `myclaw/gateway.py` (`zensynora gateway`). User guide: [telegram_guide.md](telegram_guide.md).</p>
+  <div class="mermaid">sequenceDiagram
+    autonumber
+    actor U as You in Telegram
+    participant T as Telegram servers
+    participant C as TelegramChannel
+    participant Q as Queue
+    participant W as Worker
+    participant A as Agent
+    U-&gt;&gt;T: &quot;@writer a haiku about rain&quot;
+    T-&gt;&gt;C: update via polling
+    C-&gt;&gt;C: allowFrom check: numeric id or @username
+    alt not allowed
+        C--&gt;&gt;C: log the user id once and ignore
+    else allowed
+        C-&gt;&gt;Q: put the message
+        Q-&gt;&gt;W: next message of this chat
+        Note over Q,W: several workers, so several chats in parallel,&lt;br/&gt;one message at a time per chat
+        W-&gt;&gt;T: typing… while the agent works
+        W-&gt;&gt;W: @agent routing: remove @YourBot,&lt;br/&gt;match @writer ignoring case, else default agent
+        W-&gt;&gt;A: think(text) with this user&#x27;s memory
+        A--&gt;&gt;W: answer, or a short plain error
+        W-&gt;&gt;W: split into messages of at most 4096 characters
+        W-&gt;&gt;T: send each part, as plain text if Markdown fails
+        T--&gt;&gt;U: answer
+    end</div>
 </div>
 
 <div class="footer">

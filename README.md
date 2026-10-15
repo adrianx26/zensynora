@@ -80,6 +80,10 @@ each other, can create new specialist agents, and load **skills** (instructions
 for a kind of task, Skills page) when a task needs them. Tour of the pages:
 [docs/webui_guide.md](docs/webui_guide.md).
 
+**Telegram:** paste a bot token in Settings → Channels and the Web UI runs your
+Telegram bot too — chat with your agents from your phone, with the same
+knowledge base. Step by step: [docs/telegram_guide.md](docs/telegram_guide.md).
+
 > **llama.cpp tip:** start `llama-server` with `--jinja` so agents can use
 > tools; use provider `llamacpp` with the server's `/v1` URL.
 
@@ -87,9 +91,9 @@ for a kind of task, Skills page) when a task needs them. Tour of the pages:
 
 | Command | What it does |
 |---|---|
-| `zensynora webui [--port 8000] [--host 127.0.0.1]` | Web UI: chat channels, models, jobs, backups, settings, doctor (`--host 127.0.0.1` = this computer only) |
+| `zensynora webui [--port 8000] [--host 127.0.0.1]` | Web UI: chat channels, models, jobs, backups, settings, doctor (`--host 127.0.0.1` = this computer only); also runs the Telegram bot when it is switched on |
 | `zensynora agent` | Chat in the terminal (`@name` to address an agent) |
-| `zensynora gateway` | Run the Telegram or WhatsApp bot (falls back to terminal chat) |
+| `zensynora gateway` | Run the Telegram or WhatsApp bot without the Web UI (falls back to terminal chat) — [Telegram guide](docs/telegram_guide.md) |
 | `zensynora mcp-server` | Expose ZenSynora's tools to MCP clients over stdio |
 | `zensynora knowledge sync \| search \| list \| read \| write` | Manage the knowledge base |
 | `zensynora swarm …` · `skills list [--tools]` · `memory …` | Swarms, agent skills (and tools), conversation memory |
@@ -148,7 +152,7 @@ Details: [docs/medic_agent_guide.md](docs/medic_agent_guide.md).
 
 The easiest way is the Web UI: **Models** (default model, rotation, your own
 providers) and **Settings** (built-in providers and API keys, agents with
-✨ prompt generation, channels, features, security). Everything is stored in
+✨ prompt generation, channels such as the Telegram bot, features, security). Everything is stored in
 `~/.myclaw/config.json`; API keys are never sent back to the browser, and
 settings are only reachable from the same computer unless you set an admin
 API key.
@@ -169,7 +173,7 @@ MYCLAW_DEFAULT_PROVIDER=llamacpp
 MYCLAW_DEFAULT_MODEL=qwen2.5-7b-instruct
 MYCLAW_LLAMACPP_BASE_URL=http://localhost:8080/v1
 MYCLAW_OPENAI_API_KEY=sk-...
-MYCLAW_TELEGRAM_TOKEN=...
+MYCLAW_TELEGRAM_TOKEN=...           # Telegram bot token from @BotFather
 MYCLAW_LOG_FILE=off                 # disable ~/.myclaw/logs/zensynora.log
 MYCLAW_BACKUP_DIR=/path/to/backups  # where backups go (default ~/.myclaw-backups)
 ```
@@ -195,6 +199,7 @@ flowchart LR
 |---|---|
 | Agents and the request pipeline | `myclaw/agent.py`, `myclaw/agent_internals/` |
 | Chat channels, agent-to-agent events | `myclaw/chat/`, `myclaw/events.py`, `myclaw/web/chat_api.py` |
+| Telegram bot (in the Web UI or `zensynora gateway`) | `myclaw/channels/telegram.py`, `myclaw/web/telegram_api.py`, `myclaw/gateway.py` |
 | Jobs (schedule, evaluate, benchmark) | `myclaw/jobs/`, `myclaw/web/jobs_api.py` |
 | Backups | `myclaw/backup.py`, `myclaw/web/backup_api.py` |
 | LLM providers, fallback, circuit breaker | `myclaw/provider.py`, `myclaw/offline.py`, `myclaw/resilience/` |
@@ -222,7 +227,7 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 git clone https://github.com/adrianx26/zensynora.git && cd zensynora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q -o addopts=""        # 525 tests
+pytest -q -o addopts=""        # 586 tests
 ruff check .
 ```
 

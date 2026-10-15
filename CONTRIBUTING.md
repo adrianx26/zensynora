@@ -79,11 +79,11 @@ zensynora/
 ├── myclaw/                 # Core Python package
 │   ├── agent.py            # Main agent logic
 │   ├── config.py           # Configuration management
-│   ├── gateway.py          # Telegram/WhatsApp gateways
+│   ├── gateway.py          # `zensynora gateway`: Telegram/WhatsApp bots without the Web UI
 │   ├── memory.py           # SQLite memory system
 │   ├── provider.py         # LLM provider abstraction
 │   ├── tools/               # Tool system (shell, files, web, kb, scheduler, swarm, toolbox)
-│   ├── channels/           # Messaging channel implementations
+│   ├── channels/           # Messaging channels (telegram.py: the Telegram bot)
 │   ├── knowledge/          # Knowledge base (DB, graph, parser)
 │   ├── profiles/           # Agent personality profiles
 │   └── swarm/              # Multi-agent swarm orchestration
@@ -164,6 +164,7 @@ isort .
 | A provider preset (local or online) | `PROVIDER_PRESETS` in `myclaw/web/settings_api.py` | [docs/webui_guide.md](docs/webui_guide.md#models-switch-rotate-add-providers) |
 | A job template | `TEMPLATES` in `webui/src/components/JobsView.tsx` | [docs/webui_guide.md](docs/webui_guide.md#jobs-scheduled-and-on-demand-tasks) |
 | Data that should be in backups | `_PART_PATTERNS` in `myclaw/backup.py` | [docs/webui_guide.md](docs/webui_guide.md#backups-settings-api-keys-knowledge) |
+| A Telegram command | a handler in `myclaw/channels/telegram.py` (it is added to the bot's `/` menu with its description); Web UI status in `myclaw/web/telegram_api.py` | [docs/telegram_guide.md](docs/telegram_guide.md) |
 | An LLM provider | `myclaw/provider.py` (+ SDK in `requirements.txt` if it is needed at chat time) | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 
 Every user-visible change gets a line in `CHANGELOG.md` under `[Unreleased]`.
@@ -253,6 +254,7 @@ pytest -v
 - **Unit tests** (`tests/test_*.py`): Test individual functions in isolation
 - **Integration tests**: Test gateway ↔ agent ↔ provider flow
 - **Security tests** (`tests/test_security.py`): Path traversal, injection, allowlist
+- **Telegram tests** (`tests/test_telegram_channel.py`, `tests/test_telegram_webui.py`): the Telegram bot (including an end-to-end run of python-telegram-bot against the local fake Bot API server in `tests/fixtures/fake_telegram_api.py`, selected with `ZENSYNORA_TELEGRAM_API_URL`), and the bot inside the Web UI
 
 ### Mocking External Services
 When testing LLM-dependent code, mock the provider responses:

@@ -4,6 +4,8 @@
 > 0.7.1: chat channels and agent-to-agent events (§12), jobs (§13),
 > approval-gated self-update (§14), backups, model rotation and custom
 > providers (§4), full program-folder backup in updates (§9).
+> Unreleased: the Telegram bot can run inside the Web UI process, message
+> flow through queue and workers, shared knowledge base (§1, §2, §15).
 > Rewritten for 0.7.0. The previous version showed planning phases and
 > modules that no longer match the code. Every diagram below reflects the
 > current source tree; file names are given so you can jump to the code.
@@ -25,6 +27,7 @@
 12. [Chat channels and agent-to-agent talk](#12-chat-channels-and-agent-to-agent-talk)
 13. [Jobs](#13-jobs)
 14. [Self-update proposals](#14-self-update-proposals)
+15. [Telegram bot](#15-telegram-bot)
 
 ---
 
@@ -38,7 +41,7 @@ flowchart LR
     subgraph entry["Entry points"]
         webui["Web UI<br/>browser · port 8000"]
         cli["Terminal<br/>zensynora agent"]
-        tg["Telegram bot"]
+        tg["Telegram bot<br/>inside zensynora webui<br/>or zensynora gateway"]
         wa["WhatsApp Cloud"]
         mcpc["MCP clients<br/>zensynora mcp-server"]
     end
@@ -75,8 +78,8 @@ flowchart TB
     subgraph L1["Interfaces"]
         direction LR
         cli2["cli.py<br/>click commands"]
-        webapi["web/<br/>api · settings · models · chat · jobs · backup · medic"]
-        gw["gateway.py<br/>Telegram / WhatsApp / console"]
+        webapi["web/<br/>api · settings · models · chat · jobs · backup · medic · telegram"]
+        gw["gateway.py<br/>zensynora gateway: Telegram / WhatsApp / console"]
         channels["channels/<br/>telegram · whatsapp · discord"]
         mcpsrv["mcp/server.py<br/>tools over MCP (stdio)"]
         apisrv["api_server.py<br/>REST API library (/api/v1)"]
@@ -131,7 +134,8 @@ flowchart TB
 ## 3. A chat message, end to end
 
 What happens inside one agent when it answers (Telegram and the terminal
-follow the same path from `Agent` onwards). Since 0.7.1 the Web UI reaches
+follow the same path from `Agent` onwards; the Telegram steps before `Agent`
+are in [§15](#15-telegram-bot)). Since 0.7.1 the Web UI reaches
 `Agent.stream_think` through chat channels — see [§12](#12-chat-channels-and-agent-to-agent-talk);
 the per-agent socket shown here still works for scripts.
 
@@ -482,6 +486,82 @@ flowchart TD
     agent -- record_lesson --> kb[("knowledge note<br/>medic-lessons")]
     kb -. "found by later searches" .-> agent
 ```
+
+---
+
+## 15. Telegram bot
+
+`myclaw/channels/telegram.py`, started by `myclaw/web/telegram_api.py` (inside
+`zensynora webui`) or by `myclaw/gateway.py` (`zensynora gateway`). User guide:
+[telegram_guide.md](telegram_guide.md).
+
+**Where the bot runs.** With `channels.telegram.enabled` and
+`channels.telegram.run_in_webui` (default on) the Web UI process starts the
+bot. `zensynora gateway` runs it without the Web UI. Telegram lets only one
+copy of a bot receive messages: a second copy gets "conflict" and the Web UI
+stops its own.
+
+```mermaid
+flowchart LR
+    tgapp(["Telegram app<br/>you, on your phone"]) <--> tgsrv["Telegram servers"]
+    subgraph webproc["zensynora webui · one process"]
+        tapi["web/telegram_api.py<br/>status · test · restart"]
+        tch1["TelegramChannel"]
+        reg1["agent registry<br/>same agents as the Web UI"]
+        tapi --> tch1 --> reg1
+    end
+    subgraph gwproc["zensynora gateway · alternative"]
+        tch2["TelegramChannel"]
+        reg2["agent registry"]
+        tch2 --> reg2
+    end
+    tch1 -- "polling" --> tgsrv
+    tch2 -. "polling, only if the Web UI copy is off" .-> tgsrv
+    reg1 & reg2 --> kb[("main knowledge base<br/>shared with the Web UI")]
+    reg1 & reg2 --> mem[("conversation memory<br/>one per Telegram user")]
+    settings["Settings → Channels<br/>Test bot · Restart bot"] --> tapi
+```
+
+**One message, end to end.**
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as You in Telegram
+    participant T as Telegram servers
+    participant C as TelegramChannel
+    participant Q as Queue
+    participant W as Worker
+    participant A as Agent
+    U->>T: "@writer a haiku about rain"
+    T->>C: update via polling
+    C->>C: allowFrom check: numeric id or @username
+    alt not allowed
+        C-->>C: log the user id once and ignore
+    else allowed
+        C->>Q: put the message
+        Q->>W: next message of this chat
+        Note over Q,W: several workers, so several chats in parallel,<br/>one message at a time per chat
+        W->>T: typing… while the agent works
+        W->>W: @agent routing: remove @YourBot,<br/>match @writer ignoring case, else default agent
+        W->>A: think(text) with this user's memory
+        A-->>W: answer, or a short plain error
+        W->>W: split into messages of at most 4096 characters
+        W->>T: send each part, as plain text if Markdown fails
+        T-->>U: answer
+    end
+```
+
+* `/start`, `/help` and `/whoami` answer everyone; all other commands need an
+  allowed user.
+* Photos, voice messages and documents: the caption is used as the message;
+  without a caption the bot says it can only read text for now.
+* Agents created later (`create_agent`, Settings) are found without a restart.
+* Answers from a named agent start with `@Name: `.
+* Polling is the default; `zensynora gateway --webhook-url … --port 8443`
+  switches the gateway copy to webhook mode (path `/webhook`). The Web UI copy
+  always polls. `ZENSYNORA_TELEGRAM_API_URL` points either copy at a
+  self-hosted Bot API server.
 
 ---
 

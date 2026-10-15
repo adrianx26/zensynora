@@ -4,7 +4,8 @@
 > version: adds the Web UI settings API, provider routing changes, the safe
 > updater and the doctor/medic rewrite (0.7.0); chat channels, agent-to-agent
 > events, jobs, backups, model rotation, custom providers and approval-gated
-> self-update (0.7.1); test inventory recounted.
+> self-update (0.7.1); test inventory recounted. **Unreleased:** Telegram bot
+> fixed and able to run inside the Web UI (`web/telegram_api.py`).
 > **Audience:** contributors and operators. For end-user docs see
 > [`README.md`](../README.md). Sprint history:
 > [`archive/SPRINTS_SUMMARY.md`](archive/SPRINTS_SUMMARY.md).
@@ -34,8 +35,11 @@ myclaw/
 ├── backup.py                # Backups of settings, API keys, knowledge, chat, jobs [0.7.1]
 ├── caching/                 # Shared BaseTTLCache + PersistentCacheMixin [Sprint 11]
 ├── channels/                # telegram / whatsapp / discord / web adapters [Sprint 6]
+│   └── telegram.py          # Telegram bot: allowFrom, per-chat queue + workers, @agent
+│                            #   routing, commands + / menu, reply splitting [Unreleased]
 ├── chat/                    # Web UI chat channels: store (chat.db) + multi-agent engine [0.7.1]
 ├── config.py                # Pydantic config + hot-reload (watchdog)
+├── gateway.py               # `zensynora gateway`: Telegram / WhatsApp without the Web UI
 ├── cost_tracker.py          # SQLite cost accumulator + dashboard queries
 ├── defaults.py              # Single source of truth for tunable constants [Sprint 10]
 ├── doctor/                  # Health checks, integrity baseline, safe fixes [0.7.0]
@@ -75,6 +79,7 @@ myclaw/
 │   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
 │   ├── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
 │   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
+│   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [Unreleased]
 │   └── skills_api.py        # Skills page: list, edit, import, assign [0.7.5]
 └── ... (~50 utility modules)
 
@@ -102,7 +107,10 @@ webui/src/
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 558 tests (pytest --collect-only, 2026-10-14)
+tests/                       # 586 tests (pytest --collect-only, 2026-10-16)
+├── fixtures/fake_telegram_api.py # Local fake Telegram Bot API server [Unreleased]
+├── test_telegram_channel.py # Telegram bot, incl. end-to-end via the fake server [Unreleased]
+└── test_telegram_webui.py   # Telegram bot inside the Web UI [Unreleased]
 ```
 
 ---
@@ -112,7 +120,8 @@ tests/                       # 558 tests (pytest --collect-only, 2026-10-14)
 The "happy path" for a single user message:
 
 ```
-gateway (telegram/whatsapp/web/cli)
+channel (web chat / telegram / whatsapp / cli)
+  telegram only: allowFrom check → per-chat queue → worker → @agent routing
   → Agent.think()
       → _route_message()      task timer, guardrails, model selection,
                               medic loop guard (working since 0.7.0)
@@ -127,8 +136,13 @@ gateway (telegram/whatsapp/web/cli)
       → _execute_tools()      parallel + sequential tool dispatch
       → _handle_summarization() background memory cleanup
   ← response string
-gateway sends reply
+channel sends reply (Telegram: split into ≤ 4096-character messages)
 ```
+
+The Telegram bot runs either inside `zensynora webui` (started by
+`web/telegram_api.py` when `channels.telegram.run_in_webui` is on) or in
+`zensynora gateway` (`gateway.py`) — never both, because Telegram allows only
+one copy of a bot to receive updates.
 
 ### Where Sprint 2-4 modules plug in
 
@@ -305,10 +319,12 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_v071_features.py` | 17 |
 | `test_v073_reliability.py` | 11 |
 | `test_v074_update_and_prompt.py` | 8 |
+| `test_telegram_channel.py` | 12 |
+| `test_telegram_webui.py` | 16 |
 | `test_v075_channels_medic_skills.py` | 25 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **558** |
+| **Total** | **586** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 
@@ -327,7 +343,7 @@ pytest -q -o addopts=""
 * **Add a new vector backend** → subclass `VectorBackend` in
   `myclaw/vector/`, then teach `factory.make_backend` about its name.
 * **Add a new channel** → match the pattern in `channels/telegram.py`
-  (gateway-based dispatch into `Agent.think`).
+  (access check, per-chat queue and workers, dispatch into `Agent.think`).
 * **Add a health check** → one `@check` function in `myclaw/doctor/checks.py`
   ([guide](medic_agent_guide.md#adding-a-check)).
 * **Change the data format** → add a migration in `updater/migrations/`

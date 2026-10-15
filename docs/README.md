@@ -7,7 +7,8 @@
 
 | Guide | What it covers |
 |---|---|
-| [Web UI guide](webui_guide.md) | Chat channels with several agents, agent-to-agent activity, Models (switch, rotate, your own providers), Jobs, Backups |
+| [Web UI guide](webui_guide.md) | Chat channels with several agents, agent-to-agent activity, Models (switch, rotate, your own providers), Jobs, Backups, the Telegram bot in Settings → Channels |
+| [Telegram bot](telegram_guide.md) | Set up the Telegram bot, allow users, commands, `@agent` messages, reminders, knowledge, troubleshooting |
 | [Updating](UPDATING.md) | `zensynora update`, rollback, data and program-folder backups, how updates stay safe |
 | [Medic & Doctor](medic_agent_guide.md) | `zensynora doctor`, the Doctor page, medic tools, integrity and recovery, self-update proposals and learning |
 | [Choosing an LLM](llm_recommendations.md) | Which local model for which hardware; llama.cpp / Ollama / LM Studio setup |
