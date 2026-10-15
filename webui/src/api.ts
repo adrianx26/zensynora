@@ -68,6 +68,8 @@ export interface SystemHealth {
   mcp: { enabled: boolean; servers: number };
   swarm: { enabled: boolean };
   channels: { telegram: boolean; whatsapp: boolean };
+  // Telegram bot inside the Web UI: "running @name" | "stopped" | "starting" | "conflict" | "error"
+  telegram_bot?: string | null;
   tools: number;
   config_file_exists: boolean;
   websocket_clients: number;

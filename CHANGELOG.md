@@ -7,6 +7,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+The Telegram bot was reviewed and fixed: it answers normal messages again,
+runs inside the Web UI, and shares the knowledge base with it. See the new
+[Telegram guide](docs/telegram_guide.md).
+
+### Fixed
+- **The bot never answered normal messages.** Messages went into a queue whose
+  worker was never started, so only `/commands` worked. The workers now start
+  with the bot: several chats are answered in parallel, one message at a time
+  per chat.
+- **Long answers failed.** Answers over 4096 characters (Telegram's limit) are
+  now split into several messages. Markdown that Telegram cannot read no
+  longer makes a reply fail; it is sent as plain text instead.
+- **Raw error text.** Errors now show a short plain explanation, with the same
+  wording as the Web UI (for example: the model is rate-limited, the server
+  cannot be reached).
+- **"typing…" disappeared.** It was only shown for long messages and went away
+  after 5 seconds; it now stays while the agent works.
+- **`@agent` routing.** `@name` at the start of a message ignores upper/lower
+  case, and agents created later (by another agent with `create_agent`, or in
+  Settings) can be addressed without a restart. In groups, a mention of the
+  bot itself (`@YourBot`) is removed before routing.
+- **Not-allowed users were ignored silently**, and nobody could find their
+  user id. Messages from people not in `allowFrom` are now logged once per
+  user, with their id. `allowFrom` accepts numeric ids or `@usernames`. A
+  placeholder such as `YOUR_USER_ID`, or an empty list, is reported in the
+  startup log, by the doctor and in the Web UI.
+- **Telegram notes were invisible in the Web UI.** They were saved in a
+  separate knowledge base. Allowed Telegram users now share the main knowledge
+  base with the Web UI by default (`channels.telegram.shared_knowledge: true`);
+  conversation memory stays per Telegram user. Set it to `false` to keep a
+  separate knowledge base per Telegram user.
+- **Photos, voice messages and documents** got no answer. The caption is now
+  used as the message; without a caption the bot says it can only read text
+  for now.
+- **Gateway (`zensynora gateway`).** MCP servers are started on the bot's own
+  event loop (before, they were scheduled on a loop that might never run);
+  agents created with `create_agent` are added to the bot's agent list;
+  polling and webhook modes share one setup (webhook had a duplicated copy).
+- **Webhook mode could not be used.** It was in the code but no command
+  reached it. Now: `zensynora gateway --webhook-url https://your.domain/webhook
+  --port 8443` (Telegram calls the URL; the bot listens on `0.0.0.0:<port>`,
+  path `/webhook`). Polling stays the default. `zensynora gateway` prints a
+  note when `run_in_webui` is on, because only one copy of the bot may run.
+- **Replies from named agents** start with `@Name: `, so you know who
+  answered; `@Name` with nothing after it gets "What should @Name do? …"
+  instead of an empty request. Error replies are short; technical details go
+  to the log only.
+
+### Added
+- **The bot runs inside the Web UI.** With `channels.telegram.enabled` and
+  `channels.telegram.run_in_webui` (default on), `zensynora webui` starts the
+  Telegram bot too — no separate `zensynora gateway` needed. Telegram allows
+  only one copy of a bot: if another process already runs it (for example
+  `zensynora gateway`), the Web UI shows "conflict" and stops its own copy.
+- **Settings → Channels:** *Allowed Telegram users* (list), *Run the bot inside
+  the Web UI*, *Telegram uses the same knowledge base as the Web UI*, and a
+  *Telegram bot* panel with the status (Running as @name, Starting…, Stopped,
+  Turned off, No bot token yet, Runs in zensynora gateway, conflict, Error), a
+  warning when nobody is allowed yet, **Test bot** (checks the typed token, or
+  else the saved one, with Telegram) and **Restart bot** (not available when
+  the bot is off, runs in the gateway or has no saved token). Saving restarts
+  the bot by itself, only when a Telegram setting changed. The sidebar health
+  has a *Telegram* row (running @name / stopped / conflict / error). API:
+  `GET /api/telegram/status`, `POST /api/telegram/test`,
+  `POST /api/telegram/restart`.
+- **`/start`, `/help` and `/whoami`.** These work for everyone. `/whoami`
+  answers with your own numeric Telegram id and how to allow it; nothing else
+  is revealed. All other commands need an allowed user.
+- **Command menu.** The `/` list in Telegram is registered automatically, with
+  a description for each command.
+- **Doctor check "Telegram bot"** (category configuration): *off*; *enabled
+  but no bot token* (fail); *nobody is allowed to use the bot* (warning, with
+  the hint to send `/whoami` and add the number); or the number of allowed
+  users and whether the bot runs inside the Web UI or with
+  `zensynora gateway`.
+- **`ZENSYNORA_TELEGRAM_API_URL`** points the bot at a self-hosted Telegram
+  Bot API server (for example `http://localhost:8081`); the tests use it too.
+- **Tests:** `tests/test_telegram_channel.py`, including an end-to-end test of
+  the real python-telegram-bot library against a local fake Bot API server
+  (`tests/fixtures/fake_telegram_api.py`), and `tests/test_telegram_webui.py`.
+
 ## [0.7.5] - 2026-10-14
 
 Agents get skills and work as a team; failed jobs get a medic; channels no

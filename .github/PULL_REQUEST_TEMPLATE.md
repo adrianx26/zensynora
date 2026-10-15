@@ -22,7 +22,7 @@ Fixes # (issue number)
 ## Testing
 <!-- Describe the tests you ran and how to reproduce them -->
 - [ ] Tested locally with `zensynora agent`
-- [ ] Tested Telegram gateway
+- [ ] Tested the Telegram bot (inside `zensynora webui` or with `zensynora gateway`)
 - [ ] Tested WhatsApp gateway
 - [ ] Tested WebUI (`zensynora webui`)
 - [ ] `zensynora doctor` reports no new problems

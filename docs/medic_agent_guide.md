@@ -41,7 +41,7 @@ monitoring.
 | Category | Check | Auto-fix |
 |---|---|---|
 | environment | Python ≥ 3.11 · running inside the venv · required packages · **provider libraries** (e.g. `openai` for llama.cpp) · free disk · RAM · CPU load | — |
-| configuration | config file exists and matches the schema · providers known · API keys present for cloud providers | — |
+| configuration | config file exists and matches the schema · providers known · API keys present for cloud providers · Telegram bot: token set, someone allowed, where it runs ([Telegram guide](telegram_guide.md)) | — |
 | llm *(network)* | default model server reachable (latency) · configured model is offered by the server | — |
 | data | `~/.myclaw` writable, standard folders present · every SQLite database passes `PRAGMA quick_check` · data migrations up to date | folders, migrations |
 | security | `config.json`, `.config_key`, audit secret and update backups are owner-only · Web UI access mode | permissions |

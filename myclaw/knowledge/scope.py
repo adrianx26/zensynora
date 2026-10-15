@@ -32,6 +32,19 @@ INTERNAL = {"", "default", "webui", "__delegate__", "local", "cli", "console", "
 KB_USER: ContextVar[str | None] = ContextVar("kb_user", default=None)
 
 _migrated: set[str] = set()
+# Ids of people who share the main knowledge base (e.g. the allowed Telegram
+# users when channels.telegram.shared_knowledge is on).
+_SHARED_IDS: set[str] = set()
+
+
+def share_main_knowledge(*user_ids: str) -> None:
+    """Let these (external) user ids use the shared knowledge base."""
+    _SHARED_IDS.update(str(u).strip() for u in user_ids if str(u).strip())
+
+
+def unshare_main_knowledge(*user_ids: str) -> None:
+    for u in user_ids:
+        _SHARED_IDS.discard(str(u).strip())
 _lock = threading.Lock()
 
 
@@ -41,7 +54,7 @@ def is_internal(user_id: str | None) -> bool:
 
 def kb_user(user_id: str | None = None) -> str:
     """The knowledge base for this id: internal ids share ``default``."""
-    if is_internal(user_id):
+    if is_internal(user_id) or str(user_id).strip() in _SHARED_IDS:
         return SHARED
     return str(user_id).strip()
 
@@ -51,7 +64,7 @@ def for_turn(user_id: str | None) -> str:
     caller's knowledge base."""
     if is_internal(user_id):
         return KB_USER.get() or SHARED
-    return kb_user(user_id)
+    return kb_user(user_id)  # an id in _SHARED_IDS maps to the shared base
 
 
 def for_tool(user_id: str | None = None) -> str:

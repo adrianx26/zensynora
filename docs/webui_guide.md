@@ -3,6 +3,7 @@
 > **Applies to:** v0.7.5 · **Added:** 2026-10-13 · **v0.7.3:** Channels page,
 > real model tests · **v0.7.4:** Updates page, Restart button · **v0.7.5:**
 > Skills, agents that create and delegate, medic for failed jobs, token speed
+> · **Unreleased:** Telegram bot inside the Web UI (Settings → Channels)
 
 Start the Web UI with `zensynora webui` and open <http://localhost:8000>
 (`--host 127.0.0.1` keeps it on this computer only). This guide covers the
@@ -150,8 +151,10 @@ searches it automatically; agents can also use these tools themselves:
 
 With *auto extract* on (Settings → Features → `knowledge.auto_extract`),
 useful facts from conversations and tool results are saved by themselves. The
-**knowledge-keeper** skill teaches an agent when to save and how. Telegram or
-WhatsApp users each keep their own knowledge base.
+**knowledge-keeper** skill teaches an agent when to save and how. Allowed
+Telegram users use the same knowledge base as the Web UI (switch it off in
+Settings → Channels to give each Telegram user their own); WhatsApp users each
+keep their own knowledge base.
 
 **MCP memory servers.** Any MCP server (a memo/notes server, a database, a
 file system …) can be added in `~/.myclaw/config.json`:
@@ -163,6 +166,41 @@ file system …) can be added in `~/.myclaw/config.json`:
 Its tools appear for all agents as `mcp_<server>_<tool>` when the Web UI (or
 `zensynora agent`) starts. In the other direction, `zensynora mcp-server`
 offers ZenSynora's tools — knowledge base included — to other MCP clients.
+
+## Telegram bot (Settings → Channels)
+
+*Settings → Channels* is about messaging apps — not the chat channels above.
+With the Telegram bot switched on, `zensynora webui` runs the bot too, so you
+can talk to your agents from your phone. No separate `zensynora gateway` is
+needed. The bot restarts by itself when you save a change to a Telegram
+setting. WhatsApp still runs in `zensynora gateway` — restart the gateway
+after changing WhatsApp settings.
+
+| Setting or button | What it does |
+|---|---|
+| **Telegram bot enabled** · **Telegram bot token** | Switch the bot on; paste the token from @BotFather |
+| **Allowed Telegram users** | Your numeric user id — send `/whoami` to the bot to see it — or `@username`. Nobody else can use the bot. |
+| **Run the bot inside the Web UI** | On (default). Turn off if you run the bot with `zensynora gateway` instead. |
+| **Telegram uses the same knowledge base as the Web UI** | On (default): notes are shared; each Telegram user keeps their own conversation memory |
+| **Test bot** | Checks the token with Telegram — the token you just typed, or else the saved one. Success: *Token works — bot @name (Name)*. |
+| **Restart bot** | Starts the bot again. Not available when the bot is turned off, runs in `zensynora gateway`, or has no saved token. |
+
+The **Telegram bot** panel shows the **Status**:
+
+| Status | Meaning |
+|---|---|
+| Running as @name | All good |
+| Starting… | Wait a few seconds |
+| Stopped · Turned off | The bot is not running / *Telegram bot enabled* is off |
+| No bot token yet | Paste the token from @BotFather and Save |
+| Runs in zensynora gateway, not in the Web UI | *Run the bot inside the Web UI* is off |
+| Another ZenSynora (zensynora gateway?) is already running this bot … | Conflict: Telegram allows only one copy. Stop the other one, or turn off *Run the bot inside the Web UI*. |
+| Error: … | Read the message; click **Test bot** |
+
+While nobody is allowed, the panel warns: *Nobody can use the bot yet: add your
+user id to Allowed Telegram users below.* The sidebar health has a
+**Telegram** row too (running @name / stopped / conflict / error). Set-up step by step, commands and
+troubleshooting: [Telegram guide](telegram_guide.md).
 
 ## Skills: instructions agents load when needed
 

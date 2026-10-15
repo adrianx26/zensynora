@@ -98,6 +98,12 @@ async def _reset_agent_registry() -> None:
         _chat_api.sync_channels()
     except Exception as exc:  # pragma: no cover - best effort
         logger.warning("Could not update channels after the settings change: %s", exc)
+    # Telegram bot in the Web UI: restart it only when its settings changed
+    # (it reads agents through _ensure_registry, so the new registry is used).
+    try:
+        await _telegram_api.on_settings_changed()
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Could not apply the Telegram settings: %s", exc)
 
 
 from myclaw.web import settings_api as _settings_api  # noqa: E402
@@ -114,8 +120,11 @@ from myclaw.web import backup_api as _backup_api  # noqa: E402
 from myclaw.web import medic_api as _medic_api  # noqa: E402
 from myclaw.web import update_api as _update_api  # noqa: E402
 from myclaw.web import skills_api as _skills_api  # noqa: E402
+from myclaw.web import telegram_api as _telegram_api  # noqa: E402
 
 _chat_api.set_registry_getter(_ensure_registry)
+# The bot gets the getter (not the dict): the registry is rebuilt after each save.
+_telegram_api.set_registry_getter(_ensure_registry)
 
 
 def _add_created_agent(name: str, agent) -> None:
@@ -136,6 +145,7 @@ app.include_router(_backup_api.router)
 app.include_router(_medic_api.router)  # self-update proposals (v0.7.1)
 app.include_router(_update_api.router)  # check / update / rollback / restart (v0.7.4)
 app.include_router(_skills_api.router)  # agent skills (v0.7.5)
+app.include_router(_telegram_api.router)  # Telegram bot inside the Web UI
 
 
 _mcp_manager = None
@@ -157,9 +167,18 @@ async def _start_background_runner() -> None:
             await _mcp_manager.start_all()
     except Exception as exc:  # an MCP server must never stop the Web UI
         logger.warning("Could not start MCP servers: %s", exc)
+    # Telegram bot (channels.telegram.run_in_webui): no separate gateway needed.
+    try:
+        await _telegram_api.start_bot()
+    except Exception as exc:  # the bot must never stop the Web UI
+        logger.warning("Could not start the Telegram bot: %s", exc.__class__.__name__)
 
 
 async def _stop_background_runner() -> None:
+    try:
+        await _telegram_api.stop_bot()
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Could not stop the Telegram bot: %s", exc)
     await _jobs_api.stop_runner()
     if _mcp_manager is not None:
         await _mcp_manager.stop_all()

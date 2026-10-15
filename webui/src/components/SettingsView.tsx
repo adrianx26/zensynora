@@ -41,6 +41,12 @@ type Tab = typeof TABS[number];
 const CHANNEL_FIELDS: FieldDef[] = [
   { path: 'channels.telegram.enabled', label: 'Telegram bot enabled', kind: 'bool' },
   { path: 'channels.telegram.token', label: 'Telegram bot token', kind: 'password', help: 'From @BotFather.' },
+  {
+    path: 'channels.telegram.allowFrom', label: 'Allowed Telegram users', kind: 'list',
+    help: 'Your numeric user id — send /whoami to the bot to see it — or @username. Nobody else can use the bot.',
+  },
+  { path: 'channels.telegram.run_in_webui', label: 'Run the bot inside the Web UI', kind: 'bool', help: 'Turn off if you run the bot with zensynora gateway instead.' },
+  { path: 'channels.telegram.shared_knowledge', label: 'Telegram uses the same knowledge base as the Web UI', kind: 'bool' },
   { path: 'channels.telegram.max_workers', label: 'Telegram worker threads', kind: 'number' },
   { path: 'channels.whatsapp.enabled', label: 'WhatsApp enabled', kind: 'bool' },
   { path: 'channels.whatsapp.phone_number_id', label: 'WhatsApp phone number ID', kind: 'text' },
@@ -120,6 +126,36 @@ interface Props {
   onSaved?: () => void;
 }
 
+interface TelegramBot {
+  state: 'stopped' | 'starting' | 'running' | 'conflict' | 'error' | string;
+  bot_username?: string | null;
+  error?: string | null;
+}
+
+interface TelegramStatus {
+  enabled: boolean;
+  run_in_webui: boolean;
+  token_set: boolean;
+  allow_from: string[];
+  allow_from_placeholder: boolean;
+  bot: TelegramBot;
+}
+
+type TelegramTest = { ok: boolean; bot_username?: string | null; bot_name?: string | null; error?: string; loading?: boolean };
+
+function botStateText(bot: TelegramBot): { text: string; ok: boolean } {
+  switch (bot.state) {
+    case 'running': return { text: bot.bot_username ? `Running as @${bot.bot_username}` : 'Running', ok: true };
+    case 'starting': return { text: 'Starting…', ok: true };
+    case 'conflict': return {
+      text: "Another ZenSynora (zensynora gateway?) is already running this bot — stop it or turn off 'Run the bot inside the Web UI'.",
+      ok: false,
+    };
+    case 'error': return { text: `Error: ${bot.error || 'the bot could not start.'}`, ok: false };
+    default: return { text: 'Stopped', ok: false };
+  }
+}
+
 const SettingsView: React.FC<Props> = ({ onSaved }) => {
   const [data, setData] = useState<SettingsResponse | null>(null);
   const [draft, setDraft] = useState<Json>(null);
@@ -136,6 +172,16 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
   const [generating, setGenerating] = useState<number | null>(null);
   // v0.7.5: skills that can be given to agents (names + descriptions)
   const [skillList, setSkillList] = useState<{ name: string; description: string }[]>([]);
+  // Telegram bot running inside the Web UI
+  const [tgStatus, setTgStatus] = useState<TelegramStatus | null>(null);
+  const [tgTest, setTgTest] = useState<TelegramTest | null>(null);
+  const [tgBusy, setTgBusy] = useState(false);
+  const [tgError, setTgError] = useState<string | null>(null);
+  const loadTelegram = useCallback(async () => {
+    try {
+      setTgStatus(await api<TelegramStatus>('/api/telegram/status'));
+    } catch { /* optional panel */ }
+  }, []);
   useEffect(() => {
     api<{ skills: { name: string; description: string }[] }>('/api/skills').then(r => setSkillList(r.skills)).catch(() => { /* optional */ });
   }, []);
@@ -212,6 +258,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
         : ' New chats use the new settings right away.';
       setNotice({ kind: 'ok', text: `Saved.${restart}` });
       await load();
+      loadTelegram();
       onSaved?.();
     } catch (e) {
       setNotice({ kind: 'error', text: (e as Error).message });
@@ -234,6 +281,40 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
       setProbe(p => ({ ...p, [provider]: { ok: false, models: [], error: (e as Error).message } }));
     }
   };
+
+  const testTelegram = async () => {
+    setTgTest({ ok: false, loading: true });
+    const token = changes['channels.telegram.token'];
+    try {
+      setTgTest(await api<TelegramTest>('/api/telegram/test', {
+        method: 'POST',
+        body: JSON.stringify({ token: token || null }),
+      }));
+    } catch (e) {
+      setTgTest({ ok: false, error: (e as Error).message });
+    }
+  };
+
+  const restartTelegram = async () => {
+    setTgBusy(true);
+    setTgError(null);
+    try {
+      await api('/api/telegram/restart', { method: 'POST' });
+    } catch (e) {
+      setTgError((e as Error).message);
+    } finally {
+      setTgBusy(false);
+      loadTelegram();
+    }
+  };
+
+  // Refresh the bot state while the Channels tab is open (it may change on its own).
+  useEffect(() => {
+    if (tab !== 'Channels') return;
+    loadTelegram();
+    const t = window.setInterval(loadTelegram, 5000);
+    return () => window.clearInterval(t);
+  }, [tab, loadTelegram]);
 
   // v0.7.1: write an agent's system prompt from its name + description with the main LLM.
   const generatePrompt = async (i: number, a: Json, onDone: (prompt: string) => void) => {
@@ -487,7 +568,37 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
         {tab === 'Channels' && (
           <div className="settings-card">
             <h3>Messaging channels</h3>
-            <p className="muted">Channels run in the gateway (<code>zensynora gateway</code>). Restart it after changing these.</p>
+            <p className="muted">The Telegram bot runs inside the Web UI and restarts by itself when you save. WhatsApp runs in the gateway (<code>zensynora gateway</code>) — restart it after changing those.</p>
+            {tgStatus && (
+              <div className="telegram-status">
+                <h4>Telegram bot</h4>
+                <div className="probe-row">
+                  <span>Status:</span>
+                  {!tgStatus.enabled ? <span className="muted">Turned off</span>
+                    : !tgStatus.run_in_webui ? <span className="muted">Runs in zensynora gateway, not in the Web UI</span>
+                      : !tgStatus.token_set ? <span className="muted">No bot token yet</span>
+                        : <span className={botStateText(tgStatus.bot).ok ? 'probe-ok' : 'probe-err'}>{botStateText(tgStatus.bot).text}</span>}
+                </div>
+                {tgStatus.enabled && tgStatus.allow_from_placeholder && (
+                  <div className="notice">Nobody can use the bot yet: add your user id to <b>Allowed Telegram users</b> below.</div>
+                )}
+                <div className="probe-row">
+                  <button type="button" className="ghost-btn" onClick={testTelegram} disabled={tgTest?.loading}>
+                    {tgTest?.loading ? 'Testing…' : 'Test bot'}
+                  </button>
+                  <button type="button" className="ghost-btn" onClick={restartTelegram}
+                    disabled={tgBusy || !tgStatus.enabled || !tgStatus.run_in_webui || !tgStatus.token_set}>
+                    {tgBusy ? 'Restarting…' : 'Restart bot'}
+                  </button>
+                  {tgTest && !tgTest.loading && (
+                    <span className={tgTest.ok ? 'probe-ok' : 'probe-err'}>
+                      {tgTest.ok ? `Token works — bot @${tgTest.bot_username}${tgTest.bot_name ? ` (${tgTest.bot_name})` : ''}` : tgTest.error}
+                    </span>
+                  )}
+                  {tgError && <span className="probe-err">{tgError}</span>}
+                </div>
+              </div>
+            )}
             {CHANNEL_FIELDS.map(renderField)}
           </div>
         )}
