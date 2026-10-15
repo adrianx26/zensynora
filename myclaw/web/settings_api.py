@@ -362,8 +362,31 @@ async def update_settings(update: SettingsUpdate):
         "changed": sorted(update.changes.keys()),
         "restart_needed_for": [
             p for p in update.changes if p.startswith(("channels.", "mcp.", "security.cors_origins"))
+            # the Telegram bot inside the Web UI restarts by itself
+            and not (p.startswith("channels.telegram.") and _telegram_in_webui())
         ],
     }
+
+
+def _telegram_in_webui() -> bool:
+    try:
+        return bool(load_config().channels.telegram.run_in_webui)
+    except Exception:  # pragma: no cover - defensive
+        return False
+
+
+def _telegram_bot_state() -> Optional[str]:
+    """State of the Telegram bot running inside the Web UI (lazy import: no cycle)."""
+    try:
+        from myclaw.web import telegram_api
+
+        st = telegram_api.bot_status()
+        state = st.get("state") or "stopped"
+        if state == "running" and st.get("bot_username"):
+            return f"running @{st['bot_username']}"
+        return state
+    except Exception:  # pragma: no cover - informational only
+        return None
 
 
 # ── Provider probe (test connection + list models) ───────────────────────────
@@ -480,6 +503,7 @@ async def system_health():
     if _health_cache["data"] and now - _health_cache["at"] < 10:
         data = dict(_health_cache["data"])
         data["websocket_clients"] = _active_ws["count"]
+        data["telegram_bot"] = _telegram_bot_state()
         return data
 
     cfg = load_config()
@@ -537,6 +561,7 @@ async def system_health():
     _health_cache.update(at=now, data=data)
     out = dict(data)
     out["websocket_clients"] = _active_ws["count"]
+    out["telegram_bot"] = _telegram_bot_state()  # live, not cached
     return out
 
 

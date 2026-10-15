@@ -265,6 +265,14 @@ function App() {
               <HealthRow label="Messaging"
                 value={[health.channels.telegram && 'Telegram', health.channels.whatsapp && 'WhatsApp'].filter(Boolean).join(', ') || 'none'}
                 state={health.channels.telegram || health.channels.whatsapp ? 'ok' : 'off'} />
+              {health.channels.telegram && health.telegram_bot && (
+                <HealthRow label="Telegram"
+                  value={health.telegram_bot}
+                  state={health.telegram_bot.startsWith('running') ? 'ok'
+                    : health.telegram_bot === 'conflict' || health.telegram_bot === 'error' ? 'err'
+                      : health.telegram_bot === 'starting' ? 'warn' : 'off'} />
+              )}
+              {health.telegram_bot === 'conflict' && <div className="health-note">Another ZenSynora (zensynora gateway?) is already running this Telegram bot.</div>}
               <button className="link-btn" onClick={() => go('doctor')}>Full diagnostics →</button>
               {!health.config_file_exists && <div className="health-note">Not configured yet — open Models to pick a model.</div>}
             </div>

@@ -705,6 +705,11 @@ select.field-input { cursor: pointer; }
 .probe-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 0.85rem; }
 .probe-ok { color: var(--success-color); font-size: 0.85rem; }
 .probe-err { color: var(--danger-color); font-size: 0.85rem; }
+.telegram-status {
+  border: 1px solid var(--panel-border); border-radius: 10px; padding: 12px 14px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.telegram-status h4 { margin: 0; }
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip {

@@ -58,7 +58,11 @@ def _read_state() -> Dict[str, Any]:
 def _write_state(data: Dict[str, Any]) -> None:
     f = _state_file()
     if f:
-        f.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        # Atomic: a status request reading a half-written file used to see
+        # "no update" (flaky "finished" reports while the waiter thread wrote).
+        tmp = f.with_name(f"{f.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        os.replace(tmp, f)
 
 
 def _clean_env() -> Dict[str, str]:
