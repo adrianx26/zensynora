@@ -1551,6 +1551,7 @@ async def complete_with_fallback(config, messages: List[Dict], provider: Optiona
     from .llm_errors import cooldown_key
     from .provider_keys import normalize_key_id
 
+    candidates: List[Tuple[str, str, Optional[str]]]
     if provider and model:
         candidates = [(provider, model, None)]
     else:

@@ -113,8 +113,11 @@ webui/src/
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 586 tests (pytest --collect-only, 2026-10-16)
+tests/                       # 643 tests (pytest --collect-only, 2026-10-18)
 ├── fixtures/fake_telegram_api.py # Local fake Telegram Bot API server [Unreleased]
+├── test_chat_message_actions.py # Copy/edit/delete/regenerate chat messages [Unreleased]
+├── test_doctor_report.py    # Doctor checks, report, errors viewer, downloads [Unreleased]
+├── test_provider_keys.py    # Several API keys per provider [Unreleased]
 ├── test_telegram_channel.py # Telegram bot, incl. end-to-end via the fake server [Unreleased]
 └── test_telegram_webui.py   # Telegram bot inside the Web UI [Unreleased]
 ```
@@ -325,12 +328,15 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_v071_features.py` | 17 |
 | `test_v073_reliability.py` | 11 |
 | `test_v074_update_and_prompt.py` | 8 |
-| `test_telegram_channel.py` | 12 |
-| `test_telegram_webui.py` | 16 |
+| `test_chat_message_actions.py` | 8 |
+| `test_doctor_report.py` | 21 |
+| `test_provider_keys.py` | 18 |
+| `test_telegram_channel.py` | 19 |
+| `test_telegram_webui.py` | 19 |
 | `test_v075_channels_medic_skills.py` | 25 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **586** |
+| **Total** | **643** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

@@ -101,6 +101,9 @@ def _install_shutdown_handlers() -> None:
     import signal
 
     def _graceful_shutdown() -> None:
+        # At interpreter exit the log streams may already be closed (pytest,
+        # piped output): don't print "--- Logging error ---" tracebacks then.
+        logging.raiseExceptions = False
         logger.info("Shutting down gracefully...")
         # Close shared aiohttp session
         try:
