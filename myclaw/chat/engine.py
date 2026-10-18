@@ -82,22 +82,106 @@ class ChatEngine:
         t = self._tasks.get(channel_id)
         return bool(t and not t.done())
 
-    async def post(self, channel_id: str, text: str, sender: str = "you") -> dict[str, Any]:
-        """Store your message, broadcast it and start the agents' turn in the background."""
-        text = text.strip()
-        if not text:
-            raise ValueError("Empty message")
+    async def _open_channel(self, channel_id: str) -> dict[str, Any]:
         ch = await asyncio.to_thread(store.get_channel, channel_id)
         if ch is None:
             raise KeyError(channel_id)
         if ch["kind"] == "dm" and ch["members"][0] not in self._registry():  # v0.7.5
             raise ValueError(f"@{ch['members'][0]} no longer exists (renamed or deleted in Settings). "
                              "Delete this conversation on the Channels page.")
+        return ch
+
+    async def post(self, channel_id: str, text: str, sender: str = "you") -> dict[str, Any]:
+        """Store your message, broadcast it and start the agents' turn in the background."""
+        text = text.strip()
+        if not text:
+            raise ValueError("Empty message")
+        await self._open_channel(channel_id)
         msg = await asyncio.to_thread(store.add_message, channel_id, "user", sender, text)
         events.publish(channel_id, {"type": "message", "message": msg})
         task = asyncio.create_task(self._run_turn(channel_id, text))
         self._tasks[channel_id] = task
         return msg
+
+    async def rerun(self, channel_id: str, message_id: int) -> None:
+        """Answer one of your messages again (after "edit and resend").
+
+        The message is not stored a second time. The agents' memory of this
+        channel is rebuilt from the messages before it first, so they don't
+        see the old version of the question as the last turn.
+        """
+        await self._open_channel(channel_id)
+        msg = await asyncio.to_thread(store.get_message, message_id)
+        if msg is None or msg["channel_id"] != channel_id or msg["role"] != "user":
+            raise KeyError(message_id)
+        task = asyncio.create_task(self._run_turn(channel_id, msg["text"], anchor=msg))
+        self._tasks[channel_id] = task
+
+    async def regenerate(self, channel_id: str, message_id: int) -> dict[str, Any]:
+        """Write one agent's answer again, in the same place (same message id).
+
+        Returns the message of yours that is answered again.
+        """
+        await self._open_channel(channel_id)
+        answer = await asyncio.to_thread(store.get_message, message_id)
+        if answer is None or answer["channel_id"] != channel_id or answer["role"] != "agent":
+            raise KeyError(message_id)
+        before = await asyncio.to_thread(store.all_messages, channel_id, message_id)
+        question = next((m for m in reversed(before) if m["role"] == "user"), None)
+        if question is None:
+            raise ValueError("This answer does not answer a message of yours, so it can't be regenerated.")
+        # Activity of the old answer (tool calls, delegations) goes with it.
+        stale = []
+        for m in await asyncio.to_thread(store.messages_after, channel_id, message_id):
+            if m["role"] != "event":
+                break
+            meta = m["meta"] or {}
+            if answer["sender"] in (m["sender"], meta.get("agent"), meta.get("from")):
+                stale.append(m["id"])
+        if stale:
+            gone = await asyncio.to_thread(store.delete_messages, channel_id, stale)
+            events.publish(channel_id, {"type": "messages_deleted", "ids": gone})
+        task = asyncio.create_task(self._run_turn(channel_id, question["text"], anchor=question,
+                                                  only=answer["sender"], reuse=answer))
+        self._tasks[channel_id] = task
+        return question
+
+    async def resync_memory(self, channel_id: str, agents: list[str] | None = None,
+                            before_id: int | None = None) -> None:
+        """Rebuild the agents' private memory of this channel from the chat history.
+
+        Used after messages are edited, deleted or answered again, so an agent
+        remembers the conversation as it is shown (tool details of earlier
+        turns are not kept). ``before_id`` limits it to messages before that id.
+        """
+        from ..agent import MEMORY_SCOPE
+
+        ch = await asyncio.to_thread(store.get_channel, channel_id)
+        if ch is None:
+            return
+        msgs = await asyncio.to_thread(store.all_messages, channel_id, before_id)
+        registry = self._registry()
+        names = list(dict.fromkeys(agents if agents is not None else ch["members"]))
+        for name in names:
+            get_mem = getattr(registry.get(name), "_get_memory", None)
+            if get_mem is None:
+                continue
+            turns = memory_turns(msgs, name)[-MEMORY_REPLAY:]
+            token = MEMORY_SCOPE.set(memory_scope(channel_id, name))
+            try:
+                mem = await get_mem(USER_ID)
+                await mem.clear()
+                add = getattr(mem, "add", None)
+                if add is not None:
+                    for role, text in turns:
+                        await add(role, text)
+                    flush = getattr(mem, "flush", None)
+                    if flush is not None:
+                        await flush()
+            except Exception as e:  # memory is a convenience; never break the chat
+                logger.warning("Could not rebuild memory of @%s in %s: %s", name, channel_id, e)
+            finally:
+                MEMORY_SCOPE.reset(token)
 
     async def stop(self, channel_id: str) -> bool:
         t = self._tasks.get(channel_id)
@@ -128,13 +212,17 @@ class ChatEngine:
             return members[:1]
         return members
 
-    async def _run_turn(self, channel_id: str, text: str) -> None:
+    async def _run_turn(self, channel_id: str, text: str, anchor: dict[str, Any] | None = None,
+                        only: str | None = None, reuse: dict[str, Any] | None = None) -> None:
+        """One turn. ``anchor`` = an existing message of yours answered again
+        (edit and resend, regenerate); ``only`` = just this agent answers;
+        ``reuse`` = the old answer whose bubble the new answer is written into."""
         lock = self._locks.setdefault(channel_id, asyncio.Lock())
         async with lock:  # one turn at a time per channel; later messages queue
             ch = await asyncio.to_thread(store.get_channel, channel_id)
             if ch is None:
                 return
-            targets = self.resolve_targets(ch, text)
+            targets = [only] if only else self.resolve_targets(ch, text)
             new_members = [t for t in targets if t not in ch["members"]]
             if new_members:
                 ch = await asyncio.to_thread(store.update_channel, channel_id,
@@ -144,19 +232,36 @@ class ChatEngine:
                                                f"Added {', '.join('@' + m for m in new_members)} to this channel.")
                 events.publish(channel_id, {"type": "message", "message": note})
 
+            history = None
+            replies: dict[str, str] = {}
+            if anchor is not None:
+                await self.resync_memory(channel_id, list(dict.fromkeys(ch["members"] + targets)), anchor["id"])
+                history = (await asyncio.to_thread(store.all_messages, channel_id, anchor["id"]))[-40:]
+                if only and ch["reply_mode"] != "parallel":  # what the others answered before it
+                    for m in await asyncio.to_thread(store.messages_after, channel_id, anchor["id"]):
+                        if m["role"] == "user" or (reuse and m["id"] >= reuse["id"]):
+                            break
+                        if m["role"] == "agent" and m["sender"] != only and m["text"]:
+                            replies[m["sender"]] = m["text"]
+
             events.publish(channel_id, {"type": "turn_start", "agents": targets})
             try:
                 if ch["reply_mode"] == "parallel" and len(targets) > 1:
-                    await asyncio.gather(*(self._answer(ch, a, text, {}) for a in targets))
+                    await asyncio.gather(*(self._answer(ch, a, text, {}, history) for a in targets))
                 else:
-                    replies: dict[str, str] = {}
                     for agent in targets:
-                        replies[agent] = await self._answer(ch, agent, text, replies)
+                        replies[agent] = await self._answer(ch, agent, text, replies, history,
+                                                            reuse if agent == only else None)
             except asyncio.CancelledError:
                 note = await asyncio.to_thread(store.add_message, channel_id, "system", "", "Stopped.")
                 events.publish(channel_id, {"type": "message", "message": note})
                 raise
             finally:
+                if only and anchor is not None:  # turns after the regenerated one stay remembered
+                    try:
+                        await self.resync_memory(channel_id, [only])
+                    except Exception as e:  # pragma: no cover - resync_memory logs its own errors
+                        logger.debug("memory resync after regenerate failed: %s", e)
                 events.publish(channel_id, {"type": "turn_end"})
 
     def _prompt(self, ch: dict[str, Any], agent: str, text: str, replies: dict[str, str],
@@ -188,7 +293,8 @@ class ChatEngine:
         return "\n\n".join(lines)
 
     async def _answer(self, ch: dict[str, Any], agent_name: str, text: str,
-                      replies: dict[str, str]) -> str:
+                      replies: dict[str, str], history: list[dict[str, Any]] | None = None,
+                      reuse: dict[str, Any] | None = None) -> str:
         from ..agent import MEMORY_SCOPE
 
         channel_id = ch["id"]
@@ -198,11 +304,16 @@ class ChatEngine:
                                            f"Agent @{agent_name} does not exist (any more).")
             events.publish(channel_id, {"type": "message", "message": note})
             return ""
-        history = await asyncio.to_thread(store.list_messages, channel_id, None, 40)
-        prompt = self._prompt(ch, agent_name, text, replies, history[:-1])
+        if history is None:
+            history = (await asyncio.to_thread(store.list_messages, channel_id, None, 40))[:-1]
+        prompt = self._prompt(ch, agent_name, text, replies, history)
 
-        msg = await asyncio.to_thread(store.add_message, channel_id, "agent", agent_name, "",
-                                      {"streaming": True})
+        if reuse is not None:  # regenerate: the new answer replaces the old one in place
+            await asyncio.to_thread(store.update_message, reuse["id"], "", {"streaming": True})
+            msg = {**reuse, "text": "", "meta": {"streaming": True}}
+        else:
+            msg = await asyncio.to_thread(store.add_message, channel_id, "agent", agent_name, "",
+                                          {"streaming": True})
         events.publish(channel_id, {"type": "stream_start", "message": msg})
         tokens = (events.CURRENT_CHANNEL.set(channel_id), events.CURRENT_AGENT.set(agent_name),
                   MEMORY_SCOPE.set(memory_scope(channel_id, agent_name)))
@@ -240,6 +351,26 @@ class ChatEngine:
             await asyncio.to_thread(store.update_message, msg["id"], full, meta)
             events.publish(channel_id, {"type": "stream_end", "id": msg["id"], "text": full, "meta": meta})
         return full
+
+
+MEMORY_REPLAY = 40  # messages put back into an agent's memory after an edit
+
+
+def memory_turns(messages: list[dict[str, Any]], agent: str) -> list[tuple[str, str]]:
+    """(role, text) pairs an agent remembers from a channel: each message of
+    yours that the agent answered, followed by its answer."""
+    out: list[tuple[str, str]] = []
+    question: str | None = None
+    for m in messages:
+        if m["role"] == "user":
+            question = m["text"]
+        elif m["role"] == "agent" and m["sender"] == agent and m["text"] \
+                and not (m.get("meta") or {}).get("streaming"):
+            if question is not None:
+                out.append(("user", question))
+                question = None
+            out.append(("assistant", m["text"]))
+    return out
 
 
 def estimate_tokens(text: str) -> int:

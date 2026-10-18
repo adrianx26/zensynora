@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+**Chat: copy, edit, delete, regenerate**
+- Every chat message has a hover bar (… on touch screens): **Copy** (code
+  blocks get their own Copy button), **Edit** (your message: edit and send
+  again, later messages are removed; an agent answer: correct it in place),
+  **Delete** (your message with or without its answers) and **Regenerate**
+  (an agent writes its answer again). Edited messages show *(edited)*; all open
+  browsers update at once. ↑ in the empty input edits your last message;
+  **⤓ MD** copies or downloads the conversation as Markdown.
+- API: `PATCH`/`DELETE /api/channels/{id}/messages/{mid}`,
+  `POST …/{mid}/regenerate`, `GET /api/channels/{id}/export.md`; socket events
+  `message_updated` and `messages_deleted`. Refused with 409 while agents are
+  answering. Agents' channel memory is rebuilt from the visible messages.
+
 ### Fixed (2026-10-18)
 - **Telegram: "The bot token is wrong" although Test bot said it works.** A
   space or line break pasted with the token broke every request of the bot;
