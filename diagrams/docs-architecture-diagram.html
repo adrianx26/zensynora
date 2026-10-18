@@ -16,7 +16,7 @@
   <span class="dot"></span>
   <h1 class="title">ZenSynora Architecture — Visual Guide</h1>
 </div>
-<p class="subtitle">17 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
+<p class="subtitle">20 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
 <div class="legend">
   <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
   <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
@@ -308,6 +308,16 @@
     end</div>
 </div>
 <div class="diagram-card">
+  <h2 class="diagram-title">10. Doctor and medic</h2>
+  <p class="diagram-desc">`zensynora doctor`, the Web UI **Doctor** page and the medic agent&#x27;s tools share one set of checks (`myclaw/doctor/`, rewritten in 0.7.0).</p>
+  <div class="mermaid">flowchart LR
+    err[&quot;exception in the agent turn&quot;] --&gt; kind{&quot;is_provider_error?&lt;br/&gt;(llm_errors.py)&quot;}
+    kind -- &quot;rate limit, no rotation&quot; --&gt; retry[&quot;wait 5 s, retry once&lt;br/&gt;same model + key&quot;] --&gt; ok([&quot;answer&quot;])
+    retry -- &quot;still failing&quot; --&gt; warn
+    kind -- &quot;rate limit · timeout · bad key ·&lt;br/&gt;unknown model&quot; --&gt; warn[&quot;one WARNING line&lt;br/&gt;+ readable reason in chat&quot;]
+    kind -- &quot;anything else&quot; --&gt; crash[&quot;ERROR + traceback&quot;] --&gt; diag[&quot;medic diagnosis&lt;br/&gt;check_system_health · check_memory_usage ·&lt;br/&gt;get_health_report (from agents.medic_agent)&quot;]</div>
+</div>
+<div class="diagram-card">
   <h2 class="diagram-title">11. Install layout on disk</h2>
   
   <div class="mermaid">flowchart TB
@@ -451,6 +461,33 @@
     llm -- &quot;429 · quota · 401&quot; --&gt; rot{&quot;rotate_keys on?&quot;}
     rot -- &quot;yes&quot; --&gt; other[&quot;same model,&lt;br/&gt;next key of the provider&quot;] --&gt; client
     rot -- &quot;no&quot; --&gt; next[&quot;next model in the rotation list&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">17. Knowledge page (Web UI)</h2>
+  <p class="diagram-desc">The Knowledge page reads the Markdown notes directly (they are the source of truth); the SQLite index is used for full-text search and is updated after every edit. A relation whose target note does not exist becomes a &quot;missing&quot; node.</p>
+  <div class="mermaid">flowchart LR
+    ui[&quot;Knowledge page&lt;br/&gt;graph · notes · tags · panel&quot;] -- &quot;GET graph / note&quot; --&gt; api[&quot;knowledge_api.py&quot;]
+    ui -- &quot;POST / PUT note&quot; --&gt; api
+    ui -- &quot;DELETE note&quot; --&gt; api
+    api -- &quot;parse every *.md&quot; --&gt; md[(&quot;~/.myclaw/knowledge/&amp;lt;base&amp;gt;/*.md&quot;)]
+    api -- &quot;nodes · edges · tags · categories&quot; --&gt; ui
+    api -- &quot;write file, then re-index&quot; --&gt; md
+    api --&gt; db[(&quot;knowledge_&amp;lt;base&amp;gt;.db&lt;br/&gt;FTS index&quot;)]
+    api -- &quot;move, not delete&quot; --&gt; trash[(&quot;&amp;lt;base&amp;gt;/.trash&quot;)]
+    agents[&quot;agents&lt;br/&gt;write_to_knowledge …&quot;] --&gt; md</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">18. Context length per agent</h2>
+  
+  <div class="mermaid">flowchart LR
+    ui[&quot;Settings → Agents&lt;br/&gt;slider + number box&quot;] -- &quot;prompt · skills · provider · model&lt;br/&gt;(after each edit)&quot; --&gt; est[&quot;POST /api/agents/context-estimate&quot;]
+    est --&gt; parts[&quot;estimate_context()&lt;br/&gt;prompt + skills + team + tool schemas&lt;br/&gt;→ min · recommended&quot;]
+    est --&gt; mx[&quot;model_context_max()&lt;br/&gt;Ollama /api/show · LM Studio · llama.cpp /props ·&lt;br/&gt;/models lists · Gemini · Anthropic · model library&quot;]
+    parts &amp; mx --&gt; ui
+    ui -- &quot;save: context_length&quot; --&gt; cfg[(&quot;config.json&lt;br/&gt;agents.*.context_length&quot;)]
+    cfg --&gt; turn[&quot;agent turn&quot;]
+    turn --&gt; fit[&quot;fit_messages()&lt;br/&gt;drop oldest messages to fit&quot;]
+    turn --&gt; var[&quot;CONTEXT_LENGTH contextvar&quot;] --&gt; oll[&quot;Ollama: options.num_ctx&quot;]</div>
 </div>
 
 <div class="footer">
