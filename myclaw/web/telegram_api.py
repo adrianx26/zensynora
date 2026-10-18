@@ -214,3 +214,32 @@ async def telegram_restart():
         raise HTTPException(status_code=409, detail="No bot token saved yet — paste it from @BotFather and save first.")
     await restart_bot()
     return {"ok": True, "bot": bot_status()}
+
+
+
+class SendTestIn(BaseModel):
+    chat_id: Optional[str] = None  # empty = every numeric id in Allowed Telegram users
+
+
+@router.post("/api/telegram/send-test", dependencies=guard)
+async def telegram_send_test(req: SendTestIn = SendTestIn()):
+    """Let the running bot send a short message, to check it can reach you."""
+    if _channel is None or bot_status().get("state") != "running":
+        raise HTTPException(status_code=409, detail="The bot is not running — check its status above first.")
+    targets = [req.chat_id] if req.chat_id else [a for a in (_tg().allowFrom or []) if str(a).strip().isdigit()]
+    if not targets:
+        raise HTTPException(status_code=400, detail="No numeric user id in Allowed Telegram users to send to.")
+    text = ("✅ ZenSynora is connected. Write me anything and an agent answers; "
+            "start with @name to ask a specific agent. /help lists the commands.")
+    results = []
+    for chat in targets:
+        try:
+            await _channel.send_text(str(chat).strip(), text)
+            results.append({"chat_id": str(chat), "ok": True})
+        except Exception as exc:  # e.g. the person never pressed Start
+            msg = str(exc)
+            if "chat not found" in msg.lower() or "forbidden" in msg.lower() or "blocked" in msg.lower():
+                msg = ("Telegram does not let the bot write first: open the bot in Telegram "
+                       "and press Start (or send /start), then try again.")
+            results.append({"chat_id": str(chat), "ok": False, "error": _scrub(msg, _tg())})
+    return {"ok": all(r["ok"] for r in results), "results": results}

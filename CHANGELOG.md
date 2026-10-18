@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (2026-10-18)
+- **Telegram: "The bot token is wrong" although Test bot said it works.** A
+  space or line break pasted with the token broke every request of the bot;
+  the Test bot button trimmed it, the bot did not. The bot now trims the
+  token, and saving Settings trims every secret (API keys and tokens never
+  contain spaces). The real reason Telegram gave is now in the log.
+
+### Added (2026-10-18)
+- **Send test message** (Settings → Channels, `POST /api/telegram/send-test`):
+  the running bot writes to every numeric id in *Allowed Telegram users*, or
+  to one `chat_id`. If Telegram refuses because the person never pressed
+  Start in the bot, the message says so.
+
 The Telegram bot was reviewed and fixed: it answers normal messages again,
 runs inside the Web UI, and shares the knowledge base with it. See the new
 [Telegram guide](docs/telegram_guide.md).
