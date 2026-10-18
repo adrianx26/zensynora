@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (2026-10-18, Telegram errors on a real install)
+- **The `myclaw` service (`zensynora gateway`) crashed every ~7 seconds** with
+  "There is no current event loop" and systemd restarted it. Each start sent
+  a request to Telegram before crashing, which took the connection away from
+  the bot inside the Web UI → "Another program is already running this bot"
+  and the Web UI's bot stopped. The gateway bot now runs on its own event
+  loop, and when the bot is set to run inside the Web UI the gateway leaves
+  Telegram alone and exits cleanly (so systemd does not restart it).
+  `zensynora gateway --telegram` runs it there anyway.
+- **A restart looked like a second bot.** Right after a restart Telegram keeps
+  the previous request open for a few seconds and answers "conflict"; the bot
+  stopped for good. Conflicts in the first 90 s are now retried, and the Web
+  UI closes the bot before restarting itself (Updates → Restart).
+- **Background knowledge sync never started** (`_background_extraction_task is
+  not defined`); in the gateway it now starts on the bot's event loop.
+- The "Telegram is enabled but no token" warning points to Settings → Channels.
+
+### Added (2026-10-18)
+- **`send_telegram_message` tool**: agents can write to you through
+  ZenSynora's own bot (only to *Allowed Telegram users*). Agents had been
+  building their own Telegram tools with placeholder tokens.
+- Doctor: the Telegram check warns when the `myclaw` service runs next to the
+  bot in the Web UI.
+
 ### Fixed (2026-10-18)
 - **Telegram: "The bot token is wrong" although Test bot said it works.** A
   space or line break pasted with the token broke every request of the bot;

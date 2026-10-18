@@ -359,7 +359,20 @@ def _telegram(ctx):
     if problem:
         return WARN, "nobody is allowed to use the bot", \
             "Send /whoami to the bot and add the number to Settings → Channels → Allowed Telegram users."
-    where = "inside the Web UI" if getattr(tg, "run_in_webui", True) else "with `zensynora gateway`"
+    in_webui = getattr(tg, "run_in_webui", True)
+    if in_webui and shutil.which("systemctl"):
+        # 2026-10-18: the myclaw service runs `zensynora gateway`; with the bot in
+        # the Web UI as well, the two copies stole each other's connection.
+        try:
+            state = subprocess.run(["systemctl", "is-active", "myclaw.service"], capture_output=True,
+                                   text=True, timeout=5).stdout.strip()
+        except (OSError, subprocess.SubprocessError):
+            state = ""
+        if state in ("active", "activating"):
+            return WARN, "the myclaw service (zensynora gateway) runs next to the bot in the Web UI", \
+                "Since 2026-10-18 the gateway leaves Telegram to the Web UI. If you only use the Web UI: " \
+                "sudo systemctl disable --now myclaw"
+    where = "inside the Web UI" if in_webui else "with `zensynora gateway`"
     return OK, f"{len(tg.allowFrom)} allowed user(s); runs {where}"
 
 

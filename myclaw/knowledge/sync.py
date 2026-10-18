@@ -622,6 +622,7 @@ def sync_and_report(user_id: str = "default") -> str:
 
 
 # ── Background Knowledge Extraction ─────────────────────────────────────────────
+_background_extraction_task: "asyncio.Task | None" = None  # was never defined → NameError at start
 
 async def _background_extraction_loop(user_id: str, interval_seconds: int = 60):
     """
@@ -684,12 +685,10 @@ def start_background_extraction(
                 _background_extraction_loop(user_id, interval_seconds)
             )
         except RuntimeError:
-            # No running loop, create a new one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            _background_extraction_task = loop.create_task(
-                _background_extraction_loop(user_id, interval_seconds)
-            )
+            # No running loop: a task on a new, never-run loop would never run
+            # (and replaced the caller's current loop). Start it from a running
+            # loop instead (the gateway does so when the bot starts).
+            raise RuntimeError("start_background_extraction() needs a running event loop")
     else:
         _background_extraction_task = loop.create_task(
             _background_extraction_loop(user_id, interval_seconds)

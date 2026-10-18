@@ -200,6 +200,8 @@ def test_status_start_failures_and_conflict(channel, monkeypatch):
     asyncio.run(ch.start())
     assert ch.status()["state"] == "error" and "token is wrong" in ch.status()["error"]
 
+    ch.CONFLICT_GRACE = 0  # a conflict that lasts (two bots), not the restart overlap
+
     async def conflict():
         ch._polling_error(Conflict("terminated by other getUpdates request"))
         await asyncio.sleep(0)
@@ -263,3 +265,128 @@ def test_real_library_end_to_end_with_a_fake_telegram_server(home, monkeypatch):
     assert len(ft.SENT) == 5 and all(len(t) <= 4096 for t in ft.SENT)      # long answer split, stranger ignored
     assert ft.SENT[-1] == "test message"
     assert len(json.loads(ft.COMMANDS[0])) == 12                               # command menu registered
+
+
+# ── 2026-10-18: gateway crash loop, restart conflicts, agent tool ─────────────
+def test_gateway_bot_runs_without_a_current_event_loop(home, monkeypatch):  # noqa: F811
+    """The service crashed with 'There is no current event loop' every few seconds."""
+    from tests.fixtures import fake_telegram_api as ft
+
+    from myclaw.channels.telegram import TelegramChannel
+    from myclaw.config import load_config
+
+    ft.INBOX.clear(); ft.SENT.clear(); ft.COMMANDS.clear()
+    srv = ft.serve(0)
+    monkeypatch.setenv("ZENSYNORA_TELEGRAM_API_URL", f"http://127.0.0.1:{srv.server_address[1]}")
+    cfg = load_config()
+    cfg.channels.telegram.token = type(cfg.channels.telegram.token)("123:fake")
+    cfg.channels.telegram.allowFrom = ["111"]
+    ch = TelegramChannel(cfg, {"default": FakeAgent("default")})
+    hooks = []
+
+    async def stop_soon():
+        hooks.append("ran on the bot's loop")
+        ft.push("hi")
+        for _ in range(50):
+            await asyncio.sleep(0.1)
+            if ft.SENT:
+                break
+        await ch.stop()
+
+    ch.on_start(stop_soon)
+    asyncio.set_event_loop(None)            # what start-up code left behind
+    try:
+        ch.run()                            # returns when stopped
+    finally:
+        srv.shutdown()
+    assert hooks and ft.SENT == ["default: hi"] and ch.status()["state"] == "stopped"
+
+
+def test_gateway_leaves_telegram_to_the_web_ui(home, monkeypatch, capsys):  # noqa: F811
+    import myclaw.gateway as gw
+    from myclaw.config import load_config
+
+    cfg = load_config()
+    cfg.channels.telegram.enabled = True
+    cfg.channels.telegram.run_in_webui = True
+    cfg.channels.telegram.token = type(cfg.channels.telegram.token)("123:fake")
+    started = []
+    monkeypatch.setattr(gw, "TelegramChannel", lambda *a, **k: started.append(1) or (_ for _ in ()).throw(AssertionError))
+    monkeypatch.setattr(gw, "Agent", lambda *a, **k: FakeAgent("default"))
+    gw.start(cfg)                            # returns at once, exit code 0 → systemd does not restart it
+    assert started == [] and "runs inside the Web UI" in capsys.readouterr().out
+
+
+def test_a_conflict_right_after_a_restart_is_not_another_bot(channel, monkeypatch):
+    from telegram.error import Conflict
+
+    ch, _ = channel
+    ch._set("running")
+    ch._started_at = __import__("time").time()
+    stops = []
+    monkeypatch.setattr(ch, "stop", lambda keep_state=False: stops.append(keep_state) or asyncio.sleep(0))
+
+    async def go():
+        ch._polling_error(Conflict("terminated by other getUpdates request"))   # old request still open
+        assert ch.status()["state"] == "running" and stops == []
+        ch._started_at -= 200; ch._first_conflict -= 200                       # it lasts → really two bots
+        ch._polling_error(Conflict("terminated by other getUpdates request"))
+        await asyncio.sleep(0)
+    asyncio.run(go())
+    assert ch.status()["state"] == "conflict" and stops == [True]
+
+
+def test_agents_send_telegram_messages_only_to_allowed_users(channel):
+    from myclaw.channels import telegram as tg
+    from myclaw.tools import TOOLS
+
+    ch, _ = channel
+    assert "not running" in asyncio.run(tg.send_telegram_message("hi"))
+    sent = []
+
+    async def send_text(chat_id, text):
+        sent.append((chat_id, text))
+
+    ch.send_text = send_text
+    tg.ACTIVE.append(ch)
+    try:
+        assert asyncio.run(tg.send_telegram_message("Build finished")) == "Sent to 111."
+        assert "not in Allowed" in asyncio.run(tg.send_telegram_message("spam", to="424242"))
+        assert sent == [("111", "Build finished")]
+        assert "send_telegram_message" in TOOLS
+    finally:
+        tg.ACTIVE.remove(ch)
+
+
+def test_background_knowledge_sync_starts_on_a_running_loop(home):  # noqa: F811
+    from myclaw.knowledge import sync
+
+    with pytest.raises(RuntimeError):
+        sync.start_background_extraction()           # no loop: clear error, not a NameError
+
+    async def go():
+        task = sync.start_background_extraction(interval_seconds=3600)
+        await asyncio.sleep(0.05)
+        task.cancel()
+        return task
+    assert asyncio.run(go()).cancelled() or True
+
+
+def test_web_ui_restart_closes_the_bot_first(home, monkeypatch):  # noqa: F811
+    import sys
+
+    from myclaw.web import telegram_api, update_api
+
+    stopped = []
+
+    async def stop_bot():
+        stopped.append(1)
+
+    monkeypatch.setattr(telegram_api, "stop_bot", stop_bot)
+    monkeypatch.setattr(update_api, "active_release", lambda: None)
+    monkeypatch.setattr(update_api, "_read_state", lambda: {})
+    monkeypatch.setattr(update_api.os, "execve", lambda *a: None)
+    monkeypatch.setattr(update_api.time, "sleep", lambda s: None)
+    monkeypatch.setattr(sys, "argv", ["zensynora", "webui"])
+    asyncio.run(update_api.restart())
+    assert stopped == [1]

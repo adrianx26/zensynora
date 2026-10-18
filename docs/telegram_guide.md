@@ -155,6 +155,12 @@ changed by its owner, a user id cannot.
 
 ## Inside the Web UI or `zensynora gateway`
 
+Only one copy may run. When *Run the bot inside the Web UI* is on, `zensynora
+gateway` (and the `myclaw` service, which runs it) does not start the bot and
+says so; use `zensynora gateway --telegram` to run it there anyway, or turn the
+setting off. Agents can write to you with the `send_telegram_message` tool
+(only to allowed users).
+
 | | Inside the Web UI (default) | `zensynora gateway` |
 |---|---|---|
 | Start | `zensynora webui` starts the bot too | Run `zensynora gateway` in a terminal or as a service |
@@ -231,6 +237,8 @@ local fake server.
 
 | Problem | What to do |
 |---|---|
+| The bot works for a few seconds, then *conflict* — and the log shows ZenSynora starting every few seconds | The `myclaw` service (`zensynora gateway`) was crash-looping and grabbing the bot (fixed 2026-10-18: the gateway now leaves Telegram to the Web UI). If you only use the Web UI: `sudo systemctl disable --now myclaw`. `zensynora doctor` warns about it. |
+| An agent says it needs a "bot token" or "chat id" to message you | Agents use the `send_telegram_message` tool (since 2026-10-18) — the bot must be running. Disable home-made Telegram tools an agent created earlier (Tools page, or ask an agent: `disable_skill telegram_integration`). |
 | The bot does not answer | Send `/whoami`. If it says you are not allowed, add the number to **Allowed Telegram users** and Save. Check that the status in Settings → Channels says *Running as @YourBot*. |
 | Status: *Another ZenSynora (zensynora gateway?) is already running this bot …* (sidebar: *conflict*) | Two copies of the bot are running — for example `zensynora gateway` and the Web UI, or two computers with the same token. Stop one (or turn off **Run the bot inside the Web UI**), then click **Restart bot**. |
 | Status: *No bot token yet* | Paste the token from @BotFather in **Telegram bot token** and Save. |

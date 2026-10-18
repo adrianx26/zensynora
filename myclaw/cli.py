@@ -189,10 +189,12 @@ def agent():
 @cli.command()
 @click.option("--webhook-url", default=None, help="Telegram webhook mode: the public HTTPS URL Telegram calls")
 @click.option("--port", default=8443, show_default=True, help="Port for the webhook server")
-def gateway(webhook_url, port):
+@click.option("--telegram", "force_telegram", is_flag=True,
+              help="Run the Telegram bot here even if it is set to run inside the Web UI")
+def gateway(webhook_url, port, force_telegram):
     """Start the messaging gateway (Telegram/WhatsApp) without the Web UI"""
     config = load_config()
-    start(config, webhook_url=webhook_url, port=port)
+    start(config, webhook_url=webhook_url, port=port, force_telegram=force_telegram)
 
 @cli.command(name="mcp-server")
 def mcp_server():

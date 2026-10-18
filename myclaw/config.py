@@ -739,8 +739,9 @@ def _validate_config(config: AppConfig) -> None:
     if config.channels.telegram.enabled:
         if not config.channels.telegram.token.get_secret_value():
             warnings.append(
-                "Telegram is enabled but MYCLAW_TELEGRAM_TOKEN is not set.\n"
-                "  Get a token from @BotFather: https://t.me/botfather"
+                "Telegram is enabled but no bot token is set.\n"
+                "  Get one from @BotFather and paste it in Web UI → Settings → Channels "
+                "(or set MYCLAW_TELEGRAM_TOKEN)."
             )
         if not config.channels.telegram.allowFrom:
             warnings.append(

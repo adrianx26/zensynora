@@ -69,6 +69,10 @@ HELP = (
 )
 
 
+# Bots running in this process (used by the send_telegram_message tool).
+ACTIVE: list["TelegramChannel"] = []
+
+
 def allow_list_problem(allow_from: list[str]) -> str | None:
     """Plain-language problem with allowFrom, or None when it looks usable."""
     real = [a for a in (allow_from or []) if str(a).strip().lower() not in PLACEHOLDERS]
@@ -137,6 +141,9 @@ class TelegramChannel:
         self._on_start: list[Callable[[], Any]] = []
         self.app: Application | None = None
         self._status: dict[str, Any] = {"state": "stopped", "bot_username": None, "error": None, "since": None}
+        self._started_at: float | None = None
+        self._first_conflict: float | None = None
+        self._conflict_noted = False
         self._bot_username: str | None = None
 
     # ── registry / access ────────────────────────────────────────────────────
@@ -461,14 +468,29 @@ class TelegramChannel:
     async def _on_error(self, update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
         err = context.error
         if isinstance(err, Conflict):
-            self._set("conflict", "Another program is already running this bot (zensynora gateway?). "
-                                  "Telegram allows only one.")
-            logger.error("Telegram: %s", self._status["error"])
+            self._polling_error(err)
             return
         logger.error("Telegram error: %s", err)
 
+    CONFLICT_GRACE = 90.0  # seconds
+
     def _polling_error(self, err: TelegramError) -> None:
         if isinstance(err, Conflict):
+            # Right after a restart Telegram still holds the previous copy's open
+            # request for a while and answers "conflict" — that is not a second
+            # bot. The library keeps retrying; give up only if it lasts.
+            now = time.time()
+            if self._first_conflict is None:
+                self._first_conflict = now
+            started = self._started_at or now
+            if now - started < self.CONFLICT_GRACE or now - self._first_conflict < self.CONFLICT_GRACE:
+                if not self._conflict_noted:
+                    self._conflict_noted = True
+                    logger.info("Telegram: the previous connection is still open — retrying for up to %d s",
+                                int(self.CONFLICT_GRACE))
+                return
+            if self._status["state"] == "conflict":
+                return
             self._set("conflict", "Another program is already running this bot (zensynora gateway?). "
                                   "Telegram allows only one.")
             logger.error("Telegram: %s Stopping this copy.", self._status["error"])
@@ -497,6 +519,7 @@ class TelegramChannel:
         if self.app is not None:
             return
         self._set("starting")
+        self._started_at, self._first_conflict, self._conflict_noted = time.time(), None, False
         try:
             self.app = self._build_app()
             await self.app.initialize()
@@ -506,6 +529,7 @@ class TelegramChannel:
                                                  drop_pending_updates=False)
             if self._status["state"] == "starting":
                 self._set("running")
+                ACTIVE.append(self)
         except InvalidToken as e:
             self._set("error", "The bot token is wrong — copy it again from @BotFather.")
             logger.error("Telegram: the token was refused (%s)", str(e).replace(self.token, "***"))
@@ -517,6 +541,8 @@ class TelegramChannel:
 
     async def stop(self, keep_state: bool = False) -> None:
         """Stop polling and the workers."""
+        if self in ACTIVE:
+            ACTIVE.remove(self)
         await self._cleanup()
         if not keep_state:
             self._set("stopped")
@@ -544,21 +570,85 @@ class TelegramChannel:
 
     # ── run on its own (zensynora gateway) ───────────────────────────────────
     def run(self, webhook_url: str | None = None, port: int = 8443) -> None:
-        """Blocking: polling (default) or webhook mode."""
-        app = self.app = self._build_app()
-        print(f"🦞 ZenSynora Telegram bot started{' in WEBHOOK mode' if webhook_url else ''}.")
+        """Blocking: polling (default) or webhook mode.
+
+        Polling uses the same start()/stop() as the Web UI on a fresh event loop.
+        (2026-10-18: the library's run_polling() looked for the "current" event
+        loop, which start-up code had already closed — the gateway crashed with
+        "There is no current event loop" and systemd restarted it every few
+        seconds.)
+        """
+        print(f"🦞 ZenSynora Telegram bot{' (webhook mode)' if webhook_url else ''} starting…")
         print(f"   Agents: {', '.join(self.registry)}")
         problem = allow_list_problem(self.allow_from)
         if problem:
             print(f"   ⚠️  {problem}")
-        print("   Send /help to the bot to see the commands.")
-        self._set("running")
         if webhook_url:
+            asyncio.set_event_loop(asyncio.new_event_loop())
+            app = self.app = self._build_app()
+            self._set("running")
             app.run_webhook(listen="0.0.0.0", port=port, url_path="webhook", webhook_url=webhook_url)
-        else:
-            app.run_polling()
-        self._set("stopped")
+            self._set("stopped")
+            return
+        try:
+            asyncio.run(self._serve())
+        except KeyboardInterrupt:
+            pass
+        state = self._status["state"]
+        if state in ("error", "conflict"):
+            raise SystemExit(f"Telegram bot stopped: {self._status['error']}")
+
+    async def _serve(self) -> None:
+        await self.start()
+        if self._status["state"] != "running":
+            return
+        print(f"   Running as @{self._bot_username}. Send /help to the bot. Ctrl+C stops it.")
+        try:
+            while self.app is not None:  # stop() (or a lasting conflict) clears it
+                await asyncio.sleep(1)
+        finally:
+            if self.app is not None:
+                await self.stop()
 
     def run_webhook(self, webhook_url: str, port: int = 8443) -> None:
         """Kept for compatibility: same as ``run(webhook_url, port)``."""
         self.run(webhook_url=webhook_url, port=port)
+
+
+# ── Tool for agents (2026-10-18) ─────────────────────────────────────────────
+# Agents had no way to write to the user on Telegram and built their own
+# "telegram_integration" tools with placeholder tokens. This uses the bot that
+# is already running and only writes to people in Allowed Telegram users.
+async def send_telegram_message(text: str, to: str = "") -> str:
+    """Send a Telegram message through ZenSynora's own bot to an allowed user.
+
+    text: the message
+    to: numeric Telegram user id from Allowed Telegram users (empty = all allowed users)
+    """
+    if not ACTIVE:
+        return ("Error: the Telegram bot is not running. Turn it on in the Web UI → Settings → "
+                "Channels (do not create your own Telegram tool — none is needed).")
+    ch = ACTIVE[0]
+    allowed = [a for a in ch.allow_from if a.isdigit()]
+    if to:
+        to = str(to).strip().lstrip("@")
+        if to not in allowed:
+            return f"Error: {to} is not in Allowed Telegram users ({', '.join(allowed) or 'none'})."
+        targets = [to]
+    else:
+        targets = allowed
+    if not targets:
+        return "Error: no numeric user id in Allowed Telegram users."
+    if not (text or "").strip():
+        return "Error: the message is empty."
+    sent, failed = [], []
+    for chat in targets:
+        try:
+            await ch.send_text(chat, text)
+            sent.append(chat)
+        except Exception as e:
+            failed.append(f"{chat} ({str(e)[:120]})")
+    out = f"Sent to {', '.join(sent)}." if sent else "Nothing sent."
+    if failed:
+        out += (f" Failed: {'; '.join(failed)}. The person must have pressed Start in the bot once.")
+    return out
