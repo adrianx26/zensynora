@@ -515,6 +515,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#diagnosis-after-an-unexpected-error" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnosis after an unexpected error
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#runaway-loop-guard" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1218,6 +1229,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#diagnosis-after-an-unexpected-error" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnosis after an unexpected error
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#runaway-loop-guard" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1629,6 +1651,14 @@ failure instead of breaking the report.</p>
 </ul>
 <p>For a whole broken installation, <code>zensynora update rollback</code> or
 <code>zensynora update --force</code> is the better tool (<a href="../UPDATING/">UPDATING.md</a>).</p>
+<h3 id="diagnosis-after-an-unexpected-error">Diagnosis after an unexpected error<a class="headerlink" href="#diagnosis-after-an-unexpected-error" title="Permanent link">&para;</a></h3>
+<p>When an agent turn fails with an error ZenSynora does not know, the agent
+runs <code>check_system_health</code>, <code>check_memory_usage</code> and <code>get_health_report</code> and
+writes the result to the log ("Medic Agent Diagnosis"); the chat answer gets
+a short note. Errors that come from the model server — rate limits,
+timeouts, refused keys, unknown models — are expected and only logged as one
+warning with the reason (2026-10-18). A rate-limited model is retried once
+after 5 s when no rotation list is set.</p>
 <h3 id="runaway-loop-guard">Runaway-loop guard<a class="headerlink" href="#runaway-loop-guard" title="Permanent link">&para;</a></h3>
 <p>The agent router calls <code>prevent_infinite_loop()</code> on every processing step.
 If more than <code>medic.max_loop_iterations</code> steps (default <strong>100</strong>) happen
@@ -1752,6 +1782,22 @@ disable it, or <code>MYCLAW_LOG_FILE=/path/file.log</code> to move it.</p>
 <tr>
 <td>Delegation answers "Agent registry not initialized"</td>
 <td>Fixed in 0.7.1. Update with <code>zensynora update</code>.</td>
+</tr>
+<tr>
+<td>Log: <code>Medic diagnosis itself failed: cannot import name 'check_system_health'</code></td>
+<td>Fixed 2026-10-18 (the diagnosis imported the tools from the wrong place). Update.</td>
+</tr>
+<tr>
+<td>Log: <code>cannot import name 'TaskStatus' / 'SwarmOrchestrator' from 'myclaw.tools.swarm'</code> or <code>No module named 'myclaw.tools.memory'</code></td>
+<td>Fixed 2026-10-18 (wrong imports after the tools were split into modules). Update.</td>
+</tr>
+<tr>
+<td>Log: <code>… is temporarily rate-limited upstream</code></td>
+<td>The (free) model is busy. ZenSynora retries once after 5 s; add models to the rotation list on the <strong>Models</strong> page so another model answers. Since 2026-10-18 this no longer starts a medic diagnosis.</td>
+</tr>
+<tr>
+<td>The same configuration warning many times in the log</td>
+<td>Fixed 2026-10-18: it is logged once and again only when it changes. Remove <code>curl</code>/<code>wget</code> from Settings → Security → allowed commands if you don't need them.</td>
 </tr>
 </tbody>
 </table>

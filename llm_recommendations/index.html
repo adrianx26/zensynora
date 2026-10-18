@@ -1513,6 +1513,12 @@ ollama<span class="w"> </span>pull<span class="w"> </span>qwen2.5:32b
 <hr />
 <h2 id="context-window-budget-for-zensynora">Context Window Budget for ZenSynora<a class="headerlink" href="#context-window-budget-for-zensynora" title="Permanent link">&para;</a></h2>
 <p>ZenSynora's <code>agent.py</code> builds a context window from:</p>
+<p>Settings → Agents → <strong>Context length</strong> estimates this for each agent from
+its real prompt, skills and tools, shows a minimum and a recommended value,
+and sends the chosen size to Ollama as <code>num_ctx</code> (2026-10-18). Measured on
+0.7.5: the ~105 tool definitions alone are about <strong>7,000 tokens</strong> per request
+— more than Ollama's default context (usually 4,096), so set a context length
+for Ollama agents.</p>
 <table>
 <thead>
 <tr>
@@ -1523,9 +1529,14 @@ ollama<span class="w"> </span>pull<span class="w"> </span>qwen2.5:32b
 </thead>
 <tbody>
 <tr>
+<td>Tool definitions</td>
+<td>~7,000 tokens</td>
+<td>Sent with every request (105 tools)</td>
+</tr>
+<tr>
 <td>System prompt</td>
 <td>500–1,500 tokens</td>
-<td>Agent personality + available tools schema</td>
+<td>Agent personality, skills list, team list</td>
 </tr>
 <tr>
 <td>Memory history</td>

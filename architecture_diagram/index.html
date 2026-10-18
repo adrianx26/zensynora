@@ -951,6 +951,28 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#17-knowledge-page-web-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Knowledge page (Web UI)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#18-context-length-per-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        18. Context length per agent
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1329,6 +1351,28 @@
     <span class="md-ellipsis">
       
         16. Providers, keys and agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#17-knowledge-page-web-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. Knowledge page (Web UI)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#18-context-length-per-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        18. Context length per agent
       
     </span>
   </a>
@@ -1715,6 +1759,14 @@ share one set of checks (<code>myclaw/doctor/</code>, rewritten in 0.7.0).</p>
         m5["prevent_infinite_loop&lt;br/&gt;called by the router on every step"]
         m6["read_source_file · propose_code_change ·&lt;br/&gt;get_recent_problems · record_lesson (0.7.1, §14)"]
     end</code></pre>
+<p>When an agent turn fails (2026-10-18), errors from the model server are told
+apart from real crashes; only the latter start the medic diagnosis.</p>
+<pre class="mermaid"><code>flowchart LR
+    err["exception in the agent turn"] --&gt; kind{"is_provider_error?&lt;br/&gt;(llm_errors.py)"}
+    kind -- "rate limit, no rotation" --&gt; retry["wait 5 s, retry once&lt;br/&gt;same model + key"] --&gt; ok(["answer"])
+    retry -- "still failing" --&gt; warn
+    kind -- "rate limit · timeout · bad key ·&lt;br/&gt;unknown model" --&gt; warn["one WARNING line&lt;br/&gt;+ readable reason in chat"]
+    kind -- "anything else" --&gt; crash["ERROR + traceback"] --&gt; diag["medic diagnosis&lt;br/&gt;check_system_health · check_memory_usage ·&lt;br/&gt;get_health_report (from agents.medic_agent)"]</code></pre>
 <hr />
 <h2 id="11-install-layout-on-disk">11. Install layout on disk<a class="headerlink" href="#11-install-layout-on-disk" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart TB
@@ -1886,6 +1938,36 @@ model. Cooldowns are kept per provider, model and key.</p>
     llm -- "429 · quota · 401" --&gt; rot{"rotate_keys on?"}
     rot -- "yes" --&gt; other["same model,&lt;br/&gt;next key of the provider"] --&gt; client
     rot -- "no" --&gt; next["next model in the rotation list"]</code></pre>
+<h2 id="17-knowledge-page-web-ui">17. Knowledge page (Web UI)<a class="headerlink" href="#17-knowledge-page-web-ui" title="Permanent link">&para;</a></h2>
+<p>The Knowledge page reads the Markdown notes directly (they are the source of
+truth); the SQLite index is used for full-text search and is updated after
+every edit. A relation whose target note does not exist becomes a "missing"
+node.</p>
+<pre class="mermaid"><code>flowchart LR
+    ui["Knowledge page&lt;br/&gt;graph · notes · tags · panel"] -- "GET graph / note" --&gt; api["knowledge_api.py"]
+    ui -- "POST / PUT note" --&gt; api
+    ui -- "DELETE note" --&gt; api
+    api -- "parse every *.md" --&gt; md[("~/.myclaw/knowledge/&amp;lt;base&amp;gt;/*.md")]
+    api -- "nodes · edges · tags · categories" --&gt; ui
+    api -- "write file, then re-index" --&gt; md
+    api --&gt; db[("knowledge_&amp;lt;base&amp;gt;.db&lt;br/&gt;FTS index")]
+    api -- "move, not delete" --&gt; trash[("&amp;lt;base&amp;gt;/.trash")]
+    agents["agents&lt;br/&gt;write_to_knowledge …"] --&gt; md</code></pre>
+<p>The model test on Settings → Agents uses <code>POST /api/models/test</code> (one short
+real request) and colours the round-trip time: green &lt; 1.5 s, amber &lt; 5 s,
+red above or failed.</p>
+<h2 id="18-context-length-per-agent">18. Context length per agent<a class="headerlink" href="#18-context-length-per-agent" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart LR
+    ui["Settings → Agents&lt;br/&gt;slider + number box"] -- "prompt · skills · provider · model&lt;br/&gt;(after each edit)" --&gt; est["POST /api/agents/context-estimate"]
+    est --&gt; parts["estimate_context()&lt;br/&gt;prompt + skills + team + tool schemas&lt;br/&gt;→ min · recommended"]
+    est --&gt; mx["model_context_max()&lt;br/&gt;Ollama /api/show · LM Studio · llama.cpp /props ·&lt;br/&gt;/models lists · Gemini · Anthropic · model library"]
+    parts &amp; mx --&gt; ui
+    ui -- "save: context_length" --&gt; cfg[("config.json&lt;br/&gt;agents.*.context_length")]
+    cfg --&gt; turn["agent turn"]
+    turn --&gt; fit["fit_messages()&lt;br/&gt;drop oldest messages to fit"]
+    turn --&gt; var["CONTEXT_LENGTH contextvar"] --&gt; oll["Ollama: options.num_ctx"]</code></pre>
+<p><code>myclaw/context_budget.py</code> holds all of it; token counts are estimated at
+about 3.8 characters per token.</p>
 
 
 

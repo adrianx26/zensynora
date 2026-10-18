@@ -416,6 +416,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Knowledge base">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#knowledge-page-graph-notes-tags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Knowledge page: graph, notes, tags
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1169,6 +1186,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="Knowledge base">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#knowledge-page-graph-notes-tags" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Knowledge page: graph, notes, tags
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1446,6 +1480,63 @@ accounts, or a work and a personal key.</p>
 <span class="nt">"agents"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"named"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Coder"</span><span class="p">,</span><span class="w"> </span><span class="nt">"provider"</span><span class="p">:</span><span class="w"> </span><span class="s2">"openrouter"</span><span class="p">,</span><span class="w"> </span><span class="nt">"model"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">,</span><span class="w"> </span><span class="nt">"key"</span><span class="p">:</span><span class="w"> </span><span class="s2">"work"</span><span class="p">}]}</span>
 </code></pre></div>
 <p>Key ids use lower-case letters, digits, <code>-</code> and <code>_</code>; <code>default</code> is reserved.</p>
+<p><strong>Choosing a model and testing its speed.</strong> Settings → Agents has a
+<em>Provider / Key / Model</em> row for the default agent and for every named agent.
+The <em>Model</em> list holds the models that provider (with that key) offers; it is
+loaded when the tab opens, ↻ reloads it and <em>Other — type a name…</em> takes a
+model the list does not show. <strong>⚡ Test</strong> sends one short real request and
+shows how long the answer took:</p>
+<table>
+<thead>
+<tr>
+<th>Light</th>
+<th>Round trip</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>🟢 Low</td>
+<td>under 1.5 s</td>
+<td>quick</td>
+</tr>
+<tr>
+<td>🟡 Medium</td>
+<td>1.5 – 5 s</td>
+<td>usable, slower</td>
+</tr>
+<tr>
+<td>🔴 High / Failed</td>
+<td>over 5 s, or no answer</td>
+<td>slow, or not working (the reason is shown)</td>
+</tr>
+</tbody>
+</table>
+<p>The first request to a local model (Ollama, LM Studio, llama.cpp) also loads
+it into memory — test a second time to see the normal speed.</p>
+<p><img alt="Agents tab with model list and latency test" src="../images/webui-agents-latency.png" /></p>
+<p><strong>Context length.</strong> How much text (in tokens) the agent's model works with
+per turn. Each agent has a slider and a number box (type <code>16384</code> or <code>16k</code>);
+<em>model default</em> leaves it to the model.</p>
+<p><img alt="Context length slider" src="../images/webui-agent-context.png" /></p>
+<ul>
+<li><strong>min</strong> (amber mark) — what the agent needs at the very least: its system
+  prompt, skills list and team list, the tool definitions sent with every
+  request (about 7k tokens for ZenSynora's ~105 tools), one exchange and a
+  short reply. Below it the bar is red: the agent forgets the conversation or
+  fails.</li>
+<li><strong>rec.</strong> (green mark) — the minimum plus knowledge-base results, the recent
+  conversation (<code>agents.summarization_threshold</code> messages) and a longer
+  reply.</li>
+<li><strong>The end of the bar</strong> is the model's own maximum, asked from the provider
+  (or the model library; "max unknown" if neither knows it).</li>
+</ul>
+<p>The marks are recalculated (≈ 1 s) after you write, generate or change the
+prompt, or change the skills or the model. Token counts are estimates
+(±20 %). The setting takes effect on save: Ollama loads the model with this
+<code>num_ctx</code> (Ollama's own default is usually 4k — less than ZenSynora needs);
+for every provider the oldest messages are left out when a turn would not
+fit.</p>
 <p><strong>Writing agent prompts.</strong> In Settings → Agents, give a new agent a name and a
 short description and click <strong>✨ Generate prompt</strong>: the default model writes
 a system prompt (role, how to work, tools to prefer, limits). Review it and
@@ -1554,6 +1645,30 @@ useful facts from conversations and tool results are saved by themselves. The
 Telegram users use the same knowledge base as the Web UI (switch it off in
 Settings → Channels to give each Telegram user their own); WhatsApp users each
 keep their own knowledge base.</p>
+<h3 id="knowledge-page-graph-notes-tags">Knowledge page: graph, notes, tags<a class="headerlink" href="#knowledge-page-graph-notes-tags" title="Permanent link">&para;</a></h3>
+<p><img alt="Knowledge graph" src="../images/webui-knowledge-graph.png" /></p>
+<p>The <strong>Knowledge</strong> page (sidebar) shows the knowledge base visually:</p>
+<ul>
+<li><strong>Graph</strong> — every note is a dot, every link (<code>- uses [[Other note]]</code>) an
+  arrow. Bigger dots have more links and facts; colours are tags (or the
+  number of links). Drag the background to pan, use the wheel to zoom, drag a
+  note to pin it (double-click releases it), hover for a preview, click to
+  open it. <em>Around selected</em> shows only the notes 1–3 links away; <em>link
+  names</em>, <em>hide missing</em>, <em>hide unlinked</em>, <em>Fit</em>, <em>Freeze</em> and <em>Re-layout</em>
+  change the view. A dashed dot is a note that is linked to but does not
+  exist yet — click it and <em>Create this note</em>.</li>
+<li><strong>Notes</strong> — all notes with tags, number of facts and links, and last
+  change; click a column to sort.</li>
+<li><strong>Tags &amp; types</strong> — tag cloud, fact categories (<code>- [category] text</code>) and
+  link types; click one to filter the graph and the list.</li>
+<li><strong>Side panel</strong> — text, facts by category, <em>Links to</em> and <em>Linked from</em>
+  (click to jump), <strong>✎ Edit</strong> (the Markdown file), <strong>Move to trash</strong> (moved
+  to <code>.trash</code> in the same folder, not deleted).</li>
+<li><strong>Search</strong> filters by full text; <strong>+ New note</strong> creates one; <strong>↻
+  Re-index</strong> re-reads all files into the search index (after editing files by
+  hand). The picker at the top switches between the shared base and the
+  separate bases of Telegram/WhatsApp users.</li>
+</ul>
 <p><strong>MCP memory servers.</strong> Any MCP server (a memo/notes server, a database, a
 file system …) can be added in <code>~/.myclaw/config.json</code>:</p>
 <div class="highlight"><pre><span></span><code><span class="nt">"mcp"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"servers"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"memo"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"command"</span><span class="p">:</span><span class="w"> </span><span class="s2">"npx"</span><span class="p">,</span><span class="w"> </span><span class="nt">"args"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"-y"</span><span class="p">,</span><span class="w"> </span><span class="s2">"&lt;memo-mcp-package&gt;"</span><span class="p">]}}}</span>
