@@ -979,3 +979,13 @@ textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; fon
 .error-count { font-weight: 600; min-width: 36px; }
 .error-msg { flex: 1 1 260px; min-width: 0; word-break: break-word; }
 .error-group-body { display: flex; flex-direction: column; gap: 6px; padding-bottom: 10px; }
+/* several API keys per provider (v0.7.5) */
+.keys-panel { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--panel-border); }
+.key-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.key-row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--panel-border); }
+.key-row .badge { margin-left: 6px; }
+.key-test, .key-edit { width: 100%; }
+.key-edit { flex-wrap: wrap; }
+.key-none { display: inline-block; padding: 9px 0; }
+.agent-editor-grid.four { grid-template-columns: 1fr 1.2fr 1fr 1.3fr; }
+@media (max-width: 768px) { .agent-editor-grid.four { grid-template-columns: 1fr; } }

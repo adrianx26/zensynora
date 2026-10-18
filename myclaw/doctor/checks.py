@@ -166,6 +166,10 @@ def _provider_config(ctx):
                 problems.append(f"{p}: API key missing")
     if problems:
         return FAIL, "; ".join(problems), "Open Web UI → Settings → Providers."
+    from ..provider_keys import missing_key_refs  # v0.7.5: several keys per provider
+
+    if missing_key_refs(cfg):
+        return WARN, "; ".join(missing_key_refs(cfg)) + " (the default key is used)", "Pick another key in Settings → Agents."
     d = cfg.agents.defaults
     return OK, f"default: {d.provider} / {d.model}"
 

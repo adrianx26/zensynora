@@ -3,7 +3,12 @@
 // list (fallback on errors, or round-robin), and add your own providers —
 // local servers or online services, many with a free tier.
 import React, { useCallback, useEffect, useState } from 'react';
-import { api, type ModelChoice, type ModelsOverview, type ProbeResult } from '../api';
+import { api, type ModelChoice, type ModelsOverview, type ProbeResult, type ProviderKeysMap } from '../api';
+import { KeySelect, ProviderKeysPanel } from './ProviderKeys';
+
+// Name of a provider key for display ("" for the default key).
+const keyLabel = (keysMap: ProviderKeysMap | null, provider: string, key?: string): string =>
+  (key ? keysMap?.[provider]?.keys.find(k => k.id === key)?.label || key : '');
 
 interface Preset { name: string; label: string; kind: 'openai' | 'ollama'; base_url: string; local: boolean; free?: boolean }
 
@@ -31,8 +36,11 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
   // v0.7.3: results of a real chat test per "provider/model"
   const [tests, setTests] = useState<Record<string, { ok?: boolean; error?: string; reply?: string; ms?: number; loading?: boolean }>>({});
 
+  // provider/model plus the key id when a named key is used (v0.7.5)
+  const choiceId = (m: ModelChoice) => `${m.provider}/${m.model}${m.key ? `#${m.key}` : ''}`;
+  const sameChoice = (a: ModelChoice, b: ModelChoice) => choiceId(a) === choiceId(b);
   const testModel = async (m: ModelChoice) => {
-    const key = `${m.provider}/${m.model}`;
+    const key = choiceId(m);
     setTests(t => ({ ...t, [key]: { loading: true } }));
     try {
       const r = await api<{ ok: boolean; error?: string; reply?: string; ms: number }>('/api/models/test', { method: 'POST', body: JSON.stringify(m) });
@@ -43,7 +51,7 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
   };
 
   const testResult = (m: ModelChoice) => {
-    const r = tests[`${m.provider}/${m.model}`];
+    const r = tests[choiceId(m)];
     if (!r) return null;
     if (r.loading) return <span className="muted small"> testing…</span>;
     return r.ok
@@ -52,6 +60,8 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
   };
   const [edit, setEdit] = useState<{ index: number | null; p: CustomProvider } | null>(null);
   const [rotAdd, setRotAdd] = useState<ModelChoice>({ provider: '', model: '' });
+  // custom provider whose "Keys" list is open
+  const [keysOpen, setKeysOpen] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -79,20 +89,23 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
     }
   };
 
-  const listModels = async (provider: string, extra?: { base_url?: string; api_key?: string; kind?: string }) => {
-    setProbe(p => ({ ...p, [provider]: { ok: false, models: [], loading: true } }));
+  // Model lists are per provider and key (a key may unlock other models).
+  const probeId = (provider: string, key?: string) => (key ? `${provider}#${key}` : provider);
+  const listModels = async (provider: string, extra?: { base_url?: string; api_key?: string; kind?: string }, key?: string) => {
+    const id = probeId(provider, key);
+    setProbe(p => ({ ...p, [id]: { ok: false, models: [], loading: true } }));
     try {
       const res = extra
         ? await api<ProbeResult>('/api/settings/probe', { method: 'POST', body: JSON.stringify({ provider, ...extra }) })
-        : await api<ProbeResult>(`/api/models/${encodeURIComponent(provider)}`);
-      setProbe(p => ({ ...p, [provider]: res }));
+        : await api<ProbeResult>(`/api/models/${encodeURIComponent(provider)}${key ? `?key=${encodeURIComponent(key)}` : ''}`);
+      setProbe(p => ({ ...p, [id]: res }));
     } catch (e) {
-      setProbe(p => ({ ...p, [provider]: { ok: false, models: [], error: (e as Error).message } }));
+      setProbe(p => ({ ...p, [id]: { ok: false, models: [], error: (e as Error).message } }));
     }
   };
 
-  useEffect(() => { if (pick.provider && !probe[pick.provider]) listModels(pick.provider); }, [pick.provider]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { if (rotAdd.provider && !probe[rotAdd.provider]) listModels(rotAdd.provider); }, [rotAdd.provider]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (pick.provider && !probe[probeId(pick.provider, pick.key)]) listModels(pick.provider, undefined, pick.key); }, [pick.provider, pick.key]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (rotAdd.provider && !probe[probeId(rotAdd.provider, rotAdd.key)]) listModels(rotAdd.provider, undefined, rotAdd.key); }, [rotAdd.provider, rotAdd.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveSettings = (changes: Record<string, any>) => api('/api/settings', { method: 'PUT', body: JSON.stringify({ changes }) });
 
@@ -101,6 +114,10 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
   }
 
   const label = (name: string) => ov.providers.find(p => p.name === name)?.label || name;
+  const keysMap: ProviderKeysMap | null = ov.keys || null;
+  const setKeysMap = (next: ProviderKeysMap) => { setOv(o => (o ? { ...o, keys: next } : o)); onChanged?.(); };
+  // "provider/model", plus " · key name" for a named key
+  const choiceText = (m: ModelChoice) => `${m.provider}/${m.model}${m.key ? ` · ${keyLabel(keysMap, m.provider, m.key)}` : ''}`;
   const rot = ov.rotation;
   const custom: CustomProvider[] = (settings.config?.providers?.custom || []).map((c: any) => ({ ...BLANK, ...c, api_key: '' }));
   const keySet = (name: string) => settings.secrets_set.includes(`providers.custom.${name}.api_key`);
@@ -133,16 +150,18 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
   // A render helper, not a component: a component defined inside render would
   // be re-created on every keystroke and the text box would lose focus.
   const modelPicker = (id: string, value: ModelChoice, onChange: (v: ModelChoice) => void) => {
-    const r = probe[value.provider];
+    const r = probe[probeId(value.provider, value.key)];
     return (
       <>
         <div className="field-row">
           <select className="field-input" value={value.provider} onChange={e => onChange({ provider: e.target.value, model: '' })}>
             {ov.providers.map(p => <option key={p.name} value={p.name}>{p.label}{p.local ? ' (local)' : ''}{p.custom ? ' ★' : ''}</option>)}
           </select>
+          <KeySelect provider={value.provider} keysMap={keysMap} value={value.key}
+            onChange={k => onChange({ ...value, key: k || undefined })} />
           <input className="field-input" list={`${id}-models`} placeholder="model name" value={value.model} onChange={e => onChange({ ...value, model: e.target.value })} />
           <datalist id={`${id}-models`}>{(r?.models || []).map(m => <option key={m} value={m} />)}</datalist>
-          <button className="ghost-btn" onClick={() => listModels(value.provider)} disabled={r?.loading}>{r?.loading ? '…' : '↻'}</button>
+          <button className="ghost-btn" onClick={() => listModels(value.provider, undefined, value.key)} disabled={r?.loading}>{r?.loading ? '…' : '↻'}</button>
         </div>
         {r && !r.loading && (r.ok
           ? <div className="chip-row">{r.models.slice(0, 30).map(m => (
@@ -159,15 +178,15 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
 
         <div className="settings-card">
           <h3>Default model</h3>
-          <p className="muted">Now: <b>{label(ov.default.provider)}</b> · <code>{ov.default.model}</code>. Used by the default agent and every agent without its own model.</p>
+          <p className="muted">Now: <b>{label(ov.default.provider)}</b> · <code>{ov.default.model}</code>{ov.default.key ? <> · key <b>{keyLabel(keysMap, ov.default.provider, ov.default.key)}</b></> : null}. Used by the default agent and every agent without its own model.</p>
           {modelPicker('pick', pick, setPick)}
           <div className="save-actions">
             <span>{testResult(pick)}</span>
-            <button className="ghost-btn" disabled={!pick.model || tests[`${pick.provider}/${pick.model}`]?.loading}
+            <button className="ghost-btn" disabled={!pick.model || tests[choiceId(pick)]?.loading}
               title="Send a tiny real request — a listed model can still refuse to answer"
               onClick={() => testModel(pick)}>Test</button>
-            <button className="primary-btn" disabled={!pick.model || (pick.provider === ov.default.provider && pick.model === ov.default.model)}
-              onClick={() => run(() => api('/api/models/default', { method: 'POST', body: JSON.stringify(pick) }), `Default model is now ${pick.provider}/${pick.model}. The previous one was added to the rotation list.`)}>
+            <button className="primary-btn" disabled={!pick.model || sameChoice(pick, ov.default)}
+              onClick={() => run(() => api('/api/models/default', { method: 'POST', body: JSON.stringify(pick) }), `Default model is now ${choiceText(pick)}. The previous one was added to the rotation list.`)}>
               Make default
             </button>
           </div>
@@ -197,16 +216,16 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
             ))}
           </div>
           <ol className="rotation-list">
-            <li><b>{ov.default.provider}/{ov.default.model}</b> <span className="badge default-badge">default</span>
+            <li><b>{choiceText(ov.default)}</b> <span className="badge default-badge">default</span>
               <span className="row-actions"><button className="icon-btn" title="Test" onClick={() => testModel(ov.default)}>✓?</button></span>
               {testResult(ov.default)}</li>
             {rot.entries.map((e, i) => (
-              <li key={`${e.provider}/${e.model}`}>
-                {e.provider}/{e.model}
+              <li key={choiceId(e)}>
+                {choiceText(e)}
                 <span className="row-actions">
                   <button className="icon-btn" onClick={() => move(i, -1)} title="Up">↑</button>
                   <button className="icon-btn" onClick={() => move(i, 1)} title="Down">↓</button>
-                  <button className="icon-btn" title="Make default" onClick={() => run(() => api('/api/models/default', { method: 'POST', body: JSON.stringify(e) }), `Default is now ${e.provider}/${e.model}.`)}>★</button>
+                  <button className="icon-btn" title="Make default" onClick={() => run(() => api('/api/models/default', { method: 'POST', body: JSON.stringify(e) }), `Default is now ${choiceText(e)}.`)}>★</button>
                   <button className="icon-btn" onClick={() => setRotation(rot.entries.filter((_, j) => j !== i))} title="Remove">×</button>
                   <button className="icon-btn" title="Test" onClick={() => testModel(e)}>✓?</button>
                 </span>
@@ -216,7 +235,7 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
           </ol>
           {modelPicker('rot', rotAdd, setRotAdd)}
           <div className="save-actions">
-            <button className="ghost-btn" disabled={!rotAdd.model || rot.entries.some(e => e.provider === rotAdd.provider && e.model === rotAdd.model)}
+            <button className="ghost-btn" disabled={!rotAdd.model || rot.entries.some(e => sameChoice(e, rotAdd))}
               onClick={() => setRotation([...rot.entries, rotAdd])}>+ Add to rotation</button>
           </div>
         </div>
@@ -236,6 +255,8 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
               </div>
               <div className="row-actions">
                 <button className="ghost-btn" onClick={() => listModels(c.name)}>Test</button>
+                <button className="ghost-btn" onClick={() => setKeysOpen(keysOpen === c.name ? null : c.name)}
+                  title="Several API keys for this provider">Keys{(keysMap?.[c.name]?.keys.length || 1) > 1 ? ` (${keysMap?.[c.name]?.keys.length})` : ''}</button>
                 <button className="ghost-btn" onClick={() => setEdit({ index: i, p: { ...c } })}>Edit</button>
                 <button className="ghost-btn danger" onClick={() => removeCustom(i)}>Remove</button>
               </div>
@@ -244,6 +265,7 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
                   {probe[c.name].ok ? `Connected — ${probe[c.name].models.length} models` : probe[c.name].error}
                 </div>
               )}
+              {keysOpen === c.name && <div><ProviderKeysPanel provider={c.name} keysMap={keysMap} onChanged={setKeysMap} /></div>}
             </div>
           ))}
 

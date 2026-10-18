@@ -62,6 +62,7 @@ myclaw/
 ├── observability/           # OpenTelemetry tracing — wired Sprint 10
 ├── prompts/                 # Versioned Jinja2 prompt registry [Sprint 3]
 ├── provider.py              # LLM providers (+ your own, providers.custom) + Message TypedDict
+├── provider_keys.py         # Several API keys per provider: lookup, key fallback order, who uses which key [0.7.5]
 ├── resilience/              # Circuit breaker + fallback chain — wired Sprint 10
 ├── selfupdate.py            # Agents' code-change proposals → approval → safe updater [0.7.1]
 ├── structured_output/       # extract_json / validate / repair_json [Sprint 3]
@@ -77,6 +78,7 @@ myclaw/
 │   ├── settings_api.py      # Settings, health, doctor, costs, history [0.5.0]
 │   ├── chat_api.py          # Channels REST + /ws/channels/{id} [0.7.1]
 │   ├── models_api.py        # Default model, rotation, prompt generator [0.7.1]
+│   ├── provider_keys_api.py # Add / rename / delete / test a provider's API keys [0.7.5]
 │   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
 │   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
 │   ├── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]

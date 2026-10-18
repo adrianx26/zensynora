@@ -34,7 +34,7 @@ import os
 import time
 import threading
 from pathlib import Path
-from pydantic import BaseModel, SecretStr, ValidationError
+from pydantic import BaseModel, SecretStr, ValidationError, field_validator
 from typing import Optional, Dict, Any, List
 
 from .exceptions import ConfigurationError
@@ -260,6 +260,50 @@ class WhatsAppConfig(BaseModel):
     allowFrom: list[str] = []
 
 
+# ── Several API keys per provider (v0.7.5) ───────────────────────────────────
+
+# Key ids: short slugs ("work", "free-2"). "default" is the provider's api_key.
+KEY_ID_PATTERN = r"^[a-z0-9][a-z0-9_-]{0,31}$"
+
+
+class ProviderKey(BaseModel):
+    """An extra named API key of a provider (the plain ``api_key`` is the default key)."""
+
+    id: str
+    label: str = ""
+    api_key: SecretStr = SecretStr("")
+
+    @field_validator("id")
+    @classmethod
+    def _check_id(cls, v: str) -> str:
+        import re
+
+        v = (v or "").strip().lower()
+        if v == "default":
+            raise ValueError("'default' is reserved for the provider's main API key")
+        if not re.match(KEY_ID_PATTERN, v):
+            raise ValueError(f"key id '{v}' must use 1-32 lower-case letters, digits, - or _")
+        return v
+
+
+class MultiKeyMixin(BaseModel):
+    """Extra keys of a provider; agents pick one by id (``agents.*.key``)."""
+
+    keys: list[ProviderKey] = []
+    # On a rate limit, quota or key error, try the same model with this
+    # provider's other keys before moving to the next model.
+    rotate_keys: bool = False
+
+    @field_validator("keys")
+    @classmethod
+    def _unique_ids(cls, v: list) -> list:
+        ids = [k.id for k in v]
+        dupes = sorted({i for i in ids if ids.count(i) > 1})
+        if dupes:
+            raise ValueError(f"two keys have the id {', '.join(dupes)}")
+        return v
+
+
 # ── Local Providers ───────────────────────────────────────────────────────────
 
 
@@ -267,7 +311,7 @@ class OllamaConfig(BaseModel):
     base_url: str = "http://localhost:11434"
 
 
-class LMStudioConfig(BaseModel):
+class LMStudioConfig(MultiKeyMixin):
     """LM Studio local server — OpenAI-compatible REST API."""
 
     base_url: str = "http://localhost:1234/v1"
@@ -276,7 +320,7 @@ class LMStudioConfig(BaseModel):
     )  # LM Studio ignores the key but openai SDK requires one
 
 
-class LlamaCppConfig(BaseModel):
+class LlamaCppConfig(MultiKeyMixin):
     """llama.cpp server (`llama-server`) — OpenAI-compatible REST API."""
 
     base_url: str = "http://localhost:8080/v1"
@@ -286,25 +330,25 @@ class LlamaCppConfig(BaseModel):
 # ── Online Providers ──────────────────────────────────────────────────────────
 
 
-class OpenAIConfig(BaseModel):
+class OpenAIConfig(MultiKeyMixin):
     api_key: SecretStr = SecretStr("")
     base_url: str = "https://api.openai.com/v1"  # override for Azure, proxies, etc.
 
 
-class AnthropicConfig(BaseModel):
+class AnthropicConfig(MultiKeyMixin):
     api_key: SecretStr = SecretStr("")
 
 
-class GeminiConfig(BaseModel):
+class GeminiConfig(MultiKeyMixin):
     api_key: SecretStr = SecretStr("")
 
 
-class GroqConfig(BaseModel):
+class GroqConfig(MultiKeyMixin):
     api_key: SecretStr = SecretStr("")
     base_url: str = "https://api.groq.com/openai/v1"
 
 
-class OpenRouterConfig(BaseModel):
+class OpenRouterConfig(MultiKeyMixin):
     api_key: SecretStr = SecretStr("")
     base_url: str = "https://openrouter.ai/api/v1"
     site_url: str = ""  # optional X-OpenRouter-Site-URL header
@@ -314,7 +358,7 @@ class OpenRouterConfig(BaseModel):
 # ── Providers Container ───────────────────────────────────────────────────────
 
 
-class CustomProviderConfig(BaseModel):
+class CustomProviderConfig(MultiKeyMixin):
     """A provider added by the user (v0.7.1).
 
     Any OpenAI-compatible server — local (vLLM, LocalAI, Jan, KoboldCpp,
@@ -353,6 +397,8 @@ class AgentDefaults(BaseModel):
     provider: str = "ollama"  # which provider to use by default
     # v0.7.5: skills of the default agent (names from the Skills page)
     skills: list[str] = []
+    # v0.7.5: id of the provider key to use ("" = the provider's default key)
+    key: str = ""
 
 
 class NamedAgentConfig(BaseModel):
@@ -367,6 +413,9 @@ class NamedAgentConfig(BaseModel):
     description: str = ""
     # v0.7.5: skills this agent knows about (see myclaw/agent_skills.py)
     skills: list[str] = []
+    # v0.7.5: provider key id ("" = default key; with no provider of its own,
+    # the agent also uses the default agent's key)
+    key: str = ""
 
 
 class ModelChoice(BaseModel):
@@ -374,6 +423,7 @@ class ModelChoice(BaseModel):
 
     provider: str
     model: str
+    key: str = ""  # v0.7.5: provider key id ("" = default key)
 
 
 class RotationConfig(BaseModel):
@@ -877,6 +927,11 @@ def save_config(config):
                 obj_val = getattr(model_obj, field_name, None)
                 if isinstance(field_val, dict) and obj_val is not None:
                     _inject_secrets(field_val, obj_val)
+                elif isinstance(field_val, list) and isinstance(obj_val, list):
+                    # v0.7.5: secrets inside list items (custom providers, provider keys)
+                    for item_raw, item_obj in zip(field_val, obj_val):
+                        if isinstance(item_raw, dict) and isinstance(item_obj, BaseModel):
+                            _inject_secrets(item_raw, item_obj)
                 elif isinstance(obj_val, SecretStr):
                     raw_dict[field_name] = obj_val.get_secret_value()
 

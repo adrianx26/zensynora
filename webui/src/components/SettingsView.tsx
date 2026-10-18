@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, ApiError, getAdminKey, setAdminKey, type ProbeResult } from '../api';
+import { api, ApiError, getAdminKey, setAdminKey, type ProbeResult, type ProviderKeysMap } from '../api';
+import { KeySelect, ProviderKeysPanel } from './ProviderKeys';
 
 type Json = any;
 
@@ -172,6 +173,13 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
   const [generating, setGenerating] = useState<number | null>(null);
   // v0.7.5: skills that can be given to agents (names + descriptions)
   const [skillList, setSkillList] = useState<{ name: string; description: string }[]>([]);
+  // v0.7.5: every provider's API keys (no secrets) — for the Keys lists and key pickers
+  const [keysMap, setKeysMap] = useState<ProviderKeysMap | null>(null);
+  const loadKeys = useCallback(async () => {
+    try {
+      setKeysMap((await api<{ providers: ProviderKeysMap }>('/api/provider-keys')).providers);
+    } catch { /* optional: older server */ }
+  }, []);
   // Telegram bot running inside the Web UI
   const [tgStatus, setTgStatus] = useState<TelegramStatus | null>(null);
   const [tgTest, setTgTest] = useState<TelegramTest | null>(null);
@@ -216,12 +224,14 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); loadKeys(); }, [load, loadKeys]);
 
   const secretSet = useMemo(() => new Set(data?.secrets_set || []), [data]);
   const secretPaths = useMemo(() => new Set(data?.secret_paths || []), [data]);
 
   const update = (path: string, value: Json) => {
+    // A key belongs to one provider: switching provider goes back to its default key.
+    if (path === 'agents.defaults.provider' && getPath(draft, 'agents.defaults.key')) update('agents.defaults.key', '');
     setDraft((d: Json) => setPathImmutable(d, path, value));
     setChanges(prev => {
       const next = { ...prev };
@@ -279,6 +289,19 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
       setProbe(p => ({ ...p, [provider]: res }));
     } catch (e) {
       setProbe(p => ({ ...p, [provider]: { ok: false, models: [], error: (e as Error).message } }));
+    }
+  };
+
+  // Models of a provider with one of its keys (Agents tab model list).
+  const probeKeyId = (provider: string, key?: string) => (key ? `${provider}#${key}` : provider);
+  const runKeyProbe = async (provider: string, key?: string) => {
+    const id = probeKeyId(provider, key);
+    setProbe(p => ({ ...p, [id]: { ok: false, models: [], loading: true } }));
+    try {
+      const res = await api<ProbeResult>('/api/settings/probe', { method: 'POST', body: JSON.stringify({ provider, key_id: key || null }) });
+      setProbe(p => ({ ...p, [id]: res }));
+    } catch (e) {
+      setProbe(p => ({ ...p, [id]: { ok: false, models: [], error: (e as Error).message } }));
     }
   };
 
@@ -487,6 +510,13 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
             <h3>Default model</h3>
             <p className="muted">Used by the <b>default</b> agent and by named agents that don't pick their own.</p>
             {renderField({ path: 'agents.defaults.provider', label: 'Provider', kind: 'select', options: data.providers })}
+            {(keysMap?.[defaultProvider]?.keys.length || 0) > 1 && (
+              <div className="field">
+                <label className="field-label">Key{'agents.defaults.key' in changes && <span className="changed-dot" />}</label>
+                <KeySelect provider={defaultProvider} keysMap={keysMap} value={getPath(draft, 'agents.defaults.key')}
+                  onChange={k => update('agents.defaults.key', k)} />
+              </div>
+            )}
             <div className="field">
               <label htmlFor="f-model" className="field-label">
                 Model{'agents.defaults.model' in changes && <span className="changed-dot" />}
@@ -517,6 +547,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
             <h3>{PROVIDER_LABELS[p] || p}{p === defaultProvider && <span className="badge default-badge">default</span>}</h3>
             {providerFields(p).map(renderField)}
             <ProbeLine provider={p} />
+            <ProviderKeysPanel provider={p} keysMap={keysMap} onChanged={next => { setKeysMap(next); onSaved?.(); }} />
           </div>
         ))}
 
@@ -533,23 +564,40 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
                 const next = named.map((x: Json, j: number) => (j === i ? { ...x, [key]: val } : x));
                 update('agents.named', next);
               };
+              // v0.7.5: provider → key → model; the model list comes from that provider + key
+              const agentProvider: string = a.provider || defaultProvider;
+              const agentKey: string = a.key || (a.provider ? '' : getPath(draft, 'agents.defaults.key') || '');
+              const agentModels = probe[probeKeyId(agentProvider, agentKey)];
               return (
                 <div className="agent-editor" key={i}>
-                  <div className="agent-editor-grid">
+                  <div className="agent-editor-grid four">
                     <div className="field">
                       <label className="field-label">Name</label>
                       <input className="field-input" value={a.name} onChange={e => setAgent('name', e.target.value.replace(/\s+/g, '_'))} />
                     </div>
                     <div className="field">
                       <label className="field-label">Provider</label>
-                      <select className="field-input" value={a.provider || ''} onChange={e => setAgent('provider', e.target.value)}>
+                      <select className="field-input" value={a.provider || ''}
+                        onChange={e => update('agents.named', named.map((x: Json, j: number) => (j === i ? { ...x, provider: e.target.value, key: '' } : x)))}>
                         <option value="">Same as default ({defaultProvider})</option>
                         {data.providers.map(p => <option key={p} value={p}>{PROVIDER_LABELS[p] || p}</option>)}
                       </select>
                     </div>
                     <div className="field">
+                      <label className="field-label">Key</label>
+                      {(keysMap?.[agentProvider]?.keys.length || 0) > 1 || a.key
+                        ? <KeySelect provider={agentProvider} keysMap={keysMap} value={a.key || ''} onChange={k => setAgent('key', k)} />
+                        : <span className="muted small key-none">Default key</span>}
+                    </div>
+                    <div className="field">
                       <label className="field-label">Model</label>
-                      <input className="field-input" value={a.model} onChange={e => setAgent('model', e.target.value)} />
+                      <div className="field-row">
+                        <input className="field-input" list={`agent-models-${i}`} value={a.model} onChange={e => setAgent('model', e.target.value)} />
+                        <button type="button" className="ghost-btn" title="List the models of this provider and key"
+                          disabled={agentModels?.loading} onClick={() => runKeyProbe(agentProvider, agentKey)}>{agentModels?.loading ? '…' : '↻'}</button>
+                      </div>
+                      <datalist id={`agent-models-${i}`}>{(agentModels?.models || []).map(m => <option key={m} value={m} />)}</datalist>
+                      {agentModels && !agentModels.loading && !agentModels.ok && <div className="probe-err small">{agentModels.error}</div>}
                     </div>
                   </div>
                   <div className="field">
@@ -576,7 +624,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
               );
             })}
             <button type="button" className="ghost-btn" onClick={() => update('agents.named', [...named, {
-              name: `agent${named.length + 1}`, provider: '', model: getPath(draft, 'agents.defaults.model') || '', system_prompt: '', description: '', skills: [],
+              name: `agent${named.length + 1}`, provider: '', key: '', model: getPath(draft, 'agents.defaults.model') || '', system_prompt: '', description: '', skills: [],
             }])}>+ Add agent</button>
           </div>
         )}

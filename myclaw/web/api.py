@@ -58,6 +58,7 @@ def _ensure_registry() -> dict:
             model=nc.model,
             system_prompt=nc.system_prompt or None,
             provider_name=nc.provider or None,
+            key=nc.key or None,  # v0.7.5: which API key of the provider
         )
 
     load_custom_tools()

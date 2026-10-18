@@ -1363,19 +1363,29 @@ _provider_cache_ttl: float = 300.0  # 5 minutes default TTL
 _provider_lock = threading.Lock()
 
 
-def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
+def get_provider(config, provider_name: str = "ollama", key_id: Optional[str] = None) -> BaseLLMProvider:
     """Return an initialised provider instance for *provider_name*.
 
     Uses a TTL-based cache with config mtime invalidation. If the config
     file has been modified since the provider was cached, the cache is
     invalidated and a new provider is created.
 
+    v0.7.5: *key_id* picks one of the provider's named API keys
+    (``providers.<name>.keys``); None / "" / "default" is the plain api_key.
+    The cache is keyed by (provider, key), so each key has its own client.
+
     Raises:
         ValueError  – unknown provider name
         ImportError – required SDK not installed
         ValueError  – API key missing for cloud providers
+        UnknownKeyError (a ValueError) – the provider has no such key
     """
+    from .provider_keys import config_with_key, key_secret, normalize_key_id
+
     name = (provider_name or "ollama").lower().strip()
+    kid = normalize_key_id(key_id)
+    # The default key keeps the plain name as cache key (as before 0.7.5).
+    cache_key: Any = name if kid is None else (name, kid)
     _configure_semantic_cache(config)
 
     # Check config file mtime for cache invalidation. A stat failure here is
@@ -1392,8 +1402,8 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
     # Thread-safe provider cache access with TTL check
     with _provider_lock:
         now = time.time()
-        cached_entry = _provider_cache.get(name)
-        cached_time = _provider_cache_timestamps.get(name, 0)
+        cached_entry = _provider_cache.get(cache_key)
+        cached_time = _provider_cache_timestamps.get(cache_key, 0)
 
         if cached_entry is not None:
             # Check if cache entry is expired or config has changed
@@ -1401,14 +1411,14 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
             is_stale = cached_time < config_mtime
 
             if not is_expired and not is_stale:
-                logger.debug(f"Provider cache hit: {name}")
+                logger.debug(f"Provider cache hit: {cache_key}")
                 return cached_entry
 
             logger.debug(
-                f"Provider cache invalidated for {name}: expired={is_expired}, stale={is_stale}"
+                f"Provider cache invalidated for {cache_key}: expired={is_expired}, stale={is_stale}"
             )
-            _provider_cache.pop(name, None)
-            _provider_cache_timestamps.pop(name, None)
+            _provider_cache.pop(cache_key, None)
+            _provider_cache_timestamps.pop(cache_key, None)
 
         cls = _PROVIDER_MAP.get(name)
         if cls is None:
@@ -1417,13 +1427,22 @@ def get_provider(config, provider_name: str = "ollama") -> BaseLLMProvider:
                 raise ValueError(
                     f"Unknown provider '{name}'. Available: {', '.join(provider_names(config))}"
                 )
-            logger.debug(f"Initialising custom provider: {name}")
+            if kid is not None:
+                from pydantic import SecretStr
+
+                custom = custom.model_copy(update={"api_key": SecretStr(key_secret(config, name, kid))})
+            logger.debug(f"Initialising custom provider: {name} (key {kid or 'default'})")
             provider = _build_custom_provider(custom)
         else:
-            logger.debug(f"Initialising provider: {name}")
-            provider = cls(config)
-        _provider_cache[name] = provider
-        _provider_cache_timestamps[name] = now
+            logger.debug(f"Initialising provider: {name} (key {kid or 'default'})")
+            if kid is not None:
+                if name == "ollama":
+                    raise ValueError("ollama does not use API keys")
+                provider = cls(config_with_key(config, name, key_secret(config, name, kid)))
+            else:
+                provider = cls(config)
+        _provider_cache[cache_key] = provider
+        _provider_cache_timestamps[cache_key] = now
         return provider
 
 
@@ -1463,14 +1482,22 @@ _CLOUD_DEFAULT_URLS = {
 }
 
 
-def provider_endpoint(config, name: str) -> Optional[Dict[str, Any]]:
+def provider_endpoint(config, name: str, key_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
     """How to reach a provider: {kind, base_url, api_key, local, label}.
 
     kind is "ollama", "anthropic", "gemini" or "openai" (OpenAI-compatible).
     Used by the connection test, the doctor and the model lists so built-in
     and custom providers are handled the same way. None if unknown.
+    v0.7.5: *key_id* returns that named key as api_key (UnknownKeyError if missing).
     """
+    from .provider_keys import key_secret, normalize_key_id
+
     name = (name or "").strip()
+    if normalize_key_id(key_id) is not None:
+        ep = provider_endpoint(config, name)
+        if ep is not None:
+            ep["api_key"] = key_secret(config, name, key_id)
+        return ep
     if name in SUPPORTED_PROVIDERS:
         pcfg = getattr(config.providers, name, None)
         key = pcfg.api_key.get_secret_value() if pcfg is not None and hasattr(pcfg, "api_key") else ""
@@ -1520,25 +1547,30 @@ async def complete_with_fallback(config, messages: List[Dict], provider: Optiona
 
     from .llm_errors import MODEL_COOLDOWN, cooldown_for, describe_llm_error
 
+    from .llm_errors import cooldown_key
+    from .provider_keys import normalize_key_id
+
     if provider and model:
-        candidates = [(provider, model)]
+        candidates = [(provider, model, None)]
     else:
         d = config.agents.defaults
-        candidates = [(d.provider, d.model)]
+        candidates = [(d.provider, d.model, normalize_key_id(getattr(d, "key", "")))]
         for e in getattr(getattr(config.agents, "rotation", None), "entries", []) or []:
-            if (e.provider, e.model) not in candidates and e.provider and e.model:
-                candidates.append((e.provider, e.model))
+            c = (e.provider, e.model, normalize_key_id(getattr(e, "key", "")))
+            if c not in candidates and e.provider and e.model:
+                candidates.append(c)
     now = _t.time()
-    usable = [c for c in candidates if MODEL_COOLDOWN.get(c, 0) <= now] or candidates
+    usable = [c for c in candidates if MODEL_COOLDOWN.get(cooldown_key(*c), 0) <= now] or candidates
     errors: List[str] = []
-    for prov_name, mdl in usable:
+    for prov_name, mdl, kid in usable:
         try:
-            text = await complete_text(get_provider(config, prov_name), messages, mdl)
+            prov = get_provider(config, prov_name, key_id=kid) if kid else get_provider(config, prov_name)
+            text = await complete_text(prov, messages, mdl)
         except Exception as e:
             wait = cooldown_for(e)
             if wait:
-                MODEL_COOLDOWN[(prov_name, mdl)] = _t.time() + wait
-            errors.append(describe_llm_error(e, f"{prov_name}/{mdl}"))
+                MODEL_COOLDOWN[cooldown_key(prov_name, mdl, kid)] = _t.time() + wait
+            errors.append(describe_llm_error(e, f"{prov_name}/{mdl}" + (f" (key {kid})" if kid else "")))
             continue
         if (text or "").strip():
             return text, prov_name, mdl

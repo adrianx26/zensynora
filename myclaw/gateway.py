@@ -119,6 +119,7 @@ def start(config, webhook_url: str | None = None, port: int = 8443, force_telegr
                 model=nc.model,
                 system_prompt=nc.system_prompt or None,
                 provider_name=agent_provider,
+                key=nc.key or None,  # v0.7.5: which API key of the provider
             )
 
         # Load any persisted custom tools (Feature 4)

@@ -73,6 +73,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the running bot writes to every numeric id in *Allowed Telegram users*, or
   to one `chat_id`. If Telegram refuses because the person never pressed
   Start in the bot, the message says so.
+- **Several API keys per provider** (e.g. two free OpenRouter accounts):
+  - Each provider with an API key, and each of your own providers, has a
+    **Keys** list (Settings → Providers; Models → Your providers → Keys):
+    add a key with a name, rename it, replace or delete it, **Test** it (also
+    lists the models that key can use) and see which agents use it. The old
+    `api_key` is the *Default key*; old settings load unchanged.
+  - Settings → Agents and the Models page have a **Key** picker after the
+    provider; rotation entries can use a key too. Config:
+    `providers.<name>.keys[] = {id, label, api_key}`, `agents.defaults.key`,
+    `agents.named[].key`, `agents.rotation.entries[].key` (empty = default key).
+  - *When a key hits a rate limit or runs out of quota, try the other keys*
+    (`providers.<name>.rotate_keys`, off by default): on a 429 / quota / key
+    error the same model is tried with the provider's other keys before the
+    next model. Cooldowns are per provider, model and key.
+  - Keys are secrets like `api_key`: never sent to the browser, kept when the
+    field is left empty, encrypted with the rest of the config. An agent whose
+    key was removed uses the default key; the log and the doctor say so.
+  - API: `GET/POST /api/provider-keys`, `PATCH/DELETE
+    /api/provider-keys/{provider}/{key}`, `POST …/{key}/test`, `PUT
+    …/{provider}/rotate`; `key_id` in `POST /api/settings/probe`, `?key=` in
+    `GET /api/models/{provider}`, `key` in `POST /api/models/default` and
+    `/api/models/test`; the `create_agent` tool takes `key`.
 
 The Telegram bot was reviewed and fixed: it answers normal messages again,
 runs inside the Web UI, and shares the knowledge base with it. See the new

@@ -112,6 +112,46 @@ tool calls are not kept in that memory.
   provider then appears everywhere a provider can be chosen. Keys are stored
   in `~/.myclaw/config.json` and never sent back to the browser.
 
+### Several keys for one provider
+
+A provider can have more than one API key — for example two free OpenRouter
+accounts, or a work and a personal key.
+
+* **Add keys.** Settings → Providers shows a **Keys** list under each
+  provider (for your own providers: Models → Your providers → **Keys**).
+  *+ Add key*, give it a name and paste the key. The provider's normal API
+  key is the **Default key**.
+* **Per key:** *Test* checks the connection with that key and lists the
+  models it can use; *Edit* renames it or replaces the secret (leave the key
+  field empty to keep it); *Delete* removes it. Each key shows which agents
+  use it; a key in use cannot be deleted — pick another key for those agents
+  first.
+* **Pick a key.** Settings → Agents: *Provider*, then *Key*, then *Model*
+  (↻ lists the models of that provider and key). The Models page has the same
+  *Key* picker for the default model and for rotation entries. *Default key*
+  means the provider's normal key; an agent that has no provider of its own
+  also uses the default agent's key.
+* **Use the other keys when one is limited.** Turn on *When a key hits a rate
+  limit or runs out of quota, try the other keys* (shown once a provider has
+  two keys). On a rate limit, missing credits or a refused key, the same model
+  is tried with the provider's other keys before the next model in the
+  rotation. A key that just failed is skipped for a while (per provider, model
+  and key). Off by default.
+* If an agent's key was deleted (for example by editing the config file), the
+  agent uses the default key; the log and the Doctor warn about it.
+
+In `config.json`:
+
+```json
+"providers": {"openrouter": {
+  "api_key": "sk-or-main",
+  "keys": [{"id": "work", "label": "Work account", "api_key": "sk-or-work"}],
+  "rotate_keys": true}},
+"agents": {"named": [{"name": "Coder", "provider": "openrouter", "model": "…", "key": "work"}]}
+```
+
+Key ids use lower-case letters, digits, `-` and `_`; `default` is reserved.
+
 **Writing agent prompts.** In Settings → Agents, give a new agent a name and a
 short description and click **✨ Generate prompt**: the default model writes
 a system prompt (role, how to work, tools to prefer, limits). Review it and

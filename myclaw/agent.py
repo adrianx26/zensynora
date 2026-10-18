@@ -311,6 +311,7 @@ class Agent:
         model: str = None,
         system_prompt: str = None,
         provider_name: str = None,
+        key: str = None,
     ):
         self.name = name
         self._memories: dict[str, Memory] = {}
@@ -329,6 +330,10 @@ class Agent:
             )
             default_provider = "ollama"
         self._provider_name = provider_name or default_provider
+        # v0.7.5: which API key of the provider (None = its default key). An
+        # agent without its own provider also takes the default agent's key.
+        self._key: Optional[str] = self._resolve_key(config, key, inherit=provider_name is None)
+        self.last_key_used: Optional[str] = None
 
         # ── Resolve model ─────────────────────────────────────────────────────
         try:
@@ -737,6 +742,34 @@ class Agent:
             self._memories[key] = mem
         return self._memories[key]
 
+    def _resolve_key(self, config, key: Optional[str], inherit: bool) -> Optional[str]:
+        """Key id to use, or None for the default key; a missing key falls back with a warning."""
+        from .provider_keys import has_key, normalize_key_id
+
+        if key is None and inherit:
+            try:
+                key = getattr(config.agents.defaults, "key", "") or ""
+            except AttributeError:
+                key = ""
+        kid = normalize_key_id(key if isinstance(key, str) else "")
+        if kid is None:
+            return None
+        try:
+            ok = has_key(config, self._provider_name, kid)
+        except Exception:  # unusual config objects (tests, mocks)
+            ok = False
+        if not ok:
+            logger.warning("Agent %s uses key '%s' of %s, which no longer exists — using the default key.",
+                           self.name, kid, self._provider_name)
+            return None
+        return kid
+
+    def _get_provider_for(self, provider_name: str, key: Optional[str] = None):
+        """get_provider for one key (the plain two-argument call for the default key)."""
+        if key:
+            return get_provider(self._config, provider_name, key_id=key)
+        return get_provider(self._config, provider_name)
+
     @property
     def provider(self):
         """Lazy provider initialization - initializes on first access.
@@ -746,7 +779,7 @@ class Agent:
         """
         if self._provider is None:
             try:
-                self._provider = get_provider(self._config, self._provider_name)
+                self._provider = self._get_provider_for(self._provider_name, self._key)
             except Exception as e:
                 # Do NOT silently switch to Ollama: the user picked this
                 # provider on purpose, and quietly sending their chat to
@@ -782,6 +815,9 @@ class Agent:
 
         # v0.7.1: default-LLM rotation / fallback list (Settings → Model).
         candidates = self._rotation_candidates()
+        if not candidates and self._key_fallback_on():
+            # v0.7.5: no model rotation, but other keys of this provider may answer.
+            candidates = [self._own_candidate(model)]
         if candidates:
             return await self._rotating_chat(candidates, messages, stream)
 
@@ -839,17 +875,38 @@ class Agent:
             return False
         return self._provider_name == d.provider and self.model == d.model
 
+    def _own_candidate(self, model: Optional[str] = None) -> tuple:
+        """(provider, model) or, with a named key, (provider, model, key)."""
+        base = (self._provider_name, model or self.model)
+        return base + (self._key,) if self._key else base
+
+    def _key_fallback_on(self) -> bool:
+        """True when the agent's provider tries its other keys on rate limits (rotate_keys)."""
+        try:
+            from .provider_keys import rotate_keys_enabled
+
+            return rotate_keys_enabled(self.config, self._provider_name)
+        except Exception:
+            return False
+
     def _rotation_candidates(self) -> List[tuple]:
-        """Ordered (provider, model) pairs to try, or [] when rotation is off."""
+        """Ordered (provider, model[, key]) tuples to try, or [] when rotation is off.
+
+        The key part is only present for a named key (v0.7.5), so setups with
+        default keys keep plain (provider, model) pairs.
+        """
+        from .provider_keys import normalize_key_id
+
         try:
             rot = self.config.agents.rotation
         except AttributeError:
             return []
         if not (rot.enabled and rot.entries) or not self._follows_default_model():
             return []
-        pairs = [(self._provider_name, self.model)]
+        pairs = [self._own_candidate()]
         for e in rot.entries:
-            pair = (e.provider, e.model)
+            kid = normalize_key_id(getattr(e, "key", "") or "")
+            pair = (e.provider, e.model) + ((kid,) if kid else ())
             if e.provider and e.model and pair not in pairs:
                 pairs.append(pair)
         if rot.strategy == "round_robin" and len(pairs) > 1:
@@ -865,45 +922,74 @@ class Agent:
         for a while (see llm_errors.cooldown_for), so every request does not
         first wait for the same failure again.
         """
-        from .llm_errors import cooldown_for, describe_llm_error
+        from .llm_errors import cooldown_for, cooldown_key, describe_llm_error, is_key_error
+        from .provider_keys import key_chain
+
+        # v0.7.5: each candidate may carry a key id; with the provider's
+        # rotate_keys on, its other keys are tried for the same model first
+        # (rate limit / quota / refused key). Cooldowns are per (provider, model, key).
+        def _chain(prov_name, key):
+            try:
+                return key_chain(self.config, prov_name, key)
+            except Exception:
+                return [key]
 
         now = time.time()
-        usable = [c for c in candidates if _MODEL_COOLDOWN.get(c, 0) <= now]
-        if usable and len(usable) < len(candidates):
-            logger.info("Rotation: skipping %s (failed recently)",
-                        ", ".join(f"{p}/{m}" for p, m in candidates if (p, m) not in usable))
+        plan = [(c[0], c[1], _chain(c[0], c[2] if len(c) > 2 else None)) for c in candidates]
+        usable = []
+        for p, m, keys in plan:
+            ready = [k for k in keys if _MODEL_COOLDOWN.get(cooldown_key(p, m, k), 0) <= now]
+            if ready:
+                usable.append((p, m, ready))
+        if usable and len(usable) < len(plan):
+            skipped = {(p, m) for p, m, _ in plan} - {(p, m) for p, m, _ in usable}
+            logger.info("Rotation: skipping %s (failed recently)", ", ".join(f"{p}/{m}" for p, m in skipped))
         errors: List[str] = []
-        for prov_name, model in (usable or candidates):
-            try:
-                prov = get_provider(self._config, prov_name)
-                if not stream:
-                    result = await prov.chat(messages, model, stream=False)
-                    self.last_model_used = (prov_name, model)
-                    return result
-                gen, collector = await prov.chat(messages, model, stream=True)
-                it = gen.__aiter__()
+        for prov_name, model, keys in (usable or plan):
+            for i, key in enumerate(keys):
                 try:
-                    first = await it.__anext__()
-                except StopAsyncIteration:
-                    first = None  # empty text is fine (e.g. a tool-call-only reply)
-
-                async def _chained(first=first, it=it):
-                    if first is not None:
-                        yield first
-                    async for chunk in it:
-                        yield chunk
-
-                self.last_model_used = (prov_name, model)
-                if errors:
-                    logger.warning("Rotation: answered by %s/%s after: %s", prov_name, model, "; ".join(errors))
-                return _chained(), collector
-            except Exception as e:  # rate limit, server down, missing model, bad key…
-                wait = cooldown_for(e)
-                if wait:
-                    _MODEL_COOLDOWN[(prov_name, model)] = time.time() + wait
-                errors.append(describe_llm_error(e, f"{prov_name}/{model}"))
-                logger.info("Rotation: %s/%s failed (%s); trying the next model", prov_name, model, e)
+                    return await self._chat_once(prov_name, model, key, messages, stream, errors)
+                except Exception as e:  # rate limit, server down, missing model, bad key…
+                    wait = cooldown_for(e)
+                    if wait:
+                        _MODEL_COOLDOWN[cooldown_key(prov_name, model, key)] = time.time() + wait
+                    where = f"{prov_name}/{model}" + (f" (key {key})" if key else "")
+                    errors.append(describe_llm_error(e, where))
+                    if i + 1 < len(keys) and is_key_error(e):
+                        logger.info("Rotation: %s failed (%s); trying %s with another key",
+                                    where, e, model)
+                        continue
+                    logger.info("Rotation: %s failed (%s); trying the next model", where, e)
+                    break
         raise ProviderUnavailableError("All models in the rotation failed — " + " | ".join(errors))
+
+    async def _chat_once(self, prov_name: str, model: str, key: Optional[str], messages,
+                         stream: bool, errors: List[str]):
+        """One rotation attempt; remembers which provider/model/key answered."""
+        prov = self._get_provider_for(prov_name, key)
+        if not stream:
+            result = await prov.chat(messages, model, stream=False)
+            self.last_model_used = (prov_name, model)
+            self.last_key_used = key
+            return result
+        gen, collector = await prov.chat(messages, model, stream=True)
+        it = gen.__aiter__()
+        try:
+            first = await it.__anext__()
+        except StopAsyncIteration:
+            first = None  # empty text is fine (e.g. a tool-call-only reply)
+
+        async def _chained(first=first, it=it):
+            if first is not None:
+                yield first
+            async for chunk in it:
+                yield chunk
+
+        self.last_model_used = (prov_name, model)
+        self.last_key_used = key
+        if errors:
+            logger.warning("Rotation: answered by %s/%s after: %s", prov_name, model, "; ".join(errors))
+        return _chained(), collector
 
     def _extract_suggested_topics(self, message: str) -> List[str]:
         """Extract suggested topics from a message for knowledge gap guidance.
