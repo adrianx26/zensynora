@@ -447,6 +447,6 @@ async def dashboard_app(dashboard: "MyClawDashboard"):
 
 __all__ = [
     "MyClawDashboard",
-    "create_dashboard_app",
+    "dashboard_app",
     "DASHBOARD_HTML",
 ]

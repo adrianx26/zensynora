@@ -23,6 +23,8 @@ from .core import (
 # are read from the core module at call time — names imported above would
 # stay None forever ("Scheduler not available").
 from . import core as _core  # noqa: E402
+from .scheduler import _create_job_internal
+from .kb import write_to_knowledge
 
 import json
 import asyncio
