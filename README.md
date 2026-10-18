@@ -27,7 +27,8 @@ Ollama, or any major cloud provider.
   LM Studio. Cloud providers (OpenAI, Anthropic, Gemini, Groq, OpenRouter) are
   optional. Everything is stored locally in `~/.myclaw`.
 - **Remembers.** Conversation memory per user, plus a Markdown knowledge base
-  with full-text search and a knowledge graph the agents read and write.
+  with full-text search and a knowledge graph the agents read and write —
+  and you can explore, edit and search it as a live graph in the Web UI.
 - **Does things.** 95 tools: files, sandboxed shell, web and headless browser,
   scheduling, knowledge, delegation, and tools the agent writes for itself.
 - **Works in teams.** Chat channels with several agents at once — see who
@@ -231,7 +232,7 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 git clone https://github.com/adrianx26/zensynora.git && cd zensynora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q -o addopts=""        # 643 tests
+pytest -q -o addopts=""        # 668 tests
 ruff check .
 ```
 

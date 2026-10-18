@@ -13,6 +13,51 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
 
 ### Added
 
+**Knowledge base page (2026-10-18)**
+- New **Knowledge** page in the Web UI: a live graph of the notes and their
+  links (drag, zoom, pin notes, colour by tag or by number of links, show only
+  the notes 1–3 links around the selected one, link names, hide missing or
+  unlinked notes), a sortable **Notes** list, and **Tags & types** (tag cloud,
+  fact categories, link types — click to filter). The side panel shows a
+  note's text, facts by category, links out and backlinks; notes can be
+  created, edited (Markdown) and moved to the trash (`<base>/.trash`, nothing
+  is deleted). Links to notes that do not exist yet appear as dashed "missing"
+  nodes with *Create this note*. Search, *Re-index*, and a picker for every
+  knowledge base on the computer (shared and per-Telegram-user).
+- API: `GET /api/knowledge/bases`, `GET /api/knowledge/graph`,
+  `GET|PUT|DELETE /api/knowledge/note/{permalink}`, `POST /api/knowledge/note`,
+  `GET /api/knowledge/search`, `POST /api/knowledge/sync`.
+
+**Settings → Agents: context length per agent (2026-10-18)**
+- Every agent (and the default agent) has a **Context length**: a slider
+  (logarithmic, 1k up to the model's maximum) and a box for the exact number,
+  both editable; *model default* leaves it to the model.
+- Markers on the slider show the **estimated minimum** (system prompt + skills
+  + team list + the tool definitions sent with every request + one exchange
+  + a short reply) and the **recommended** size (plus knowledge results, the
+  recent conversation and a longer reply). The estimate is redone whenever
+  the prompt is written, generated or changed, or the skills or model change.
+  The bar is red below the minimum, amber up to the recommended size, green
+  above; a line says what the chosen value means, *use recommended* sets it.
+- The slider's end is the **model's own maximum**, asked from the provider
+  (Ollama `/api/show`, LM Studio, llama.cpp `/props`, OpenRouter / Groq /
+  vLLM model lists, Gemini, Anthropic) or the built-in model library.
+- The value is used: Ollama receives it as `num_ctx` (Ollama's own default,
+  usually 4k, is smaller than the ~7k the 105 tool definitions alone take — a
+  warning says so); for every provider the oldest messages are left out when
+  a turn would not fit (tool results never without their tool call).
+- Config: `agents.defaults.context_length`, `agents.named[].context_length`
+  (0 = model default). API: `POST /api/agents/context-estimate`.
+
+**Settings → Agents: provider, model list and latency test (2026-10-18)**
+- The default agent now has its own *Provider / Key / Model* row on the
+  Agents tab too. For every agent the model is picked from a list of the
+  models the chosen provider (and key) offers — loaded when the tab opens, ↻
+  reloads, *Other…* to type a name that is not listed.
+- **⚡ Test** for every agent (and on the Model tab) sends one short real
+  request and shows the round-trip time with a traffic light: green under
+  1.5 s, amber under 5 s, red above or failed (with the reason).
+
 **Telegram (2026-10-18)**
 - **`send_telegram_message` tool**: agents can write to you through
   ZenSynora's own bot (only to *Allowed Telegram users*). Agents had been
@@ -111,6 +156,41 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
   (`tests/fixtures/fake_telegram_api.py`), and `tests/test_telegram_webui.py`.
 
 ### Fixed
+
+**Errors from a real `zensynora.log` (2026-10-18)**
+- **Broken imports after `tools` became a package.** Several modules still
+  imported `from .swarm`, `.memory`, `.config`, `.provider`, `.backends` as
+  if they lived in `myclaw/`, so they looked inside `myclaw/tools/`:
+  - swarm tools (`swarm_list`, `swarm_status`, `swarm_create` …) failed with
+    "cannot import name 'TaskStatus' / 'SwarmOrchestrator'";
+  - `extract_user_preferences` and `generate_session_insights` failed with
+    "No module named 'myclaw.tools.memory'";
+  - the SSH / hardware tools could not load their backends;
+  - the **medic diagnosis** after an unexpected error failed with "cannot
+    import name 'check_system_health' from 'myclaw.tools'" (those tools are
+    loaded lazily there);
+  - the admin dashboard (`..config` went above the package);
+  - `zensynora memory list|clear` imported a `get_db` that no longer exists
+    (memory is one `memory_<user>.db` per user).
+  A new test checks that every relative import in `myclaw/` points at a real
+  module and name.
+- **Swarm storage** then failed with "SQLitePool has no attribute
+  '_get_lock'" (the sync pool used the async pool's helper).
+- **Rate limits and timeouts are no longer treated as crashes.** "Model is
+  temporarily rate-limited upstream", "Request timed out" or "not a valid
+  model ID" are the model server's answer: logged as one warning with the
+  reason, no traceback, and no medic diagnosis run. Without a rotation list
+  a rate-limited model is **retried once after 5 s** (same key) before the
+  turn — or a delegated task — fails.
+- **Log noise.** The configuration warnings (e.g. `curl`/`wget` in allowed
+  commands) were written as 7 lines every time the settings were re-read —
+  232 times in one day. They are now one entry, logged again only when they
+  change. "pyotp not installed" (31×) is logged once, as info. A disabled
+  TOOLBOX tool whose file was removed no longer warns.
+- Already fixed earlier and only present in the old log: the gateway restart
+  loop ("Could not start background knowledge extraction",
+  `_background_extraction_task`) and the Telegram conflict (another program —
+  Hermes — used the same bot token).
 
 **Telegram errors on a real install (2026-10-18)**
 - **The `myclaw` service (`zensynora gateway`) crashed every ~7 seconds** with

@@ -98,9 +98,9 @@ async def generate_session_insights(user_id: str = "default", save_to_knowledge:
     Returns:
         Formatted insight summary (and confirmation if saved to KB).
     """
-    from .memory import Memory
-    from .config import load_config
-    from .provider import get_provider
+    from ..memory import Memory
+    from ..config import load_config
+    from ..provider import get_provider
     from datetime import datetime
     import asyncio
 
@@ -185,7 +185,7 @@ async def extract_user_preferences(user_id: str = "default") -> str:
     Returns:
         JSON string with user profile data, or error message.
     """
-    from .memory import Memory
+    from ..memory import Memory
     import asyncio
 
     try:

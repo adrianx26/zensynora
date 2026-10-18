@@ -52,8 +52,8 @@ async def ssh_command(cmd: str, host: str = None, user: str = "root", key_path: 
         timeout: Timeout in seconds
     """
     try:
-        from .backends.ssh import SSHBackend
-        from .config import SSHBackendConfig
+        from ..backends.ssh import SSHBackend
+        from ..config import SSHBackendConfig
         from pydantic import SecretStr
 
         # Load defaults if not provided
@@ -89,8 +89,8 @@ async def ssh_put_file(local_path: str, remote_path: str, host: str, user: str =
     Key-based authentication is strongly preferred. See ssh_command() for details.
     """
     try:
-        from .backends.ssh import SSHBackend
-        from .config import SSHBackendConfig
+        from ..backends.ssh import SSHBackend
+        from ..config import SSHBackendConfig
         from pydantic import SecretStr
 
         # Validate local path
@@ -119,8 +119,8 @@ async def ssh_get_file(remote_path: str, local_path: str, host: str, user: str =
     Key-based authentication is strongly preferred. See ssh_command() for details.
     """
     try:
-        from .backends.ssh import SSHBackend
-        from .config import SSHBackendConfig
+        from ..backends.ssh import SSHBackend
+        from ..config import SSHBackendConfig
         from pydantic import SecretStr
 
         # Validate local path
@@ -148,7 +148,7 @@ def get_system_diagnostic() -> str:
     Includes CPU, GPU, RAM, NPU, and Network metrics.
     """
     try:
-        from .backends.hardware import get_system_metrics, get_optimization_suggestions
+        from ..backends.hardware import get_system_metrics, get_optimization_suggestions
         metrics = get_system_metrics()
         suggestions = get_optimization_suggestions(metrics)
 

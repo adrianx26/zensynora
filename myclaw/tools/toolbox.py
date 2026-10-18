@@ -445,13 +445,15 @@ def load_custom_tools():
                 # Handle old format where registry was just path strings
                 tool_path = Path(info)
 
-            if not tool_path.exists():
-                logger.warning(f"Tool file missing from TOOLBOX: {tool_path}")
-                continue
-
-            # Skip disabled tools
+            # Skip disabled tools (before the file check: a disabled tool whose
+            # file was removed is not a problem).
             if isinstance(info, dict) and not info.get("enabled", True):
                 logger.info(f"Skipping disabled tool from TOOLBOX: {name}")
+                continue
+
+            if not tool_path.exists():
+                logger.warning(f"Tool file missing from TOOLBOX: {tool_path} — "
+                               f"remove '{name}' from {TOOLBOX_REG.name} or set it to disabled")
                 continue
 
             try:

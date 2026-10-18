@@ -381,6 +381,18 @@ flowchart LR
     end
 ```
 
+When an agent turn fails (2026-10-18), errors from the model server are told
+apart from real crashes; only the latter start the medic diagnosis.
+
+```mermaid
+flowchart LR
+    err["exception in the agent turn"] --> kind{"is_provider_error?<br/>(llm_errors.py)"}
+    kind -- "rate limit, no rotation" --> retry["wait 5 s, retry once<br/>same model + key"] --> ok(["answer"])
+    retry -- "still failing" --> warn
+    kind -- "rate limit · timeout · bad key ·<br/>unknown model" --> warn["one WARNING line<br/>+ readable reason in chat"]
+    kind -- "anything else" --> crash["ERROR + traceback"] --> diag["medic diagnosis<br/>check_system_health · check_memory_usage ·<br/>get_health_report (from agents.medic_agent)"]
+```
+
 ---
 
 ## 11. Install layout on disk
@@ -590,3 +602,45 @@ flowchart LR
     rot -- "yes" --> other["same model,<br/>next key of the provider"] --> client
     rot -- "no" --> next["next model in the rotation list"]
 ```
+
+## 17. Knowledge page (Web UI)
+
+The Knowledge page reads the Markdown notes directly (they are the source of
+truth); the SQLite index is used for full-text search and is updated after
+every edit. A relation whose target note does not exist becomes a "missing"
+node.
+
+```mermaid
+flowchart LR
+    ui["Knowledge page<br/>graph · notes · tags · panel"] -- "GET graph / note" --> api["knowledge_api.py"]
+    ui -- "POST / PUT note" --> api
+    ui -- "DELETE note" --> api
+    api -- "parse every *.md" --> md[("~/.myclaw/knowledge/&lt;base&gt;/*.md")]
+    api -- "nodes · edges · tags · categories" --> ui
+    api -- "write file, then re-index" --> md
+    api --> db[("knowledge_&lt;base&gt;.db<br/>FTS index")]
+    api -- "move, not delete" --> trash[("&lt;base&gt;/.trash")]
+    agents["agents<br/>write_to_knowledge …"] --> md
+```
+
+The model test on Settings → Agents uses `POST /api/models/test` (one short
+real request) and colours the round-trip time: green < 1.5 s, amber < 5 s,
+red above or failed.
+
+## 18. Context length per agent
+
+```mermaid
+flowchart LR
+    ui["Settings → Agents<br/>slider + number box"] -- "prompt · skills · provider · model<br/>(after each edit)" --> est["POST /api/agents/context-estimate"]
+    est --> parts["estimate_context()<br/>prompt + skills + team + tool schemas<br/>→ min · recommended"]
+    est --> mx["model_context_max()<br/>Ollama /api/show · LM Studio · llama.cpp /props ·<br/>/models lists · Gemini · Anthropic · model library"]
+    parts & mx --> ui
+    ui -- "save: context_length" --> cfg[("config.json<br/>agents.*.context_length")]
+    cfg --> turn["agent turn"]
+    turn --> fit["fit_messages()<br/>drop oldest messages to fit"]
+    turn --> var["CONTEXT_LENGTH contextvar"] --> oll["Ollama: options.num_ctx"]
+```
+
+`myclaw/context_budget.py` holds all of it; token counts are estimated at
+about 3.8 characters per token.
+

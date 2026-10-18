@@ -98,7 +98,7 @@ def get_recent_routing_decisions(limit: int = 10) -> List[Dict[str, Any]]:
 # ── KB growth tracking ──────────────────────────────────────────────────────
 def get_kb_stats(user_id: str = "default") -> Dict[str, Any]:
     """Get knowledge base statistics."""
-    from ..knowledge.db import KnowledgeDB
+    from .knowledge.db import KnowledgeDB
 
     try:
         with KnowledgeDB(user_id) as db:
@@ -116,8 +116,8 @@ def get_kb_stats(user_id: str = "default") -> Dict[str, Any]:
 # ── Provider health ─────────────────────────────────────────────────────────
 def get_provider_health() -> List[Dict[str, Any]]:
     """Check health of configured LLM providers."""
-    from ..provider import SUPPORTED_PROVIDERS
-    from ..config import load_config
+    from .provider import SUPPORTED_PROVIDERS
+    from .config import load_config
     import httpx
 
     config = load_config()
@@ -169,7 +169,7 @@ def get_provider_health() -> List[Dict[str, Any]]:
 def get_tool_stats() -> List[Dict[str, Any]]:
     """Get recent tool execution statistics."""
     try:
-        from ..metrics import get_metrics
+        from .metrics import get_metrics
         metrics = get_metrics()
         # We can't easily read back from Prometheus counters, so return placeholder
         # In a real deployment, this would query Prometheus or a local stats DB
@@ -181,8 +181,8 @@ def get_tool_stats() -> List[Dict[str, Any]]:
 # ── Dashboard payload builder ───────────────────────────────────────────────
 def build_dashboard_data() -> Dict[str, Any]:
     """Build the complete dashboard payload."""
-    from ..config import load_config
-    from ..provider import SUPPORTED_PROVIDERS
+    from .config import load_config
+    from .provider import SUPPORTED_PROVIDERS
 
     config = load_config()
     kb_stats = get_kb_stats()

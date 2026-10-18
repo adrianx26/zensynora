@@ -73,6 +73,21 @@ _KEY_ERROR_RE = re.compile(
 )
 
 
+_RATE_LIMIT_RE = re.compile(r"\b429\b|rate.?limit|too many requests|temporarily rate-limited")
+
+
+def is_rate_limit(err: BaseException | str) -> bool:
+    """True for "slow down" errors that usually pass after a few seconds."""
+    return bool(_RATE_LIMIT_RE.search(str(err).lower()))
+
+
+def is_provider_error(err: BaseException | str) -> bool:
+    """True when the error comes from the model server (rate limit, timeout,
+    refused key, unknown model …) — an expected outside problem, not a bug in
+    ZenSynora, so no traceback and no medic diagnosis are needed (2026-10-18)."""
+    return _match(err)[0] is not None
+
+
 def is_key_error(err: BaseException | str) -> bool:
     """True when trying the same model with another key of the provider may help."""
     return bool(_KEY_ERROR_RE.search(str(err).lower()))

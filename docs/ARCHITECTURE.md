@@ -39,6 +39,7 @@ myclaw/
 │                            #   routing, commands + / menu, reply splitting [Unreleased]
 ├── chat/                    # Web UI chat channels: store (chat.db) + multi-agent engine [0.7.1]
 ├── config.py                # Pydantic config + hot-reload (watchdog)
+├── context_budget.py        # Per-agent context: estimate, model maximum, trimming, num_ctx [Unreleased]
 ├── gateway.py               # `zensynora gateway`: Telegram / WhatsApp without the Web UI
 ├── cost_tracker.py          # SQLite cost accumulator + dashboard queries
 ├── defaults.py              # Single source of truth for tunable constants [Sprint 10]
@@ -85,6 +86,7 @@ myclaw/
 │   ├── doctor_api.py        # Doctor report, errors viewer, report download [Unreleased]
 │   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
 │   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [Unreleased]
+│   ├── knowledge_api.py     # Knowledge page: graph, notes, edit, trash, search [Unreleased]
 │   └── skills_api.py        # Skills page: list, edit, import, assign [0.7.5]
 └── ... (~50 utility modules)
 
@@ -97,6 +99,8 @@ webui/src/
 ├── api.ts                   # Backend helpers and shared types
 ├── colors.ts                # Stable colour per agent [0.7.1]
 ├── updates.ts               # Update status type, restart-and-wait helper [0.7.4]
+├── latency.ts               # Latency levels of the model test (green/amber/red) [Unreleased]
+├── contextLength.ts         # Context slider helpers: formatting, snapping, levels [Unreleased]
 └── components/
     ├── ChatView.tsx         # Channel chat, @mentions, activity panel [0.7.1]
     ├── ModelsView.tsx       # Default model, rotation, your providers [0.7.1]
@@ -106,6 +110,10 @@ webui/src/
     ├── ChannelsView.tsx     # Create / rename / manage channels [0.7.3]
     ├── UpdatesView.tsx      # Check for updates, update, roll back, restart [0.7.4]
     ├── SkillsView.tsx       # Skills page [0.7.5]
+    ├── KnowledgeView.tsx    # Knowledge page: graph, notes, tags, note panel [Unreleased]
+    ├── KnowledgeGraph.tsx   # Canvas force-directed graph (no extra libraries) [Unreleased]
+    ├── ModelPicker.tsx      # Model list per provider + key, ⚡ latency test [Unreleased]
+    ├── ContextLength.tsx    # Per-agent context slider with min / recommended / max marks [Unreleased]
     ├── SettingsView.tsx     # Settings page [0.5.0]
     ├── DoctorView.tsx       # Doctor page [0.7.0]
     ├── DoctorReport.tsx     # Doctor → Report: errors viewer, report view, download [Unreleased]
@@ -113,7 +121,7 @@ webui/src/
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 643 tests (pytest --collect-only, 2026-10-18)
+tests/                       # 668 tests (pytest --collect-only, 2026-10-18)
 ├── fixtures/fake_telegram_api.py # Local fake Telegram Bot API server [Unreleased]
 ├── test_chat_message_actions.py # Copy/edit/delete/regenerate chat messages [Unreleased]
 ├── test_doctor_report.py    # Doctor checks, report, errors viewer, downloads [Unreleased]
@@ -330,13 +338,16 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_v074_update_and_prompt.py` | 8 |
 | `test_chat_message_actions.py` | 8 |
 | `test_doctor_report.py` | 21 |
+| `test_knowledge_api.py` | 5 |
+| `test_log_fixes_20261018.py` | 12 |
+| `test_context_budget.py` | 8 |
 | `test_provider_keys.py` | 18 |
 | `test_telegram_channel.py` | 19 |
 | `test_telegram_webui.py` | 19 |
 | `test_v075_channels_medic_skills.py` | 25 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **643** |
+| **Total** | **668** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

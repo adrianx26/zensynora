@@ -34,7 +34,7 @@ import os
 import time
 import threading
 from pathlib import Path
-from pydantic import BaseModel, SecretStr, ValidationError, field_validator
+from pydantic import BaseModel, Field, SecretStr, ValidationError, field_validator
 from typing import Optional, Dict, Any, List
 
 from .exceptions import ConfigurationError
@@ -399,6 +399,10 @@ class AgentDefaults(BaseModel):
     skills: list[str] = []
     # v0.7.5: id of the provider key to use ("" = the provider's default key)
     key: str = ""
+    # Context length in tokens (0 = the model's default). Ollama gets it as
+    # num_ctx; for every provider the oldest messages are left out so a turn
+    # fits (myclaw/context_budget.py). Settings → Agents → Context length.
+    context_length: int = Field(0, ge=0, le=10_000_000)
 
 
 class NamedAgentConfig(BaseModel):
@@ -416,6 +420,8 @@ class NamedAgentConfig(BaseModel):
     # v0.7.5: provider key id ("" = default key; with no provider of its own,
     # the agent also uses the default agent's key)
     key: str = ""
+    # Context length in tokens (0 = the model's default) — see AgentDefaults.
+    context_length: int = Field(0, ge=0, le=10_000_000)
 
 
 class ModelChoice(BaseModel):
@@ -745,6 +751,9 @@ class AppConfig(BaseModel):
 # ── Validation ────────────────────────────────────────────────────────────────
 
 
+_last_config_warnings: tuple = ()  # last warnings logged by _validate_config
+
+
 def _validate_config(config: AppConfig) -> None:
     """Validate critical configuration and warn about missing required values.
 
@@ -845,15 +854,21 @@ def _validate_config(config: AppConfig) -> None:
         )
 
     # ── Log all warnings ────────────────────────────────────────────────────
+    # The config is re-read after every save (and by every agent created), so
+    # the same warnings were logged hundreds of times a day (2026-10-18 log:
+    # 232×). Log them once, as one entry, and again only when they change.
+    global _last_config_warnings
+    key = tuple(warnings)
+    if key == _last_config_warnings:
+        if warnings:
+            logger.debug("Configuration warnings unchanged (%d)", len(warnings))
+        return
+    _last_config_warnings = key
     if warnings:
-        logger.warning("=" * 60)
-        logger.warning("CONFIGURATION WARNINGS — ZenSynora may not work correctly")
-        logger.warning("=" * 60)
-        for i, w in enumerate(warnings, 1):
-            logger.warning(f"  {i}. {w}")
-        logger.warning("=" * 60)
-        logger.warning("Run `zensynora onboard` for interactive setup.")
-        logger.warning("=" * 60)
+        body = "\n".join(f"  {i}. {w}" for i, w in enumerate(warnings, 1))
+        logger.warning(
+            "CONFIGURATION WARNINGS — ZenSynora may not work correctly:\n%s\n"
+            "Fix them in the Web UI → Settings or run `zensynora onboard`.", body)
 
 
 # ── Loaders ───────────────────────────────────────────────────────────────────

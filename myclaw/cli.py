@@ -309,23 +309,37 @@ def memory():
 @memory.command()
 def list_sessions():
     """List active user sessions and sizes"""
-    from .memory import get_db
-    with get_db() as conn:
-        users = conn.execute("SELECT user_id, COUNT(id) FROM messages GROUP BY user_id").fetchall()
-        if not users:
-            click.echo("No memory records found.")
-        else:
-            for uid, count in users:
-                click.echo(f"- Session: {uid} | Messages: {count}")
+    # One SQLite file per user: ~/.myclaw/memory_<user>.db
+    import sqlite3
+    from pathlib import Path
+
+    found = False
+    for db in sorted((Path.home() / ".myclaw").glob("memory_*.db")):
+        try:
+            with sqlite3.connect(db) as conn:
+                count = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        except sqlite3.Error as e:
+            click.echo(f"- Session: {db.stem[7:]} | unreadable ({e})")
+            continue
+        found = True
+        click.echo(f"- Session: {db.stem[7:]} | Messages: {count}")
+    if not found:
+        click.echo("No memory records found.")
 
 @memory.command()
 @click.argument('user_id', default="default")
 def clear(user_id):
     """Clear memory for a specific session"""
-    from .memory import get_db
-    with get_db() as conn:
-        conn.execute("DELETE FROM messages WHERE user_id = ?", (user_id,))
-    click.echo(f"Cleared memory for session {user_id}")
+    import sqlite3
+    from pathlib import Path
+
+    db = Path.home() / ".myclaw" / f"memory_{user_id}.db"
+    if not db.exists():
+        click.echo(f"No memory for session {user_id}.")
+        return
+    with sqlite3.connect(db) as conn:
+        n = conn.execute("DELETE FROM messages").rowcount
+    click.echo(f"Cleared memory for session {user_id} ({n} messages)")
 
 ### SWARM COMMANDS ###
 @cli.group()

@@ -397,9 +397,11 @@ def test_no_key_rotation_when_off_or_for_other_errors(home, monkeypatch):
     monkeypatch.setattr(agent_mod, "get_provider", lambda c, n, key_id=None: _Prov(key_id, calls, {None, "work", "free2"}))
     b = agent_mod.Agent(cfg, name="default")
     b._provider_breaker, b._offline_mode = None, False
+    monkeypatch.setattr(agent_mod, "RATE_LIMIT_RETRY_SECONDS", 0)
     with pytest.raises(Exception) as exc:
         asyncio.run(b._provider_chat([{"role": "user", "content": "hi"}], "m1"))
-    assert not isinstance(exc.value, ProviderUnavailableError) and calls == [("m1", None)]
+    # 2026-10-18: a rate limit is retried once with the SAME key — never another one.
+    assert not isinstance(exc.value, ProviderUnavailableError) and calls == [("m1", None), ("m1", None)]
 
 
 # ── create_agent tool ────────────────────────────────────────────────────────

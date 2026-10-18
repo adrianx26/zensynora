@@ -219,7 +219,7 @@ class SQLitePool:
         """Get or create a pooled connection."""
         key = str(db_path)
 
-        with cls._get_lock():
+        with cls._pool_lock:
             if key not in cls._locks:
                 cls._locks[key] = threading.Lock()
                 cls._refcounts[key] = 0
@@ -233,7 +233,7 @@ class SQLitePool:
             conn.execute("PRAGMA synchronous=NORMAL")  # Balance safety/speed
             cls._pools[key] = conn
 
-        with cls._get_lock():
+        with cls._pool_lock:
             cls._refcounts[key] += 1
             cls._last_used[key] = time.time()
 
@@ -243,7 +243,7 @@ class SQLitePool:
     def release_connection(cls, db_path: Path):
         """Release a connection back to the pool."""
         key = str(db_path)
-        with cls._get_lock():
+        with cls._pool_lock:
             cls._refcounts[key] -= 1
             if cls._refcounts[key] <= 0:
                 cls._last_used[key] = time.time()
@@ -254,7 +254,7 @@ class SQLitePool:
     @classmethod
     def close_all(cls):
         """Close all pooled connections."""
-        with cls._get_lock():
+        with cls._pool_lock:
             for conn in cls._pools.values():
                 try:
                     conn.close()
@@ -268,7 +268,7 @@ class SQLitePool:
     def cleanup_idle(cls):
         """Close connections idle for longer than IDLE_TIMEOUT."""
         now = time.time()
-        with cls._get_lock():
+        with cls._pool_lock:
             idle_keys = [
                 key
                 for key, last in cls._last_used.items()

@@ -187,6 +187,37 @@ async def generate_agent_prompt(req: PromptRequest):
     return {"prompt": text, "provider": provider, "model": model}
 
 
+# ── Context length estimate (Settings → Agents) ──────────────────────────────
+class ContextEstimateRequest(BaseModel):
+    name: str = "default"
+    system_prompt: str = ""
+    skills: list[str] = []
+    provider: str = ""
+    model: str = ""
+    key: str = ""
+
+
+@router.post("/api/agents/context-estimate", dependencies=guard)
+async def context_estimate(req: ContextEstimateRequest):
+    """Minimum / recommended context for this (possibly unsaved) prompt, and the model's maximum."""
+    import asyncio
+
+    from myclaw.context_budget import FALLBACK_MAX, estimate_context, model_context_max
+
+    cfg = load_config()
+    est = await asyncio.to_thread(estimate_context, cfg, req.name or "default", req.system_prompt, req.skills)
+    provider = req.provider or cfg.agents.defaults.provider
+    model = req.model or cfg.agents.defaults.model
+    limit = await model_context_max(cfg, provider, model, req.key)
+    est["model_max"] = limit["max"]
+    est["model_max_source"] = limit["source"]
+    if limit.get("error"):
+        est["model_max_error"] = limit["error"]
+    est["slider_max"] = limit["max"] or FALLBACK_MAX
+    est["provider"], est["model"] = provider, model
+    return est
+
+
 # ── Real test of a model (v0.7.3) ────────────────────────────────────────────
 class TestRequest(BaseModel):
     provider: str
