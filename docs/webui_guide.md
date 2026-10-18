@@ -269,6 +269,23 @@ Works for standard installs (`~/.local/share/zensynora`); a git checkout
 shows why it cannot update itself. Restart works when the server was started
 with `zensynora webui`. Details: [UPDATING.md](UPDATING.md).
 
+## Doctor: report, errors and download
+
+The Doctor page has two tabs. **Checks** is the health check (the same as
+`zensynora doctor`). **Report** shows:
+
+* summary cards — checks OK / warnings / failures, errors and warnings in the
+  last 24 h, restarts (marked *crash loop* when the service keeps
+  restarting), failed jobs;
+* **Errors** — warnings and errors from the log, grouped (messages that
+  differ only in numbers count as one). Filter by period (1 h, 24 h, 7 days),
+  level and text; click a group to see its log lines and traceback, and
+  **Copy** them;
+* **View report** — the whole diagnostics report in the page;
+* **Download** — **Markdown**, **JSON** or **ZIP** (report + the last log
+  lines). Keys and tokens are never included, so the file is safe to attach
+  to a bug report.
+
 ## Doctor: change proposals
 
 ![Change proposals](images/webui-proposals.png)

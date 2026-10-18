@@ -15,6 +15,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   contain spaces). The real reason Telegram gave is now in the log.
 
 ### Added (2026-10-18)
+- **Doctor: more checks, report view and download**
+  - New checks: restarts (crash loop: more than 10 starts in 15 min), risky
+    custom tools (placeholder or hard-coded credentials in `~/.myclaw/TOOLBOX`),
+    knowledge index (notes not indexed; `--fix` syncs), agent skills (unknown or
+    broken), MCP servers (command not installed), chat channels (unfinished
+    answers, deleted agents still members).
+  - *Errors in the last 24 h* now also counts CRITICAL lines and warnings that
+    repeat (5+), per level, and groups messages that differ only in numbers.
+  - Diagnostics report: `zensynora doctor --report [PATH]` (Markdown, `.json`
+    or `.zip`), Web UI → Doctor → **Report** (summary, Errors viewer with
+    filters and log lines, View report, Download), `/api/doctor/report`,
+    `/api/doctor/report/download`, `/api/doctor/errors`. Keys and tokens are
+    never included; log text is redacted.
+  - The medic's `get_recent_problems` and self-review also see restarts,
+    repeated warnings and risky custom tools.
 - **Send test message** (Settings → Channels, `POST /api/telegram/send-test`):
   the running bot writes to every numeric id in *Allowed Telegram users*, or
   to one `chat_id`. If Telegram refuses because the person never pressed

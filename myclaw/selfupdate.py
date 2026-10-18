@@ -45,7 +45,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from myclaw.doctor.paths import install_base, install_root, log_file, medic_dir
+from myclaw.doctor.paths import install_base, install_root, medic_dir
 
 logger = logging.getLogger(__name__)
 
@@ -357,38 +357,24 @@ def apply_in_background(pid: str) -> None:
 
 # ── 5. Learning ──────────────────────────────────────────────────────────────
 def recent_problems(hours: int = 24, limit: int = 20) -> dict[str, Any]:
-    """Errors from the log, failed/low-score job runs and open proposals."""
-    cutoff = time.time() - hours * 3600
-    errors: list[dict[str, str]] = []
-    lf = log_file()
-    if lf.exists():
-        try:
-            with open(lf, encoding="utf-8", errors="replace") as f:
-                f.seek(max(0, lf.stat().st_size - 2_000_000))
-                for line in f:
-                    try:
-                        rec = json.loads(line)
-                    except ValueError:
-                        continue
-                    if rec.get("level") not in ("ERROR", "CRITICAL"):
-                        continue
-                    try:
-                        from datetime import datetime
+    """Errors from the log, repeated warnings, restarts, risky custom tools,
+    failed/low-score job runs and open proposals."""
+    from myclaw.doctor import logscan
 
-                        if datetime.fromisoformat(rec.get("timestamp", "")).timestamp() < cutoff:
-                            continue
-                    except ValueError:
-                        pass
-                    errors.append({"time": rec.get("timestamp", ""), "where": rec.get("module", rec.get("logger", "")),
-                                   "message": str(rec.get("message", ""))[:400]})
-        except OSError:
-            pass
-    # Group identical messages so a repeated error counts once.
-    grouped: dict[str, dict[str, Any]] = {}
-    for e in errors:
-        g = grouped.setdefault(e["message"], {**e, "count": 0})
-        g["count"] += 1
-        g["time"] = e["time"]
+    cutoff = time.time() - hours * 3600
+    sc = logscan.scan(hours, max_bytes=8_000_000)
+    # Messages that differ only in numbers/ids are one group (with a count).
+    groups = [{"time": g["last"], "where": g["module"], "message": g["message"][:400], "count": g["count"],
+               "level": g["level"], "traceback": g["traceback"]} for g in logscan.group(sc.problems, samples=1)]
+    errors = sorted((g for g in groups if g["level"] != "WARNING"), key=lambda g: -g["count"])
+    warnings = sorted((g for g in groups if g["level"] == "WARNING" and g["count"] >= 5), key=lambda g: -g["count"])
+    restarts = logscan.restart_stats(sc.starts)
+    try:
+        from myclaw.doctor.checks_more import risky_tools
+
+        tools = [{"name": t["name"], "problems": t["problems"]} for t in risky_tools()]
+    except Exception:
+        tools = []
     runs: list[dict[str, Any]] = []
     try:
         from myclaw.jobs import store as jobs
@@ -405,7 +391,11 @@ def recent_problems(hours: int = 24, limit: int = 20) -> dict[str, Any]:
     except Exception as e:  # jobs DB missing or locked — not fatal here
         logger.debug("recent_problems: jobs unavailable: %s", e)
     return {
-        "errors": sorted(grouped.values(), key=lambda g: -g["count"])[:limit],
+        "errors": errors[:limit],
+        "repeated_warnings": warnings[:limit],
+        "restarts": {"starts": restarts["starts"], "max_in_15_min": restarts["max_in_window"],
+                     "crash_loop": restarts["max_in_window"] > 10, "typical_gap_s": restarts["typical_gap_s"]},
+        "risky_custom_tools": tools,
         "job_problems": runs[:limit],
         "open_proposals": [{"id": p["id"], "title": p["title"], "status": p["status"]}
                            for p in list_proposals() if p["status"] in ("pending", "approved", "failed")][:limit],
@@ -510,9 +500,12 @@ def _emit(kind: str, prop: dict[str, Any]) -> None:
 
 
 SELF_REVIEW_PROMPT = """You are the Medic doing a self-review of ZenSynora.
-1. Call get_recent_problems to see recent errors, failed or low-scoring jobs and open proposals.
+1. Call get_recent_problems to see recent errors, repeated warnings, restarts (crash_loop),
+   risky custom tools, failed or low-scoring jobs and open proposals.
 2. Pick at most ONE problem that clearly comes from ZenSynora's own code (skip network,
-   model-server or API-key problems — report those instead).
+   model-server or API-key problems — report those instead). A crash loop comes first:
+   find the error logged just before the restarts. A risky custom tool (placeholder or
+   hard-coded credentials) is not a code fix: tell the user to disable it with disable_skill.
 3. Use list_source_files and read_source_file to find and read the code involved.
 4. If you are confident of a small, safe fix, call propose_code_change with the COMPLETE
    new file content and a clear reason. Do not repeat an open proposal.

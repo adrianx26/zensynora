@@ -399,15 +399,26 @@ def update(updater_args):
 @click.option("--offline", is_flag=True, help="Skip checks that need the network (LLM server).")
 @click.option("--json", "as_json", is_flag=True, help="Machine-readable output.")
 @click.option("--problems", is_flag=True, help="Only show warnings and failures.")
-def doctor(fix, offline, as_json, problems):
+@click.option("--report", "report_path", is_flag=False, flag_value=".", default=None, metavar="[PATH]",
+              help="Write a full diagnostics report (Markdown; .json or .zip by extension) and print its path.")
+@click.option("--hours", default=24, show_default=True, help="Period the report covers.")
+def doctor(fix, offline, as_json, problems, report_path, hours):
     """Check this installation and explain how to fix problems.
 
     \b
+    zensynora doctor --report              report in this folder (zensynora-report-….md)
+    zensynora doctor --report ~/r.json     JSON (or .zip: report + log tail)
     Exit code: 0 = healthy, 1 = warnings, 2 = failures.
     """
     import json as _json
 
     from .doctor import apply_fixes, run_checks
+
+    if report_path is not None:
+        from .doctor import report as _report
+
+        click.echo(_report.write(report_path, hours=hours, offline=offline))
+        return
 
     report = run_checks(offline=offline)
     if fix:
