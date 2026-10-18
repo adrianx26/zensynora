@@ -152,6 +152,24 @@ In `config.json`:
 
 Key ids use lower-case letters, digits, `-` and `_`; `default` is reserved.
 
+**Choosing a model and testing its speed.** Settings → Agents has a
+*Provider / Key / Model* row for the default agent and for every named agent.
+The *Model* list holds the models that provider (with that key) offers; it is
+loaded when the tab opens, ↻ reloads it and *Other — type a name…* takes a
+model the list does not show. **⚡ Test** sends one short real request and
+shows how long the answer took:
+
+| Light | Round trip | Meaning |
+|---|---|---|
+| 🟢 Low | under 1.5 s | quick |
+| 🟡 Medium | 1.5 – 5 s | usable, slower |
+| 🔴 High / Failed | over 5 s, or no answer | slow, or not working (the reason is shown) |
+
+The first request to a local model (Ollama, LM Studio, llama.cpp) also loads
+it into memory — test a second time to see the normal speed.
+
+![Agents tab with model list and latency test](images/webui-agents-latency.png)
+
 **Writing agent prompts.** In Settings → Agents, give a new agent a name and a
 short description and click **✨ Generate prompt**: the default model writes
 a system prompt (role, how to work, tools to prefer, limits). Review it and
@@ -216,6 +234,32 @@ useful facts from conversations and tool results are saved by themselves. The
 Telegram users use the same knowledge base as the Web UI (switch it off in
 Settings → Channels to give each Telegram user their own); WhatsApp users each
 keep their own knowledge base.
+
+### Knowledge page: graph, notes, tags
+
+![Knowledge graph](images/webui-knowledge-graph.png)
+
+The **Knowledge** page (sidebar) shows the knowledge base visually:
+
+* **Graph** — every note is a dot, every link (`- uses [[Other note]]`) an
+  arrow. Bigger dots have more links and facts; colours are tags (or the
+  number of links). Drag the background to pan, use the wheel to zoom, drag a
+  note to pin it (double-click releases it), hover for a preview, click to
+  open it. *Around selected* shows only the notes 1–3 links away; *link
+  names*, *hide missing*, *hide unlinked*, *Fit*, *Freeze* and *Re-layout*
+  change the view. A dashed dot is a note that is linked to but does not
+  exist yet — click it and *Create this note*.
+* **Notes** — all notes with tags, number of facts and links, and last
+  change; click a column to sort.
+* **Tags & types** — tag cloud, fact categories (`- [category] text`) and
+  link types; click one to filter the graph and the list.
+* **Side panel** — text, facts by category, *Links to* and *Linked from*
+  (click to jump), **✎ Edit** (the Markdown file), **Move to trash** (moved
+  to `.trash` in the same folder, not deleted).
+* **Search** filters by full text; **+ New note** creates one; **↻
+  Re-index** re-reads all files into the search index (after editing files by
+  hand). The picker at the top switches between the shared base and the
+  separate bases of Telegram/WhatsApp users.
 
 **MCP memory servers.** Any MCP server (a memo/notes server, a database, a
 file system …) can be added in `~/.myclaw/config.json`:

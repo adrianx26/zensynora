@@ -13,6 +13,30 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
 
 ### Added
 
+**Knowledge base page (2026-10-18)**
+- New **Knowledge** page in the Web UI: a live graph of the notes and their
+  links (drag, zoom, pin notes, colour by tag or by number of links, show only
+  the notes 1–3 links around the selected one, link names, hide missing or
+  unlinked notes), a sortable **Notes** list, and **Tags & types** (tag cloud,
+  fact categories, link types — click to filter). The side panel shows a
+  note's text, facts by category, links out and backlinks; notes can be
+  created, edited (Markdown) and moved to the trash (`<base>/.trash`, nothing
+  is deleted). Links to notes that do not exist yet appear as dashed "missing"
+  nodes with *Create this note*. Search, *Re-index*, and a picker for every
+  knowledge base on the computer (shared and per-Telegram-user).
+- API: `GET /api/knowledge/bases`, `GET /api/knowledge/graph`,
+  `GET|PUT|DELETE /api/knowledge/note/{permalink}`, `POST /api/knowledge/note`,
+  `GET /api/knowledge/search`, `POST /api/knowledge/sync`.
+
+**Settings → Agents: provider, model list and latency test (2026-10-18)**
+- The default agent now has its own *Provider / Key / Model* row on the
+  Agents tab too. For every agent the model is picked from a list of the
+  models the chosen provider (and key) offers — loaded when the tab opens, ↻
+  reloads, *Other…* to type a name that is not listed.
+- **⚡ Test** for every agent (and on the Model tab) sends one short real
+  request and shows the round-trip time with a traffic light: green under
+  1.5 s, amber under 5 s, red above or failed (with the reason).
+
 **Telegram (2026-10-18)**
 - **`send_telegram_message` tool**: agents can write to you through
   ZenSynora's own bot (only to *Allowed Telegram users*). Agents had been

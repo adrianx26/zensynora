@@ -18,16 +18,17 @@ import BackupsView from './components/BackupsView';
 import ChannelsView from './components/ChannelsView';
 import UpdatesView from './components/UpdatesView';
 import SkillsView from './components/SkillsView';
+import KnowledgeView from './components/KnowledgeView';
 import { restartServer } from './updates';
 import { api, getAdminKey, getApiBase, type AgentInfo, type Channel, type SystemHealth } from './api';
 
-type View = 'chat' | 'channels' | 'models' | 'jobs' | 'skills' | 'backups' | 'updates' | 'settings' | 'costs' | 'tools' | 'doctor';
-const VIEWS: View[] = ['chat', 'channels', 'models', 'jobs', 'skills', 'backups', 'updates', 'settings', 'costs', 'tools', 'doctor'];
+type View = 'chat' | 'channels' | 'models' | 'jobs' | 'skills' | 'knowledge' | 'backups' | 'updates' | 'settings' | 'costs' | 'tools' | 'doctor';
+const VIEWS: View[] = ['chat', 'channels', 'models', 'jobs', 'skills', 'knowledge', 'backups', 'updates', 'settings', 'costs', 'tools', 'doctor'];
 const VIEW_KEY = 'zensynora_view';
 const CHANNEL_KEY = 'zensynora_channel';
 const THEME_KEY = 'zensynora_theme';
 const VIEW_TITLES: Record<View, string> = {
-  chat: 'Chat', channels: 'Channels', models: 'Models', jobs: 'Jobs', skills: 'Skills', backups: 'Backups', updates: 'Updates', settings: 'Settings',
+  chat: 'Chat', channels: 'Channels', models: 'Models', jobs: 'Jobs', skills: 'Skills', knowledge: 'Knowledge base', backups: 'Backups', updates: 'Updates', settings: 'Settings',
   costs: 'Costs & usage', tools: 'Tools', doctor: 'Doctor',
 };
 
@@ -239,6 +240,7 @@ function App() {
             <NavButton id="models" icon="🧠" label="Models" view={view} go={go} />
             <NavButton id="jobs" icon="⏱" label="Jobs" view={view} go={go} />
             <NavButton id="skills" icon="📚" label="Skills" view={view} go={go} />
+            <NavButton id="knowledge" icon="🕸" label="Knowledge" view={view} go={go} />
             <NavButton id="backups" icon="💾" label="Backups" view={view} go={go} />
             <NavButton id="updates" icon="⬆️" label="Updates" count={health?.update_installed ? 1 : undefined} view={view} go={go} />
             <NavButton id="settings" icon="⚙️" label="Settings" view={view} go={go} />
@@ -319,6 +321,7 @@ function App() {
           {view === 'channels' && <ChannelsView agents={agents} onChanged={loadChannels} onOpen={openChannel} />}
           {view === 'updates' && <UpdatesView />}
           {view === 'skills' && <SkillsView />}
+          {view === 'knowledge' && <KnowledgeView />}
           {view === 'backups' && <BackupsView onRestored={() => { loadAgents(); loadChannels(); loadHealth(); }} />}
           {view === 'settings' && <SettingsView onSaved={onSettingsSaved} />}
           {view === 'tools' && <ToolsView />}

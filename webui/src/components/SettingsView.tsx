@@ -2,6 +2,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError, getAdminKey, setAdminKey, type ProbeResult, type ProviderKeysMap } from '../api';
 import { KeySelect, ProviderKeysPanel } from './ProviderKeys';
+import { LatencyTest, ModelPicker } from './ModelPicker';
 
 type Json = any;
 
@@ -305,6 +306,26 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
     }
   };
 
+  // Agents tab: load the model list of every provider + key in use (once each).
+  const agentPairs: string = !draft ? '' : JSON.stringify([
+    [getPath(draft, 'agents.defaults.provider'), getPath(draft, 'agents.defaults.key') || ''],
+    ...((getPath(draft, 'agents.named') || []) as Json[]).map((a: Json) => [
+      a.provider || getPath(draft, 'agents.defaults.provider'),
+      a.key || (a.provider ? '' : getPath(draft, 'agents.defaults.key') || ''),
+    ]),
+  ]);
+  useEffect(() => {
+    if (tab !== 'Agents' || !agentPairs) return;
+    const seen = new Set<string>();
+    for (const [prov, key] of JSON.parse(agentPairs) as [string, string][]) {
+      const id = probeKeyId(prov, key);
+      if (!prov || seen.has(id) || probe[id]) continue;
+      seen.add(id);
+      runKeyProbe(prov, key);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, agentPairs]);
+
   const testTelegram = async () => {
     setTgTest({ ok: false, loading: true });
     const token = changes['channels.telegram.token'];
@@ -533,6 +554,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
                 </div>
               )}
             </div>
+            <LatencyTest provider={defaultProvider} model={getPath(draft, 'agents.defaults.model') || ''} keyId={getPath(draft, 'agents.defaults.key') || ''} />
             <h4>{PROVIDER_LABELS[defaultProvider] || defaultProvider} connection</h4>
             {providerFields(defaultProvider).map(renderField)}
             <ProbeLine provider={defaultProvider} />
@@ -554,7 +576,31 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
         {tab === 'Agents' && (
           <div className="settings-card">
             <h3>Default agent</h3>
-            <p className="muted">Uses the default model (Models page).</p>
+            <p className="muted">Its model is also the default for named agents that don't pick their own.</p>
+            <div className="agent-editor">
+              <div className="agent-editor-grid three-model">
+                <div className="field">
+                  <label className="field-label">Provider{'agents.defaults.provider' in changes && <span className="changed-dot" />}</label>
+                  <select className="field-input" value={defaultProvider} onChange={e => update('agents.defaults.provider', e.target.value)}>
+                    {data.providers.map(p => <option key={p} value={p}>{PROVIDER_LABELS[p] || p}</option>)}
+                  </select>
+                </div>
+                <div className="field">
+                  <label className="field-label">Key</label>
+                  {(keysMap?.[defaultProvider]?.keys.length || 0) > 1 || getPath(draft, 'agents.defaults.key')
+                    ? <KeySelect provider={defaultProvider} keysMap={keysMap} value={getPath(draft, 'agents.defaults.key') || ''}
+                      onChange={k => update('agents.defaults.key', k)} />
+                    : <span className="muted small key-none">Default key</span>}
+                </div>
+                <div className="field">
+                  <label className="field-label">Model{'agents.defaults.model' in changes && <span className="changed-dot" />}</label>
+                  <ModelPicker value={getPath(draft, 'agents.defaults.model') || ''} onChange={m => update('agents.defaults.model', m)}
+                    probe={probe[probeKeyId(defaultProvider, getPath(draft, 'agents.defaults.key') || '')]}
+                    onRefresh={() => runKeyProbe(defaultProvider, getPath(draft, 'agents.defaults.key') || '')} />
+                </div>
+              </div>
+              <LatencyTest provider={defaultProvider} model={getPath(draft, 'agents.defaults.model') || ''} keyId={getPath(draft, 'agents.defaults.key') || ''} />
+            </div>
             {skillChips(getPath(draft, 'agents.defaults.skills') || [], next => update('agents.defaults.skills', next))}
             <h3>Named agents</h3>
             <p className="muted">Extra agents appear in the sidebar and can be addressed in chat with <code>@name</code>.</p>
@@ -591,15 +637,12 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
                     </div>
                     <div className="field">
                       <label className="field-label">Model</label>
-                      <div className="field-row">
-                        <input className="field-input" list={`agent-models-${i}`} value={a.model} onChange={e => setAgent('model', e.target.value)} />
-                        <button type="button" className="ghost-btn" title="List the models of this provider and key"
-                          disabled={agentModels?.loading} onClick={() => runKeyProbe(agentProvider, agentKey)}>{agentModels?.loading ? '…' : '↻'}</button>
-                      </div>
-                      <datalist id={`agent-models-${i}`}>{(agentModels?.models || []).map(m => <option key={m} value={m} />)}</datalist>
-                      {agentModels && !agentModels.loading && !agentModels.ok && <div className="probe-err small">{agentModels.error}</div>}
+                      <ModelPicker value={a.model || ''} onChange={m => setAgent('model', m)} probe={agentModels}
+                        placeholder={a.provider ? 'Pick a model…' : `Default (${getPath(draft, 'agents.defaults.model') || 'none'})`}
+                        onRefresh={() => runKeyProbe(agentProvider, agentKey)} />
                     </div>
                   </div>
+                  <LatencyTest provider={agentProvider} model={a.model || getPath(draft, 'agents.defaults.model') || ''} keyId={agentKey} />
                   <div className="field">
                     <label className="field-label">Short description</label>
                     <input className="field-input" value={a.description || ''} placeholder="e.g. Reviews Python code for bugs and explains fixes simply"

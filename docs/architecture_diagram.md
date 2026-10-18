@@ -590,3 +590,28 @@ flowchart LR
     rot -- "yes" --> other["same model,<br/>next key of the provider"] --> client
     rot -- "no" --> next["next model in the rotation list"]
 ```
+
+## 17. Knowledge page (Web UI)
+
+The Knowledge page reads the Markdown notes directly (they are the source of
+truth); the SQLite index is used for full-text search and is updated after
+every edit. A relation whose target note does not exist becomes a "missing"
+node.
+
+```mermaid
+flowchart LR
+    ui["Knowledge page<br/>graph · notes · tags · panel"] -- "GET graph / note" --> api["knowledge_api.py"]
+    ui -- "POST / PUT note" --> api
+    ui -- "DELETE note" --> api
+    api -- "parse every *.md" --> md[("~/.myclaw/knowledge/&lt;base&gt;/*.md")]
+    api -- "nodes · edges · tags · categories" --> ui
+    api -- "write file, then re-index" --> md
+    api --> db[("knowledge_&lt;base&gt;.db<br/>FTS index")]
+    api -- "move, not delete" --> trash[("&lt;base&gt;/.trash")]
+    agents["agents<br/>write_to_knowledge …"] --> md
+```
+
+The model test on Settings → Agents uses `POST /api/models/test` (one short
+real request) and colours the round-trip time: green < 1.5 s, amber < 5 s,
+red above or failed.
+
