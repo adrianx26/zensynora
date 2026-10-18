@@ -10,11 +10,12 @@ says how long rotation should skip a model after such an error.
 from __future__ import annotations
 
 import re
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 
 # (provider, model) -> time until which it is skipped after a hard failure.
 # Shared by agent rotation and utility calls (prompt writer, job judge). v0.7.3
-MODEL_COOLDOWN: Dict[Tuple[str, str], float] = {}
+# v0.7.5: a named API key adds a third part, (provider, model, key) — see cooldown_key.
+MODEL_COOLDOWN: Dict[tuple, float] = {}
 
 _RULES = [
     # (pattern in the lower-cased error, explanation, cooldown seconds)
@@ -61,3 +62,22 @@ def describe_llm_error(err: BaseException | str, model: Optional[str] = None) ->
 def cooldown_for(err: BaseException | str) -> int:
     """Seconds rotation should skip the model after this error (0 = don't skip)."""
     return _match(err)[1]
+
+
+# v0.7.5: errors that another API key of the same provider may not have
+# (rate limit, no credits / quota, key refused).
+_KEY_ERROR_RE = re.compile(
+    r"\b429\b|rate.?limit|too many requests|temporarily rate-limited"
+    r"|\b402\b|insufficient credits|payment required|quota exceeded|exceeded your current quota"
+    r"|\b401\b|unauthori[sz]ed|invalid api key|incorrect api key|no auth credentials"
+)
+
+
+def is_key_error(err: BaseException | str) -> bool:
+    """True when trying the same model with another key of the provider may help."""
+    return bool(_KEY_ERROR_RE.search(str(err).lower()))
+
+
+def cooldown_key(provider: str, model: str, key: Optional[str] = None) -> tuple:
+    """MODEL_COOLDOWN key: (provider, model) for the default key, else (provider, model, key)."""
+    return (provider, model) if not key or key == "default" else (provider, model, key)

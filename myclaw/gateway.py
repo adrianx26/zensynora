@@ -82,7 +82,7 @@ def _run_research_if_idle():
     else:
         logger.debug(f"System busy (last active {idle_duration/60:.1f} mins ago). Skipping research.")
 
-def start(config, webhook_url: str | None = None, port: int = 8443):
+def start(config, webhook_url: str | None = None, port: int = 8443, force_telegram: bool = False):
     """Build agent registry, initialize tools, and start the active channel.
 
     webhook_url: run the Telegram bot in webhook mode (default: polling).
@@ -119,6 +119,7 @@ def start(config, webhook_url: str | None = None, port: int = 8443):
                 model=nc.model,
                 system_prompt=nc.system_prompt or None,
                 provider_name=agent_provider,
+                key=nc.key or None,  # v0.7.5: which API key of the provider
             )
 
         # Load any persisted custom tools (Feature 4)
@@ -156,26 +157,43 @@ def start(config, webhook_url: str | None = None, port: int = 8443):
         # Triggered when config.knowledge.auto_extract = true (default: false).
         # Runs sync_knowledge() every 60 s so any Markdown notes written to disk
         # are automatically picked up and indexed in the SQLite knowledge graph.
+        # 2026-10-18: started on the bot's running event loop (see on_start below);
+        # it used to fail with NameError and would have run on a dead loop.
+        startup_hooks = []
+        if mcp_manager is not None:
+            startup_hooks.append(mcp_manager.start_all)
         if getattr(config.knowledge, 'auto_extract', False):
-            from .knowledge.sync import start_background_extraction
-            try:
-                start_background_extraction(user_id="default", interval_seconds=60)
-                logger.info("Background knowledge file-sync extraction started (interval: 60s)")
-            except Exception as _ke:
-                logger.warning(f"Could not start background knowledge extraction: {_ke}")
+            def _start_kb_sync():
+                from .knowledge.sync import start_background_extraction
+                try:
+                    start_background_extraction(user_id="default", interval_seconds=60)
+                except Exception as _ke:
+                    logger.warning(f"Could not start background knowledge extraction: {_ke}")
+            startup_hooks.append(_start_kb_sync)
 
         # ── Start channel ─────────────────────────────────────────────────────────
-        if config.channels.telegram.enabled:
-            if getattr(config.channels.telegram, "run_in_webui", False):
-                print("ℹ️  The Telegram bot is also set to run inside the Web UI "
-                      "(channels.telegram.run_in_webui). Run only one of them — Telegram allows one copy.")
+        tg_cfg = config.channels.telegram
+        if tg_cfg.enabled and getattr(tg_cfg, "run_in_webui", False) and not force_telegram:
+            # 2026-10-18: the Web UI runs the bot. A second copy here only caused
+            # "conflict" errors (Telegram allows one) — and as a systemd service
+            # crashed and was restarted every few seconds.
+            msg = ("The Telegram bot runs inside the Web UI (Settings → Channels → 'Run the bot "
+                   "inside the Web UI'), so the gateway does not start it. To run it here instead, "
+                   "turn that setting off, or use `zensynora gateway --telegram`.")
+            logger.info(msg)
+            print(f"ℹ️  {msg}")
+            if not config.channels.whatsapp.enabled:
+                return
+        if tg_cfg.enabled and (force_telegram or not getattr(tg_cfg, "run_in_webui", False)):
             channel = TelegramChannel(config, registry)
-            if mcp_manager is not None:
-                channel.on_start(mcp_manager.start_all)
+            for hook in startup_hooks:
+                channel.on_start(hook)
             channel.run(webhook_url=webhook_url, port=port)
         elif config.channels.whatsapp.enabled:
-            if mcp_manager is not None:
-                loop.create_task(mcp_manager.start_all())
+            for hook in startup_hooks:
+                res = hook()
+                if asyncio.iscoroutine(res):
+                    loop.create_task(res)
             WhatsAppChannel(config, registry).run()
         else:
             # No messaging channel configured — fall back to interactive console

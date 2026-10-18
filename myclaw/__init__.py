@@ -87,7 +87,12 @@ def init_app(
     # 2. Graceful-shutdown handlers
     _install_shutdown_handlers()
 
-    logger.info("ZenSynora v%s initialised (log_level=%s)", __version__, logging.getLevelName(log_level))
+    # cmd= lets the doctor tell service starts (gateway, webui) from short CLI
+    # commands when it looks for crash loops (myclaw/doctor/logscan.py).
+    _argv = __import__("sys").argv
+    _cmd = next((a for a in _argv[1:] if not a.startswith("-")), "") if len(_argv) > 1 else ""
+    logger.info("ZenSynora v%s initialised (log_level=%s, cmd=%s)", __version__,
+                logging.getLevelName(log_level), _cmd)
 
 
 def _install_shutdown_handlers() -> None:
@@ -96,6 +101,9 @@ def _install_shutdown_handlers() -> None:
     import signal
 
     def _graceful_shutdown() -> None:
+        # At interpreter exit the log streams may already be closed (pytest,
+        # piped output): don't print "--- Logging error ---" tracebacks then.
+        logging.raiseExceptions = False
         logger.info("Shutting down gracefully...")
         # Close shared aiohttp session
         try:

@@ -55,6 +55,27 @@ it back and forth forever. Switch creation off with
 direct messages and jobs move to the new name. An agent you delete is removed
 from its channels (the channel says so).
 
+**Message actions.** Point at a message (on a phone: tap **…**) for a small
+bar with the time (hover it for the full date) and these actions:
+
+| Action | Your messages | Agent answers |
+|---|---|---|
+| **Copy** | Copies the text | Copies the text; each ``` code block also has its own **Copy code** button |
+| **Edit** | Edit in place, **Save & send** (Enter; Esc cancels): everything after it in the channel is removed and the agents answer the edited message again (same rules, `@mentions` work) | Correct the text in place; nothing is run again |
+| **Delete** | *Delete this message*, or *Delete this message and the answers to it* (up to your next message) | Deletes the answer (asks first) |
+| **Regenerate** | — | The same agent writes this answer again, in the same place |
+
+Edited messages show *(edited)*. Changes and deletions appear in every open
+browser at once. While the agents are answering these actions wait: press ■
+or let them finish. **↑** in the empty input edits your last message.
+**⤓ MD** in the channel bar copies or downloads the conversation as
+Markdown (`GET /api/channels/{id}/export.md`).
+
+After an edit, delete or regenerate, each agent's memory of the channel is
+rebuilt from the messages you see (your messages and its own answers), so it
+never answers an edited question with the old one in mind. Details of earlier
+tool calls are not kept in that memory.
+
 **Good to know.**
 * Under each answer: model, time and **⚡ tokens per second** (hover for the
   token count and the time to the first token; counts are estimates).
@@ -90,6 +111,46 @@ from its channels (the channel says so).
   server. Presets fill the URL; add the key, *Test connection*, save. The new
   provider then appears everywhere a provider can be chosen. Keys are stored
   in `~/.myclaw/config.json` and never sent back to the browser.
+
+### Several keys for one provider
+
+A provider can have more than one API key — for example two free OpenRouter
+accounts, or a work and a personal key.
+
+* **Add keys.** Settings → Providers shows a **Keys** list under each
+  provider (for your own providers: Models → Your providers → **Keys**).
+  *+ Add key*, give it a name and paste the key. The provider's normal API
+  key is the **Default key**.
+* **Per key:** *Test* checks the connection with that key and lists the
+  models it can use; *Edit* renames it or replaces the secret (leave the key
+  field empty to keep it); *Delete* removes it. Each key shows which agents
+  use it; a key in use cannot be deleted — pick another key for those agents
+  first.
+* **Pick a key.** Settings → Agents: *Provider*, then *Key*, then *Model*
+  (↻ lists the models of that provider and key). The Models page has the same
+  *Key* picker for the default model and for rotation entries. *Default key*
+  means the provider's normal key; an agent that has no provider of its own
+  also uses the default agent's key.
+* **Use the other keys when one is limited.** Turn on *When a key hits a rate
+  limit or runs out of quota, try the other keys* (shown once a provider has
+  two keys). On a rate limit, missing credits or a refused key, the same model
+  is tried with the provider's other keys before the next model in the
+  rotation. A key that just failed is skipped for a while (per provider, model
+  and key). Off by default.
+* If an agent's key was deleted (for example by editing the config file), the
+  agent uses the default key; the log and the Doctor warn about it.
+
+In `config.json`:
+
+```json
+"providers": {"openrouter": {
+  "api_key": "sk-or-main",
+  "keys": [{"id": "work", "label": "Work account", "api_key": "sk-or-work"}],
+  "rotate_keys": true}},
+"agents": {"named": [{"name": "Coder", "provider": "openrouter", "model": "…", "key": "work"}]}
+```
+
+Key ids use lower-case letters, digits, `-` and `_`; `default` is reserved.
 
 **Writing agent prompts.** In Settings → Agents, give a new agent a name and a
 short description and click **✨ Generate prompt**: the default model writes
@@ -268,6 +329,23 @@ Open **Updates** in the sidebar (or click the version at the bottom).
 Works for standard installs (`~/.local/share/zensynora`); a git checkout
 shows why it cannot update itself. Restart works when the server was started
 with `zensynora webui`. Details: [UPDATING.md](UPDATING.md).
+
+## Doctor: report, errors and download
+
+The Doctor page has two tabs. **Checks** is the health check (the same as
+`zensynora doctor`). **Report** shows:
+
+* summary cards — checks OK / warnings / failures, errors and warnings in the
+  last 24 h, restarts (marked *crash loop* when the service keeps
+  restarting), failed jobs;
+* **Errors** — warnings and errors from the log, grouped (messages that
+  differ only in numbers count as one). Filter by period (1 h, 24 h, 7 days),
+  level and text; click a group to see its log lines and traceback, and
+  **Copy** them;
+* **View report** — the whole diagnostics report in the page;
+* **Download** — **Markdown**, **JSON** or **ZIP** (report + the last log
+  lines). Keys and tokens are never included, so the file is safe to attach
+  to a bug report.
 
 ## Doctor: change proposals
 

@@ -43,6 +43,8 @@ myclaw/
 ├── cost_tracker.py          # SQLite cost accumulator + dashboard queries
 ├── defaults.py              # Single source of truth for tunable constants [Sprint 10]
 ├── doctor/                  # Health checks, integrity baseline, safe fixes [0.7.0]
+│                            #   + checks_more.py (restarts, custom tools, knowledge index, skills, MCP, chat),
+│                            #   logscan.py (log grouping, redaction), report.py (diagnostics report) [Unreleased]
 ├── evals/                   # Dataset-driven eval harness [Sprint 7]
 ├── events.py                # Agent-to-agent activity events (delegation, tools, jobs) [0.7.1]
 ├── jobs/                    # Jobs: store (jobs.db) + runner (schedule, evaluate, benchmark) [0.7.1]
@@ -60,6 +62,7 @@ myclaw/
 ├── observability/           # OpenTelemetry tracing — wired Sprint 10
 ├── prompts/                 # Versioned Jinja2 prompt registry [Sprint 3]
 ├── provider.py              # LLM providers (+ your own, providers.custom) + Message TypedDict
+├── provider_keys.py         # Several API keys per provider: lookup, key fallback order, who uses which key [0.7.5]
 ├── resilience/              # Circuit breaker + fallback chain — wired Sprint 10
 ├── selfupdate.py            # Agents' code-change proposals → approval → safe updater [0.7.1]
 ├── structured_output/       # extract_json / validate / repair_json [Sprint 3]
@@ -75,9 +78,11 @@ myclaw/
 │   ├── settings_api.py      # Settings, health, doctor, costs, history [0.5.0]
 │   ├── chat_api.py          # Channels REST + /ws/channels/{id} [0.7.1]
 │   ├── models_api.py        # Default model, rotation, prompt generator [0.7.1]
+│   ├── provider_keys_api.py # Add / rename / delete / test a provider's API keys [0.7.5]
 │   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
 │   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
 │   ├── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
+│   ├── doctor_api.py        # Doctor report, errors viewer, report download [Unreleased]
 │   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
 │   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [Unreleased]
 │   └── skills_api.py        # Skills page: list, edit, import, assign [0.7.5]
@@ -103,12 +108,16 @@ webui/src/
     ├── SkillsView.tsx       # Skills page [0.7.5]
     ├── SettingsView.tsx     # Settings page [0.5.0]
     ├── DoctorView.tsx       # Doctor page [0.7.0]
+    ├── DoctorReport.tsx     # Doctor → Report: errors viewer, report view, download [Unreleased]
     ├── ToolsView.tsx        # Tool list [0.5.0]
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 586 tests (pytest --collect-only, 2026-10-16)
+tests/                       # 643 tests (pytest --collect-only, 2026-10-18)
 ├── fixtures/fake_telegram_api.py # Local fake Telegram Bot API server [Unreleased]
+├── test_chat_message_actions.py # Copy/edit/delete/regenerate chat messages [Unreleased]
+├── test_doctor_report.py    # Doctor checks, report, errors viewer, downloads [Unreleased]
+├── test_provider_keys.py    # Several API keys per provider [Unreleased]
 ├── test_telegram_channel.py # Telegram bot, incl. end-to-end via the fake server [Unreleased]
 └── test_telegram_webui.py   # Telegram bot inside the Web UI [Unreleased]
 ```
@@ -319,12 +328,15 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_v071_features.py` | 17 |
 | `test_v073_reliability.py` | 11 |
 | `test_v074_update_and_prompt.py` | 8 |
-| `test_telegram_channel.py` | 12 |
-| `test_telegram_webui.py` | 16 |
+| `test_chat_message_actions.py` | 8 |
+| `test_doctor_report.py` | 21 |
+| `test_provider_keys.py` | 18 |
+| `test_telegram_channel.py` | 19 |
+| `test_telegram_webui.py` | 19 |
 | `test_v075_channels_medic_skills.py` | 25 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **586** |
+| **Total** | **643** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

@@ -237,6 +237,15 @@ async def restart():
         env["VIRTUAL_ENV"] = str(active / "venv")
         env["PATH"] = os.pathsep.join([str(active / "venv" / "bin"), env.get("PATH", "")])
 
+    # 2026-10-18: close the Telegram bot's connection first; otherwise Telegram
+    # keeps the old request open and the restarted bot sees a "conflict".
+    try:
+        from myclaw.web import telegram_api
+
+        await telegram_api.stop_bot()
+    except Exception as e:  # pragma: no cover - never block a restart
+        logger.warning("Could not stop the Telegram bot before restarting: %s", e)
+
     def _reexec():
         time.sleep(1.0)  # let this response reach the browser
         logger.info("Restarting the Web UI: %s", " ".join(argv))

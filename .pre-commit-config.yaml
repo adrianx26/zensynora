@@ -7,7 +7,9 @@
 # Skip hook: git commit -m "msg" --no-verify   (not recommended)
 #
 # These hooks run locally before every commit to catch issues early.
-# The same checks are enforced in CI via .github/workflows/ci.yml.
+# CI (.github/workflows/ci.yml) enforces only the ruff rules from pyproject
+# plus mypy and pytest; the formatter hooks below (ruff-format, black, isort)
+# are local-only and reformat whole files — see CONTRIBUTING.md.
 # =============================================================================
 
 repos:

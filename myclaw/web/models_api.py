@@ -3,7 +3,7 @@
 Routes
 ------
 GET  /api/models                 current default, rotation list, every provider
-GET  /api/models/{provider}      models offered by one provider (live probe)
+GET  /api/models/{provider}      models offered by one provider (live probe; ?key=<id> uses that key)
 POST /api/models/default         switch the default provider + model now
 POST /api/models/rotate          make the next rotation entry the default
 POST /api/agents/generate-prompt write a system prompt from a name/description
@@ -21,6 +21,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from myclaw.config import load_config
+from myclaw.provider_keys import has_key, keys_overview, normalize_key_id
 from myclaw.web import settings_api
 from myclaw.web.settings_api import SettingsUpdate, guard
 
@@ -44,29 +45,40 @@ def _provider_list(cfg) -> list[dict[str, Any]]:
     return out
 
 
+def _choice(provider: str, model: str, key: str = "") -> dict[str, str]:
+    """{provider, model} plus "key" only for a named key (v0.7.5; same shape as before otherwise)."""
+    out = {"provider": provider, "model": model}
+    if normalize_key_id(key):
+        out["key"] = normalize_key_id(key)
+    return out
+
+
 @router.get("/api/models", dependencies=guard)
 async def models_overview():
     cfg = load_config()
     rot = cfg.agents.rotation
     return {
-        "default": {"provider": cfg.agents.defaults.provider, "model": cfg.agents.defaults.model},
+        "default": _choice(cfg.agents.defaults.provider, cfg.agents.defaults.model, cfg.agents.defaults.key),
         "rotation": {
             "enabled": rot.enabled,
             "strategy": rot.strategy,
-            "entries": [e.model_dump() for e in rot.entries],
+            "entries": [_choice(e.provider, e.model, e.key) for e in rot.entries],
         },
         "providers": _provider_list(cfg),
+        # v0.7.5: every provider's API keys (ids and labels only) and who uses them
+        "keys": keys_overview(cfg),
     }
 
 
 @router.get("/api/models/{provider}", dependencies=guard)
-async def provider_models(provider: str):
-    return await settings_api._probe(provider, None, None)
+async def provider_models(provider: str, key: str | None = None):
+    return await settings_api._probe(provider, None, None, None, key or None)
 
 
 class DefaultModel(BaseModel):
     provider: str
     model: str
+    key: str = ""  # v0.7.5: provider key id ("" = default key)
     # Keep the previous default in the rotation list so you can switch back.
     remember_previous: bool = True
 
@@ -76,14 +88,19 @@ async def set_default_model(req: DefaultModel):
     cfg = load_config()
     if not req.model.strip():
         raise HTTPException(status_code=400, detail="Pick a model.")
+    key = normalize_key_id(req.key) or ""
+    if not has_key(cfg, req.provider, key):
+        raise HTTPException(status_code=400, detail=f"{req.provider} has no key '{key}'.")
     changes: dict[str, Any] = {
         "agents.defaults.provider": req.provider,
         "agents.defaults.model": req.model.strip(),
+        "agents.defaults.key": key,
     }
     if req.remember_previous:
-        prev = {"provider": cfg.agents.defaults.provider, "model": cfg.agents.defaults.model}
-        entries = [e.model_dump() for e in cfg.agents.rotation.entries]
-        new = {"provider": req.provider, "model": req.model.strip()}
+        d = cfg.agents.defaults
+        prev = _choice(d.provider, d.model, d.key)
+        entries = [_choice(e.provider, e.model, e.key) for e in cfg.agents.rotation.entries]
+        new = _choice(req.provider, req.model.strip(), key)
         entries = [e for e in entries if e != new]
         if prev != new and prev not in entries:
             entries.append(prev)
@@ -96,14 +113,16 @@ async def set_default_model(req: DefaultModel):
 async def rotate_default_model():
     """Next model in the rotation list becomes the default; the old default moves to the end."""
     cfg = load_config()
-    entries = [e.model_dump() for e in cfg.agents.rotation.entries]
+    entries = [_choice(e.provider, e.model, e.key) for e in cfg.agents.rotation.entries]
     if not entries:
         raise HTTPException(status_code=400, detail="The rotation list is empty — add models in Settings → Model.")
     nxt = entries.pop(0)
-    entries.append({"provider": cfg.agents.defaults.provider, "model": cfg.agents.defaults.model})
+    d = cfg.agents.defaults
+    entries.append(_choice(d.provider, d.model, d.key))
     await settings_api.update_settings(SettingsUpdate(changes={
         "agents.defaults.provider": nxt["provider"],
         "agents.defaults.model": nxt["model"],
+        "agents.defaults.key": nxt.get("key", ""),
         "agents.rotation.entries": entries,
     }))
     return await models_overview()
@@ -172,6 +191,7 @@ async def generate_agent_prompt(req: PromptRequest):
 class TestRequest(BaseModel):
     provider: str
     model: str
+    key: str = ""  # v0.7.5: test with this provider key ("" = default key)
 
 
 @router.post("/api/models/test", dependencies=guard)
@@ -191,8 +211,9 @@ async def test_model(req: TestRequest):
     cfg = load_config()
     started = time.monotonic()
     try:
+        prov = get_provider(cfg, req.provider, key_id=req.key) if req.key else get_provider(cfg, req.provider)
         text = await asyncio.wait_for(complete_text(
-            get_provider(cfg, req.provider),
+            prov,
             [{"role": "user", "content": "Reply with the single word: OK"}], req.model), timeout=60)
     except Exception as e:
         return {"ok": False, "error": describe_llm_error(e), "ms": int((time.monotonic() - started) * 1000)}
@@ -201,3 +222,9 @@ async def test_model(req: TestRequest):
         return {"ok": False, "error": "The model answered with nothing. It may not be loaded, or it "
                 "only works through other apps.", "ms": ms}
     return {"ok": True, "reply": text.strip()[:200], "ms": ms}
+
+
+# v0.7.5: several API keys per provider (add / rename / delete / test).
+from myclaw.web import provider_keys_api as _provider_keys_api  # noqa: E402
+
+router.include_router(_provider_keys_api.router)

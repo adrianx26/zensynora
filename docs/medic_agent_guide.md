@@ -16,6 +16,7 @@ against runaway loops.
 | Check everything from a terminal | `zensynora doctor` |
 | See the same report in the browser | Web UI → **Doctor** |
 | Repair safe things automatically | `zensynora doctor --fix` or **Fix automatically** |
+| Get one file to understand or share a problem | `zensynora doctor --report` or Doctor → **Report** → Download |
 | Let an agent check/repair itself | the medic tools below (available to every agent) |
 | Let agents propose fixes to the code (you approve) | Doctor → **Change proposals**, `zensynora medic` ([section 6](#6-self-update-proposals)) |
 
@@ -29,6 +30,8 @@ zensynora doctor --problems   # only warnings and failures
 zensynora doctor --offline    # skip the model-server checks
 zensynora doctor --fix        # apply safe fixes, then re-check
 zensynora doctor --json       # machine-readable
+zensynora doctor --report     # diagnostics report → ./zensynora-report-YYYYmmdd-HHMM.md
+zensynora doctor --report ~/r.json   # .json, or .zip (report + log tail); --hours 168 = 7 days
 ```
 
 Exit code: `0` healthy, `1` warnings, `2` failures — handy for scripts and
@@ -43,14 +46,52 @@ monitoring.
 | environment | Python ≥ 3.11 · running inside the venv · required packages · **provider libraries** (e.g. `openai` for llama.cpp) · free disk · RAM · CPU load | — |
 | configuration | config file exists and matches the schema · providers known · API keys present for cloud providers · Telegram bot: token set, someone allowed, where it runs ([Telegram guide](telegram_guide.md)) | — |
 | llm *(network)* | default model server reachable (latency) · configured model is offered by the server | — |
-| data | `~/.myclaw` writable, standard folders present · every SQLite database passes `PRAGMA quick_check` · data migrations up to date | folders, migrations |
+| data | `~/.myclaw` writable, standard folders present · every SQLite database passes `PRAGMA quick_check` · data migrations up to date · knowledge index (see below) · chat channels (see below) | folders, migrations, knowledge sync |
 | security | `config.json`, `.config_key`, audit secret and update backups are owner-only · Web UI access mode | permissions |
 | install | version, managed vs. legacy layout, updater present · Web UI built | — |
-| runtime | errors in `~/.myclaw/logs/zensynora.log` in the last 24 h · systemd service state | — |
+| runtime | errors and repeated warnings in `~/.myclaw/logs/zensynora.log` in the last 24 h · restarts (crash loop) · systemd service state | — |
 | integrity | installed code matches the recorded hash baseline | — |
 
 Safe fixes never delete anything: they create missing folders, tighten
-file permissions (`600`/`700`) and run pending data migrations.
+file permissions (`600`/`700`), run pending data migrations and sync the
+knowledge index.
+
+Checks that look for trouble a running install collects:
+
+| Check (id) | Warning / failure when… | What to do |
+|---|---|---|
+| Restarts (`restart_loop`) | more than 10 starts of the service (`gateway` / `webui`) in 15 minutes. **Failure** if it is still happening, **warning** if it happened earlier in the last 24 h. Short commands like `zensynora doctor` do not count. | `sudo systemctl status myclaw`, `journalctl -u myclaw -n 100` — the errors in the report are usually the cause |
+| Errors in the last 24 h (`recent_errors`) | any ERROR or CRITICAL line, or a WARNING seen 5 times or more. Messages that differ only in numbers or ids count as one kind (`task_webui_123` and `task_webui_456`). **Failure** with 3 or more CRITICAL lines. | Doctor → Report → Errors shows each kind with its log lines and traceback |
+| Custom tools (`custom_tools`) | an enabled tool in `~/.myclaw/TOOLBOX` holds placeholder credentials (`YOUR_…_HERE`, `YOUR_BOT_TOKEN`, `"xxx"`, `<token>`) or a hard-coded secret (Telegram token, `sk-…` key) | disable it (`disable_skill`, or `"enabled": false` in `toolbox_registry.json`) and use the built-in tools, e.g. `send_telegram_message` |
+| Knowledge index (`knowledge_index`) | 3 or more note files (or more than 10 %) are not in the index, or the full-text index of note text is missing | `zensynora knowledge sync` or `zensynora doctor --fix` |
+| Agent skills (`skills`) | an agent lists a skill that does not exist, or a `SKILL.md` of yours is unreadable or empty | Skills page, or Settings → Agents |
+| MCP servers (`mcp_servers`) | a configured server's command is not installed (not on `PATH`) | install it (Node.js for `npx`, uv for `uvx`) or fix the command |
+| Chat channels (`chat_db`) | answers left unfinished by a stop, or channel members that are no longer agents | restart the Web UI — it repairs both at start |
+
+All of them read local files only and take well under a second.
+
+### Diagnostics report
+
+`zensynora doctor --report [PATH]` (or Web UI → Doctor → **Report**) writes
+one file with everything needed to understand a problem:
+
+* all doctor checks with hints;
+* warnings and errors of the period, grouped (count, first/last time,
+  module, message) with up to a few raw log lines and tracebacks each;
+* restarts (how many, most in 15 minutes, typical gap);
+* failed, timed-out or interrupted job runs, open change proposals, number of
+  medic lessons;
+* system (OS, Python, CPU, RAM, disk) and installation (folders, release);
+* a configuration summary — which providers have a key, agents with provider
+  and model, channels on/off — **never the keys or tokens themselves**;
+* the last 200 log lines.
+
+Anything in log text that looks like a token, API key or password
+(Telegram tokens, `sk-…`, `AIza…`, `Bearer …`, `api_key=…`, passwords in
+URLs) is replaced by `[redacted]`. Formats: Markdown (default), `.json`, and
+`.zip` (report.md + report.json + `zensynora.log.tail.txt`). API:
+`GET /api/doctor/report`, `GET /api/doctor/report/download?format=md|json|zip&hours=24`,
+`GET /api/doctor/errors?hours=24&level=ERROR&q=text`.
 
 ### Adding a check
 
@@ -99,7 +140,7 @@ All tools are registered in `myclaw/tools/__init__.py` and implemented in
 | `read_source_file(path, start_line, max_lines)` / `list_source_files(pattern)` | Read the installed code (read-only; never `venv/`, `.git`, `.env`) — v0.7.1 |
 | `propose_code_change(title, reason, file_path, new_content, files_json)` | File a change proposal; installed only after you approve it — v0.7.1 |
 | `list_change_proposals(status)` | Proposals and their status — v0.7.1 |
-| `get_recent_problems(hours=24)` | Grouped log errors, failed or low-scoring job runs, open proposals — v0.7.1 |
+| `get_recent_problems(hours=24)` | Grouped log errors (incl. CRITICAL), repeated warnings, restarts / crash loop, risky custom tools, failed or low-scoring job runs, open proposals — v0.7.1 |
 | `record_lesson(topic, lesson)` | Save a lesson to the knowledge note `medic-lessons` — v0.7.1 |
 
 ### Integrity and recovery

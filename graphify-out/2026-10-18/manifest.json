@@ -372,9 +372,9 @@
     "semantic_hash": ""
   },
   "myclaw/channels/telegram.py": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.3412428,
-    "ast_hash": "3e2be9ef5f298130ecaed6bf47406df7",
+    "mtime": 1792336082.287135,
+    "seen": 1792336270.8265116,
+    "ast_hash": "8143b37fb2b233df72d3c5da368944ff",
     "semantic_hash": ""
   },
   "myclaw/channels/whatsapp.py": {
@@ -384,15 +384,15 @@
     "semantic_hash": ""
   },
   "myclaw/cli.py": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.3412557,
-    "ast_hash": "14b1bb714a1e991a3d404408cbb459b3",
+    "mtime": 1792336082.3128753,
+    "seen": 1792336270.826522,
+    "ast_hash": "fd97698d16fcd8eff61a4910c81d6d3f",
     "semantic_hash": ""
   },
   "myclaw/config.py": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.3412578,
-    "ast_hash": "68cab66e58c9d4dfd0eaff5d097a5d72",
+    "mtime": 1792336082.3133976,
+    "seen": 1792336270.8265235,
+    "ast_hash": "8e069536a6f31238adc5d4830ff4bd29",
     "semantic_hash": ""
   },
   "myclaw/config_encryption.py": {
@@ -438,9 +438,9 @@
     "semantic_hash": ""
   },
   "myclaw/doctor/checks.py": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.341277,
-    "ast_hash": "ef263da2c5889c213f8505e324b230cf",
+    "mtime": 1792336231.5341668,
+    "seen": 1792336270.826537,
+    "ast_hash": "4f479c231098fd144815b73340d72e17",
     "semantic_hash": ""
   },
   "myclaw/doctor/integrity.py": {
@@ -486,9 +486,9 @@
     "semantic_hash": ""
   },
   "myclaw/gateway.py": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.3413007,
-    "ast_hash": "7b1ca65253433b47872dd1a8a5549f5f",
+    "mtime": 1792336082.3119833,
+    "seen": 1792336270.8265514,
+    "ast_hash": "8c55d0106567abb6ca1ee01ea4980e9e",
     "semantic_hash": ""
   },
   "myclaw/gdpr.py": {
@@ -558,9 +558,9 @@
     "semantic_hash": ""
   },
   "myclaw/knowledge/sync.py": {
-    "mtime": 1791907182.0572808,
-    "seen": 1791916693.3168855,
-    "ast_hash": "44aa7b1f17112cf33137e43a072c42e7",
+    "mtime": 1792336082.3095942,
+    "seen": 1792336270.8265796,
+    "ast_hash": "fd021993fd2fe83216530c96da750751",
     "semantic_hash": ""
   },
   "myclaw/knowledge_spaces.py": {
@@ -876,9 +876,9 @@
     "semantic_hash": ""
   },
   "myclaw/tools/__init__.py": {
-    "mtime": 1792098312.492959,
-    "seen": 1792098812.34148,
-    "ast_hash": "bc706d6931781e9fa3cc946a467d9a59",
+    "mtime": 1792336082.3081937,
+    "seen": 1792336270.8266594,
+    "ast_hash": "73c7f743f0e5eb987d5a1e7e0a58df53",
     "semantic_hash": ""
   },
   "myclaw/tools/browser.py": {
@@ -1002,8 +1002,8 @@
     "semantic_hash": ""
   },
   "myclaw/web/api.py": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.3415267,
+    "mtime": 1792334767.6762543,
+    "seen": 1792334923.286778,
     "ast_hash": "2709344dc0b19fc5465972a73c6d89c0",
     "semantic_hash": ""
   },
@@ -1014,9 +1014,9 @@
     "semantic_hash": ""
   },
   "myclaw/web/settings_api.py": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.3415434,
-    "ast_hash": "d8e47d4c98bd7586f38f8e5485935e41",
+    "mtime": 1792335975.8111286,
+    "seen": 1792336270.8266954,
+    "ast_hash": "e02462f75744565c728aff231967563a",
     "semantic_hash": ""
   },
   "myclaw/web_search.py": {
@@ -1308,14 +1308,14 @@
     "semantic_hash": ""
   },
   "webui/src/App.tsx": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.3417077,
+    "mtime": 1792334767.6762543,
+    "seen": 1792334923.2869363,
     "ast_hash": "639bd43cf8508046f66a03c0dab25f4e",
     "semantic_hash": ""
   },
   "webui/src/api.ts": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.34171,
+    "mtime": 1792334767.6762543,
+    "seen": 1792334923.2869387,
     "ast_hash": "6f11bec484d63166811aef7d00839c5d",
     "semantic_hash": ""
   },
@@ -1332,9 +1332,9 @@
     "semantic_hash": ""
   },
   "webui/src/components/SettingsView.tsx": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.3417337,
-    "ast_hash": "126a75bb983ea26e4a9825d4f0f9f639",
+    "mtime": 1792335975.8111286,
+    "seen": 1792336270.826807,
+    "ast_hash": "cd2bf5fb615d232508c53c854d7d1943",
     "semantic_hash": ""
   },
   "webui/src/components/ToolsView.tsx": {
@@ -1392,8 +1392,8 @@
     "semantic_hash": ""
   },
   ".github/PULL_REQUEST_TEMPLATE.md": {
-    "mtime": 1792098839.263966,
-    "seen": 1792098938.6535854,
+    "mtime": 1792334767.1642544,
+    "seen": 1792334923.2869976,
     "ast_hash": "aecd23b4fdb5db5d43e226ad8a89ccbe",
     "semantic_hash": ""
   },
@@ -1446,20 +1446,20 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1792098878.582308,
-    "seen": 1792098938.6535983,
-    "ast_hash": "a00560865127ae65dad46d8fe54c1223",
+    "mtime": 1792336245.4030254,
+    "seen": 1792336270.8268352,
+    "ast_hash": "9729c6a55cd37d74f2c5821aa0e47bbd",
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
-    "mtime": 1792098799.9155858,
-    "seen": 1792098812.3417895,
+    "mtime": 1792334767.1642544,
+    "seen": 1792334923.2870183,
     "ast_hash": "a1419aeb8af59c7c3d23b1bbe42ec111",
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1792098899.6160052,
-    "seen": 1792098938.6536007,
+    "mtime": 1792334767.1642544,
+    "seen": 1792334923.2870202,
     "ast_hash": "4af9fad6f874c99681030b45a6cc8b92",
     "semantic_hash": ""
   },
@@ -1476,8 +1476,8 @@
     "semantic_hash": ""
   },
   "diagrams/docs-architecture-diagram.html": {
-    "mtime": 1792098899.7256758,
-    "seen": 1792098938.6536045,
+    "mtime": 1792334767.1642544,
+    "seen": 1792334923.2870262,
     "ast_hash": "7caf300d8cd5f9f0705d4c299c5201b9",
     "semantic_hash": ""
   },
@@ -1536,8 +1536,8 @@
     "semantic_hash": ""
   },
   "diagrams/index.html": {
-    "mtime": 1792098899.7312684,
-    "seen": 1792098938.6536179,
+    "mtime": 1792334767.1682544,
+    "seen": 1792334923.2870498,
     "ast_hash": "9651c5edbb3c48dc83f35bfbf6abad81",
     "semantic_hash": ""
   },
@@ -1554,8 +1554,8 @@
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
-    "mtime": 1792098903.1684637,
-    "seen": 1792098938.6536217,
+    "mtime": 1792334767.1682544,
+    "seen": 1792334923.2870567,
     "ast_hash": "459092d0a0056a870ce78eefd7e8175a",
     "semantic_hash": ""
   },
@@ -1566,8 +1566,8 @@
     "semantic_hash": ""
   },
   "docs/README.md": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.3418665,
+    "mtime": 1792334767.1682544,
+    "seen": 1792334923.2870615,
     "ast_hash": "8ca75defb1b4dbe8c81be9073a759450",
     "semantic_hash": ""
   },
@@ -1596,8 +1596,8 @@
     "semantic_hash": ""
   },
   "docs/architecture_diagram.md": {
-    "mtime": 1792098799.915745,
-    "seen": 1792098812.3418794,
+    "mtime": 1792334767.1682544,
+    "seen": 1792334923.287074,
     "ast_hash": "deaeb78e41a142a1ca954b1193ff9538",
     "semantic_hash": ""
   },
@@ -1956,8 +1956,8 @@
     "semantic_hash": ""
   },
   "docs/medic_agent_guide.md": {
-    "mtime": 1792098806.7605958,
-    "seen": 1792098812.3420277,
+    "mtime": 1792334767.1682544,
+    "seen": 1792334923.2872064,
     "ast_hash": "f30c06c85283c9c33ab96490015bb726",
     "semantic_hash": ""
   },
@@ -2310,9 +2310,9 @@
     "semantic_hash": ""
   },
   "docs/webui_guide.md": {
-    "mtime": 1792098872.9355838,
-    "seen": 1792098938.6537306,
-    "ast_hash": "d180dab3723d8ec17b551493a3465cd1",
+    "mtime": 1792335975.6351285,
+    "seen": 1792336270.82697,
+    "ast_hash": "9d63d6361231941d416b109726a118be",
     "semantic_hash": ""
   },
   "docs/images/webui-backups.png": {
@@ -2382,9 +2382,9 @@
     "semantic_hash": ""
   },
   "myclaw/web/update_api.py": {
-    "mtime": 1792098859.1881056,
-    "seen": 1792098938.6534636,
-    "ast_hash": "6c1d578ed284946ccc20e4b4484740d7",
+    "mtime": 1792336088.5597084,
+    "seen": 1792336270.8267014,
+    "ast_hash": "4341d0ace53583dc042f6f830d7e9795",
     "semantic_hash": ""
   },
   "tests/test_v074_update_and_prompt.py": {
@@ -2502,8 +2502,8 @@
     "semantic_hash": ""
   },
   "myclaw/knowledge/scope.py": {
-    "mtime": 1792098768.8573463,
-    "seen": 1792098812.3413389,
+    "mtime": 1792334767.6762543,
+    "seen": 1792334923.2866027,
     "ast_hash": "90350313ea31c35bb096bca9754a9844",
     "semantic_hash": ""
   },
@@ -2514,39 +2514,39 @@
     "semantic_hash": ""
   },
   "myclaw/web/telegram_api.py": {
-    "mtime": 1792098859.1877134,
-    "seen": 1792098938.653461,
-    "ast_hash": "b6e854dd54823734bf90045ee766f981",
+    "mtime": 1792335975.8111286,
+    "seen": 1792336270.8266993,
+    "ast_hash": "a18d1aa4633c97cee2a616ab919ae253",
     "semantic_hash": ""
   },
   "tests/fixtures/__init__.py": {
-    "mtime": 1792098761.7888374,
-    "seen": 1792098812.3415682,
+    "mtime": 1792334767.6762543,
+    "seen": 1792334923.286818,
     "ast_hash": "d41d8cd98f00b204e9800998ecf8427e",
     "semantic_hash": ""
   },
   "tests/fixtures/fake_telegram_api.py": {
-    "mtime": 1792098761.7790396,
-    "seen": 1792098812.3415706,
+    "mtime": 1792334767.6762543,
+    "seen": 1792334923.2868204,
     "ast_hash": "bbcea0f253d43926604e84aab188fece",
     "semantic_hash": ""
   },
   "tests/test_telegram_channel.py": {
-    "mtime": 1792098761.7808373,
-    "seen": 1792098812.341644,
-    "ast_hash": "39a776569139dfd64fbccd4378abfb84",
+    "mtime": 1792336125.3353834,
+    "seen": 1792336270.826754,
+    "ast_hash": "bea8024d59bb50f692a7e192488e21b1",
     "semantic_hash": ""
   },
   "tests/test_telegram_webui.py": {
-    "mtime": 1792098655.0531902,
-    "seen": 1792098812.3416467,
-    "ast_hash": "0cde650446fbc7d7e1b543d34a16f169",
+    "mtime": 1792335975.8111286,
+    "seen": 1792336270.8267553,
+    "ast_hash": "7b0a4ba26f4eaf9aaad4e75dd45a47ab",
     "semantic_hash": ""
   },
   "docs/telegram_guide.md": {
-    "mtime": 1792098872.9362698,
-    "seen": 1792098938.6537287,
-    "ast_hash": "bbcdb3b4bf83e8dec43e6aa8cc04b891",
+    "mtime": 1792336256.8015497,
+    "seen": 1792336270.8269687,
+    "ast_hash": "6500e3cb7c27d5f3fbbfa1526953ab5b",
     "semantic_hash": ""
   }
 }

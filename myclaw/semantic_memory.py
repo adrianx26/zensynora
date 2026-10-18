@@ -194,7 +194,7 @@ class PreferenceLearner:
         if not user_messages:
             return
         
-        avg_length = sum(len(m.get("content", "")) / len(user_messages)
+        avg_length = sum(len(m.get("content", "")) for m in user_messages) / len(user_messages)
         
         if avg_length < 50:
             self._update_preference(profile, "response_length", "short", source="auto")

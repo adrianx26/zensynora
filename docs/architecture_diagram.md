@@ -568,3 +568,25 @@ sequenceDiagram
 *Diagrams are Mermaid; GitHub renders them directly. Standalone dark-theme
 pages are generated into [`diagrams/`](../diagrams/index.html) with
 `python diagrams/generate.py`.*
+
+## 16. Providers, keys and agents
+
+Since the Unreleased changes a provider can hold several named API keys
+(`providers.<name>.keys`; the plain `api_key` is the *Default key*). Each agent,
+the default model and every rotation entry pick a provider, a key and a model.
+With `providers.<name>.rotate_keys` on, a rate-limited or exhausted key makes
+the agent try the same model with the provider's other keys before the next
+model. Cooldowns are kept per provider, model and key.
+
+```mermaid
+flowchart LR
+    agent["Agent<br/>provider · key · model"] --> pick{"key id"}
+    pick -- "empty" --> defkey["Default key<br/>providers.X.api_key"]
+    pick -- "work" --> named["Named key<br/>providers.X.keys[work]"]
+    pick -- "unknown" --> warn["warning in the log<br/>uses the Default key"] --> defkey
+    defkey & named --> client["provider client<br/>cached per provider + key"]
+    client --> llm(["model server"])
+    llm -- "429 · quota · 401" --> rot{"rotate_keys on?"}
+    rot -- "yes" --> other["same model,<br/>next key of the provider"] --> client
+    rot -- "no" --> next["next model in the rotation list"]
+```

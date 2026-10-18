@@ -23,6 +23,10 @@ import asyncio
 import atexit
 import logging
 from threading import Lock
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:  # annotations only; aiohttp is imported lazily at runtime
+    import aiohttp
 
 logger = logging.getLogger(__name__)
 

@@ -189,10 +189,12 @@ def agent():
 @cli.command()
 @click.option("--webhook-url", default=None, help="Telegram webhook mode: the public HTTPS URL Telegram calls")
 @click.option("--port", default=8443, show_default=True, help="Port for the webhook server")
-def gateway(webhook_url, port):
+@click.option("--telegram", "force_telegram", is_flag=True,
+              help="Run the Telegram bot here even if it is set to run inside the Web UI")
+def gateway(webhook_url, port, force_telegram):
     """Start the messaging gateway (Telegram/WhatsApp) without the Web UI"""
     config = load_config()
-    start(config, webhook_url=webhook_url, port=port)
+    start(config, webhook_url=webhook_url, port=port, force_telegram=force_telegram)
 
 @cli.command(name="mcp-server")
 def mcp_server():
@@ -399,15 +401,26 @@ def update(updater_args):
 @click.option("--offline", is_flag=True, help="Skip checks that need the network (LLM server).")
 @click.option("--json", "as_json", is_flag=True, help="Machine-readable output.")
 @click.option("--problems", is_flag=True, help="Only show warnings and failures.")
-def doctor(fix, offline, as_json, problems):
+@click.option("--report", "report_path", is_flag=False, flag_value=".", default=None, metavar="[PATH]",
+              help="Write a full diagnostics report (Markdown; .json or .zip by extension) and print its path.")
+@click.option("--hours", default=24, show_default=True, help="Period the report covers.")
+def doctor(fix, offline, as_json, problems, report_path, hours):
     """Check this installation and explain how to fix problems.
 
     \b
+    zensynora doctor --report              report in this folder (zensynora-report-….md)
+    zensynora doctor --report ~/r.json     JSON (or .zip: report + log tail)
     Exit code: 0 = healthy, 1 = warnings, 2 = failures.
     """
     import json as _json
 
     from .doctor import apply_fixes, run_checks
+
+    if report_path is not None:
+        from .doctor import report as _report
+
+        click.echo(_report.write(report_path, hours=hours, offline=offline))
+        return
 
     report = run_checks(offline=offline)
     if fix:

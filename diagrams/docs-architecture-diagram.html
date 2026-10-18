@@ -16,7 +16,7 @@
   <span class="dot"></span>
   <h1 class="title">ZenSynora Architecture — Visual Guide</h1>
 </div>
-<p class="subtitle">16 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
+<p class="subtitle">17 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
 <div class="legend">
   <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
   <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
@@ -437,6 +437,20 @@
         W-&gt;&gt;T: send each part, as plain text if Markdown fails
         T--&gt;&gt;U: answer
     end</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">16. Providers, keys and agents</h2>
+  <p class="diagram-desc">Since the Unreleased changes a provider can hold several named API keys (`providers.&lt;name&gt;.keys`; the plain `api_key` is the *Default key*). Each agent, the default model and every rotation entry pick a provider, a key and a model. With `pr</p>
+  <div class="mermaid">flowchart LR
+    agent[&quot;Agent&lt;br/&gt;provider · key · model&quot;] --&gt; pick{&quot;key id&quot;}
+    pick -- &quot;empty&quot; --&gt; defkey[&quot;Default key&lt;br/&gt;providers.X.api_key&quot;]
+    pick -- &quot;work&quot; --&gt; named[&quot;Named key&lt;br/&gt;providers.X.keys[work]&quot;]
+    pick -- &quot;unknown&quot; --&gt; warn[&quot;warning in the log&lt;br/&gt;uses the Default key&quot;] --&gt; defkey
+    defkey &amp; named --&gt; client[&quot;provider client&lt;br/&gt;cached per provider + key&quot;]
+    client --&gt; llm([&quot;model server&quot;])
+    llm -- &quot;429 · quota · 401&quot; --&gt; rot{&quot;rotate_keys on?&quot;}
+    rot -- &quot;yes&quot; --&gt; other[&quot;same model,&lt;br/&gt;next key of the provider&quot;] --&gt; client
+    rot -- &quot;no&quot; --&gt; next[&quot;next model in the rotation list&quot;]</div>
 </div>
 
 <div class="footer">

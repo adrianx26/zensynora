@@ -97,7 +97,7 @@ knowledge base. Step by step: [docs/telegram_guide.md](docs/telegram_guide.md).
 | `zensynora mcp-server` | Expose ZenSynora's tools to MCP clients over stdio |
 | `zensynora knowledge sync \| search \| list \| read \| write` | Manage the knowledge base |
 | `zensynora swarm …` · `skills list [--tools]` · `memory …` | Swarms, agent skills (and tools), conversation memory |
-| `zensynora doctor` | Health check with fix hints (`--fix`, `--offline`, `--json`) |
+| `zensynora doctor` | Health check with fix hints (`--fix`, `--offline`, `--json`); `--report [PATH]` writes a diagnostics report (Markdown, `.json` or `.zip`, no secrets) |
 | `zensynora backup create \| list \| restore` | Back up / restore settings, API keys, knowledge, conversations, jobs |
 | `zensynora medic proposals \| show \| approve` | Review code changes proposed by agents |
 | `zensynora update` | Safe update (`status --check`, `rollback`, `backup`) |
@@ -166,6 +166,10 @@ API key.
 | Anthropic · Gemini | API key | install `anthropic` / `google-generativeai` |
 | **Your own** (Models → Add provider) | URL (+ key) | any OpenAI-compatible server or another Ollama; presets for vLLM, LocalAI, DeepSeek, Mistral, Cerebras, GitHub Models … |
 
+A provider can hold **several API keys** (Settings → Providers → Keys) and
+each agent picks one; optionally the other keys are tried when one is
+rate-limited — see [Several keys for one provider](docs/webui_guide.md#several-keys-for-one-provider).
+
 Environment variables override the file — useful for Docker and services:
 
 ```bash
@@ -227,7 +231,7 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 git clone https://github.com/adrianx26/zensynora.git && cd zensynora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q -o addopts=""        # 586 tests
+pytest -q -o addopts=""        # 643 tests
 ruff check .
 ```
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import copy
 import logging
+import re
 import secrets
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -21,6 +22,7 @@ from pydantic import BaseModel, SecretStr, ValidationError
 
 from myclaw.config import (
     CONFIG_FILE,
+    KEY_ID_PATTERN,
     AppConfig,
     load_config,
     save_config,
@@ -197,7 +199,58 @@ def _public_config(cfg: AppConfig) -> Tuple[Dict[str, Any], List[str]]:
         if cp.api_key.get_secret_value():
             set_secrets.append(f"providers.custom.{cp.name}.api_key")
         data["providers"]["custom"][i]["api_key"] = ""
+        _mask_keys(cp, data["providers"]["custom"][i], f"providers.custom.{cp.name}", set_secrets)
+    # v0.7.5: extra named keys of built-in providers (list items as well).
+    for name in type(cfg.providers).model_fields:
+        pcfg = getattr(cfg.providers, name)
+        if isinstance(pcfg, BaseModel) and "keys" in type(pcfg).model_fields:
+            _mask_keys(pcfg, data["providers"][name], f"providers.{name}", set_secrets)
     return data, set_secrets
+
+
+def _mask_keys(pcfg: Any, out: Dict[str, Any], prefix: str, set_secrets: List[str]) -> None:
+    """Blank the secrets of a provider's extra keys; note which ones are set."""
+    for j, k in enumerate(getattr(pcfg, "keys", None) or []):
+        if k.api_key.get_secret_value():
+            set_secrets.append(f"{prefix}.keys.{k.id}.api_key")
+        out["keys"][j]["api_key"] = ""
+
+
+_KEY_ID_RE = re.compile(KEY_ID_PATTERN)
+
+
+def _merge_keys(new_items: Any, stored_items: Any, where: str) -> List[Dict[str, Any]]:
+    """Validate a provider's extra keys from the form and keep stored secrets (v0.7.5).
+
+    Like custom providers: an empty ``api_key`` keeps the saved secret of the
+    key with the same id (or ``_previous_id``); ``clear_api_key`` removes it.
+    """
+    if new_items is None:
+        return []
+    if not isinstance(new_items, list):
+        raise HTTPException(status_code=400, detail=f"{where}.keys must be a list")
+    stored = {k.get("id"): k for k in (stored_items or []) if isinstance(k, dict)}
+    out, seen = [], set()
+    for item in new_items:
+        if not isinstance(item, dict):
+            raise HTTPException(status_code=400, detail=f"{where}: invalid key entry")
+        kid = str(item.get("id", "")).strip().lower()
+        if kid == "default":
+            raise HTTPException(status_code=400, detail=f"{where}: 'default' is the main API key; pick another id.")
+        if not _KEY_ID_RE.match(kid):
+            raise HTTPException(status_code=400, detail=f"{where}: key id '{kid}' must use lower-case letters, digits, - or _.")
+        if kid in seen:
+            raise HTTPException(status_code=400, detail=f"{where}: two keys have the id '{kid}'.")
+        seen.add(kid)
+        clean = {"id": kid, "label": str(item.get("label") or "").strip()[:80]}
+        secret = "".join(str(item.get("api_key") or "").split())
+        if item.get("clear_api_key"):
+            secret = ""
+        elif not secret:
+            secret = (stored.get(item.get("_previous_id") or kid) or {}).get("api_key", "")
+        clean["api_key"] = secret
+        out.append(clean)
+    return out
 
 
 _HELPER_KEYS = ("_previous_name", "clear_api_key")
@@ -232,11 +285,15 @@ def _merge_custom_providers(new_items: Any, raw: Dict[str, Any]) -> List[Dict[st
         if not str(item.get("base_url", "")).strip():
             raise HTTPException(status_code=400, detail=f"{name}: server URL is required.")
         clean = {k: v for k, v in item.items() if k not in _HELPER_KEYS}
+        prev = stored.get(item.get("_previous_name") or name) or {}
         if item.get("clear_api_key"):
             clean["api_key"] = ""
         elif not clean.get("api_key"):
-            prev = stored.get(item.get("_previous_name") or name) or {}
             clean["api_key"] = prev.get("api_key", "")
+        if "keys" in item:  # v0.7.5: extra named keys keep their secrets too
+            clean["keys"] = _merge_keys(item.get("keys"), prev.get("keys"), name)
+        elif prev.get("keys"):
+            clean["keys"] = prev["keys"]
         out.append(clean)
     return out
 
@@ -301,6 +358,8 @@ async def update_settings(update: SettingsUpdate):
             continue  # empty secret field = keep the stored value
         if path == "providers.custom":
             value = _merge_custom_providers(value, raw)
+        elif path.startswith("providers.") and path.endswith(".keys") and path.count(".") == 2:
+            value = _merge_keys(value, _get_path(raw, path), path.split(".")[1])
         _set_path(raw, path, value)
 
     for path in update.clear_secrets:
@@ -343,9 +402,16 @@ async def update_settings(update: SettingsUpdate):
                    if o and n and o != n and o not in new_names and n not in old_names}
 
     try:
-        AppConfig(**raw)
+        new_cfg = AppConfig(**raw)
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=f"Invalid settings: {e.errors()[:3]}")
+    # v0.7.5: an agent or rotation entry must not point at a key that does not exist.
+    if any(p.startswith("agents.") or p.endswith(".keys") or p == "providers.custom" for p in update.changes):
+        from myclaw.provider_keys import missing_key_refs
+
+        missing = missing_key_refs(new_cfg)
+        if missing:
+            raise HTTPException(status_code=400, detail="; ".join(missing) + ".")
 
     save_config(raw)
     load_config(force_reload=True)
@@ -399,19 +465,25 @@ class ProbeRequest(BaseModel):
     base_url: Optional[str] = None  # unsaved value from the form, optional
     api_key: Optional[str] = None  # unsaved value from the form, optional
     kind: Optional[str] = None  # for an unsaved custom provider: "openai" | "ollama"
+    key_id: Optional[str] = None  # v0.7.5: test one of the provider's saved keys
 
 
 async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str],
-                 kind: Optional[str] = None) -> Dict[str, Any]:
+                 kind: Optional[str] = None, key_id: Optional[str] = None) -> Dict[str, Any]:
     """Test a provider and list its models.
 
     v0.7.1: works for custom providers too (via provider_endpoint), and for an
     unsaved custom provider when ``kind`` + ``base_url`` come from the form.
+    v0.7.5: ``key_id`` tests (and lists models with) one of the saved keys.
     """
     from myclaw.provider import provider_endpoint
+    from myclaw.provider_keys import UnknownKeyError
 
     cfg = load_config()
-    ep = provider_endpoint(cfg, provider)
+    try:
+        ep = provider_endpoint(cfg, provider, key_id)
+    except UnknownKeyError as e:
+        return {"ok": False, "error": str(e), "models": []}
     if ep is None:
         if not (kind and base_url):
             return {"ok": False, "error": f"Unknown provider '{provider}'", "models": []}
@@ -484,7 +556,7 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str],
 
 @router.post("/api/settings/probe", dependencies=guard)
 async def probe_provider(req: ProbeRequest):
-    return await _probe(req.provider, req.base_url, req.api_key, req.kind)
+    return await _probe(req.provider, req.base_url, req.api_key, req.kind, req.key_id)
 
 
 # ── Live system health (replaces the hard-coded sidebar values) ──────────────
@@ -512,7 +584,7 @@ async def system_health():
 
     cfg = load_config()
     provider = cfg.agents.defaults.provider
-    probe = await _probe(provider, None, None)
+    probe = await _probe(provider, None, None, None, getattr(cfg.agents.defaults, "key", "") or None)
 
     kb: Dict[str, Any] = {"ok": False}
     try:

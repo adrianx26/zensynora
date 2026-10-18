@@ -7,24 +7,149 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed (2026-10-18)
+Since 0.7.5 (no new version number yet). The Telegram bot was reviewed and fixed: it answers normal messages again,
+runs inside the Web UI, and shares the knowledge base with it. See the new
+[Telegram guide](docs/telegram_guide.md).
+
+### Added
+
+**Telegram (2026-10-18)**
+- **`send_telegram_message` tool**: agents can write to you through
+  ZenSynora's own bot (only to *Allowed Telegram users*). Agents had been
+  building their own Telegram tools with placeholder tokens. Agents are now told
+  in their instructions to use it and never to ask for the bot token or the
+  user's id.
+- Doctor: the Telegram check warns when the `myclaw` service runs next to the
+  bot in the Web UI.
+
+**Chat: copy, edit, delete, regenerate**
+- Every chat message has a hover bar (… on touch screens): **Copy** (code
+  blocks get their own Copy button), **Edit** (your message: edit and send
+  again, later messages are removed; an agent answer: correct it in place),
+  **Delete** (your message with or without its answers) and **Regenerate**
+  (an agent writes its answer again). Edited messages show *(edited)*; all open
+  browsers update at once. ↑ in the empty input edits your last message;
+  **⤓ MD** copies or downloads the conversation as Markdown.
+- API: `PATCH`/`DELETE /api/channels/{id}/messages/{mid}`,
+  `POST …/{mid}/regenerate`, `GET /api/channels/{id}/export.md`; socket events
+  `message_updated` and `messages_deleted`. Refused with 409 while agents are
+  answering. Agents' channel memory is rebuilt from the visible messages.
+
+**Doctor, API keys (2026-10-18)**
+- **Doctor: more checks, report view and download**
+  - New checks: restarts (crash loop: more than 10 starts in 15 min), risky
+    custom tools (placeholder or hard-coded credentials in `~/.myclaw/TOOLBOX`),
+    knowledge index (notes not indexed; `--fix` syncs), agent skills (unknown or
+    broken), MCP servers (command not installed), chat channels (unfinished
+    answers, deleted agents still members).
+  - *Errors in the last 24 h* now also counts CRITICAL lines and warnings that
+    repeat (5+), per level, and groups messages that differ only in numbers.
+  - Diagnostics report: `zensynora doctor --report [PATH]` (Markdown, `.json`
+    or `.zip`), Web UI → Doctor → **Report** (summary, Errors viewer with
+    filters and log lines, View report, Download), `/api/doctor/report`,
+    `/api/doctor/report/download`, `/api/doctor/errors`. Keys and tokens are
+    never included; log text is redacted.
+  - The medic's `get_recent_problems` and self-review also see restarts,
+    repeated warnings and risky custom tools.
+- **Send test message** (Settings → Channels, `POST /api/telegram/send-test`):
+  the running bot writes to every numeric id in *Allowed Telegram users*, or
+  to one `chat_id`. If Telegram refuses because the person never pressed
+  Start in the bot, the message says so.
+- **Several API keys per provider** (e.g. two free OpenRouter accounts):
+  - Each provider with an API key, and each of your own providers, has a
+    **Keys** list (Settings → Providers; Models → Your providers → Keys):
+    add a key with a name, rename it, replace or delete it, **Test** it (also
+    lists the models that key can use) and see which agents use it. The old
+    `api_key` is the *Default key*; old settings load unchanged.
+  - Settings → Agents and the Models page have a **Key** picker after the
+    provider; rotation entries can use a key too. Config:
+    `providers.<name>.keys[] = {id, label, api_key}`, `agents.defaults.key`,
+    `agents.named[].key`, `agents.rotation.entries[].key` (empty = default key).
+  - *When a key hits a rate limit or runs out of quota, try the other keys*
+    (`providers.<name>.rotate_keys`, off by default): on a 429 / quota / key
+    error the same model is tried with the provider's other keys before the
+    next model. Cooldowns are per provider, model and key.
+  - Keys are secrets like `api_key`: never sent to the browser, kept when the
+    field is left empty, encrypted with the rest of the config. An agent whose
+    key was removed uses the default key; the log and the doctor say so.
+  - API: `GET/POST /api/provider-keys`, `PATCH/DELETE
+    /api/provider-keys/{provider}/{key}`, `POST …/{key}/test`, `PUT
+    …/{provider}/rotate`; `key_id` in `POST /api/settings/probe`, `?key=` in
+    `GET /api/models/{provider}`, `key` in `POST /api/models/default` and
+    `/api/models/test`; the `create_agent` tool takes `key`.
+
+- **The bot runs inside the Web UI.** With `channels.telegram.enabled` and
+  `channels.telegram.run_in_webui` (default on), `zensynora webui` starts the
+  Telegram bot too — no separate `zensynora gateway` needed. Telegram allows
+  only one copy of a bot: if another process already runs it (for example
+  `zensynora gateway`), the Web UI shows "conflict" and stops its own copy.
+- **Settings → Channels:** *Allowed Telegram users* (list), *Run the bot inside
+  the Web UI*, *Telegram uses the same knowledge base as the Web UI*, and a
+  *Telegram bot* panel with the status (Running as @name, Starting…, Stopped,
+  Turned off, No bot token yet, Runs in zensynora gateway, conflict, Error), a
+  warning when nobody is allowed yet, **Test bot** (checks the typed token, or
+  else the saved one, with Telegram) and **Restart bot** (not available when
+  the bot is off, runs in the gateway or has no saved token). Saving restarts
+  the bot by itself, only when a Telegram setting changed. The sidebar health
+  has a *Telegram* row (running @name / stopped / conflict / error). API:
+  `GET /api/telegram/status`, `POST /api/telegram/test`,
+  `POST /api/telegram/restart`.
+- **`/start`, `/help` and `/whoami`.** These work for everyone. `/whoami`
+  answers with your own numeric Telegram id and how to allow it; nothing else
+  is revealed. All other commands need an allowed user.
+- **Command menu.** The `/` list in Telegram is registered automatically, with
+  a description for each command.
+- **Doctor check "Telegram bot"** (category configuration): *off*; *enabled
+  but no bot token* (fail); *nobody is allowed to use the bot* (warning, with
+  the hint to send `/whoami` and add the number); or the number of allowed
+  users and whether the bot runs inside the Web UI or with
+  `zensynora gateway`.
+- **`ZENSYNORA_TELEGRAM_API_URL`** points the bot at a self-hosted Telegram
+  Bot API server (for example `http://localhost:8081`); the tests use it too.
+- **Tests:** `tests/test_telegram_channel.py`, including an end-to-end test of
+  the real python-telegram-bot library against a local fake Bot API server
+  (`tests/fixtures/fake_telegram_api.py`), and `tests/test_telegram_webui.py`.
+
+### Fixed
+
+**Telegram errors on a real install (2026-10-18)**
+- **The `myclaw` service (`zensynora gateway`) crashed every ~7 seconds** with
+  "There is no current event loop" and systemd restarted it. Each start sent
+  a request to Telegram before crashing, which took the connection away from
+  the bot inside the Web UI → "Another program is already running this bot"
+  and the Web UI's bot stopped. The gateway bot now runs on its own event
+  loop, and when the bot is set to run inside the Web UI the gateway leaves
+  Telegram alone and exits cleanly (so systemd does not restart it).
+  `zensynora gateway --telegram` runs it there anyway.
+- **A restart looked like a second bot.** Right after a restart Telegram keeps
+  the previous request open for a few seconds and answers "conflict"; the bot
+  stopped for good. Conflicts in the first 90 s are now retried, and the Web
+  UI closes the bot before restarting itself (Updates → Restart).
+- **Background knowledge sync never started** (`_background_extraction_task is
+  not defined`); in the gateway it now starts on the bot's event loop.
+- The "Telegram is enabled but no token" warning points to Settings → Channels.
+
+- **CI workflows fixed.** lint, test, typecheck and docker failed on every PR
+  and on `main`, and the docs deploy failed on `main`. Causes: the `[dev]`
+  extra listed `graphify-tool`, which is not on PyPI (test and typecheck could
+  not install); ruff ran every style rule over a codebase that was never
+  style-clean; the Docker image did not copy `README.md`, which the package
+  metadata needs; the docs deploy had no write permission. CI now runs ruff
+  with real-error rules only, mypy with a realistic config, pytest on 3.11 and
+  3.12 with the core dependencies, a Web UI build and a Docker smoke test
+  (`/health`); the docs workflow also checks that `diagrams/` is up to date.
+  Fixed on the way: undefined names that would have crashed at runtime
+  (`tools/session.py`, `tools/toolbox.py`, `tools/management.py`,
+  `plugin_system.py`, `provider.py`, `knowledge/sync.py`) and a syntax error in
+  `semantic_memory.py`. See CONTRIBUTING.md, "CI (GitHub Actions)".
+
+**Telegram token (2026-10-18)**
 - **Telegram: "The bot token is wrong" although Test bot said it works.** A
   space or line break pasted with the token broke every request of the bot;
   the Test bot button trimmed it, the bot did not. The bot now trims the
   token, and saving Settings trims every secret (API keys and tokens never
   contain spaces). The real reason Telegram gave is now in the log.
 
-### Added (2026-10-18)
-- **Send test message** (Settings → Channels, `POST /api/telegram/send-test`):
-  the running bot writes to every numeric id in *Allowed Telegram users*, or
-  to one `chat_id`. If Telegram refuses because the person never pressed
-  Start in the bot, the message says so.
-
-The Telegram bot was reviewed and fixed: it answers normal messages again,
-runs inside the Web UI, and shares the knowledge base with it. See the new
-[Telegram guide](docs/telegram_guide.md).
-
-### Fixed
 - **The bot never answered normal messages.** Messages went into a queue whose
   worker was never started, so only `/commands` worked. The workers now start
   with the bot: several chats are answered in parallel, one message at a time
@@ -67,39 +192,6 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
   answered; `@Name` with nothing after it gets "What should @Name do? …"
   instead of an empty request. Error replies are short; technical details go
   to the log only.
-
-### Added
-- **The bot runs inside the Web UI.** With `channels.telegram.enabled` and
-  `channels.telegram.run_in_webui` (default on), `zensynora webui` starts the
-  Telegram bot too — no separate `zensynora gateway` needed. Telegram allows
-  only one copy of a bot: if another process already runs it (for example
-  `zensynora gateway`), the Web UI shows "conflict" and stops its own copy.
-- **Settings → Channels:** *Allowed Telegram users* (list), *Run the bot inside
-  the Web UI*, *Telegram uses the same knowledge base as the Web UI*, and a
-  *Telegram bot* panel with the status (Running as @name, Starting…, Stopped,
-  Turned off, No bot token yet, Runs in zensynora gateway, conflict, Error), a
-  warning when nobody is allowed yet, **Test bot** (checks the typed token, or
-  else the saved one, with Telegram) and **Restart bot** (not available when
-  the bot is off, runs in the gateway or has no saved token). Saving restarts
-  the bot by itself, only when a Telegram setting changed. The sidebar health
-  has a *Telegram* row (running @name / stopped / conflict / error). API:
-  `GET /api/telegram/status`, `POST /api/telegram/test`,
-  `POST /api/telegram/restart`.
-- **`/start`, `/help` and `/whoami`.** These work for everyone. `/whoami`
-  answers with your own numeric Telegram id and how to allow it; nothing else
-  is revealed. All other commands need an allowed user.
-- **Command menu.** The `/` list in Telegram is registered automatically, with
-  a description for each command.
-- **Doctor check "Telegram bot"** (category configuration): *off*; *enabled
-  but no bot token* (fail); *nobody is allowed to use the bot* (warning, with
-  the hint to send `/whoami` and add the number); or the number of allowed
-  users and whether the bot runs inside the Web UI or with
-  `zensynora gateway`.
-- **`ZENSYNORA_TELEGRAM_API_URL`** points the bot at a self-hosted Telegram
-  Bot API server (for example `http://localhost:8081`); the tests use it too.
-- **Tests:** `tests/test_telegram_channel.py`, including an end-to-end test of
-  the real python-telegram-bot library against a local fake Bot API server
-  (`tests/fixtures/fake_telegram_api.py`), and `tests/test_telegram_webui.py`.
 
 ## [0.7.5] - 2026-10-14
 

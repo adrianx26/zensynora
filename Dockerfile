@@ -35,7 +35,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir -r requirements.txt
 
 # ── Stage 2: Frontend Builder ────────────────────────────────────────────────
-FROM node:20-slim AS frontend-builder
+# Vite 8 needs Node >= 20.19; Node 20 is end-of-life, so build on 22 LTS.
+FROM node:22-slim AS frontend-builder
 
 WORKDIR /frontend
 
@@ -88,6 +89,9 @@ WORKDIR /app
 # Copy package metadata FIRST for proper editable install
 COPY --chown=zensynora:zensynora pyproject.toml ./
 COPY --chown=zensynora:zensynora requirements.txt ./
+# pyproject.toml declares readme = "README.md"; hatchling refuses to build
+# the package metadata without it (this broke `pip install -e .` below).
+COPY --chown=zensynora:zensynora README.md LICENSE ./
 
 # Copy application code
 COPY --chown=zensynora:zensynora myclaw/ ./myclaw/
@@ -131,14 +135,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install dev dependencies
-RUN pip install --no-cache-dir \
-    pytest>=7.0 \
-    pytest-asyncio>=0.21.0 \
-    pytest-cov>=4.0 \
-    ruff>=0.4.0 \
-    black>=24.0 \
-    isort>=5.13 \
-    mypy>=1.9
+# (quoted: unquoted `pytest>=7.0` is a shell redirect, not a version spec)
+RUN pip install --no-cache-dir -e ".[test]" \
+    "ruff>=0.4.0,<1" \
+    "mypy>=1.9,<2"
 
 USER zensynora
 
