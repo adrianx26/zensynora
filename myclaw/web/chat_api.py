@@ -11,14 +11,21 @@ GET    /api/channels/{id}/messages      history (?before=<id>&limit=100)
 DELETE /api/channels/{id}/messages      clear the channel
 POST   /api/channels/{id}/messages      post a message (same as over the socket)
 POST   /api/channels/{id}/stop          stop the agents answering right now
+PATCH  /api/channels/{id}/messages/{mid}             edit {text, resend?}; resend = answer again
+DELETE /api/channels/{id}/messages/{mid}             delete (?with_replies=true: and its answers)
+POST   /api/channels/{id}/messages/{mid}/regenerate  an agent writes its answer again
+GET    /api/channels/{id}/export.md     the conversation as Markdown
 GET    /api/activity                    latest agent-to-agent events, all channels
+
+Editing, deleting and regenerating are refused (409) while the channel's
+agents are answering; stop them first.
 
 WebSocket  /ws/channels/{id}
 ----------------------------
 Client → server: {"type": "message", "text": "..."} | {"type": "stop"} | "__ping__"
 Server → client: JSON events — message, stream_start, chunk, stream_end,
 turn_start, turn_end, tool_start, tool_end, delegation_start, delegation_end,
-job_run, channel, error.
+job_run, channel, message_updated, messages_deleted, cleared, error.
 
 Reading and chatting follow the same rule as the original chat socket (open
 to whoever can reach the Web UI, with the two-factor code when MFA is on);
@@ -34,6 +41,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 
 from myclaw import events
@@ -205,6 +213,99 @@ async def post_message(channel_id: str, body: PostIn):
         raise HTTPException(status_code=404, detail="No such channel")
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── Message actions: edit, delete, regenerate, export ────────────────────────
+BUSY = "Wait until the agents have finished (or press ■)."
+
+
+class EditIn(BaseModel):
+    text: str
+    resend: bool = False
+
+
+async def _own_message(channel_id: str, message_id: int) -> dict[str, Any]:
+    """The message, if it belongs to the channel and nobody is answering there."""
+    msg = await asyncio.to_thread(store.get_message, message_id)
+    if msg is None or msg["channel_id"] != channel_id:
+        raise HTTPException(status_code=404, detail="No such message")
+    if engine().busy(channel_id):
+        raise HTTPException(status_code=409, detail=BUSY)
+    return msg
+
+
+async def _forget(channel_id: str, extra: list[str] | None = None) -> None:
+    """Agents remember the channel as it is shown now (after edits/deletes)."""
+    ch = await asyncio.to_thread(store.get_channel, channel_id)
+    if ch:
+        await engine().resync_memory(channel_id, list(dict.fromkeys(ch["members"] + (extra or []))))
+
+
+@router.patch("/api/channels/{channel_id}/messages/{message_id}", dependencies=guard)
+async def edit_message(channel_id: str, message_id: int, body: EditIn):
+    msg = await _own_message(channel_id, message_id)
+    text = body.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="The message is empty.")
+    if msg["role"] not in ("user", "agent") or msg["meta"].get("streaming"):
+        raise HTTPException(status_code=400, detail="This message can't be edited.")
+    if body.resend and msg["role"] != "user":
+        raise HTTPException(status_code=400, detail="Only your own messages can be sent again.")
+    if body.resend:  # check before changing anything (deleted agent in a DM, …)
+        try:
+            await engine()._open_channel(channel_id)
+        except (KeyError, ValueError) as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    updated = await asyncio.to_thread(store.edit_message, message_id, text)
+    events.publish(channel_id, {"type": "message_updated", "message": updated})
+    deleted: list[int] = []
+    if body.resend:
+        later = await asyncio.to_thread(store.messages_after, channel_id, message_id)
+        deleted = await asyncio.to_thread(store.delete_messages, channel_id, [m["id"] for m in later])
+        if deleted:
+            events.publish(channel_id, {"type": "messages_deleted", "ids": deleted})
+        await engine().rerun(channel_id, message_id)  # rebuilds the agents' memory first
+    else:
+        await _forget(channel_id, [msg["sender"]] if msg["role"] == "agent" else None)
+    return {"message": updated, "deleted": deleted}
+
+
+@router.delete("/api/channels/{channel_id}/messages/{message_id}", dependencies=guard)
+async def delete_message(channel_id: str, message_id: int, with_replies: bool = False):
+    msg = await _own_message(channel_id, message_id)
+    ids = [message_id]
+    if with_replies and msg["role"] == "user":
+        ids += await asyncio.to_thread(store.reply_ids, channel_id, message_id)
+    gone_msgs = [msg] + [m for m in await asyncio.to_thread(store.messages_after, channel_id, message_id)
+                         if m["id"] in ids]
+    deleted = await asyncio.to_thread(store.delete_messages, channel_id, ids)
+    events.publish(channel_id, {"type": "messages_deleted", "ids": deleted})
+    await _forget(channel_id, [m["sender"] for m in gone_msgs if m["role"] == "agent"])
+    return {"deleted": deleted}
+
+
+@router.post("/api/channels/{channel_id}/messages/{message_id}/regenerate", dependencies=guard)
+async def regenerate_message(channel_id: str, message_id: int):
+    await _own_message(channel_id, message_id)
+    try:
+        question = await engine().regenerate(channel_id, message_id)
+    except KeyError:
+        raise HTTPException(status_code=400, detail="Only an agent's answer can be regenerated.")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return {"status": "regenerating", "answers": question["id"]}
+
+
+@router.get("/api/channels/{channel_id}/export.md")
+async def export_channel(channel_id: str):
+    ch = await asyncio.to_thread(_get_channel, channel_id)
+    if ch is None:
+        raise HTTPException(status_code=404, detail="No such channel")
+    msgs = await asyncio.to_thread(store.all_messages, channel_id)
+    md = store.to_markdown(ch, msgs)
+    name = store.slug(ch["members"][0] if ch["kind"] == "dm" else ch["name"])
+    return PlainTextResponse(md, media_type="text/markdown; charset=utf-8",
+                             headers={"Content-Disposition": f'attachment; filename="{name}.md"'})
 
 
 @router.post("/api/channels/{channel_id}/stop")

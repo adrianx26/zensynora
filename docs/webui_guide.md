@@ -55,6 +55,27 @@ it back and forth forever. Switch creation off with
 direct messages and jobs move to the new name. An agent you delete is removed
 from its channels (the channel says so).
 
+**Message actions.** Point at a message (on a phone: tap **…**) for a small
+bar with the time (hover it for the full date) and these actions:
+
+| Action | Your messages | Agent answers |
+|---|---|---|
+| **Copy** | Copies the text | Copies the text; each ``` code block also has its own **Copy code** button |
+| **Edit** | Edit in place, **Save & send** (Enter; Esc cancels): everything after it in the channel is removed and the agents answer the edited message again (same rules, `@mentions` work) | Correct the text in place; nothing is run again |
+| **Delete** | *Delete this message*, or *Delete this message and the answers to it* (up to your next message) | Deletes the answer (asks first) |
+| **Regenerate** | — | The same agent writes this answer again, in the same place |
+
+Edited messages show *(edited)*. Changes and deletions appear in every open
+browser at once. While the agents are answering these actions wait: press ■
+or let them finish. **↑** in the empty input edits your last message.
+**⤓ MD** in the channel bar copies or downloads the conversation as
+Markdown (`GET /api/channels/{id}/export.md`).
+
+After an edit, delete or regenerate, each agent's memory of the channel is
+rebuilt from the messages you see (your messages and its own answers), so it
+never answers an edited question with the old one in mind. Details of earlier
+tool calls are not kept in that memory.
+
 **Good to know.**
 * Under each answer: model, time and **⚡ tokens per second** (hover for the
   token count and the time to the first token; counts are estimates).

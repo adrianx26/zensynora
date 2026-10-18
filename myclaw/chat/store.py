@@ -319,9 +319,91 @@ def list_messages(channel_id: str, before: int | None = None, limit: int = 100) 
     return [_message(r) for r in reversed(rows)]
 
 
+def get_message(message_id: int) -> dict[str, Any] | None:
+    with _conn() as c:
+        row = c.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
+    return _message(row) if row else None
+
+
+def all_messages(channel_id: str, before: int | None = None) -> list[dict[str, Any]]:
+    """Every message of a channel (oldest first), optionally only those before an id."""
+    with _conn() as c:
+        rows = c.execute("SELECT * FROM messages WHERE channel_id = ? AND id < ? ORDER BY id",
+                         (channel_id, before if before else 2 ** 62)).fetchall()
+    return [_message(r) for r in rows]
+
+
+def messages_after(channel_id: str, message_id: int) -> list[dict[str, Any]]:
+    with _conn() as c:
+        rows = c.execute("SELECT * FROM messages WHERE channel_id = ? AND id > ? ORDER BY id",
+                         (channel_id, message_id)).fetchall()
+    return [_message(r) for r in rows]
+
+
+def reply_ids(channel_id: str, message_id: int) -> list[int]:
+    """Ids of the answers to a message: everything after it up to the next message of yours."""
+    out = []
+    for m in messages_after(channel_id, message_id):
+        if m["role"] == "user":
+            break
+        out.append(m["id"])
+    return out
+
+
+def delete_messages(channel_id: str, ids: list[int]) -> list[int]:
+    """Delete messages of one channel; returns the ids that were deleted."""
+    ids = [int(i) for i in ids]
+    if not ids:
+        return []
+    marks = ",".join("?" * len(ids))
+    with _conn() as c:
+        found = [r["id"] for r in c.execute(
+            f"SELECT id FROM messages WHERE channel_id = ? AND id IN ({marks}) ORDER BY id",
+            (channel_id, *ids)).fetchall()]
+        if found:
+            c.execute(f"DELETE FROM messages WHERE channel_id = ? AND id IN ({marks})", (channel_id, *ids))
+    return found
+
+
+def edit_message(message_id: int, text: str) -> dict[str, Any] | None:
+    """Change a message's text and mark it edited (meta.edited_at)."""
+    m = get_message(message_id)
+    if m is None:
+        return None
+    meta = {**m["meta"], "edited_at": time.time()}
+    update_message(message_id, text, meta)
+    return {**m, "text": text, "meta": meta}
+
+
 def clear_messages(channel_id: str) -> int:
     with _conn() as c:
         return c.execute("DELETE FROM messages WHERE channel_id = ?", (channel_id,)).rowcount
+
+
+def to_markdown(channel: dict[str, Any], messages: list[dict[str, Any]]) -> str:
+    """The conversation as Markdown (Copy / Download as Markdown in the chat)."""
+    title = f"@{channel['members'][0]}" if channel.get("kind") == "dm" and channel.get("members") \
+        else f"#{channel.get('name', channel.get('id', ''))}"
+    lines = [f"# {title}", ""]
+    if channel.get("topic"):
+        lines += [f"_{channel['topic']}_", ""]
+    for m in messages:
+        when = time.strftime("%Y-%m-%d %H:%M", time.localtime(m.get("created") or 0))
+        edited = " (edited)" if (m.get("meta") or {}).get("edited_at") else ""
+        if m["role"] == "user":
+            lines += [f"**You** · {when}{edited}", "", m["text"], ""]
+        elif m["role"] == "agent":
+            lines += [f"**@{m['sender']}** · {when}{edited}", "", m["text"], ""]
+        elif m["role"] == "system":
+            lines += [f"_{m['text']}_", ""]
+        else:  # agent-to-agent activity, one line
+            ev = m.get("meta") or {}
+            what = ev.get("type", "event")
+            who = " → ".join(f"@{x}" for x in (ev.get("from"), ev.get("to")) if x) or \
+                (f"@{ev['agent']}" if ev.get("agent") else "")
+            detail = ev.get("tool") or ev.get("job") or ""
+            lines += [f"> {what} {who} {detail}".rstrip(), ""]
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def recent_activity(limit: int = 100) -> list[dict[str, Any]]:

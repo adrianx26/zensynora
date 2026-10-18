@@ -10,7 +10,9 @@
 //   as compact cards and, filtered, in the Activity panel on the right.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import TypewriterText from './TypewriterText';
-import { api, getWsBase, type AgentInfo, type Channel, type ChatMsg } from '../api';
+import { MessageActions, MessageBody, MessageEditor } from './MessageActions';
+import { copyText } from '../clipboard';
+import { api, getApiBase, getWsBase, type AgentInfo, type Channel, type ChatMsg } from '../api';
 import { agentColor } from '../colors';
 
 interface Props {
@@ -86,6 +88,10 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
   const [mfa, setMfa] = useState<{ required: boolean; code: string; error?: string }>({ required: false, code: '' });
   const [error, setError] = useState<string | null>(null);
   const [mention, setMention] = useState<{ query: string; index: number } | null>(null);
+  const [editing, setEditing] = useState<{ id: number } | null>(null);
+  const [askDelete, setAskDelete] = useState<number | null>(null); // your message: with or without answers
+  const [exportMenu, setExportMenu] = useState(false);
+  const [exportNote, setExportNote] = useState('');
 
   const wsRef = useRef<WebSocket | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -158,9 +164,25 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
         case 'message':
           setMessages(prev => (prev.some(m => m.id === e.message.id) ? prev : [...prev, e.message]));
           break;
-        case 'stream_start':
-          setMessages(prev => [...prev, { ...e.message, meta: { ...e.message.meta, streaming: true } }]);
+        case 'stream_start': {
+          const started = { ...e.message, meta: { ...e.message.meta, streaming: true } };
+          // Regenerate writes the new answer into the old bubble (same id).
+          setMessages(prev => (prev.some(m => m.id === started.id)
+            ? prev.map(m => (m.id === started.id ? started : m)) : [...prev, started]));
           setWorking(w => Array.from(new Set([...w, e.message.sender])));
+          break;
+        }
+        case 'message_updated':
+          setMessages(prev => prev.map(m => (m.id === e.message.id ? e.message : m)));
+          break;
+        case 'messages_deleted': {
+          const gone = new Set<number>(e.ids || []);
+          setMessages(prev => prev.filter(m => !gone.has(m.id)));
+          setEditing(ed => (ed && gone.has(ed.id) ? null : ed));
+          break;
+        }
+        case 'cleared':
+          setMessages([]);
           break;
         case 'chunk':
           setMessages(prev => prev.map(m => (m.id === e.id ? { ...m, text: m.text + e.text } : m)));
@@ -287,11 +309,74 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
       }
       if (e.key === 'Escape') { setMention(null); return; }
     }
+    if (e.key === 'ArrowUp' && !input && !busy) { // edit your last message
+      const mine = [...messages].reverse().find(m => m.role === 'user');
+      if (mine) { e.preventDefault(); setEditing({ id: mine.id }); }
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       send();
     }
   };
+
+  // ── message actions: edit, delete, regenerate, export ───────────────────
+  const msgUrl = (id: number) => `/api/channels/${encodeURIComponent(channelId)}/messages/${id}`;
+
+  const saveEdit = async (m: ChatMsg, text: string) => {
+    try {
+      await api(msgUrl(m.id), { method: 'PATCH', body: JSON.stringify({ text, resend: m.role === 'user' }) });
+      setEditing(null);
+      if (m.role === 'user') stickToBottom.current = true;
+      setTimeout(() => inputRef.current?.focus(), 0);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const removeMessage = async (m: ChatMsg, withReplies = false) => {
+    setAskDelete(null);
+    if (m.role !== 'user' && !window.confirm('Delete this message?')) return;
+    try {
+      const res = await api<{ deleted: number[] }>(`${msgUrl(m.id)}?with_replies=${withReplies}`, { method: 'DELETE' });
+      const gone = new Set(res.deleted);
+      setMessages(prev => prev.filter(x => !gone.has(x.id)));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const regenerate = async (m: ChatMsg) => {
+    try {
+      await api(`${msgUrl(m.id)}/regenerate`, { method: 'POST' });
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const exportMarkdown = async (how: 'copy' | 'download') => {
+    setExportMenu(false);
+    try {
+      const res = await fetch(`${getApiBase()}/api/channels/${encodeURIComponent(channelId)}/export.md`);
+      if (!res.ok) throw new Error(`Export failed (HTTP ${res.status})`);
+      const md = await res.text();
+      if (how === 'copy') {
+        setExportNote((await copyText(md)) ? 'Conversation copied as Markdown' : 'Could not copy — use Download');
+        setTimeout(() => setExportNote(''), 2500);
+      } else {
+        const url = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${channel?.kind === 'dm' ? channel.members[0] : channel?.name || channelId}.md`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+
+  const BUSY = 'Wait until the agents have finished (or press ■)';
 
   // ── channel settings ──────────────────────────────────────────────────────
   const patchChannel = async (patch: Partial<Channel>) => {
@@ -354,8 +439,19 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
             <button className={`ghost-btn ${showActivity ? 'active' : ''}`} onClick={() => setShowActivity(v => !v)}>
               Activity{events.length ? ` (${events.length})` : ''}
             </button>
+            <div className="export-wrap">
+              <button className="ghost-btn" onClick={() => setExportMenu(v => !v)} aria-expanded={exportMenu}
+                title="Copy or download this conversation as Markdown">⤓ MD</button>
+              {exportMenu && (
+                <div className="export-menu" role="menu">
+                  <button role="menuitem" onClick={() => exportMarkdown('copy')}>Copy as Markdown</button>
+                  <button role="menuitem" onClick={() => exportMarkdown('download')}>Download .md</button>
+                </div>
+              )}
+            </div>
             <button className="ghost-btn" onClick={clearChannel} title="Clear this channel">🗑</button>
           </div>
+          {exportNote && <span className="muted small" role="status">{exportNote}</span>}
         </div>
 
         {editMembers && channel && !isDm && (
@@ -406,6 +502,8 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
             }
             const mine = m.role === 'user';
             const streaming = !!m.meta?.streaming;
+            const isEditing = editing?.id === m.id;
+            const edited = m.meta?.edited_at ? <span className="muted edited" title={`Edited ${new Date(m.meta.edited_at * 1000).toLocaleString()}`}> (edited)</span> : null;
             return (
               <div key={m.id} className={`chat-message ${mine ? 'user' : 'agent'}`}>
                 {mine ? <div className="message-avatar">U</div> : <Avatar name={m.sender} />}
@@ -421,9 +519,32 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
                       )}
                     </div>
                   )}
-                  {mine ? m.text : <TypewriterText text={m.text} active={streaming} />}
+                  {isEditing ? (
+                    <MessageEditor initial={m.text} resend={mine} onSave={t => saveEdit(m, t)}
+                      onCancel={() => { setEditing(null); inputRef.current?.focus(); }} />
+                  ) : streaming ? <TypewriterText text={m.text} active /> : <MessageBody text={m.text} />}
+                  {!isEditing && edited}
                   {streaming && !m.text && <span className="typing-indicator"><span className="dot" /><span className="dot" /><span className="dot" /></span>}
                   {m.meta?.error && <div className="probe-err">{m.meta.error}</div>}
+                  {askDelete === m.id && (
+                    <div className="msg-confirm" role="alertdialog" aria-label="Delete message">
+                      <button className="ghost-btn danger" onClick={() => removeMessage(m)}>Delete this message</button>
+                      <button className="ghost-btn danger" onClick={() => removeMessage(m, true)}>Delete this message and the answers to it</button>
+                      <button className="ghost-btn" onClick={() => setAskDelete(null)}>Cancel</button>
+                    </div>
+                  )}
+                  {!streaming && !isEditing && (
+                    <MessageActions
+                      text={m.text}
+                      created={m.created}
+                      canEdit
+                      canRegenerate={!mine && !m.meta?.job}
+                      disabledReason={busy ? BUSY : undefined}
+                      onEdit={() => { setAskDelete(null); setEditing({ id: m.id }); }}
+                      onDelete={() => (mine ? setAskDelete(m.id) : removeMessage(m))}
+                      onRegenerate={() => regenerate(m)}
+                    />
+                  )}
                 </div>
               </div>
             );
