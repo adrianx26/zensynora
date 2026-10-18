@@ -80,7 +80,7 @@ def _reload_prompts() -> None:
 
 
 def create_agent(name: str, description: str, system_prompt: str = "", model: str = "",
-                 provider: str = "", skills: str = "") -> str:
+                 provider: str = "", skills: str = "", key: str = "") -> str:
     """Create a new named agent (a specialist) that you and the user can then talk to and delegate to.
 
     name: short unique name, letters/digits/_/- (e.g. Weather_Bot)
@@ -89,6 +89,7 @@ def create_agent(name: str, description: str, system_prompt: str = "", model: st
     model: model to use (empty = the default model)
     provider: provider of that model (empty = the default provider)
     skills: comma-separated skill names to give it (see list_skills)
+    key: id of the provider's API key to use (empty = the default key)
     """
     from .config import CONFIG_FILE, AppConfig, load_config, load_encrypted_or_plain, save_config
     from .events import CURRENT_AGENT, emit
@@ -111,6 +112,16 @@ def create_agent(name: str, description: str, system_prompt: str = "", model: st
 
     if provider and provider not in provider_names(cfg):
         return f"Error: unknown provider '{provider}'. Known: {', '.join(provider_names(cfg))}."
+    from .provider_keys import key_ids, normalize_key_id
+
+    key_id = normalize_key_id(key) or ""
+    if key_id:
+        prov_for_key = (provider or "").strip() or cfg.agents.defaults.provider
+        known_keys = key_ids(cfg, prov_for_key)
+        if key_id not in known_keys:
+            others = [k for k in known_keys if k != "default"]
+            return (f"Error: {prov_for_key} has no key '{key_id}'. "
+                    + (f"Its keys: default, {', '.join(others)}." if others else "It only has its default key."))
     from .agent_skills import list_skills
 
     known_skills = {s["name"] for s in list_skills()}
@@ -124,7 +135,7 @@ def create_agent(name: str, description: str, system_prompt: str = "", model: st
         "and keep answers short and concrete.")
     entry = {"name": name, "description": description, "system_prompt": prompt[:8000],
              "model": (model or "").strip() or cfg.agents.defaults.model, "provider": (provider or "").strip(),
-             "skills": wanted}
+             "skills": wanted, "key": key_id}
 
     raw = (load_encrypted_or_plain(CONFIG_FILE) or {}) if CONFIG_FILE.exists() else {}
     if not raw:
@@ -143,7 +154,7 @@ def create_agent(name: str, description: str, system_prompt: str = "", model: st
         from .tools.core import _agent_registry
 
         agent = Agent(cfg, name=name, model=entry["model"], system_prompt=prompt,
-                      provider_name=entry["provider"] or None)
+                      provider_name=entry["provider"] or None, key=key_id or None)
         _agent_registry[name] = agent
         for fn in _on_created:
             fn(name, agent)

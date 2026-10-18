@@ -166,6 +166,10 @@ API key.
 | Anthropic · Gemini | API key | install `anthropic` / `google-generativeai` |
 | **Your own** (Models → Add provider) | URL (+ key) | any OpenAI-compatible server or another Ollama; presets for vLLM, LocalAI, DeepSeek, Mistral, Cerebras, GitHub Models … |
 
+A provider can hold **several API keys** (Settings → Providers → Keys) and
+each agent picks one; optionally the other keys are tried when one is
+rate-limited — see [Several keys for one provider](docs/webui_guide.md#several-keys-for-one-provider).
+
 Environment variables override the file — useful for Docker and services:
 
 ```bash

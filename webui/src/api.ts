@@ -173,12 +173,18 @@ export interface Diagnosis {
   rerun_id?: number;
 }
 
-export interface ModelChoice { provider: string; model: string }
+// key: id of one of the provider's API keys (missing / '' = its default key)
+export interface ModelChoice { provider: string; model: string; key?: string }
+
+// v0.7.5: several API keys per provider (secrets are never sent to the browser)
+export interface ProviderKeyInfo { id: string; label: string; set: boolean; used_by: string[] }
+export type ProviderKeysMap = Record<string, { rotate_keys: boolean; keys: ProviderKeyInfo[] }>;
 
 export interface ModelsOverview {
   default: ModelChoice;
   rotation: { enabled: boolean; strategy: 'fallback' | 'round_robin'; entries: ModelChoice[] };
   providers: { name: string; label: string; local: boolean; custom: boolean; configured: boolean }[];
+  keys?: ProviderKeysMap;
 }
 
 export interface BackupInfo {
