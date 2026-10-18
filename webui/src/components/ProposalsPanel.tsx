@@ -28,7 +28,13 @@ const ProposalsPanel: React.FC = () => {
   const [items, setItems] = useState<Proposal[]>([]);
   const [open, setOpen] = useState<Proposal | null>(null);
   const [lessons, setLessons] = useState<string[]>([]);
-  const [problems, setProblems] = useState<{ errors: { message: string; count: number }[]; job_problems: { job: string; status: string }[] } | null>(null);
+  const [problems, setProblems] = useState<{
+    errors: { message: string; count: number; level?: string }[];
+    job_problems: { job: string; status: string }[];
+    repeated_warnings?: { message: string; count: number }[];
+    restarts?: { starts: number; max_in_15_min: number; crash_loop: boolean };
+    risky_custom_tools?: { name: string; problems: string[] }[];
+  } | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [showAll, setShowAll] = useState(false);
 
@@ -93,13 +99,24 @@ const ProposalsPanel: React.FC = () => {
         </div>
         <p className="muted">Agents can read ZenSynora's code and propose fixes. Nothing changes until you approve; then the change is installed like an update — backed up, checked, and rolled back automatically if anything fails.</p>
         {notice && <div className={`notice ${notice.kind === 'error' ? 'error' : ''}`}>{notice.text}</div>}
-        {problems && (problems.errors.length > 0 || problems.job_problems.length > 0) && (
-          <div className="notice">
-            <b>What the medic would look at:</b> {problems.errors.length} distinct error(s) in the last 24 h
-            {problems.errors[0] && <> (most frequent: “{problems.errors[0].message.slice(0, 120)}” ×{problems.errors[0].count})</>}
-            {problems.job_problems.length > 0 && <>, {problems.job_problems.length} failed or low-scoring job run(s)</>}.
-          </div>
-        )}
+        {problems && (() => {
+          const warns = problems.repeated_warnings ?? [];
+          const tools = problems.risky_custom_tools ?? [];
+          const rs = problems.restarts;
+          const parts: React.ReactNode[] = [];
+          if (rs?.crash_loop) parts.push(<>a crash loop ({rs.starts} restarts, up to {rs.max_in_15_min} in 15 min)</>);
+          if (problems.errors.length) parts.push(<>{problems.errors.length} kind(s) of error (most frequent: “{problems.errors[0].message.slice(0, 120)}” ×{problems.errors[0].count})</>);
+          if (warns.length) parts.push(<>{warns.length} warning(s) that keep repeating (“{warns[0].message.slice(0, 80)}” ×{warns[0].count})</>);
+          if (problems.job_problems.length) parts.push(<>{problems.job_problems.length} failed or low-scoring job run(s)</>);
+          if (tools.length) parts.push(<>custom tool(s) with placeholder or hard-coded credentials: {tools.map(t => t.name).join(', ')}</>);
+          if (!parts.length) return null;
+          return (
+            <div className="notice">
+              <b>What the medic would look at (last 24 h):</b>{' '}
+              {parts.map((p, i) => <React.Fragment key={i}>{i > 0 && '; '}{p}</React.Fragment>)}. Details: Doctor → Report.
+            </div>
+          );
+        })()}
         {visible.length === 0 && <div className="muted">No proposals. Run a self-review, or ask an agent in chat to “propose a fix” for something.</div>}
         {visible.map(p => (
           <div key={p.id} className={`proposal-row ${open?.id === p.id ? 'selected' : ''}`} onClick={() => show(p.id)}>

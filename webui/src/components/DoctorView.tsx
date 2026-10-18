@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
+import DoctorReport from './DoctorReport';
 import ProposalsPanel from './ProposalsPanel';
 
 // Same checks as `zensynora doctor` (myclaw/doctor/checks.py).
@@ -30,6 +31,7 @@ const DoctorView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fixNote, setFixNote] = useState<string[] | null>(null);
+  const [tab, setTab] = useState<'checks' | 'report'>('checks');
 
   const run = useCallback(async () => {
     setLoading(true);
@@ -63,15 +65,21 @@ const DoctorView: React.FC = () => {
 
   return (
     <div className="settings-view">
-      <div className="settings-body">
+      <div className="settings-tabs">
+        <button className={`settings-tab ${tab === 'checks' ? 'active' : ''}`} onClick={() => setTab('checks')}>Checks</button>
+        <button className={`settings-tab ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>Report</button>
+      </div>
+      {tab === 'report' && <div className="settings-body"><DoctorReport /></div>}
+      {tab === 'checks' && <div className="settings-body">
         <div className="settings-card">
           <h3>
             System doctor
             {report && <span className={`badge doctor-badge ${report.overall}`}>{report.overall === 'ok' ? 'healthy' : report.overall === 'warn' ? 'warnings' : 'problems'}</span>}
           </h3>
           <p className="muted">
-            Checks packages, provider libraries, your settings, the model server, databases, permissions and recent
-            errors. The same report is available in a terminal with <code>zensynora doctor</code>.
+            Checks packages, provider libraries, your settings, the model server, databases, permissions, recent
+            errors, restarts, custom tools and the knowledge index. The Report tab shows the errors with their log lines
+            and lets you download everything as one file. The same checks run in a terminal with <code>zensynora doctor</code>.
           </p>
           <div className="probe-row">
             <button className="ghost-btn" onClick={run} disabled={loading}>{loading ? 'Checking…' : '↻ Run checks again'}</button>
@@ -110,7 +118,7 @@ const DoctorView: React.FC = () => {
             </div>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 };

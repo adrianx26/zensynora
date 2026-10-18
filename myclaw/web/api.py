@@ -121,6 +121,7 @@ from myclaw.web import medic_api as _medic_api  # noqa: E402
 from myclaw.web import update_api as _update_api  # noqa: E402
 from myclaw.web import skills_api as _skills_api  # noqa: E402
 from myclaw.web import telegram_api as _telegram_api  # noqa: E402
+from myclaw.web import doctor_api as _doctor_api  # noqa: E402
 
 _chat_api.set_registry_getter(_ensure_registry)
 # The bot gets the getter (not the dict): the registry is rebuilt after each save.
@@ -146,6 +147,7 @@ app.include_router(_medic_api.router)  # self-update proposals (v0.7.1)
 app.include_router(_update_api.router)  # check / update / rollback / restart (v0.7.4)
 app.include_router(_skills_api.router)  # agent skills (v0.7.5)
 app.include_router(_telegram_api.router)  # Telegram bot inside the Web UI
+app.include_router(_doctor_api.router)  # doctor report, errors viewer, download
 
 
 _mcp_manager = None

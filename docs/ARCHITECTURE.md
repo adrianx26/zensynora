@@ -43,6 +43,8 @@ myclaw/
 ├── cost_tracker.py          # SQLite cost accumulator + dashboard queries
 ├── defaults.py              # Single source of truth for tunable constants [Sprint 10]
 ├── doctor/                  # Health checks, integrity baseline, safe fixes [0.7.0]
+│                            #   + checks_more.py (restarts, custom tools, knowledge index, skills, MCP, chat),
+│                            #   logscan.py (log grouping, redaction), report.py (diagnostics report) [Unreleased]
 ├── evals/                   # Dataset-driven eval harness [Sprint 7]
 ├── events.py                # Agent-to-agent activity events (delegation, tools, jobs) [0.7.1]
 ├── jobs/                    # Jobs: store (jobs.db) + runner (schedule, evaluate, benchmark) [0.7.1]
@@ -78,6 +80,7 @@ myclaw/
 │   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
 │   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
 │   ├── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
+│   ├── doctor_api.py        # Doctor report, errors viewer, report download [Unreleased]
 │   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
 │   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [Unreleased]
 │   └── skills_api.py        # Skills page: list, edit, import, assign [0.7.5]
@@ -103,6 +106,7 @@ webui/src/
     ├── SkillsView.tsx       # Skills page [0.7.5]
     ├── SettingsView.tsx     # Settings page [0.5.0]
     ├── DoctorView.tsx       # Doctor page [0.7.0]
+    ├── DoctorReport.tsx     # Doctor → Report: errors viewer, report view, download [Unreleased]
     ├── ToolsView.tsx        # Tool list [0.5.0]
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]

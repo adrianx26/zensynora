@@ -952,3 +952,30 @@ textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; fon
   .msg-more { display: inline-block; }
   .msg-actions:not(.open) .msg-action-list { display: none; }
 }
+/* Doctor → Report (summary cards, errors viewer, report view) */
+.report-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+.report-stat { border: 1px solid var(--panel-border); border-radius: 10px; padding: 10px 12px; }
+.report-stat-value { font-size: 1.3rem; font-weight: 600; }
+.report-stat-label { font-size: 0.75rem; color: var(--text-secondary); }
+.report-stat.ok .report-stat-value { color: var(--success-color); }
+.report-stat.warn { border-color: #d29922; } .report-stat.warn .report-stat-value { color: #d29922; }
+.report-stat.fail { border-color: var(--danger-color); } .report-stat.fail .report-stat-value { color: var(--danger-color); }
+.report-filters { display: flex; flex-direction: column; gap: 8px; }
+.report-view-wrap { position: relative; }
+.report-view-wrap > .small-btn { position: absolute; top: 6px; right: 6px; }
+.report-view {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.78rem; line-height: 1.45;
+  background: var(--input-bg); border: 1px solid var(--panel-border); border-radius: 8px; padding: 10px 12px;
+  white-space: pre-wrap; word-break: break-word; max-height: 520px; overflow: auto; margin: 0;
+}
+.small-btn { padding: 3px 10px; font-size: 0.75rem; }
+.error-group { border-bottom: 1px solid var(--panel-border); }
+.error-group:last-child { border-bottom: none; }
+.error-group-head {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; width: 100%; text-align: left; padding: 8px 0;
+  background: none; border: none; color: var(--text-primary); font-family: inherit; font-size: 0.86rem; cursor: pointer;
+}
+.error-group-head:hover .error-msg { color: var(--accent-color); }
+.error-count { font-weight: 600; min-width: 36px; }
+.error-msg { flex: 1 1 260px; min-width: 0; word-break: break-word; }
+.error-group-body { display: flex; flex-direction: column; gap: 6px; padding-bottom: 10px; }

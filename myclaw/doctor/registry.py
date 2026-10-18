@@ -77,7 +77,8 @@ def fixer(id: str):
 
 
 def registered_checks() -> list[_Check]:
-    from . import checks  # noqa: F401  (registers the built-in checks)
+    # registers the built-in checks (checks_more: restarts, custom tools, knowledge, skills …)
+    from . import checks, checks_more  # noqa: F401
 
     return list(_CHECKS.values())
 

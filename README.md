@@ -97,7 +97,7 @@ knowledge base. Step by step: [docs/telegram_guide.md](docs/telegram_guide.md).
 | `zensynora mcp-server` | Expose ZenSynora's tools to MCP clients over stdio |
 | `zensynora knowledge sync \| search \| list \| read \| write` | Manage the knowledge base |
 | `zensynora swarm …` · `skills list [--tools]` · `memory …` | Swarms, agent skills (and tools), conversation memory |
-| `zensynora doctor` | Health check with fix hints (`--fix`, `--offline`, `--json`) |
+| `zensynora doctor` | Health check with fix hints (`--fix`, `--offline`, `--json`); `--report [PATH]` writes a diagnostics report (Markdown, `.json` or `.zip`, no secrets) |
 | `zensynora backup create \| list \| restore` | Back up / restore settings, API keys, knowledge, conversations, jobs |
 | `zensynora medic proposals \| show \| approve` | Review code changes proposed by agents |
 | `zensynora update` | Safe update (`status --check`, `rollback`, `backup`) |

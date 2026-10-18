@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import importlib.util
-import json
 import os
 import shutil
 import sqlite3
@@ -415,36 +414,29 @@ def _webui_build(ctx):
 # ── runtime ──────────────────────────────────────────────────────────────────
 @check("recent_errors", "Errors in the last 24 h", "runtime")
 def _recent_errors(ctx):
-    lf = log_file()
-    if not lf.exists():
-        return SKIP, "no log file yet"
-    cutoff = time.time() - 86400
-    count, last = 0, ""
-    try:
-        with open(lf, encoding="utf-8", errors="replace") as f:
-            f.seek(max(0, lf.stat().st_size - 2_000_000))  # last ~2 MB is plenty
-            for line in f:
-                try:
-                    rec = json.loads(line)
-                except ValueError:
-                    continue
-                if rec.get("level") not in ("ERROR", "CRITICAL"):
-                    continue
-                ts = rec.get("timestamp", "")
-                try:
-                    from datetime import datetime
+    """Errors and CRITICAL lines, plus warnings that keep repeating; messages
+    that differ only in numbers/ids count as one (see doctor/logscan.py)."""
+    from . import logscan
+    from .checks_more import CRITICAL_FAIL, WARNING_REPEAT, log_scan
 
-                    if datetime.fromisoformat(ts).timestamp() < cutoff:
-                        continue
-                except ValueError:
-                    pass
-                count += 1
-                last = rec.get("message", "")[:160]
-    except OSError as e:
-        return SKIP, f"cannot read log: {e}"
-    if count:
-        return WARN, f"{count} error(s); latest: {last}", f"Details in {lf}"
-    return OK, "none"
+    lf = log_file()
+    sc = log_scan(ctx)
+    if not sc.exists:
+        return SKIP, "no log file yet"
+    groups = [g for g in logscan.group(sc.problems)
+              if g["level"] != "WARNING" or g["count"] >= WARNING_REPEAT]
+    if not groups:
+        return OK, "none"
+    counts = {lv: sum(g["count"] for g in groups if g["level"] == lv) for lv in ("CRITICAL", "ERROR", "WARNING")}
+    kinds = {lv: sum(1 for g in groups if g["level"] == lv) for lv in counts}
+    parts = [f"{lv} {counts[lv]}" + (f" ({kinds[lv]} kinds)" if kinds[lv] > 1 else "")
+             for lv in counts if counts[lv]]
+    if counts["WARNING"]:
+        parts[-1] = parts[-1].replace("WARNING", "repeated WARNING")
+    top = max(groups, key=lambda g: g["count"])
+    detail = ", ".join(parts) + f"; most frequent: {top['message'][:140]} ×{top['count']}"
+    hint = f"Doctor → Report → Errors shows each group with its log lines (log: {lf})."
+    return (FAIL if counts["CRITICAL"] >= CRITICAL_FAIL else WARN), detail, hint
 
 
 @check("service", "Background service (systemd)", "runtime")
