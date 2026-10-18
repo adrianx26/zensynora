@@ -1,0 +1,1484 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/dev/memopad-import-plan/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>MemoPad → Zensynora Import Plan - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#memopad-zensynora-import-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              MemoPad → Zensynora Import Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-change-detection-sync-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Change Detection &amp; Sync Improvements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-data-model-enrichment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Data Model Enrichment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-search-indexing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Search &amp; Indexing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-sync-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Sync Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-file-watching" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. File Watching
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-not-worth-importing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. NOT Worth Importing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-implementation-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Implementation Priority
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Implementation Priority">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#phase-1-robustness-high-value-low-risk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — Robustness (high value, low risk)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-2-data-model-medium-value-moderate-risk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — Data Model (medium value, moderate risk)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-3-search-medium-value-low-risk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — Search (medium value, low risk)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#phase-4-performance-medium-value-moderate-risk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 — Performance (medium value, moderate risk)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-compatibility-guarantees" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Compatibility Guarantees
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-estimated-effort" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Estimated Effort
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="memopad-zensynora-import-plan">MemoPad → Zensynora Import Plan<a class="headerlink" href="#memopad-zensynora-import-plan" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Developer notes — status as of 2026-10-13 (v0.7.0).</strong> Working plan/report written during development; it may describe planned or superseded work. For current behaviour see <a href="../../">docs/README.md</a>.</p>
+</blockquote>
+<p>Goal: Port high-value patterns and capabilities from <code>github.com/adrianx26/memopad</code> into zensynora's <code>myclaw/knowledge/</code>, respecting zensynora's existing architecture (raw SQLite, no ORM, per-user tenancy, async-first).</p>
+<hr />
+<h2 id="1-change-detection-sync-improvements">1. Change Detection &amp; Sync Improvements<a class="headerlink" href="#1-change-detection-sync-improvements" title="Permanent link">&para;</a></h2>
+<p><strong>Source:</strong> <code>src/memopad/sync/sync_service.py</code></p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Current Zensynora</th>
+<th>Proposed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Change detection</strong></td>
+<td><code>mtime</code> only</td>
+<td>Add <code>checksum</code> (md5/sha256) + <code>size</code> as additional signals. Keep <code>mtime</code> as fast pre-filter; verify with checksum on mismatch.</td>
+</tr>
+<tr>
+<td><strong>Move/rename detection</strong></td>
+<td>None</td>
+<td>Detect moves by matching checksums between "new" files and DB entries with different paths.</td>
+</tr>
+<tr>
+<td><strong>Circuit breaker</strong></td>
+<td>None</td>
+<td>Skip files that fail sync &gt; N times consecutively. Reset on checksum change.</td>
+</tr>
+<tr>
+<td><strong><code>.bmignore</code> support</strong></td>
+<td>None</td>
+<td>Load ignore patterns from <code>.bmignore</code> in knowledge root; skip ignored files during scan.</td>
+</tr>
+<tr>
+<td><strong>Frontmatter auto-update</strong></td>
+<td>None</td>
+<td>When a file is renamed/moved, auto-update its <code>permalink</code> in frontmatter to match new path.</td>
+</tr>
+<tr>
+<td><strong>Forward reference resolution</strong></td>
+<td>Warn-and-skip</td>
+<td>On sync, attempt to resolve <code>[[Target]]</code> relations whose target entity doesn't exist yet. Create placeholder or retry after all files are processed.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Implementation notes:</strong>
+- Store <code>checksum</code>, <code>mtime</code>, <code>size</code> on <code>Entity</code> in <code>db.py</code>.
+- Update <code>detect_changes()</code> in <code>sync.py</code> to use checksum + mtime + size.
+- Add <code>handle_move()</code>, <code>resolve_forward_references()</code> to <code>sync.py</code>.
+- Add <code>.bmignore</code> loading utility.</p>
+<hr />
+<h2 id="2-data-model-enrichment">2. Data Model Enrichment<a class="headerlink" href="#2-data-model-enrichment" title="Permanent link">&para;</a></h2>
+<p><strong>Source:</strong> <code>src/memopad/models/knowledge.py</code></p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Current Zensynora</th>
+<th>Proposed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Entity aliases</strong></td>
+<td>None</td>
+<td>Add <code>EntityAlias</code> table: <code>entity_id</code>, <code>alias</code>, <code>created_at</code>. Allows alternative names for search.</td>
+</tr>
+<tr>
+<td><strong>Observation context</strong></td>
+<td>None</td>
+<td>Add <code>context</code> field to <code>Observation</code> — free-text provenance note about where this observation came from.</td>
+</tr>
+<tr>
+<td><strong>Observation conflict tracking</strong></td>
+<td>None</td>
+<td>Add <code>conflict_score</code>, <code>conflicting_obs_id</code>, <code>conflict_resolved</code> — enables surfacing contradictory facts.</td>
+</tr>
+<tr>
+<td><strong>Provenance path</strong></td>
+<td>None</td>
+<td>Add <code>provenance_path</code> to <code>Observation</code> — source file + location for audit trail.</td>
+</tr>
+<tr>
+<td><strong>Entity checksum/mtime/size</strong></td>
+<td>None</td>
+<td>Add to <code>Entity</code> table for robust change detection.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Implementation notes:</strong>
+- New columns are additive; existing DBs can be migrated with <code>ALTER TABLE</code> where SQLite permits, or via schema version bump.
+- Conflict fields are opt-in; existing observations default to <code>conflict_resolved=True</code>, <code>conflict_score=NULL</code>.</p>
+<hr />
+<h2 id="3-search-indexing">3. Search &amp; Indexing<a class="headerlink" href="#3-search-indexing" title="Permanent link">&para;</a></h2>
+<p><strong>Source:</strong> <code>src/memopad/services/search_service.py</code>, <code>repository/search_repository.py</code></p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Current Zensynora</th>
+<th>Proposed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Backlinks</strong></td>
+<td>None</td>
+<td><code>backlinks(permalink)</code> — find all notes linking TO a given entity.</td>
+</tr>
+<tr>
+<td><strong>Structured metadata search</strong></td>
+<td><code>search_by_tag</code> only</td>
+<td><code>search_by_metadata(filters)</code> — filter by arbitrary frontmatter fields (type, status, dates).</td>
+</tr>
+<tr>
+<td><strong>Recent activity</strong></td>
+<td>None</td>
+<td><code>recent_activity(type, timeframe)</code> — find recently updated/changed entities.</td>
+</tr>
+<tr>
+<td><strong>Search index cleanup on delete</strong></td>
+<td>Cascade-only</td>
+<td>Explicitly remove FTS entries for observations + relations when entity is deleted.</td>
+</tr>
+<tr>
+<td><strong>Hybrid search RRF</strong></td>
+<td>Weighted sum</td>
+<td>Replace weighted-sum fusion with Reciprocal Rank Fusion (RRF) for more robust hybrid FTS+semantic ranking.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Implementation notes:</strong>
+- Zensynora already has <code>search_advanced</code> with FTS+semantic. Just swap the fusion algorithm.
+- Backlinks: <code>SELECT e.* FROM entities e JOIN relations r ON e.id = r.from_id WHERE r.to_id = ?</code>.
+- <code>search_by_metadata</code>: parse frontmatter fields into a JSON blob column on <code>Entity</code>, then query with <code>json_extract</code>.</p>
+<hr />
+<h2 id="4-sync-architecture">4. Sync Architecture<a class="headerlink" href="#4-sync-architecture" title="Permanent link">&para;</a></h2>
+<p><strong>Source:</strong> <code>src/memopad/sync/sync_service.py</code></p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Current Zensynora</th>
+<th>Proposed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Watermark-based scanning</strong></td>
+<td>Full scan every time</td>
+<td>Store <code>last_scan_timestamp</code> + <code>last_file_count</code> on a <code>sync_state</code> table. Use <code>find -newermt</code> (or Python <code>os.scandir</code> with mtime filter) for incremental scans.</td>
+</tr>
+<tr>
+<td><strong>Parallel file processing</strong></td>
+<td>Thread pool for reads only</td>
+<td>Add <code>asyncio.Semaphore</code>-controlled parallel sync for write operations (add/update/delete).</td>
+</tr>
+<tr>
+<td><strong>Move detection</strong></td>
+<td>None</td>
+<td>See §1.</td>
+</tr>
+<tr>
+<td><strong>Checksum caching</strong></td>
+<td>None</td>
+<td>Cache checksums during scan to avoid recomputing.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Implementation notes:</strong>
+- Zensynora already has <code>AsyncSQLitePool</code>; reuse the semaphore pattern for file I/O concurrency.
+- Watermark: add <code>sync_meta</code> table with <code>key</code>, <code>value</code> (JSON). Keys: <code>last_scan_ts</code>, <code>last_file_count</code>.
+- On Windows, fall back to Python-based mtime filtering (MemoPad already handles this).</p>
+<hr />
+<h2 id="5-file-watching">5. File Watching<a class="headerlink" href="#5-file-watching" title="Permanent link">&para;</a></h2>
+<p><strong>Source:</strong> <code>src/memopad/sync/sync_service.py</code> + <code>watchdog</code></p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Current Zensynora</th>
+<th>Proposed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Watch mode</strong></td>
+<td>Disabled</td>
+<td>Add optional <code>watchdog</code>-based <code>sync --watch</code>. Auto-sync on file change. Opt-in via dependency.</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Implementation notes:</strong>
+- Make <code>watchdog</code> an optional extra: <code>python -m pip install 'myclaw[watch]'</code> inside a virtual environment.
+- Use <code>watchdog.observers.Observer</code> + <code>PatternMatchingEventHandler</code>.
+- Debounce events (e.g., 500ms) to avoid thrashing on bulk saves.</p>
+<hr />
+<h2 id="6-not-worth-importing">6. NOT Worth Importing<a class="headerlink" href="#6-not-worth-importing" title="Permanent link">&para;</a></h2>
+<p>These are product-level or architecture-mismatched features:</p>
+<table>
+<thead>
+<tr>
+<th>Feature</th>
+<th>Reason to skip</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>MCP server</strong></td>
+<td>Zensynora already has its own agent/tool system. MemoPad's MCP tools (<code>write_note</code>, <code>read_note</code>, etc.) map 1:1 to existing <code>myclaw/knowledge/</code> APIs — no need to adopt MCP protocol.</td>
+</tr>
+<tr>
+<td><strong>REST API</strong></td>
+<td>Zensynora is not an API server.</td>
+</tr>
+<tr>
+<td><strong>Cloud sync</strong></td>
+<td>Local-only architecture.</td>
+</tr>
+<tr>
+<td><strong>Project management</strong></td>
+<td>Zensynora uses <code>user_id</code> tenancy, not projects.</td>
+</tr>
+<tr>
+<td><strong>Dual SQLite/Postgres</strong></td>
+<td>Zensynora is SQLite-only.</td>
+</tr>
+<tr>
+<td><strong>SQLAlchemy ORM</strong></td>
+<td>Zensynora uses raw <code>sqlite3</code>/<code>aiosqlite</code>. No ORM migration planned.</td>
+</tr>
+<tr>
+<td><strong>Canvas visualization</strong></td>
+<td>Too specific to MemoPad's UX.</td>
+</tr>
+<tr>
+<td><strong>Daily journal notes</strong></td>
+<td>Specific to MemoPad's workflow.</td>
+</tr>
+<tr>
+<td><strong>Duplicate optimization</strong> (<code>optimize_storage</code>)</td>
+<td>Nice-to-have but low priority; Zensynora doesn't have duplicate accumulation problem yet.</td>
+</tr>
+<tr>
+<td><strong>Entity type/content_type system</strong></td>
+<td>Overkill for zensynora's current scope (markdown-only knowledge).</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="7-implementation-priority">7. Implementation Priority<a class="headerlink" href="#7-implementation-priority" title="Permanent link">&para;</a></h2>
+<h3 id="phase-1-robustness-high-value-low-risk">Phase 1 — Robustness (high value, low risk)<a class="headerlink" href="#phase-1-robustness-high-value-low-risk" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Checksum + mtime + size change detection</strong> in <code>db.py</code> + <code>sync.py</code></li>
+<li><strong>Circuit breaker</strong> for sync failures in <code>sync.py</code></li>
+<li><strong>Move/rename detection</strong> in <code>sync.py</code></li>
+<li><strong><code>.bmignore</code> support</strong> in <code>sync.py</code></li>
+</ol>
+<h3 id="phase-2-data-model-medium-value-moderate-risk">Phase 2 — Data Model (medium value, moderate risk)<a class="headerlink" href="#phase-2-data-model-medium-value-moderate-risk" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Entity aliases</strong> table + <code>get_entity_by_alias()</code> query</li>
+<li><strong>Observation <code>context</code> + <code>provenance_path</code></strong> fields</li>
+<li><strong>Forward reference resolution</strong> during sync</li>
+</ol>
+<h3 id="phase-3-search-medium-value-low-risk">Phase 3 — Search (medium value, low risk)<a class="headerlink" href="#phase-3-search-medium-value-low-risk" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Backlinks</strong> query in <code>graph.py</code></li>
+<li><strong>Structured metadata search</strong> (<code>search_by_metadata</code>)</li>
+<li><strong>RRF fusion</strong> in <code>advanced_search.py</code></li>
+</ol>
+<h3 id="phase-4-performance-medium-value-moderate-risk">Phase 4 — Performance (medium value, moderate risk)<a class="headerlink" href="#phase-4-performance-medium-value-moderate-risk" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Watermark-based incremental scanning</strong></li>
+<li><strong>Parallel sync with semaphore</strong> for write ops</li>
+<li><strong>Watch mode</strong> (optional extra)</li>
+</ol>
+<hr />
+<h2 id="8-compatibility-guarantees">8. Compatibility Guarantees<a class="headerlink" href="#8-compatibility-guarantees" title="Permanent link">&para;</a></h2>
+<ul>
+<li>All changes are <strong>additive</strong> — no breaking changes to existing <code>Note</code>, <code>Observation</code>, <code>Relation</code> dataclasses.</li>
+<li>Existing markdown files parse identically (same <code>parser.py</code> format).</li>
+<li>New DB columns are nullable; existing <code>KnowledgeDB</code> instances migrate cleanly.</li>
+<li><code>myclaw/knowledge/__init__.py</code> exports remain stable; new functions appended to <code>__all__</code>.</li>
+</ul>
+<hr />
+<h2 id="9-estimated-effort">9. Estimated Effort<a class="headerlink" href="#9-estimated-effort" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Phase</th>
+<th>Files touched</th>
+<th>New tests needed</th>
+<th>Risk</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><code>db.py</code>, <code>sync.py</code>, <code>storage.py</code></td>
+<td><code>tests/test_sync.py</code></td>
+<td>Low</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>db.py</code>, <code>parser.py</code>, <code>storage.py</code></td>
+<td><code>tests/test_knowledge.py</code></td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>graph.py</code>, <code>advanced_search.py</code></td>
+<td><code>tests/test_search.py</code></td>
+<td>Low</td>
+</tr>
+<tr>
+<td>4</td>
+<td><code>sync.py</code>, <code>storage.py</code></td>
+<td><code>tests/test_sync.py</code></td>
+<td>Medium</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

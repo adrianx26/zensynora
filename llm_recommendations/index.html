@@ -1,0 +1,1707 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/llm_recommendations/">
+      
+      
+        <link rel="prev" href="../medic_agent_guide/">
+      
+      
+        <link rel="next" href="../agent_catalog/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Choosing an LLM - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#zensynora-personal-recommended-llm-configuration" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Choosing an LLM
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#executive-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Executive Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-qwen25-for-zensynora" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Qwen2.5 for ZenSynora?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tiered-hardware-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tiered Hardware Recommendations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tiered Hardware Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-high-end-workstation-rtx-4090-48gb-vram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 1: High-End Workstation (RTX 4090 / 48GB+ VRAM)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2-mid-range-gaming-gpu-rtx-3060-12gb-rtx-4060-ti-16gb-rx-6800-xt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 2: Mid-Range Gaming GPU (RTX 3060 12GB / RTX 4060 Ti 16GB / RX 6800 XT)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-3-entry-gpu-rtx-3050-6gb-gtx-1660-ti-6gb-integrated-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 3: Entry GPU (RTX 3050 6GB / GTX 1660 Ti 6GB / Integrated GPU)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-4-cpu-only-low-power-laptop-no-discrete-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 4: CPU-Only / Low-Power Laptop (No discrete GPU)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#alternative-models-worth-considering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alternative Models Worth Considering
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#context-window-budget-for-zensynora" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context Window Budget for ZenSynora
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ollama-tuning-for-zensynora" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ollama Tuning for ZenSynora
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dual-provider-fallback-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dual-Provider Fallback Strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#executive-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Executive Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#why-qwen25-for-zensynora" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Qwen2.5 for ZenSynora?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tiered-hardware-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tiered Hardware Recommendations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tiered Hardware Recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tier-1-high-end-workstation-rtx-4090-48gb-vram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 1: High-End Workstation (RTX 4090 / 48GB+ VRAM)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-2-mid-range-gaming-gpu-rtx-3060-12gb-rtx-4060-ti-16gb-rx-6800-xt" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 2: Mid-Range Gaming GPU (RTX 3060 12GB / RTX 4060 Ti 16GB / RX 6800 XT)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-3-entry-gpu-rtx-3050-6gb-gtx-1660-ti-6gb-integrated-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 3: Entry GPU (RTX 3050 6GB / GTX 1660 Ti 6GB / Integrated GPU)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tier-4-cpu-only-low-power-laptop-no-discrete-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tier 4: CPU-Only / Low-Power Laptop (No discrete GPU)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#alternative-models-worth-considering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Alternative Models Worth Considering
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#context-window-budget-for-zensynora" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Context Window Budget for ZenSynora
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ollama-tuning-for-zensynora" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ollama Tuning for ZenSynora
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#dual-provider-fallback-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dual-Provider Fallback Strategy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="zensynora-personal-recommended-llm-configuration">ZenSynora Personal — Recommended LLM Configuration<a class="headerlink" href="#zensynora-personal-recommended-llm-configuration" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Variant:</strong> Personal (local-first, solo user, privacy-focused)<br />
+<strong>Date:</strong> 2026-04-20<br />
+<strong>Goal:</strong> Pick the right local model for your hardware and use case.</p>
+</blockquote>
+<hr />
+<blockquote>
+<p><strong>Updated 2026-10-13 (v0.7.0).</strong> Model advice below is from April 2026; the
+setup notes in this box are current.</p>
+<ul>
+<li><strong>Any provider works the same way.</strong> Choose it in Web UI → Settings → Model,
+  click <em>Test connection &amp; list models</em>, pick a model, save. No restart needed.</li>
+<li><strong>llama.cpp (<code>llama-server</code>)</strong> — provider <code>llamacpp</code>, URL <code>http://localhost:8080/v1</code>
+  (or wherever you run it). Start it with <code>--jinja</code> so agents can use tools;
+  without it ZenSynora still chats but retries without tools.</li>
+<li><strong>Ollama</strong> — provider <code>ollama</code>, URL <code>http://localhost:11434</code>. The configured
+  model must be pulled (<code>ollama pull …</code>), otherwise Ollama answers 404.</li>
+<li><strong>LM Studio</strong> — provider <code>lmstudio</code>, URL <code>http://localhost:1234/v1</code>.</li>
+<li><code>zensynora doctor</code> tells you whether the server is reachable and whether the
+  configured model exists on it.</li>
+</ul>
+</blockquote>
+<h2 id="executive-summary">Executive Summary<a class="headerlink" href="#executive-summary" title="Permanent link">&para;</a></h2>
+<p>For the <strong>Personal variant</strong>, the ideal LLM depends on your hardware. ZenSynora is agent-heavy (tool calling, multi-step reasoning, knowledge RAG, swarm coordination), so <strong>tool-use reliability and context-window size matter more than raw chat quality</strong>.</p>
+<table>
+<thead>
+<tr>
+<th>Hardware Profile</th>
+<th>Recommended Model</th>
+<th>Size</th>
+<th>VRAM Needed</th>
+<th>Speed*</th>
+<th>Best For</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>High-end GPU</strong></td>
+<td><strong>Qwen2.5-32B-Instruct</strong></td>
+<td>32B</td>
+<td>~22 GB (Q4)</td>
+<td>~25 t/s</td>
+<td>Power user: complex swarms, large KB RAG</td>
+</tr>
+<tr>
+<td><strong>Mid-range GPU</strong></td>
+<td><strong>Qwen2.5-14B-Instruct</strong></td>
+<td>14B</td>
+<td>~10 GB (Q4)</td>
+<td>~45 t/s</td>
+<td><strong>Sweet spot:</strong> excellent tools, fast, affordable</td>
+</tr>
+<tr>
+<td><strong>Entry GPU</strong></td>
+<td><strong>Qwen2.5-7B-Instruct</strong></td>
+<td>7B</td>
+<td>~5 GB (Q4)</td>
+<td>~75 t/s</td>
+<td>Budget builds, basic agent tasks</td>
+</tr>
+<tr>
+<td><strong>CPU-only</strong></td>
+<td><strong>Llama 3.2 3B</strong></td>
+<td>3B</td>
+<td>~2 GB (Q4)</td>
+<td>~8 t/s</td>
+<td>Minimal hardware, offline-only mode</td>
+</tr>
+</tbody>
+</table>
+<p>* <em>Tokens per second on typical consumer hardware. Measured with Ollama, Q4_K_M quantization.</em></p>
+<hr />
+<h2 id="why-qwen25-for-zensynora">Why Qwen2.5 for ZenSynora?<a class="headerlink" href="#why-qwen25-for-zensynora" title="Permanent link">&para;</a></h2>
+<p>ZenSynora's Personal variant performs these LLM-intensive operations:</p>
+<ol>
+<li><strong>Parallel tool calling</strong> (<code>agent.py</code> lines 1200–1300) — The LLM must emit valid JSON tool calls, often multiple at once.</li>
+<li><strong>Knowledge RAG</strong> — Context windows include system prompt + memory history + KB search results (can exceed 8K tokens).</li>
+<li><strong>Swarm coordination</strong> — The orchestrator sends aggregated outputs back to the LLM for synthesis.</li>
+<li><strong>Medic / NewTech analysis</strong> — Long-form reasoning over logs, code diffs, and news articles.</li>
+</ol>
+<p><strong>Qwen2.5</strong> outperforms Llama 3.x and Mistral on <strong>function-calling benchmarks</strong> (BFCL, Nexus) while maintaining strong reasoning scores. Its 128K context window handles large RAG retrievals without truncation.</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Tool-Use Score (BFCL)</th>
+<th>MATH Reasoning</th>
+<th>Context</th>
+<th>ZenSynora Fit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Qwen2.5-14B</td>
+<td><strong>89.2</strong></td>
+<td>79.1</td>
+<td>128K</td>
+<td>⭐ Best balance</td>
+</tr>
+<tr>
+<td>Llama 3.3-70B</td>
+<td>84.5</td>
+<td>83.2</td>
+<td>128K</td>
+<td>Great, needs more VRAM</td>
+</tr>
+<tr>
+<td>Mistral-Small-3-24B</td>
+<td>82.1</td>
+<td>81.5</td>
+<td>128K</td>
+<td>Good alternative</td>
+</tr>
+<tr>
+<td>Qwen2.5-32B</td>
+<td><strong>91.5</strong></td>
+<td>85.3</td>
+<td>128K</td>
+<td>Best quality, more VRAM</td>
+</tr>
+<tr>
+<td>Llama 3.2-3B</td>
+<td>61.0</td>
+<td>52.0</td>
+<td>128K</td>
+<td>Current default — limited</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="tiered-hardware-recommendations">Tiered Hardware Recommendations<a class="headerlink" href="#tiered-hardware-recommendations" title="Permanent link">&para;</a></h2>
+<h3 id="tier-1-high-end-workstation-rtx-4090-48gb-vram">Tier 1: High-End Workstation (RTX 4090 / 48GB+ VRAM)<a class="headerlink" href="#tier-1-high-end-workstation-rtx-4090-48gb-vram" title="Permanent link">&para;</a></h3>
+<p><strong>Model:</strong> <code>qwen2.5:32b</code> (Q4_K_M)<br />
+<strong>VRAM:</strong> ~22 GB<br />
+<strong>Speed:</strong> ~25 tokens/s<br />
+<strong>Use Case:</strong> Heavy swarm work, large knowledge bases (10K+ notes), coding assistance.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Ollama setup</span>
+ollama<span class="w"> </span>pull<span class="w"> </span>qwen2.5:32b
+
+<span class="c1"># ZenSynora config (~/.myclaw/config.json)</span>
+<span class="o">{</span>
+<span class="w">  </span><span class="s2">"agents"</span>:<span class="w"> </span><span class="o">{</span>
+<span class="w">    </span><span class="s2">"defaults"</span>:<span class="w"> </span><span class="o">{</span>
+<span class="w">      </span><span class="s2">"provider"</span>:<span class="w"> </span><span class="s2">"ollama"</span>,
+<span class="w">      </span><span class="s2">"model"</span>:<span class="w"> </span><span class="s2">"qwen2.5:32b"</span>
+<span class="w">    </span><span class="o">}</span>
+<span class="w">  </span><span class="o">}</span>
+<span class="o">}</span>
+</code></pre></div>
+<p><strong>Why this tier:</strong> The 32B parameter count handles complex multi-hop reasoning (e.g., "Analyze this error log, check the knowledge base for similar issues, propose a fix, and validate it with the Medic agent").</p>
+<hr />
+<h3 id="tier-2-mid-range-gaming-gpu-rtx-3060-12gb-rtx-4060-ti-16gb-rx-6800-xt">Tier 2: Mid-Range Gaming GPU (RTX 3060 12GB / RTX 4060 Ti 16GB / RX 6800 XT)<a class="headerlink" href="#tier-2-mid-range-gaming-gpu-rtx-3060-12gb-rtx-4060-ti-16gb-rx-6800-xt" title="Permanent link">&para;</a></h3>
+<p><strong>Model:</strong> <code>qwen2.5:14b</code> (Q4_K_M) — <strong>Recommended default for most users</strong><br />
+<strong>VRAM:</strong> ~10 GB<br />
+<strong>Speed:</strong> ~45 tokens/s<br />
+<strong>Use Case:</strong> Daily driver — chat, knowledge search, tool execution, light swarm work.</p>
+<div class="highlight"><pre><span></span><code>ollama<span class="w"> </span>pull<span class="w"> </span>qwen2.5:14b
+</code></pre></div>
+<p><strong>Config:</strong>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"agents"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"defaults"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"provider"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ollama"</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"model"</span><span class="p">:</span><span class="w"> </span><span class="s2">"qwen2.5:14b"</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div></p>
+<p><strong>Performance expectation:</strong>
+- Simple chat response: <strong>1–2 seconds</strong>
+- Tool call + execution + response: <strong>3–5 seconds</strong>
+- Knowledge RAG with 20 retrieved notes: <strong>4–6 seconds</strong>
+- 3-agent swarm synthesis: <strong>8–12 seconds</strong></p>
+<p>This is the <strong>sweet spot</strong> — 14B is the smallest model that reliably handles parallel tool calls and follows complex system prompts.</p>
+<hr />
+<h3 id="tier-3-entry-gpu-rtx-3050-6gb-gtx-1660-ti-6gb-integrated-gpu">Tier 3: Entry GPU (RTX 3050 6GB / GTX 1660 Ti 6GB / Integrated GPU)<a class="headerlink" href="#tier-3-entry-gpu-rtx-3050-6gb-gtx-1660-ti-6gb-integrated-gpu" title="Permanent link">&para;</a></h3>
+<p><strong>Model:</strong> <code>qwen2.5:7b</code> (Q4_K_M)<br />
+<strong>VRAM:</strong> ~5 GB<br />
+<strong>Speed:</strong> ~75 tokens/s<br />
+<strong>Use Case:</strong> Basic chat, single-tool calls, small knowledge base.</p>
+<div class="highlight"><pre><span></span><code>ollama<span class="w"> </span>pull<span class="w"> </span>qwen2.5:7b
+</code></pre></div>
+<p><strong>Trade-offs:</strong>
+- Tool calling is reliable for <strong>single tools</strong>, but parallel multi-tool execution may hallucinate or skip steps.
+- Reasoning depth is adequate for simple Q&amp;A but struggles with 3+ step planning.
+- Recommend keeping <code>memory.summarization_threshold</code> low (e.g., 10 messages) to preserve context.</p>
+<hr />
+<h3 id="tier-4-cpu-only-low-power-laptop-no-discrete-gpu">Tier 4: CPU-Only / Low-Power Laptop (No discrete GPU)<a class="headerlink" href="#tier-4-cpu-only-low-power-laptop-no-discrete-gpu" title="Permanent link">&para;</a></h3>
+<p><strong>Model:</strong> <code>llama3.2:3b</code> (current default)<br />
+<strong>VRAM/RAM:</strong> ~2 GB<br />
+<strong>Speed:</strong> ~8 tokens/s (Apple M3: ~25 t/s)<br />
+<strong>Use Case:</strong> Offline fallback, quick queries, simple shell commands.</p>
+<div class="highlight"><pre><span></span><code>ollama<span class="w"> </span>pull<span class="w"> </span>llama3.2:3b
+</code></pre></div>
+<p><strong>Caveats:</strong>
+- Knowledge gap handling (<code>agent.py</code> lines 1000–1100) will trigger more often because the 3B model has weaker recall.
+- Complex swarms should be limited to 2 agents max.
+- Consider using cloud APIs (OpenAI/Groq) as a fallback for hard tasks by setting up dual providers.</p>
+<hr />
+<h2 id="alternative-models-worth-considering">Alternative Models Worth Considering<a class="headerlink" href="#alternative-models-worth-considering" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>When to Choose It</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Llama 3.3 70B</strong></td>
+<td>If you have 48GB VRAM and want the best open-source reasoning. Slightly worse tool-use than Qwen2.5-32B but stronger on coding benchmarks.</td>
+</tr>
+<tr>
+<td><strong>Mistral Small 3 (24B)</strong></td>
+<td>If you want a European/Apache-2.0 model. Excellent context handling, very strong at 128K RAG tasks.</td>
+</tr>
+<tr>
+<td><strong>DeepSeek-R1-Distill-Qwen-14B</strong></td>
+<td>If your workflow is reasoning-heavy (math, code debugging, Medic agent log analysis). Slower due to chain-of-thought output, but higher accuracy.</td>
+</tr>
+<tr>
+<td><strong>Phi-4 (14B)</strong></td>
+<td>If you need a compact model with surprisingly strong reasoning. Good for laptops with 16GB unified memory (Apple Silicon).</td>
+</tr>
+<tr>
+<td><strong>Command R (35B)</strong></td>
+<td>If you primarily do knowledge-base RAG. Built for retrieval-augmented generation with excellent citation accuracy.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="context-window-budget-for-zensynora">Context Window Budget for ZenSynora<a class="headerlink" href="#context-window-budget-for-zensynora" title="Permanent link">&para;</a></h2>
+<p>ZenSynora's <code>agent.py</code> builds a context window from:</p>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Typical Size</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>System prompt</td>
+<td>500–1,500 tokens</td>
+<td>Agent personality + available tools schema</td>
+</tr>
+<tr>
+<td>Memory history</td>
+<td>2,000–6,000 tokens</td>
+<td>Last N messages (configurable)</td>
+</tr>
+<tr>
+<td>Knowledge RAG</td>
+<td>1,000–4,000 tokens</td>
+<td>Top-K retrieved notes</td>
+</tr>
+<tr>
+<td>Tool results</td>
+<td>500–3,000 tokens</td>
+<td>Shell output, web browse content</td>
+</tr>
+<tr>
+<td>User message</td>
+<td>50–500 tokens</td>
+<td>Current query</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~4,000–15,000 tokens</strong></td>
+<td><strong>128K context is overkill but safe</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Recommendation:</strong> Even the 7B model's 128K window is sufficient. The bottleneck is not context length — it's the model's ability to <strong>pay attention to the right parts</strong> of that context. Qwen2.5 models handle this well.</p>
+<hr />
+<h2 id="ollama-tuning-for-zensynora">Ollama Tuning for ZenSynora<a class="headerlink" href="#ollama-tuning-for-zensynora" title="Permanent link">&para;</a></h2>
+<p>Create a custom Modelfile to optimize for agentic behavior:</p>
+<div class="highlight"><pre><span></span><code><span class="k">FROM</span><span class="w"> </span><span class="s">qwen2.5:14b</span>
+
+<span class="c"># Lower temperature for more deterministic tool calls</span>
+PARAMETER<span class="w"> </span>temperature<span class="w"> </span><span class="m">0</span>.3
+
+<span class="c"># Higher repeat penalty to avoid loops (important for Agent.think())</span>
+PARAMETER<span class="w"> </span>repeat_penalty<span class="w"> </span><span class="m">1</span>.15
+
+<span class="c"># Slightly higher top-p for creative synthesis tasks</span>
+PARAMETER<span class="w"> </span>top_p<span class="w"> </span><span class="m">0</span>.9
+
+<span class="c"># System prompt tuned for tool use</span>
+SYSTEM<span class="w"> </span><span class="s2">"""You are ZenSynora, a helpful AI assistant with access to tools.</span>
+When<span class="w"> </span>a<span class="w"> </span>user<span class="w"> </span>asks<span class="w"> </span>a<span class="w"> </span>question,<span class="w"> </span>first<span class="w"> </span>determine<span class="w"> </span><span class="k">if</span><span class="w"> </span>a<span class="w"> </span>tool<span class="w"> </span>is<span class="w"> </span>needed.
+If<span class="w"> </span>multiple<span class="w"> </span>tools<span class="w"> </span>are<span class="w"> </span>independent,<span class="w"> </span>call<span class="w"> </span>them<span class="w"> </span><span class="k">in</span><span class="w"> </span>parallel.
+Always<span class="w"> </span>respond<span class="w"> </span><span class="k">in</span><span class="w"> </span>the<span class="w"> </span>user<span class="err">'</span>s<span class="w"> </span>language.<span class="w"> </span>Be<span class="w"> </span>concise<span class="w"> </span>but<span class="w"> </span>thorough.<span class="s2">"""</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code>ollama<span class="w"> </span>create<span class="w"> </span>zensynora-agent<span class="w"> </span>-f<span class="w"> </span>./Modelfile
+</code></pre></div>
+<p>Then set <code>model: "zensynora-agent"</code> in config.</p>
+<hr />
+<h2 id="dual-provider-fallback-strategy">Dual-Provider Fallback Strategy<a class="headerlink" href="#dual-provider-fallback-strategy" title="Permanent link">&para;</a></h2>
+<p>For CPU-only users or when local models struggle, configure a cloud fallback:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"agents"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"defaults"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"provider"</span><span class="p">:</span><span class="w"> </span><span class="s2">"ollama"</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"model"</span><span class="p">:</span><span class="w"> </span><span class="s2">"qwen2.5:14b"</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"providers"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"groq"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"api_key"</span><span class="p">:</span><span class="w"> </span><span class="s2">"YOUR_GROQ_KEY"</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"intelligence"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"routing"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"allowed_models"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"qwen2.5:14b"</span><span class="p">,</span><span class="w"> </span><span class="s2">"llama3-70b-8192"</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">"allowed_providers"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"ollama"</span><span class="p">,</span><span class="w"> </span><span class="s2">"groq"</span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>ZenSynora's <code>IntelligentRouter</code> (<code>backends/router.py</code>) can automatically fall back to Groq's <code>llama3-70b-8192</code> when:
+- Local Ollama is unreachable
+- The query is flagged as complex (coding, math, multi-step)
+- The user explicitly prefixes with <code>/cloud</code></p>
+<hr />
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Your Setup</th>
+<th>Recommended Model</th>
+<th>One-Liner</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>RTX 4090 / 48GB+</td>
+<td><code>qwen2.5:32b</code></td>
+<td>Maximum capability for heavy agent work</td>
+</tr>
+<tr>
+<td>RTX 3060 12GB / 4060 Ti</td>
+<td><code>qwen2.5:14b</code></td>
+<td><strong>Best value — the daily driver</strong></td>
+</tr>
+<tr>
+<td>GTX 1660 / 3050</td>
+<td><code>qwen2.5:7b</code></td>
+<td>Fast and capable for basic tasks</td>
+</tr>
+<tr>
+<td>No GPU / laptop</td>
+<td><code>llama3.2:3b</code></td>
+<td>Minimal, but consider cloud fallback</td>
+</tr>
+<tr>
+<td>Apple M3/M4 Pro</td>
+<td><code>qwen2.5:14b</code> or <code>phi4</code></td>
+<td>Excellent unified memory performance</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Bottom line:</strong> Start with <code>qwen2.5:14b</code>. It is the best-balanced open model for agentic workloads as of early 2026, and it runs comfortably on the most common consumer GPU (12–16 GB VRAM).</p>
+<hr />
+<p><em>Generated: 2026-04-20</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

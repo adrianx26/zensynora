@@ -1,0 +1,2586 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/agent_catalog/">
+      
+      
+        <link rel="prev" href="../llm_recommendations/">
+      
+      
+        <link rel="next" href="../agent_swarm_guide/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Agent catalog - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#zensynora-agent-system-documentation" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Agent catalog
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Categories
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent Categories">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#01-core-development-12-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        01. Core Development (12 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#02-language-specialists-27-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        02. Language Specialists (27 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#03-infrastructure-16-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        03. Infrastructure (16 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#04-quality-security-16-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        04. Quality &amp; Security (16 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#05-data-ai-12-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        05. Data &amp; AI (12 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#06-developer-experience-13-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        06. Developer Experience (13 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#07-specialized-domains-12-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        07. Specialized Domains (12 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#08-business-product-11-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        08. Business &amp; Product (11 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#09-meta-orchestration-12-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        09. Meta &amp; Orchestration (12 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-research-analysis-7-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Research &amp; Analysis (7 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#finding-the-right-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Finding the Right Agent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-with-swarm-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with Swarm System
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-profile-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Profile Loading
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#model-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Routing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sandbox-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sandbox Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extending-the-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extending the Registry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-count-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Count Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Categories
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent Categories">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#01-core-development-12-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        01. Core Development (12 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#02-language-specialists-27-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        02. Language Specialists (27 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#03-infrastructure-16-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        03. Infrastructure (16 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#04-quality-security-16-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        04. Quality &amp; Security (16 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#05-data-ai-12-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        05. Data &amp; AI (12 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#06-developer-experience-13-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        06. Developer Experience (13 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#07-specialized-domains-12-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        07. Specialized Domains (12 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#08-business-product-11-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        08. Business &amp; Product (11 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#09-meta-orchestration-12-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        09. Meta &amp; Orchestration (12 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-research-analysis-7-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Research &amp; Analysis (7 agents)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-examples" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage Examples
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage Examples">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#finding-the-right-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Finding the Right Agent
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#integration-with-swarm-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with Swarm System
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-profile-loading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Profile Loading
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#model-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Model Routing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sandbox-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sandbox Modes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#extending-the-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Extending the Registry
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-count-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Count Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        References
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="zensynora-agent-system-documentation">ZenSynora Agent System Documentation<a class="headerlink" href="#zensynora-agent-system-documentation" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Applies to:</strong> v0.7.0 · <strong>Reviewed:</strong> 2026-10-13. Commands use the installed <code>zensynora</code> CLI (<code>python cli.py …</code> from the source folder is equivalent). The registry contains 137 agents loaded from <code>myclaw/agents/data/agents.yaml</code>.</p>
+</blockquote>
+<p><strong>Version:</strong> 1.0
+<strong>Date:</strong> 2026-03-29
+<strong>Total Agents:</strong> 136+</p>
+<hr />
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>The ZenSynora Agent System provides a comprehensive registry of 136+ specialized AI agents modeled after the VoltAgent Codex subagents. These agents are organized into 10 categories covering development, infrastructure, quality, data/AI, and business domains.</p>
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">AGENT_REGISTRY</span><span class="p">,</span>
+    <span class="n">get_agent</span><span class="p">,</span>
+    <span class="n">list_agents</span><span class="p">,</span>
+    <span class="n">AgentCategory</span><span class="p">,</span>
+<span class="p">)</span>
+
+<span class="c1"># Get a specific agent</span>
+<span class="n">agent</span> <span class="o">=</span> <span class="n">get_agent</span><span class="p">(</span><span class="s2">"backend-developer"</span><span class="p">)</span>
+
+<span class="c1"># List all agents in a category</span>
+<span class="n">backend_agents</span> <span class="o">=</span> <span class="n">list_agents</span><span class="p">(</span><span class="n">category</span><span class="o">=</span><span class="n">AgentCategory</span><span class="o">.</span><span class="n">CORE_DEVELOPMENT</span><span class="p">)</span>
+
+<span class="c1"># Search agents by query</span>
+<span class="n">security_agents</span> <span class="o">=</span> <span class="n">list_agents</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="s2">"security"</span><span class="p">)</span>
+
+<span class="c1"># Get all agents</span>
+<span class="n">all_agents</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">AGENT_REGISTRY</span><span class="o">.</span><span class="n">values</span><span class="p">())</span>
+</code></pre></div>
+<hr />
+<h2 id="agent-categories">Agent Categories<a class="headerlink" href="#agent-categories" title="Permanent link">&para;</a></h2>
+<h3 id="01-core-development-12-agents">01. Core Development (12 agents)<a class="headerlink" href="#01-core-development-12-agents" title="Permanent link">&para;</a></h3>
+<p>Essential development agents for everyday coding tasks.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Description</th>
+<th>Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api-designer</code></td>
+<td>REST and GraphQL API architect</td>
+<td>API, Backend</td>
+</tr>
+<tr>
+<td><code>backend-developer</code></td>
+<td>Server-side expert for scalable APIs</td>
+<td>Backend, API</td>
+</tr>
+<tr>
+<td><code>code-mapper</code></td>
+<td>Code path mapping and ownership analysis</td>
+<td>Fullstack</td>
+</tr>
+<tr>
+<td><code>electron-pro</code></td>
+<td>Desktop application expert</td>
+<td>Frontend, Mobile</td>
+</tr>
+<tr>
+<td><code>frontend-developer</code></td>
+<td>UI/UX specialist for React, Vue, Angular</td>
+<td>Frontend</td>
+</tr>
+<tr>
+<td><code>fullstack-developer</code></td>
+<td>End-to-end feature development</td>
+<td>Fullstack</td>
+</tr>
+<tr>
+<td><code>graphql-architect</code></td>
+<td>GraphQL schema and federation expert</td>
+<td>API, Backend</td>
+</tr>
+<tr>
+<td><code>microservices-architect</code></td>
+<td>Distributed systems designer</td>
+<td>Backend, API</td>
+</tr>
+<tr>
+<td><code>mobile-developer</code></td>
+<td>Cross-platform mobile specialist</td>
+<td>Mobile</td>
+</tr>
+<tr>
+<td><code>ui-designer</code></td>
+<td>Visual design and interaction specialist</td>
+<td>Frontend</td>
+</tr>
+<tr>
+<td><code>ui-fixer</code></td>
+<td>Smallest safe patch for UI issues</td>
+<td>Frontend</td>
+</tr>
+<tr>
+<td><code>websocket-engineer</code></td>
+<td>Real-time communication specialist</td>
+<td>Backend, API</td>
+</tr>
+</tbody>
+</table>
+<h3 id="02-language-specialists-27-agents">02. Language Specialists (27 agents)<a class="headerlink" href="#02-language-specialists-27-agents" title="Permanent link">&para;</a></h3>
+<p>Language-specific experts with deep framework knowledge.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Language/Framework</th>
+<th>Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>angular-architect</code></td>
+<td>Angular 15+</td>
+<td>Frontend</td>
+</tr>
+<tr>
+<td><code>cpp-pro</code></td>
+<td>C++</td>
+<td>Systems</td>
+</tr>
+<tr>
+<td><code>csharp-developer</code></td>
+<td>C# / .NET</td>
+<td>Backend</td>
+</tr>
+<tr>
+<td><code>django-developer</code></td>
+<td>Django 4+</td>
+<td>Python, Backend</td>
+</tr>
+<tr>
+<td><code>dotnet-core-expert</code></td>
+<td>.NET 8</td>
+<td>C#, Backend</td>
+</tr>
+<tr>
+<td><code>dotnet-framework-4.8-expert</code></td>
+<td>.NET Framework</td>
+<td>Legacy</td>
+</tr>
+<tr>
+<td><code>elixir-expert</code></td>
+<td>Elixir/OTP</td>
+<td>Fault-tolerant</td>
+</tr>
+<tr>
+<td><code>erlang-expert</code></td>
+<td>Erlang/OTP</td>
+<td>Distributed</td>
+</tr>
+<tr>
+<td><code>flutter-expert</code></td>
+<td>Flutter 3+</td>
+<td>Mobile</td>
+</tr>
+<tr>
+<td><code>golang-pro</code></td>
+<td>Go</td>
+<td>Concurrency</td>
+</tr>
+<tr>
+<td><code>java-architect</code></td>
+<td>Java Enterprise</td>
+<td>Architecture</td>
+</tr>
+<tr>
+<td><code>javascript-pro</code></td>
+<td>JavaScript/Node.js</td>
+<td>Fullstack</td>
+</tr>
+<tr>
+<td><code>kotlin-specialist</code></td>
+<td>Kotlin/JVM</td>
+<td>Mobile</td>
+</tr>
+<tr>
+<td><code>laravel-specialist</code></td>
+<td>Laravel 10+</td>
+<td>PHP Backend</td>
+</tr>
+<tr>
+<td><code>nextjs-developer</code></td>
+<td>Next.js 14+</td>
+<td>React Fullstack</td>
+</tr>
+<tr>
+<td><code>php-pro</code></td>
+<td>PHP</td>
+<td>Backend</td>
+</tr>
+<tr>
+<td><code>powershell-5.1-expert</code></td>
+<td>PowerShell 5.1</td>
+<td>Windows Automation</td>
+</tr>
+<tr>
+<td><code>powershell-7-expert</code></td>
+<td>PowerShell 7+</td>
+<td>Cross-platform</td>
+</tr>
+<tr>
+<td><code>python-pro</code></td>
+<td>Python</td>
+<td>Data, AI, Web</td>
+</tr>
+<tr>
+<td><code>rails-expert</code></td>
+<td>Rails 8.1</td>
+<td>Ruby Backend</td>
+</tr>
+<tr>
+<td><code>react-specialist</code></td>
+<td>React 18+</td>
+<td>Frontend</td>
+</tr>
+<tr>
+<td><code>rust-engineer</code></td>
+<td>Rust</td>
+<td>Systems</td>
+</tr>
+<tr>
+<td><code>spring-boot-engineer</code></td>
+<td>Spring Boot 3+</td>
+<td>Java Microservices</td>
+</tr>
+<tr>
+<td><code>sql-pro</code></td>
+<td>SQL</td>
+<td>Database</td>
+</tr>
+<tr>
+<td><code>swift-expert</code></td>
+<td>Swift/iOS</td>
+<td>Apple</td>
+</tr>
+<tr>
+<td><code>typescript-pro</code></td>
+<td>TypeScript</td>
+<td>Type-safe JS</td>
+</tr>
+<tr>
+<td><code>vue-expert</code></td>
+<td>Vue 3</td>
+<td>Frontend</td>
+</tr>
+</tbody>
+</table>
+<h3 id="03-infrastructure-16-agents">03. Infrastructure (16 agents)<a class="headerlink" href="#03-infrastructure-16-agents" title="Permanent link">&para;</a></h3>
+<p>DevOps, cloud, and deployment specialists.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Description</th>
+<th>Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>azure-infra-engineer</code></td>
+<td>Azure infrastructure</td>
+<td>Cloud, DevOps</td>
+</tr>
+<tr>
+<td><code>cloud-architect</code></td>
+<td>Multi-cloud architecture</td>
+<td>AWS/GCP/Azure</td>
+</tr>
+<tr>
+<td><code>database-administrator</code></td>
+<td>DB management</td>
+<td>DBA, Backup</td>
+</tr>
+<tr>
+<td><code>deployment-engineer</code></td>
+<td>Deployment automation</td>
+<td>CI/CD, GitOps</td>
+</tr>
+<tr>
+<td><code>devops-engineer</code></td>
+<td>CI/CD and automation</td>
+<td>DevOps</td>
+</tr>
+<tr>
+<td><code>devops-incident-responder</code></td>
+<td>Incident management</td>
+<td>On-call</td>
+</tr>
+<tr>
+<td><code>docker-expert</code></td>
+<td>Containerization</td>
+<td>Docker</td>
+</tr>
+<tr>
+<td><code>incident-responder</code></td>
+<td>System incident response</td>
+<td>Recovery</td>
+</tr>
+<tr>
+<td><code>kubernetes-specialist</code></td>
+<td>K8s orchestration</td>
+<td>Containers</td>
+</tr>
+<tr>
+<td><code>network-engineer</code></td>
+<td>Network infrastructure</td>
+<td>DNS, VPN</td>
+</tr>
+<tr>
+<td><code>platform-engineer</code></td>
+<td>Internal developer platforms</td>
+<td>IDP</td>
+</tr>
+<tr>
+<td><code>security-engineer</code></td>
+<td>Infrastructure security</td>
+<td>Hardening</td>
+</tr>
+<tr>
+<td><code>sre-engineer</code></td>
+<td>Site reliability</td>
+<td>SLO/SLA</td>
+</tr>
+<tr>
+<td><code>terraform-engineer</code></td>
+<td>Terraform IaC</td>
+<td>AWS/GCP/Azure</td>
+</tr>
+<tr>
+<td><code>terragrunt-expert</code></td>
+<td>Terragrunt orchestration</td>
+<td>DRY IaC</td>
+</tr>
+<tr>
+<td><code>windows-infra-admin</code></td>
+<td>Active Directory</td>
+<td>Windows</td>
+</tr>
+</tbody>
+</table>
+<h3 id="04-quality-security-16-agents">04. Quality &amp; Security (16 agents)<a class="headerlink" href="#04-quality-security-16-agents" title="Permanent link">&para;</a></h3>
+<p>Testing, security, and code quality experts.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Description</th>
+<th>Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>accessibility-tester</code></td>
+<td>A11y compliance</td>
+<td>WCAG, ARIA</td>
+</tr>
+<tr>
+<td><code>ad-security-reviewer</code></td>
+<td>AD security audit</td>
+<td>IAM</td>
+</tr>
+<tr>
+<td><code>architect-reviewer</code></td>
+<td>Architecture review</td>
+<td>System Design</td>
+</tr>
+<tr>
+<td><code>browser-debugger</code></td>
+<td>Client-side debugging</td>
+<td>DevTools</td>
+</tr>
+<tr>
+<td><code>chaos-engineer</code></td>
+<td>Resilience testing</td>
+<td>Failure Injection</td>
+</tr>
+<tr>
+<td><code>code-reviewer</code></td>
+<td>Code quality guardian</td>
+<td>PR Review</td>
+</tr>
+<tr>
+<td><code>compliance-auditor</code></td>
+<td>Regulatory compliance</td>
+<td>SOC2, HIPAA</td>
+</tr>
+<tr>
+<td><code>debugger</code></td>
+<td>Advanced debugging</td>
+<td>Root Cause</td>
+</tr>
+<tr>
+<td><code>error-detective</code></td>
+<td>Error analysis</td>
+<td>Stack Traces</td>
+</tr>
+<tr>
+<td><code>penetration-tester</code></td>
+<td>Ethical hacking</td>
+<td>OWASP</td>
+</tr>
+<tr>
+<td><code>performance-engineer</code></td>
+<td>Performance optimization</td>
+<td>Profiling</td>
+</tr>
+<tr>
+<td><code>powershell-security-hardening</code></td>
+<td>PowerShell security</td>
+<td>Compliance</td>
+</tr>
+<tr>
+<td><code>qa-expert</code></td>
+<td>Test automation</td>
+<td>QA</td>
+</tr>
+<tr>
+<td><code>reviewer</code></td>
+<td>PR-style review</td>
+<td>Security</td>
+</tr>
+<tr>
+<td><code>security-auditor</code></td>
+<td>Vulnerability assessment</td>
+<td>Security</td>
+</tr>
+<tr>
+<td><code>test-automator</code></td>
+<td>Test frameworks</td>
+<td>Selenium</td>
+</tr>
+</tbody>
+</table>
+<h3 id="05-data-ai-12-agents">05. Data &amp; AI (12 agents)<a class="headerlink" href="#05-data-ai-12-agents" title="Permanent link">&para;</a></h3>
+<p>Data engineering, ML, and AI specialists.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Description</th>
+<th>Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ai-engineer</code></td>
+<td>AI system design</td>
+<td>ML Systems</td>
+</tr>
+<tr>
+<td><code>data-analyst</code></td>
+<td>Data insights</td>
+<td>Visualization</td>
+</tr>
+<tr>
+<td><code>data-engineer</code></td>
+<td>Pipeline architect</td>
+<td>ETL, Spark</td>
+</tr>
+<tr>
+<td><code>data-scientist</code></td>
+<td>Analytics expert</td>
+<td>Statistics</td>
+</tr>
+<tr>
+<td><code>database-optimizer</code></td>
+<td>Query optimization</td>
+<td>Performance</td>
+</tr>
+<tr>
+<td><code>llm-architect</code></td>
+<td>LLM system design</td>
+<td>RAG, Fine-tuning</td>
+</tr>
+<tr>
+<td><code>machine-learning-engineer</code></td>
+<td>ML engineering</td>
+<td>TensorFlow, PyTorch</td>
+</tr>
+<tr>
+<td><code>ml-engineer</code></td>
+<td>ML specialist</td>
+<td>Features</td>
+</tr>
+<tr>
+<td><code>mlops-engineer</code></td>
+<td>MLOps</td>
+<td>Deployment</td>
+</tr>
+<tr>
+<td><code>nlp-engineer</code></td>
+<td>NLP expert</td>
+<td>Transformers</td>
+</tr>
+<tr>
+<td><code>postgres-pro</code></td>
+<td>PostgreSQL expert</td>
+<td>SQL</td>
+</tr>
+<tr>
+<td><code>prompt-engineer</code></td>
+<td>Prompt optimization</td>
+<td>LLM</td>
+</tr>
+</tbody>
+</table>
+<h3 id="06-developer-experience-13-agents">06. Developer Experience (13 agents)<a class="headerlink" href="#06-developer-experience-13-agents" title="Permanent link">&para;</a></h3>
+<p>Tooling and developer productivity experts.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Description</th>
+<th>Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>build-engineer</code></td>
+<td>Build systems</td>
+<td>Bazel, Make</td>
+</tr>
+<tr>
+<td><code>cli-developer</code></td>
+<td>CLI tools</td>
+<td>argparse, Cobra</td>
+</tr>
+<tr>
+<td><code>dependency-manager</code></td>
+<td>Package management</td>
+<td>npm, pip</td>
+</tr>
+<tr>
+<td><code>documentation-engineer</code></td>
+<td>Tech docs</td>
+<td>Sphinx</td>
+</tr>
+<tr>
+<td><code>dx-optimizer</code></td>
+<td>Developer experience</td>
+<td>Productivity</td>
+</tr>
+<tr>
+<td><code>git-workflow-manager</code></td>
+<td>Git strategies</td>
+<td>Branching</td>
+</tr>
+<tr>
+<td><code>legacy-modernizer</code></td>
+<td>Tech debt</td>
+<td>Refactoring</td>
+</tr>
+<tr>
+<td><code>mcp-developer</code></td>
+<td>MCP specialist</td>
+<td>AI Integration</td>
+</tr>
+<tr>
+<td><code>powershell-module-architect</code></td>
+<td>PS modules</td>
+<td>Gallery</td>
+</tr>
+<tr>
+<td><code>powershell-ui-architect</code></td>
+<td>PowerShell UI</td>
+<td>WinForms, WPF</td>
+</tr>
+<tr>
+<td><code>refactoring-specialist</code></td>
+<td>Code refactoring</td>
+<td>Patterns</td>
+</tr>
+<tr>
+<td><code>slack-expert</code></td>
+<td>Slack integration</td>
+<td>Bolt</td>
+</tr>
+<tr>
+<td><code>tooling-engineer</code></td>
+<td>Developer tools</td>
+<td>Linters</td>
+</tr>
+</tbody>
+</table>
+<h3 id="07-specialized-domains-12-agents">07. Specialized Domains (12 agents)<a class="headerlink" href="#07-specialized-domains-12-agents" title="Permanent link">&para;</a></h3>
+<p>Domain-specific technology experts.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Description</th>
+<th>Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api-documenter</code></td>
+<td>API docs</td>
+<td>OpenAPI</td>
+</tr>
+<tr>
+<td><code>blockchain-developer</code></td>
+<td>Web3, smart contracts</td>
+<td>Solidity</td>
+</tr>
+<tr>
+<td><code>embedded-systems</code></td>
+<td>Embedded/RTOS</td>
+<td>Bare-metal</td>
+</tr>
+<tr>
+<td><code>fintech-engineer</code></td>
+<td>Financial tech</td>
+<td>Payments</td>
+</tr>
+<tr>
+<td><code>game-developer</code></td>
+<td>Unity/Unreal/Godot</td>
+<td>Gamedev</td>
+</tr>
+<tr>
+<td><code>iot-engineer</code></td>
+<td>IoT systems</td>
+<td>MQTT</td>
+</tr>
+<tr>
+<td><code>m365-admin</code></td>
+<td>Microsoft 365</td>
+<td>SharePoint</td>
+</tr>
+<tr>
+<td><code>mobile-app-developer</code></td>
+<td>iOS/Android apps</td>
+<td>React Native</td>
+</tr>
+<tr>
+<td><code>payment-integration</code></td>
+<td>Stripe/PayPal</td>
+<td>PCI-DSS</td>
+</tr>
+<tr>
+<td><code>quant-analyst</code></td>
+<td>Quantitative analysis</td>
+<td>Trading</td>
+</tr>
+<tr>
+<td><code>risk-manager</code></td>
+<td>Risk assessment</td>
+<td>Compliance</td>
+</tr>
+<tr>
+<td><code>seo-specialist</code></td>
+<td>Search optimization</td>
+<td>Analytics</td>
+</tr>
+</tbody>
+</table>
+<h3 id="08-business-product-11-agents">08. Business &amp; Product (11 agents)<a class="headerlink" href="#08-business-product-11-agents" title="Permanent link">&para;</a></h3>
+<p>Product management and business analysis.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Description</th>
+<th>Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>business-analyst</code></td>
+<td>Requirements</td>
+<td>BPMN</td>
+</tr>
+<tr>
+<td><code>content-marketer</code></td>
+<td>Content strategy</td>
+<td>SEO</td>
+</tr>
+<tr>
+<td><code>customer-success-manager</code></td>
+<td>CS specialist</td>
+<td>Onboarding</td>
+</tr>
+<tr>
+<td><code>legal-advisor</code></td>
+<td>Legal/compliance</td>
+<td>Contracts</td>
+</tr>
+<tr>
+<td><code>product-manager</code></td>
+<td>Product strategy</td>
+<td>Roadmap</td>
+</tr>
+<tr>
+<td><code>project-manager</code></td>
+<td>Project delivery</td>
+<td>PMP</td>
+</tr>
+<tr>
+<td><code>sales-engineer</code></td>
+<td>Technical sales</td>
+<td>Demos</td>
+</tr>
+<tr>
+<td><code>scrum-master</code></td>
+<td>Agile/Scrum</td>
+<td>Ceremonies</td>
+</tr>
+<tr>
+<td><code>technical-writer</code></td>
+<td>Tech writing</td>
+<td>Manuals</td>
+</tr>
+<tr>
+<td><code>ux-researcher</code></td>
+<td>User research</td>
+<td>Personas</td>
+</tr>
+<tr>
+<td><code>wordpress-master</code></td>
+<td>WordPress</td>
+<td>WooCommerce</td>
+</tr>
+</tbody>
+</table>
+<h3 id="09-meta-orchestration-12-agents">09. Meta &amp; Orchestration (12 agents)<a class="headerlink" href="#09-meta-orchestration-12-agents" title="Permanent link">&para;</a></h3>
+<p>Agent coordination and meta-programming.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Description</th>
+<th>Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>agent-installer</code></td>
+<td>Agent installation</td>
+<td>Registry</td>
+</tr>
+<tr>
+<td><code>agent-organizer</code></td>
+<td>Multi-agent coordination</td>
+<td>Workflows</td>
+</tr>
+<tr>
+<td><code>context-manager</code></td>
+<td>Context optimization</td>
+<td>Tokens</td>
+</tr>
+<tr>
+<td><code>error-coordinator</code></td>
+<td>Error handling</td>
+<td>Recovery</td>
+</tr>
+<tr>
+<td><code>it-ops-orchestrator</code></td>
+<td>IT automation</td>
+<td>Runbooks</td>
+</tr>
+<tr>
+<td><code>knowledge-synthesizer</code></td>
+<td>Knowledge aggregation</td>
+<td>Synthesis</td>
+</tr>
+<tr>
+<td><code>multi-agent-coordinator</code></td>
+<td>Advanced orchestration</td>
+<td>Swarms</td>
+</tr>
+<tr>
+<td><code>performance-monitor</code></td>
+<td>Performance tracking</td>
+<td>Metrics</td>
+</tr>
+<tr>
+<td><code>pied-piper</code></td>
+<td>Workflow automation</td>
+<td>Pipelines</td>
+</tr>
+<tr>
+<td><code>task-distributor</code></td>
+<td>Task allocation</td>
+<td>Scheduling</td>
+</tr>
+<tr>
+<td><code>workflow-orchestrator</code></td>
+<td>Workflow automation</td>
+<td>DAGs</td>
+</tr>
+</tbody>
+</table>
+<h3 id="10-research-analysis-7-agents">10. Research &amp; Analysis (7 agents)<a class="headerlink" href="#10-research-analysis-7-agents" title="Permanent link">&para;</a></h3>
+<p>Research, search, and analysis specialists.</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Description</th>
+<th>Capabilities</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>competitive-analyst</code></td>
+<td>Competitive intelligence</td>
+<td>Market</td>
+</tr>
+<tr>
+<td><code>data-researcher</code></td>
+<td>Data discovery</td>
+<td>Datasets</td>
+</tr>
+<tr>
+<td><code>docs-researcher</code></td>
+<td>API verification</td>
+<td>Reference</td>
+</tr>
+<tr>
+<td><code>market-researcher</code></td>
+<td>Market analysis</td>
+<td>Consumer</td>
+</tr>
+<tr>
+<td><code>research-analyst</code></td>
+<td>Research synthesis</td>
+<td>Methodology</td>
+</tr>
+<tr>
+<td><code>search-specialist</code></td>
+<td>Information retrieval</td>
+<td>Vector search</td>
+</tr>
+<tr>
+<td><code>trend-analyst</code></td>
+<td>Emerging trends</td>
+<td>Forecasting</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="usage-examples">Usage Examples<a class="headerlink" href="#usage-examples" title="Permanent link">&para;</a></h2>
+<h3 id="finding-the-right-agent">Finding the Right Agent<a class="headerlink" href="#finding-the-right-agent" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">list_agents</span><span class="p">,</span> <span class="n">AgentCategory</span><span class="p">,</span> <span class="n">AgentCapability</span>
+
+<span class="c1"># Find all security-related agents</span>
+<span class="n">security_agents</span> <span class="o">=</span> <span class="n">list_agents</span><span class="p">(</span>
+    <span class="n">capability</span><span class="o">=</span><span class="n">AgentCapability</span><span class="o">.</span><span class="n">SECURITY</span>
+<span class="p">)</span>
+
+<span class="c1"># Find Python developers</span>
+<span class="n">python_agents</span> <span class="o">=</span> <span class="n">list_agents</span><span class="p">(</span>
+    <span class="n">capability</span><span class="o">=</span><span class="n">AgentCapability</span><span class="o">.</span><span class="n">PYTHON</span>
+<span class="p">)</span>
+
+<span class="c1"># Find agents that can help with APIs</span>
+<span class="n">api_agents</span> <span class="o">=</span> <span class="n">list_agents</span><span class="p">(</span><span class="n">query</span><span class="o">=</span><span class="s2">"api"</span><span class="p">)</span>
+
+<span class="c1"># Get all frontend agents</span>
+<span class="n">frontend_agents</span> <span class="o">=</span> <span class="n">list_agents</span><span class="p">(</span><span class="n">category</span><span class="o">=</span><span class="n">AgentCategory</span><span class="o">.</span><span class="n">CORE_DEVELOPMENT</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="integration-with-swarm-system">Integration with Swarm System<a class="headerlink" href="#integration-with-swarm-system" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_agent</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.swarm</span><span class="w"> </span><span class="kn">import</span> <span class="n">SwarmConfig</span><span class="p">,</span> <span class="n">SwarmStrategy</span>
+
+<span class="c1"># Get agent definition</span>
+<span class="n">agent_def</span> <span class="o">=</span> <span class="n">get_agent</span><span class="p">(</span><span class="s2">"backend-developer"</span><span class="p">)</span>
+
+<span class="c1"># Create a specialized swarm</span>
+<span class="n">swarm_config</span> <span class="o">=</span> <span class="n">SwarmConfig</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"api-development-team"</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="o">=</span><span class="n">SwarmStrategy</span><span class="o">.</span><span class="n">HIERARCHICAL</span><span class="p">,</span>
+    <span class="n">workers</span><span class="o">=</span><span class="p">[</span><span class="s2">"api-designer"</span><span class="p">,</span> <span class="s2">"backend-developer"</span><span class="p">,</span> <span class="s2">"code-reviewer"</span><span class="p">],</span>
+    <span class="n">coordinator</span><span class="o">=</span><span class="s2">"fullstack-developer"</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="agent-profile-loading">Agent Profile Loading<a class="headerlink" href="#agent-profile-loading" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">pathlib</span><span class="w"> </span><span class="kn">import</span> <span class="n">Path</span>
+
+<span class="c1"># Agent profiles are stored in myclaw/agent_profiles/</span>
+<span class="n">profile_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="vm">__file__</span><span class="p">)</span><span class="o">.</span><span class="n">parent</span> <span class="o">/</span> <span class="s2">"agent_profiles"</span>
+<span class="n">backend_profile</span> <span class="o">=</span> <span class="n">profile_path</span> <span class="o">/</span> <span class="s2">"core-development"</span> <span class="o">/</span> <span class="s2">"backend-developer.md"</span>
+</code></pre></div>
+<hr />
+<h2 id="model-routing">Model Routing<a class="headerlink" href="#model-routing" title="Permanent link">&para;</a></h2>
+<p>Agents use smart model routing based on task complexity:</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Use Case</th>
+<th>Examples</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gpt-5.4</code></td>
+<td>Deep reasoning, architecture, security</td>
+<td>security-auditor, llm-architect</td>
+</tr>
+<tr>
+<td><code>gpt-5.3-codex-spark</code></td>
+<td>Fast tasks, synthesis, research</td>
+<td>search-specialist, docs-researcher</td>
+</tr>
+</tbody>
+</table>
+<h2 id="sandbox-modes">Sandbox Modes<a class="headerlink" href="#sandbox-modes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Mode</th>
+<th>Description</th>
+<th>Use Case</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>read-only</code></td>
+<td>Analyze without modifying</td>
+<td>reviewers, auditors</td>
+</tr>
+<tr>
+<td><code>workspace-write</code></td>
+<td>Create and modify files</td>
+<td>developers, engineers</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="extending-the-registry">Extending the Registry<a class="headerlink" href="#extending-the-registry" title="Permanent link">&para;</a></h2>
+<p>To add a new agent:</p>
+<ol>
+<li>Create the agent definition in <code>myclaw/agents/registry.py</code></li>
+<li>Add a profile markdown in <code>myclaw/agent_profiles/{category}/</code></li>
+<li>Register in the appropriate <code>AgentCategory</code></li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="c1"># In registry.py</span>
+<span class="s2">"my-new-agent"</span><span class="p">:</span> <span class="n">AgentDefinition</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"my-new-agent"</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">"Description of what it does"</span><span class="p">,</span>
+    <span class="n">category</span><span class="o">=</span><span class="n">AgentCategory</span><span class="o">.</span><span class="n">CORE_DEVELOPMENT</span><span class="p">,</span>
+    <span class="n">capabilities</span><span class="o">=</span><span class="p">{</span><span class="n">AgentCapability</span><span class="o">.</span><span class="n">BACKEND</span><span class="p">},</span>
+    <span class="n">profile_name</span><span class="o">=</span><span class="s2">"core-development/my-new-agent"</span><span class="p">,</span>
+    <span class="n">tags</span><span class="o">=</span><span class="p">{</span><span class="s2">"relevant"</span><span class="p">,</span> <span class="s2">"tags"</span><span class="p">},</span>
+<span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="agent-count-summary">Agent Count Summary<a class="headerlink" href="#agent-count-summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Core Development</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Language Specialists</td>
+<td>27</td>
+</tr>
+<tr>
+<td>Infrastructure</td>
+<td>16</td>
+</tr>
+<tr>
+<td>Quality &amp; Security</td>
+<td>16</td>
+</tr>
+<tr>
+<td>Data &amp; AI</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Developer Experience</td>
+<td>13</td>
+</tr>
+<tr>
+<td>Specialized Domains</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Business &amp; Product</td>
+<td>11</td>
+</tr>
+<tr>
+<td>Meta &amp; Orchestration</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Research &amp; Analysis</td>
+<td>7</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>136</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="references">References<a class="headerlink" href="#references" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Based on <a href="https://github.com/VoltAgent/awesome-codex-subagents">VoltAgent Codex Subagents</a></li>
+<li>Inspired by OpenAI's agent frameworks</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

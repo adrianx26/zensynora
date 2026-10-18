@@ -1,0 +1,1961 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/archive/architecture_with_optimizations/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>MyClaw/Zensynora Architecture (With Optimizations) - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#myclawzensynora-architecture-with-optimizations" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              MyClaw/Zensynora Architecture (With Optimizations)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#system-architecture-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        System Architecture Diagram
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optimization-highlights" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimization Highlights
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Optimization Highlights">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-caching-layer-new" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Caching Layer (New)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-database-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Database Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-agent-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Agent Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-concurrency" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Concurrency
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-error-handling-user-experience-v21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Error Handling &amp; User Experience (v2.1)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-flow-with-optimizations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Flow with Optimizations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Data Flow with Optimizations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-agent-request-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Agent Request Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-knowledge-graph-query-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Knowledge Graph Query Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-database-connection-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Database Connection Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-knowledge-gap-handling-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Knowledge Gap Handling Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-browse-error-handling-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Browse Error Handling Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Benchmarks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#thread-safety-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Thread Safety Map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#module-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Module Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing-coverage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Coverage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing Coverage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-test-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Test Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#performance-tuning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Performance Tuning
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="myclawzensynora-architecture-with-optimizations">MyClaw/Zensynora Architecture (With Optimizations)<a class="headerlink" href="#myclawzensynora-architecture-with-optimizations" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Archived on 2026-10-13 (v0.7.0).</strong> Architecture notes from the optimization sprint; replaced by docs/architecture_diagram.md. Kept for history; it describes the project at the time it was written and may not match the current code. Current documentation: <a href="../../README.md">docs/README.md</a>.</p>
+</blockquote>
+<p>This document describes the optimized architecture of MyClaw after the 2026-04-06 performance overhaul.</p>
+<h2 id="system-architecture-diagram">System Architecture Diagram<a class="headerlink" href="#system-architecture-diagram" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart TB
+    %% Styling
+    classDef core fill:#2a507a,stroke:#4477aa,stroke-width:3px,color:#fff
+    classDef optimized fill:#1a6d1a,stroke:#2d9a4a,stroke-width:3px,color:#fff
+    classDef channel fill:#1a4d2e,stroke:#2d7a4a,stroke-width:2px,color:#fff
+    classDef data fill:#6a3a14,stroke:#9c5822,stroke-width:2px,color:#fff
+    classDef llm fill:#4a1e50,stroke:#863990,stroke-width:2px,color:#fff
+    classDef cache fill:#8a6a12,stroke:#c9a227,stroke-width:2px,color:#fff
+
+    %% Channels
+    subgraph Interfaces [External Interfaces]
+        direction LR
+        CLI(["🖥️ CLI"])
+        TG(["📱 Telegram Bot"])
+        WA(["💬 WhatsApp API"])
+    end
+
+    %% Core Application
+    subgraph MyClaw [MyClaw Platform]
+        GW{"Gateway Router"}
+
+        subgraph AgentOptimized [🧠 Core Agent - Optimized]
+            AgentCore("Agent Core")
+            ProfileCache("📋 Profile Cache&lt;br/&gt;LRU Eviction")
+            AsyncLoader("⚡ Async Profile Loader&lt;br/&gt;Non-blocking I/O")
+            StringOpt("📝 String Builder Opt&lt;br/&gt;O(n) concat")
+        end
+
+        subgraph Capabilities [Agent Capabilities]
+            direction LR
+            Tools("🛠️ Dynamic Tools")
+            Profiles("📝 Profiles System")
+            Sched("⏱️ Task Scheduler")
+            RateLimiter("🚦 Rate Limiter&lt;br/&gt;Token Bucket")
+        end
+
+        subgraph AdvancedSystems [Multi-Agent System]
+            direction TB
+            Swarm("🐝 Swarm Orchestrator")
+            Spec("🤖 Specialized Agents")
+            AggEngine("📊 Aggregation Engine&lt;br/&gt;Consensus/Best/Synthesis")
+        end
+    end
+
+    %% Data Layer - Optimized
+    subgraph Storage [Persistent SQLite Storage - Optimized]
+        direction LR
+
+        subgraph MemoryPool [Connection Pool]
+            AsyncPool("AsyncSQLitePool")
+            SyncPool("SQLitePool&lt;br/&gt;Idle Timeout: 5min")
+            Cleanup("🧹 Idle Cleanup&lt;br/&gt;Auto-close stale")
+        end
+
+        subgraph Databases [Databases]
+            Mem[("💾 Memory&lt;br/&gt;(memory.py)")]
+            KB[("📚 Knowledge Base&lt;br/&gt;(knowledge/)")]
+            SwarmState[("📊 Swarm State&lt;br/&gt;(swarm.db)")]
+            Toolbox[("🔧 ToolBox&lt;br/&gt;(~/.myclaw/)")]
+            Jobs[("📋 Scheduled Jobs&lt;br/&gt;(async_scheduler.py)")]
+        end
+    end
+
+    %% Caching Layer - New
+    subgraph Caching [Caching Layer - Optimized]
+        direction TB
+        SemanticCache("🔮 Semantic Cache&lt;br/&gt;Thread-safe + Cleanup")
+        LRUCache("📦 LRU Cache with TTL&lt;br/&gt;hash() keys + Stats")
+        ProviderCache("⚡ Provider Cache&lt;br/&gt;Thread-safe init")
+        ConfigCache("🔧 Config Cache&lt;br/&gt;Thread-safe reload")
+        GapCache("🕳️ Gap Cache&lt;br/&gt;Per-session dedup")
+    end
+
+    %% LLM Providers
+    subgraph Providers [AI Providers]
+        direction LR
+        Local("💻 Local&lt;br/&gt;Ollama/LMStudio")
+        Cloud("☁️ Cloud&lt;br/&gt;OpenAI/Anthropic/Gemini")
+    end
+
+    %% Connections
+    CLI --&gt; GW
+    TG --&gt; GW
+    WA --&gt; GW
+
+    GW ==&gt; AgentCore
+
+    AgentCore &lt;--&gt; ProfileCache
+    AgentCore &lt;--&gt; AsyncLoader
+    AgentCore &lt;--&gt; StringOpt
+    AgentCore &lt;--&gt; Tools
+    AgentCore &lt;--&gt; Profiles
+    AgentCore &lt;--&gt; AdvancedSystems
+    AgentCore &lt;--&gt; Sched
+
+    Tools &lt;--&gt; RateLimiter
+
+    Swarm &lt;--&gt; AggEngine
+
+    %% Storage connections
+    AsyncPool --&gt; Databases
+    SyncPool --&gt; Databases
+    Cleanup -.-&gt; SyncPool
+
+    %% Caching connections
+    AgentCore -.-&gt; SemanticCache
+    AgentCore -.-&gt; LRUCache
+    AgentCore -.-&gt; ProviderCache
+    AgentCore -.-&gt; GapCache
+    GW -.-&gt; ConfigCache
+
+    AgentCore &lt;--&gt; Providers
+
+    %% Apply styles
+    class AgentOptimized optimized
+    class MemoryPool optimized
+    class Caching cache
+    class RateLimiter optimized
+    class AggEngine optimized
+    class AsyncLoader optimized
+    class StringOpt optimized
+    class ProfileCache optimized</code></pre>
+<h2 id="optimization-highlights">Optimization Highlights<a class="headerlink" href="#optimization-highlights" title="Permanent link">&para;</a></h2>
+<h3 id="1-caching-layer-new">1. Caching Layer (New)<a class="headerlink" href="#1-caching-layer-new" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Optimization</th>
+<th>Before</th>
+<th>After</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>LRU Cache</strong></td>
+<td>Complete rewrite with RLock</td>
+<td>MD5 keys, FIFO eviction</td>
+<td><code>hash()</code> keys, true LRU</td>
+<td>10x faster, better hit rate</td>
+</tr>
+<tr>
+<td><strong>Semantic Cache</strong></td>
+<td>Memory optimization</td>
+<td>No cleanup, unbounded threads</td>
+<td><code>torch.set_num_threads(4)</code>, cleanup method</td>
+<td>Lower memory, CPU usage</td>
+</tr>
+<tr>
+<td><strong>Profile Cache</strong></td>
+<td>LRU eviction</td>
+<td>FIFO dict</td>
+<td><code>OrderedDict</code> with <code>move_to_end()</code></td>
+<td>2x hit rate</td>
+</tr>
+<tr>
+<td><strong>Provider Cache</strong></td>
+<td>Thread-safe init</td>
+<td>No locking</td>
+<td><code>threading.Lock()</code></td>
+<td>No race conditions</td>
+</tr>
+<tr>
+<td><strong>Config Cache</strong></td>
+<td>Thread-safe reload</td>
+<td>No locking</td>
+<td><code>_config_lock</code></td>
+<td>Safe hot-reload</td>
+</tr>
+<tr>
+<td><strong>Gap Cache</strong></td>
+<td>Per-session deduplication</td>
+<td>No dedup, noisy logs</td>
+<td>300s timeout, case-insensitive</td>
+<td>Reduced log noise</td>
+</tr>
+</tbody>
+</table>
+<h3 id="2-database-layer">2. Database Layer<a class="headerlink" href="#2-database-layer" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Optimization</th>
+<th>Before</th>
+<th>After</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Connection Pool</strong></td>
+<td>Idle cleanup</td>
+<td>Never cleaned up</td>
+<td>5-minute idle timeout</td>
+<td>Prevents leaks</td>
+</tr>
+<tr>
+<td><strong>Knowledge Graph</strong></td>
+<td>Batch queries</td>
+<td>N+1 queries</td>
+<td><code>get_entities_by_permalinks()</code></td>
+<td>Eliminates N+1</td>
+</tr>
+<tr>
+<td><strong>FTS5 Search</strong></td>
+<td>Use rank column</td>
+<td><code>bm25()</code> function calls</td>
+<td>Built-in <code>rank</code> column</td>
+<td>~30% faster</td>
+</tr>
+<tr>
+<td><strong>WAL Mode</strong></td>
+<td>Checkpoint control</td>
+<td>Auto only</td>
+<td>Manual <code>checkpoint_wal()</code></td>
+<td>Prevents unbounded growth</td>
+</tr>
+<tr>
+<td><strong>Input Safety</strong></td>
+<td>Query sanitization</td>
+<td>No validation</td>
+<td>Regex sanitization</td>
+<td>Prevents injection</td>
+</tr>
+</tbody>
+</table>
+<h3 id="3-agent-layer">3. Agent Layer<a class="headerlink" href="#3-agent-layer" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Optimization</th>
+<th>Before</th>
+<th>After</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Profile Loading</strong></td>
+<td>Async I/O</td>
+<td>Blocking sync read</td>
+<td><code>asyncio.to_thread()</code></td>
+<td>Non-blocking init</td>
+</tr>
+<tr>
+<td><strong>String Building</strong></td>
+<td>List + join</td>
+<td><code>+=</code> concatenation</td>
+<td>List append + <code>''.join()</code></td>
+<td>O(n²) → O(n)</td>
+</tr>
+<tr>
+<td><strong>Streaming</strong></td>
+<td>Chunk accumulation</td>
+<td>String concat</td>
+<td>List append + join</td>
+<td>Lower memory</td>
+</tr>
+</tbody>
+</table>
+<h3 id="4-concurrency">4. Concurrency<a class="headerlink" href="#4-concurrency" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Optimization</th>
+<th>Before</th>
+<th>After</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ThreadPool</strong></td>
+<td>Non-blocking shutdown</td>
+<td><code>shutdown(wait=True)</code></td>
+<td><code>shutdown(wait=False)</code></td>
+<td>No event loop blocking</td>
+</tr>
+<tr>
+<td><strong>Provider Init</strong></td>
+<td>Race condition fix</td>
+<td>No locking</td>
+<td><code>threading.Lock()</code></td>
+<td>Thread-safe</td>
+</tr>
+<tr>
+<td><strong>Config Reload</strong></td>
+<td>Race condition fix</td>
+<td>No locking</td>
+<td><code>_config_lock</code></td>
+<td>Thread-safe</td>
+</tr>
+</tbody>
+</table>
+<h3 id="5-error-handling-user-experience-v21">5. Error Handling &amp; User Experience (v2.1)<a class="headerlink" href="#5-error-handling-user-experience-v21" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Component</th>
+<th>Enhancement</th>
+<th>Before</th>
+<th>After</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Browse Timeout</strong></td>
+<td>Structured error guidance</td>
+<td>Raw exception trace</td>
+<td>Wayback Machine suggestion + alternatives</td>
+<td>User-friendly recovery</td>
+</tr>
+<tr>
+<td><strong>Browse 404</strong></td>
+<td>Actionable error payload</td>
+<td>Generic error message</td>
+<td>Search suggestions + Wayback link</td>
+<td>Better UX</td>
+</tr>
+<tr>
+<td><strong>Browse 403</strong></td>
+<td>Alternative path guidance</td>
+<td>Access denied error</td>
+<td>Suggests <code>search_knowledge()</code></td>
+<td>Guides to solution</td>
+</tr>
+<tr>
+<td><strong>KB Empty Results</strong></td>
+<td>Actionable guidance</td>
+<td>"No results found"</td>
+<td>Broader terms + KB creation hints</td>
+<td>Self-service help</td>
+</tr>
+<tr>
+<td><strong>Gap Logging</strong></td>
+<td>Structured logging + dedup</td>
+<td>No gap tracking</td>
+<td>Dedicated logger with per-session cache</td>
+<td>Reduced noise</td>
+</tr>
+</tbody>
+</table>
+<h2 id="data-flow-with-optimizations">Data Flow with Optimizations<a class="headerlink" href="#data-flow-with-optimizations" title="Permanent link">&para;</a></h2>
+<h3 id="1-agent-request-flow">1. Agent Request Flow<a class="headerlink" href="#1-agent-request-flow" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>sequenceDiagram
+    participant User
+    participant Gateway
+    participant Agent
+    participant ProfileCache as Profile Cache&lt;br/&gt;(LRU)
+    participant LRU as LRU Cache&lt;br/&gt;(Optimized)
+    participant Semantic as Semantic Cache
+    participant Provider
+
+    User-&gt;&gt;Gateway: Send message
+    Gateway-&gt;&gt;Agent: Route request
+
+    Agent-&gt;&gt;ProfileCache: Load profile
+    ProfileCache--&gt;&gt;Agent: Cached profile&lt;br/&gt;(LRU eviction)
+
+    Agent-&gt;&gt;Semantic: Check semantic cache
+    Semantic--&gt;&gt;Agent: Cached response?&lt;br/&gt;(Cleanup on exit)
+
+    alt Cache miss
+        Agent-&gt;&gt;LRU: Check LRU cache
+        LRU--&gt;&gt;Agent: Cached?&lt;br/&gt;(hash() keys)
+
+        alt LRU miss
+            Agent-&gt;&gt;Provider: LLM request
+            Provider--&gt;&gt;Agent: Response
+            Agent-&gt;&gt;LRU: Store result&lt;br/&gt;(RLock safe)
+        end
+    end
+
+    Agent--&gt;&gt;User: Return response</code></pre>
+<h3 id="2-knowledge-graph-query-flow">2. Knowledge Graph Query Flow<a class="headerlink" href="#2-knowledge-graph-query-flow" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>sequenceDiagram
+    participant User
+    participant Agent
+    participant Graph
+    participant DB as Knowledge DB&lt;br/&gt;(Optimized)
+    participant Cache as Connection Pool&lt;br/&gt;(Idle timeout)
+
+    User-&gt;&gt;Agent: Query knowledge
+    Agent-&gt;&gt;Graph: Get related entities
+
+    Graph-&gt;&gt;DB: get_relations_from()
+    DB-&gt;&gt;Cache: Get connection&lt;br/&gt;(Track last_used)
+    Cache--&gt;&gt;DB: Connection
+
+    DB--&gt;&gt;Graph: Relation list
+
+    Graph-&gt;&gt;DB: get_entities_by_permalinks()&lt;br/&gt;(Batch - O(1))
+    DB--&gt;&gt;Graph: Entity details
+
+    Graph--&gt;&gt;Agent: Related entities
+    Agent--&gt;&gt;User: Results</code></pre>
+<h3 id="3-database-connection-lifecycle">3. Database Connection Lifecycle<a class="headerlink" href="#3-database-connection-lifecycle" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>sequenceDiagram
+    participant App
+    participant Pool as SQLitePool&lt;br/&gt;(Idle Timeout = 300s)
+    participant Conn as Connection
+
+    App-&gt;&gt;Pool: get_connection()
+    Pool-&gt;&gt;Pool: Check pool
+
+    alt Connection exists
+        Pool-&gt;&gt;Pool: _last_used[key] = now()
+        Pool--&gt;&gt;App: Return existing
+    else New connection
+        Pool-&gt;&gt;Conn: Create connection
+        Pool-&gt;&gt;Pool: _last_used[key] = now()
+        Pool--&gt;&gt;App: Return new
+    end
+
+    App-&gt;&gt;Pool: release_connection()
+    Pool-&gt;&gt;Pool: refcount--
+    Pool-&gt;&gt;Pool: if refcount &lt;= 0:&lt;br/&gt;_last_used[key] = now()
+
+    Note over Pool: Periodic cleanup_idle()
+    Pool-&gt;&gt;Pool: Find idle &gt; 300s&lt;br/&gt;and refcount &lt;= 0
+    Pool-&gt;&gt;Conn: Close idle connections</code></pre>
+<h3 id="4-knowledge-gap-handling-flow">4. Knowledge Gap Handling Flow<a class="headerlink" href="#4-knowledge-gap-handling-flow" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>sequenceDiagram
+    participant User
+    participant Agent
+    participant KBSearch as Knowledge Search
+    participant GapCache as Gap Cache&lt;br/&gt;(300s timeout)
+    participant GapLogger as Gap Logger
+    participant KB as Knowledge Base
+
+    User-&gt;&gt;Agent: Send query
+    Agent-&gt;&gt;KBSearch: _search_knowledge_context()
+
+    KBSearch-&gt;&gt;KB: search_notes(query)
+    KB--&gt;&gt;KBSearch: No results
+
+    KBSearch-&gt;&gt;GapCache: is_duplicate(query, user_id)
+
+    alt Not duplicate
+        GapCache--&gt;&gt;KBSearch: False (new gap)
+        KBSearch-&gt;&gt;GapCache: Store key with timestamp
+        KBSearch-&gt;&gt;GapLogger: Log structured gap event
+        GapLogger--&gt;&gt;KBSearch: Gap logged
+        KBSearch--&gt;&gt;Agent: KnowledgeSearchResult&lt;br/&gt;(has_results=false, suggested_topics)
+    else Duplicate (within 300s)
+        GapCache--&gt;&gt;KBSearch: True (duplicate)
+        KBSearch--&gt;&gt;Agent: KnowledgeSearchResult&lt;br/&gt;(gap_logged=false)
+    end
+
+    Agent--&gt;&gt;User: Response with guidance&lt;br/&gt;("No results found... try write_to_knowledge()")</code></pre>
+<h3 id="5-browse-error-handling-flow">5. Browse Error Handling Flow<a class="headerlink" href="#5-browse-error-handling-flow" title="Permanent link">&para;</a></h3>
+<pre class="mermaid"><code>sequenceDiagram
+    participant User
+    participant Tools as Tools Module
+    participant Requests as requests.get()
+    participant Wayback as Wayback Machine
+
+    User-&gt;&gt;Tools: browse(url)
+    Tools-&gt;&gt;Requests: GET request
+
+    alt Timeout
+        Requests--&gt;&gt;Tools: TimeoutException
+        Tools--&gt;&gt;User: ⏱️ Timeout Error&lt;br/&gt;• Try Wayback: web.archive.org/web/{url}&lt;br/&gt;• Check connection&lt;br/&gt;• search_knowledge() alternative
+    else Connection Error
+        Requests--&gt;&gt;Tools: ConnectionError
+        Tools--&gt;&gt;User: 🔌 Connection Error&lt;br/&gt;• Check internet&lt;br/&gt;• Verify URL&lt;br/&gt;• search_knowledge() alternative
+    else 404 Not Found
+        Requests--&gt;&gt;Tools: HTTPError(404)
+        Tools--&gt;&gt;User: ❌ Page Not Found&lt;br/&gt;• Check for typos&lt;br/&gt;• Try Wayback Machine&lt;br/&gt;• Web search alternative
+    else 403 Forbidden
+        Requests--&gt;&gt;Tools: HTTPError(403)
+        Tools--&gt;&gt;User: 🚫 Access Denied&lt;br/&gt;• May need authentication&lt;br/&gt;• Try search_knowledge()&lt;br/&gt;• Public source alternative
+    else Success
+        Requests--&gt;&gt;Tools: Response(200)
+        Tools-&gt;&gt;Tools: Strip HTML
+        Tools--&gt;&gt;User: Plain text content
+    end</code></pre>
+<h2 id="performance-benchmarks">Performance Benchmarks<a class="headerlink" href="#performance-benchmarks" title="Permanent link">&para;</a></h2>
+<p>Based on the optimizations implemented:</p>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Before</th>
+<th>After</th>
+<th>Improvement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Profile Cache Hit Rate</strong></td>
+<td>~60% (FIFO)</td>
+<td>~85% (LRU)</td>
+<td>+42%</td>
+</tr>
+<tr>
+<td><strong>Cache Key Generation</strong></td>
+<td>MD5: ~5μs</td>
+<td>hash(): ~0.5μs</td>
+<td>10x faster</td>
+</tr>
+<tr>
+<td><strong>String Concat (10k items)</strong></td>
+<td>O(n²) = 500ms</td>
+<td>O(n) = 10ms</td>
+<td>50x faster</td>
+</tr>
+<tr>
+<td><strong>Knowledge Graph Query</strong></td>
+<td>O(N) queries</td>
+<td>O(1) batch</td>
+<td>Eliminates N+1</td>
+</tr>
+<tr>
+<td><strong>FTS5 Search</strong></td>
+<td>bm5() function</td>
+<td>rank column</td>
+<td>~30% faster</td>
+</tr>
+<tr>
+<td><strong>Connection Cleanup</strong></td>
+<td>Never</td>
+<td>After 5min idle</td>
+<td>Prevents leaks</td>
+</tr>
+<tr>
+<td><strong>Provider Init</strong></td>
+<td>Race-prone</td>
+<td>Thread-safe</td>
+<td>Reliable</td>
+</tr>
+</tbody>
+</table>
+<h2 id="thread-safety-map">Thread Safety Map<a class="headerlink" href="#thread-safety-map" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart LR
+    subgraph Locks["🔒 Thread Safety Mechanisms"]
+        direction TB
+        L1["Provider Cache&lt;br/&gt;threading.Lock()"]
+        L2["Config Cache&lt;br/&gt;_config_lock"]
+        L3["LRU Cache&lt;br/&gt;threading.RLock()"]
+        L4["Profile Cache&lt;br/&gt;_profile_cache_lock"]
+        L5["SQLitePool&lt;br/&gt;_pool_lock + per-DB locks"]
+    end
+
+    subgraph Data["📊 Protected Data"]
+        D1["_provider_cache"]
+        D2["_cached_config"]
+        D3["_cache (LRU)"]
+        D4["_profile_cache"]
+        D5["_pools, _refcounts"]
+    end
+
+    L1 --&gt; D1
+    L2 --&gt; D2
+    L3 --&gt; D3
+    L4 --&gt; D4
+    L5 --&gt; D5</code></pre>
+<h2 id="module-dependencies">Module Dependencies<a class="headerlink" href="#module-dependencies" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart TD
+    subgraph Core["Core Modules"]
+        Agent["agent.py&lt;br/&gt;(+parallel tool_calls fix 2026-04-13)"]
+        Memory["memory.py"]
+        Provider["provider.py"]
+        Tools["tools/ (package)"]
+        Config["config.py"]
+        State["state_store.py"]
+        AsyncSched["async_scheduler.py"]
+    end
+
+    subgraph Knowledge["Knowledge"]
+        DB["db.py&lt;br/&gt;(+batch, +checkpoint, KnowledgeDB)"]
+        Graph["graph.py&lt;br/&gt;(+batch fetch)"]
+        Parser["parser.py"]
+        Storage["storage.py&lt;br/&gt;(write_note, read_note)"]
+        Researcher["researcher.py&lt;br/&gt;(GapResearcher, fixed 2026-04-13)"]
+    end
+
+    subgraph Swarm["Swarm System"]
+        Orchestrator["orchestrator.py&lt;br/&gt;(+type hints)"]
+        Models["models.py"]
+        Strategies["strategies.py"]
+        Storage["storage.py"]
+    end
+
+    Agent --&gt; Memory
+    Agent --&gt; Provider
+    Agent --&gt; Tools
+    Agent --&gt; Knowledge
+
+    Provider --&gt; Tools
+    Provider -.-&gt;|"lazy import"| Tools
+
+    Memory --&gt; DB
+    Graph --&gt; DB
+
+    Agent --&gt; Swarm
+    Orchestrator --&gt; Models
+    Orchestrator --&gt; Strategies
+
+    Gateway --&gt; Agent
+    Gateway --&gt; Config</code></pre>
+<h2 id="testing-coverage">Testing Coverage<a class="headerlink" href="#testing-coverage" title="Permanent link">&para;</a></h2>
+<h3 id="new-test-files">New Test Files<a class="headerlink" href="#new-test-files" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Test File</th>
+<th>Coverage</th>
+<th>Test Classes</th>
+<th>Test Methods</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>test_provider_retry.py</code></td>
+<td>Retry logic, backoff, cache</td>
+<td>2</td>
+<td>15+</td>
+</tr>
+<tr>
+<td><code>test_swarm_aggregation.py</code></td>
+<td>Aggregation methods</td>
+<td>2</td>
+<td>10+</td>
+</tr>
+<tr>
+<td><code>test_memory_batching.py</code></td>
+<td>Batching, pool, search</td>
+<td>3</td>
+<td>10+</td>
+</tr>
+<tr>
+<td><code>test_tool_rate_limiting.py</code></td>
+<td>Token bucket limiting</td>
+<td>2</td>
+<td>12+</td>
+</tr>
+<tr>
+<td><code>test_agent.py</code> (enhanced)</td>
+<td>Knowledge gap handling</td>
+<td>6</td>
+<td>25+</td>
+</tr>
+<tr>
+<td><code>test_tools/</code> (enhanced)</td>
+<td>Browse error handling</td>
+<td>4</td>
+<td>16+</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>Critical paths</strong></td>
+<td><strong>19</strong></td>
+<td><strong>88+</strong></td>
+</tr>
+</tbody>
+</table>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<h3 id="environment-variables">Environment Variables<a class="headerlink" href="#environment-variables" title="Permanent link">&para;</a></h3>
+<p>Run these installation commands inside an activated project virtual
+environment (see the <a href="../../README.md#quick-start">README installation guide</a>).
+This avoids Debian/Ubuntu's PEP 668 restriction on installing into system
+Python.</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Optional dependencies (install if needed)</span>
+python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>watchdog<span class="w">              </span><span class="c1"># File watching for auto-reload</span>
+python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>sentence-transformers<span class="w"> </span><span class="c1"># Semantic cache embeddings</span>
+python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>anthropic<span class="w">             </span><span class="c1"># Claude provider</span>
+python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>google-generativeai<span class="w">   </span><span class="c1"># Gemini provider</span>
+
+<span class="c1"># Core dependencies always required</span>
+python<span class="w"> </span>-m<span class="w"> </span>pip<span class="w"> </span>install<span class="w"> </span>-r<span class="w"> </span>requirements.txt
+</code></pre></div>
+<h3 id="performance-tuning">Performance Tuning<a class="headerlink" href="#performance-tuning" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># myclaw/memory.py</span>
+<span class="n">IDLE_TIMEOUT</span> <span class="o">=</span> <span class="mi">300</span>  <span class="c1"># Connection pool idle timeout (seconds)</span>
+<span class="n">CACHE_TTL</span> <span class="o">=</span> <span class="mi">300</span>     <span class="c1"># LRU cache TTL (seconds)</span>
+<span class="n">MAX_RETRIES</span> <span class="o">=</span> <span class="mi">3</span>     <span class="c1"># Provider retry attempts</span>
+
+<span class="c1"># myclaw/provider.py</span>
+<span class="n">_profile_cache_maxsize</span> <span class="o">=</span> <span class="mi">100</span>  <span class="c1"># Profile cache size</span>
+</code></pre></div>
+<hr />
+<p><em>Last Updated: 2026-04-13</em>
+<em>Optimization Version: 2.1</em>
+<em>Includes: Knowledge Gap Handling &amp; Enhanced Error Handling</em>
+<em>Bug Fixes Applied: parallel multi-tool execution, OpenAI message sanitization, researcher.py imports, agent.py UnboundLocalError</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1432 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/UPDATING/">
+      
+      
+        <link rel="prev" href="../telegram_guide/">
+      
+      
+        <link rel="next" href="../medic_agent_guide/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Updating - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#updating-zensynora-safely" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Updating
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#everyday-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Everyday use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-happens-during-an-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens during an update
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#changes-proposed-by-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changes proposed by agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#for-developers-extending-the-update-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For developers: extending the update procedure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="For developers: extending the update procedure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#add-a-data-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add a data migration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add-or-change-an-update-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add or change an update step
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#change-the-updater-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Change the updater itself
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#everyday-use" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Everyday use
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-happens-during-an-update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What happens during an update
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#changes-proposed-by-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changes proposed by agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#for-developers-extending-the-update-procedure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        For developers: extending the update procedure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="For developers: extending the update procedure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#add-a-data-migration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add a data migration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#add-or-change-an-update-step" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Add or change an update step
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#change-the-updater-itself" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Change the updater itself
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="updating-zensynora-safely">Updating ZenSynora safely<a class="headerlink" href="#updating-zensynora-safely" title="Permanent link">&para;</a></h1>
+<p>ZenSynora updates <strong>side by side</strong>: the new version is downloaded and built in
+its own folder while the current one keeps working. It is only switched in
+after it has passed its checks against your configuration. Before anything
+changes, <strong>your data and the whole installed program folder are backed up</strong>;
+any failure puts the previous version back exactly as it was.</p>
+<blockquote>
+<p>Updated for v0.7.1: full program-folder backup and restore, settings/API
+keys/knowledge base checked and restored after the switch, approval-gated
+self-update proposals (see <a href="../medic_agent_guide/#6-self-update-proposals">Medic &amp; Doctor</a>).</p>
+</blockquote>
+<h2 id="everyday-use">Everyday use<a class="headerlink" href="#everyday-use" title="Permanent link">&para;</a></h2>
+<p><strong>From the Web UI</strong> (v0.7.4): open <strong>Updates</strong> (or click the version at the
+bottom of the sidebar). <em>Check for updates</em> compares the installed version
+with GitHub; <em>Update now</em> runs the same safe update described below and shows
+each step and the log while it runs (it keeps going if you close the page);
+<em>Roll back</em> returns to the previous version. When it is done, click
+<strong>Restart ZenSynora</strong> — the server restarts with the new version and the page
+reloads by itself. <em>Branch or tag</em> and <em>Reinstall even if up to date</em> match
+<code>--ref</code> and <code>--force</code> below. Updating from the Web UI needs a standard install
+(<code>~/.local/share/zensynora</code>); it is available from this computer or with the
+admin key, like Settings.</p>
+<p><strong>From a terminal:</strong></p>
+<div class="highlight"><pre><span></span><code>zensynora<span class="w"> </span>update<span class="w">                  </span><span class="c1"># update to the latest version (GitHub main)</span>
+zensynora<span class="w"> </span>update<span class="w"> </span>status<span class="w"> </span>--check<span class="w">   </span><span class="c1"># what's installed, is a newer version out?</span>
+zensynora<span class="w"> </span>update<span class="w"> </span>rollback<span class="w">         </span><span class="c1"># go back to the previous version</span>
+</code></pre></div>
+<p>If the <code>zensynora</code> command isn't available, use the script directly:
+<code>bash ~/.local/share/zensynora/source/update.sh</code> (same options).</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>update</code> <em>(default)</em></td>
+<td>Update to the latest <code>main</code>. <code>--ref v0.7.1</code> for a tag/branch, <code>--from-dir PATH</code> / <code>--from-archive FILE</code> for offline updates, <code>--run-tests</code> to run the test suite before switching, <code>--force</code> to reinstall the same version, <code>--app-backup full\|code\|none</code> for the program-folder backup (default <code>full</code>; <code>code</code> skips <code>venv/</code>).</td>
+</tr>
+<tr>
+<td><code>rollback</code></td>
+<td>Activate the previous version. Restores <code>~/.myclaw</code> too <strong>only if</strong> that update changed your data (<code>--restore-data</code> / <code>--keep-data</code> to override). <code>--to RELEASE</code> picks a specific one.</td>
+</tr>
+<tr>
+<td><code>status [--check] [--json]</code></td>
+<td>Installed version, available releases and backups, recent updates.</td>
+</tr>
+<tr>
+<td><code>backup [--label X]</code></td>
+<td>Back up <code>~/.myclaw</code> now (for selective backups use <code>zensynora backup create</code> or the Web UI <strong>Backups</strong> page).</td>
+</tr>
+<tr>
+<td><code>restore --backup NAME</code></td>
+<td>Restore <code>~/.myclaw</code> from a backup (current data is saved first).</td>
+</tr>
+<tr>
+<td><code>prune</code></td>
+<td>Delete old releases/backups (defaults: keep 3 releases, 5 backups).</td>
+</tr>
+</tbody>
+</table>
+<p><strong>After an update, restart ZenSynora</strong> if it was running: click <em>Restart
+now</em> in the Web UI banner, or stop <code>zensynora webui</code> (Ctrl+C) and start it again. A terminal opened <em>before</em> the update
+still points at the old version — since 0.7.2 commands started there switch
+to the installed version by themselves, and the Web UI shows a banner while an
+older server is still running. Reload the browser page afterwards.</p>
+<p><strong>Upgrading from an install made before 0.6.0</strong> (no <code>update.sh</code> yet): run the
+online installer once — it detects the existing install and runs the updater:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://raw.githubusercontent.com/adrianx26/zensynora/main/install-online.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>bash
+</code></pre></div>
+<h2 id="what-happens-during-an-update">What happens during an update<a class="headerlink" href="#what-happens-during-an-update" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code> 1 preflight        Python ≥ 3.11, ~1.5 GB free, find current version, service running?
+ 2 fetch            download/copy new source → releases/&lt;version&gt;-&lt;time&gt;/
+ 3 handoff          if the new version ships a newer updater, it takes over
+ 4 backup data      ~/.myclaw + .env + data/ → backups/&lt;time&gt;-&lt;from&gt;-to-&lt;to&gt;/  (mode 700)
+ 5 backup program   the whole running release folder (code, venv, web UI, .env,
+                    your own files) → app-folder.tar.gz + an inventory of every file
+ 6 carry-over       copy .env and data/ into the new release
+ 7 build            new venv, requirements, `pip install -e`, your extra packages, web UI
+ 8 verify           imports, load YOUR config with the new code, `zensynora --help`
+ 9 stop service     systemd `myclaw` (only if it was running)
+10 migrate          versioned data migrations (see below)
+11 activate         atomically repoint  source -&gt; releases/&lt;new&gt;
+12 restore data     settings, API keys and knowledge base checked; anything missing
+                    is put back from the backup of step 4
+13 start service    and confirm it stays up
+14 finalize         record history, prune old releases/backups
+</code></pre></div>
+<p>Steps 1–10 never touch the running version. If any step fails, the completed
+steps are undone in reverse order: the new release folder is deleted, data is
+restored from the backup if a migration ran, <code>source</code> is pointed back, the
+service is restarted — and the previous program folder is compared with the
+inventory from step 5 and <strong>restored from the archive if anything in it
+differs</strong> (changed, missing or extra files). The update log says what was
+restored.</p>
+<p>Program-folder archives are large (about the size of the folder,
+compressed), so they are kept for the last two updates; data backups follow
+<code>--keep-backups</code> (default 5). Backups you make yourself (<code>update.sh backup</code>,
+<code>zensynora backup</code>, the Web UI) are never pruned automatically.</p>
+<h2 id="layout">Layout<a class="headerlink" href="#layout" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>~/.local/share/zensynora/
+  source -&gt; releases/0.6.0-20261013T203000   # what everything runs from
+  releases/                                  # one complete copy per version (own venv)
+  backups/                                   # data snapshots + program archives (contain API keys)
+  staging/                                   # temporary copies for approved self-update proposals
+  logs/update-*.log                          # full log of every update
+  updater-state.json                         # history used by rollback
+~/.myclaw/                                   # your data, shared by all versions
+  .migrations.json                           # which data migrations have run
+</code></pre></div>
+<p>Paths through <code>source/</code> (systemd unit, <code>source/venv/bin/activate</code>) keep
+working across updates because <code>source</code> is a symlink. The first update of an
+older in-place install moves it to <code>releases/&lt;version&gt;-legacy-…</code> so it stays
+available for rollback.</p>
+<p>Docker deployments update by rebuilding the image (<code>install.sh --docker</code>);
+data lives in the Docker volume and is not touched by this updater. Back it up
+first with the Web UI <strong>Backups</strong> page or <code>docker compose exec zensynora
+zensynora backup create</code>.</p>
+<h2 id="changes-proposed-by-agents">Changes proposed by agents<a class="headerlink" href="#changes-proposed-by-agents" title="Permanent link">&para;</a></h2>
+<p>Agents can propose changes to ZenSynora's own code. An approved proposal is
+installed by this updater exactly like an update from a local folder
+(<code>--from-dir</code> a copy of the current release with the change applied,
+<code>--force</code>), so every safeguard above applies, and <code>rollback</code> undoes it.
+Details: <a href="../medic_agent_guide/#6-self-update-proposals">Medic &amp; Doctor → Self-update proposals</a>.</p>
+<h2 id="for-developers-extending-the-update-procedure">For developers: extending the update procedure<a class="headerlink" href="#for-developers-extending-the-update-procedure" title="Permanent link">&para;</a></h2>
+<p>The updater (<code>updater/</code>) uses <strong>only the Python standard library</strong>, so it runs
+even when the app's own environment is broken.</p>
+<h3 id="add-a-data-migration">Add a data migration<a class="headerlink" href="#add-a-data-migration" title="Permanent link">&para;</a></h3>
+<p>When a release changes the format of anything in <code>~/.myclaw</code> (config keys,
+database schema, folder layout), add <code>updater/migrations/m_NNNN_name.py</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="n">ID</span> <span class="o">=</span> <span class="s2">"0002_rename_provider_key"</span>          <span class="c1"># unique, sortable, never reused</span>
+<span class="n">DESCRIPTION</span> <span class="o">=</span> <span class="s2">"Rename providers.llama -&gt; providers.llamacpp"</span>
+<span class="n">REVERSIBLE</span> <span class="o">=</span> <span class="kc">False</span>                       <span class="c1"># informational</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">apply</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>                          <span class="c1"># ctx.data_dir, ctx.app_version, ctx.log</span>
+    <span class="n">cfg</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">data_dir</span> <span class="o">/</span> <span class="s2">"config.json"</span>
+    <span class="o">...</span>                                  <span class="c1"># must be safe to run more than once</span>
+</code></pre></div>
+<p>Migrations run once each, in ID order, inside the <strong>new</strong> release's
+environment (so they may <code>import myclaw</code>), after the backup and before the
+switch. A failing migration aborts the update and the backup is restored.
+Fresh installs record all current migrations as applied (<code>install.sh</code> runs
+<code>python -m updater migrate</code>).</p>
+<h3 id="add-or-change-an-update-step">Add or change an update step<a class="headerlink" href="#add-or-change-an-update-step" title="Permanent link">&para;</a></h3>
+<p>Steps live in <code>updater/steps.py</code>; each is a class with <code>run(ctx)</code> and
+<code>rollback(ctx)</code>, and the order is <code>default_pipeline()</code>. To add behaviour
+(e.g. "pull a new Ollama model"), write a <code>Step</code>, make its <code>rollback</code> undo
+it, and insert it in the list. <code>Context</code> carries everything steps share.</p>
+<h3 id="change-the-updater-itself">Change the updater itself<a class="headerlink" href="#change-the-updater-itself" title="Permanent link">&para;</a></h3>
+<p>Users run the updater of the version they have installed. If a newer release
+needs different update logic, bump <code>UPDATER_PROTOCOL</code> in
+<code>updater/__init__.py</code>; older updaters then hand over to the newly downloaded
+one before doing anything else.</p>
+<h3 id="test">Test<a class="headerlink" href="#test" title="Permanent link">&para;</a></h3>
+<p><code>tests/test_updater.py</code> covers the pipeline rollback, backups, migrations,
+adoption of legacy installs, version policy and pruning without network
+access; <code>tests/test_selfupdate.py</code> covers proposals going through it. For an end-to-end check, point <code>--base</code>/<code>--data-dir</code> at a scratch
+folder and update between two local source trees with <code>--from-dir</code>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

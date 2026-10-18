@@ -1,0 +1,1738 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/MEDIC_CHANGE_MGMT/">
+      
+      
+        <link rel="prev" href="../ARCHITECTURE/">
+      
+      
+        <link rel="next" href="../archive/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Medic change management - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#medic-agent-change-management-enhancement" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Medic change management
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-addedmodified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Added/Modified
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Files Added/Modified">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#modified-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modified Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Features
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-change-plan-creation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Change Plan Creation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-approval-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Approval Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-safe-execution-with-rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Safe Execution with Rollback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-log-analysis-and-anomaly-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Log Analysis and Anomaly Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-continuous-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Continuous Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-pending-changes-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Pending Changes Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#directory-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with Tools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Example Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#manual-change-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual Change Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automated-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automated Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Enhancements
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-addedmodified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Added/Modified
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Files Added/Modified">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#new-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#modified-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modified Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#key-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key Features
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Key Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-change-plan-creation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Change Plan Creation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-approval-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Approval Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-safe-execution-with-rollback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Safe Execution with Rollback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-log-analysis-and-anomaly-detection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Log Analysis and Anomaly Detection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-continuous-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Continuous Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-pending-changes-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Pending Changes Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#directory-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#integration-with-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integration with Tools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Features
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Handling
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Example Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#manual-change-workflow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual Change Workflow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automated-monitoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automated Monitoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Enhancements
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="medic-agent-change-management-enhancement">Medic Agent Change Management Enhancement<a class="headerlink" href="#medic-agent-change-management-enhancement" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Applies to:</strong> v0.7.0 · <strong>Reviewed:</strong> 2026-10-13. Change management is a Python API (<code>myclaw.agents</code>), not an LLM tool. Since 0.7.0 the log analyzer reads <code>~/.myclaw/logs/zensynora.log</code>, which ZenSynora now writes by default — earlier versions wrote no log file, so the analyzer had nothing to read. User-facing health checks are in the <a href="../medic_agent_guide/">Medic &amp; Doctor Guide</a>.</p>
+</blockquote>
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<p>The Medic Agent has been enhanced with comprehensive change management capabilities. These features enable the agent to:</p>
+<ol>
+<li><strong>Continuously monitor logs</strong> from all relevant sources</li>
+<li><strong>Detect anomalies and failures</strong> automatically</li>
+<li><strong>Create change plans</strong> with proper documentation</li>
+<li><strong>Manage approval workflow</strong> for changes</li>
+<li><strong>Execute changes safely</strong> with rollback capability</li>
+<li><strong>Maintain audit history</strong> of all changes</li>
+<li><strong>Escalate to humans</strong> when needed</li>
+</ol>
+<h2 id="files-addedmodified">Files Added/Modified<a class="headerlink" href="#files-addedmodified" title="Permanent link">&para;</a></h2>
+<h3 id="new-files">New Files<a class="headerlink" href="#new-files" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong><code>myclaw/agents/medic_change_mgmt.py</code></strong> (900+ lines)</li>
+<li><code>ChangeManagementSystem</code> - Core change management logic</li>
+<li><code>ChangeStatus</code>, <code>ChangePriority</code>, <code>ChangeType</code> - Enums for change classification</li>
+<li><code>ChangePlan</code> - TypedDict for change plan structure</li>
+<li><code>LogAnalyzer</code> - Log ingestion and anomaly detection</li>
+<li><code>ScheduledReviewSystem</code> - Automated review scheduling</li>
+<li>Convenience functions for CLI/tool integration</li>
+</ol>
+<h3 id="modified-files">Modified Files<a class="headerlink" href="#modified-files" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong><code>myclaw/agents/__init__.py</code></strong></li>
+<li>Exported new change management classes and functions</li>
+</ol>
+<h2 id="key-features">Key Features<a class="headerlink" href="#key-features" title="Permanent link">&para;</a></h2>
+<h3 id="1-change-plan-creation">1. Change Plan Creation<a class="headerlink" href="#1-change-plan-creation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_change_plan</span><span class="p">,</span> <span class="n">ChangeType</span><span class="p">,</span> <span class="n">ChangePriority</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">create_change_plan</span><span class="p">(</span>
+    <span class="n">title</span><span class="o">=</span><span class="s2">"Fix memory leak in agent.py"</span><span class="p">,</span>
+    <span class="n">description</span><span class="o">=</span><span class="s2">"Patch to address memory leak issue"</span><span class="p">,</span>
+    <span class="n">rationale</span><span class="o">=</span><span class="s2">"Detected in logs - memory usage increasing over time"</span><span class="p">,</span>
+    <span class="n">change_type</span><span class="o">=</span><span class="s2">"patch"</span><span class="p">,</span>  <span class="c1"># config, code, security, patch, hotfix</span>
+    <span class="n">priority</span><span class="o">=</span><span class="s2">"high"</span><span class="p">,</span>      <span class="c1"># critical, high, medium, low</span>
+    <span class="n">affected_components</span><span class="o">=</span><span class="p">[</span><span class="s2">"myclaw/agent.py"</span><span class="p">],</span>
+    <span class="n">proposed_changes</span><span class="o">=</span><span class="p">{</span><span class="s2">"myclaw/agent.py"</span><span class="p">:</span> <span class="s2">"new content here"</span><span class="p">},</span>
+    <span class="n">risks</span><span class="o">=</span><span class="p">[</span><span class="s2">"May break existing functionality"</span><span class="p">],</span>
+    <span class="n">rollback_steps</span><span class="o">=</span><span class="p">[</span><span class="s2">"Restore from backup"</span><span class="p">]</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="2-approval-workflow">2. Approval Workflow<a class="headerlink" href="#2-approval-workflow" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Auto-approval</strong> for low-risk configuration changes (configurable)</li>
+<li><strong>Manual approval</strong> required for code changes, security changes, high/critical priority</li>
+<li><strong>Audit trail</strong> of all approvals with timestamps and approver identity</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">approve_change</span>
+
+<span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">approve_change</span><span class="p">(</span><span class="s2">"CHG_20250111_120000_abc123"</span><span class="p">,</span> <span class="n">approved_by</span><span class="o">=</span><span class="s2">"operator"</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="3-safe-execution-with-rollback">3. Safe Execution with Rollback<a class="headerlink" href="#3-safe-execution-with-rollback" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">execute_change</span>
+
+<span class="c1"># Dry run first</span>
+<span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">execute_change</span><span class="p">(</span><span class="s2">"CHG_20250111_120000_abc123"</span><span class="p">,</span> <span class="n">dry_run</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+<span class="c1"># Execute for real</span>
+<span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">execute_change</span><span class="p">(</span><span class="s2">"CHG_20250111_120000_abc123"</span><span class="p">,</span> <span class="n">dry_run</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+<span class="c1"># Automatically creates backups and rolls back on failure</span>
+</code></pre></div>
+<h3 id="4-log-analysis-and-anomaly-detection">4. Log Analysis and Anomaly Detection<a class="headerlink" href="#4-log-analysis-and-anomaly-detection" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">analyze_system_logs</span>
+
+<span class="c1"># Analyze logs from last 60 minutes</span>
+<span class="n">report</span> <span class="o">=</span> <span class="n">analyze_system_logs</span><span class="p">(</span><span class="n">since_minutes</span><span class="o">=</span><span class="mi">60</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">report</span><span class="p">)</span>
+</code></pre></div>
+<p>Anomaly patterns detected:
+- ERROR, CRITICAL, FATAL messages
+- Exceptions and Tracebacks
+- Timeout errors
+- Connection refused
+- Permission denied
+- Disk full / memory errors
+- Segmentation faults</p>
+<h3 id="5-continuous-monitoring">5. Continuous Monitoring<a class="headerlink" href="#5-continuous-monitoring" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">start_continuous_monitoring</span><span class="p">,</span> <span class="n">stop_continuous_monitoring</span>
+
+<span class="c1"># Start automated reviews every 60 minutes</span>
+<span class="n">start_continuous_monitoring</span><span class="p">()</span>
+
+<span class="c1"># Stop monitoring</span>
+<span class="n">stop_continuous_monitoring</span><span class="p">()</span>
+</code></pre></div>
+<p>When anomalies are detected:
+1. Automatically creates a change plan
+2. Auto-approves if low-risk
+3. Executes the change
+4. Logs everything to audit trail</p>
+<h3 id="6-pending-changes-management">6. Pending Changes Management<a class="headerlink" href="#6-pending-changes-management" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_pending_changes</span><span class="p">,</span> <span class="n">get_change_history</span>
+
+<span class="c1"># View pending approvals</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">get_pending_changes</span><span class="p">())</span>
+
+<span class="c1"># View change history</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">get_change_history</span><span class="p">(</span><span class="n">limit</span><span class="o">=</span><span class="mi">10</span><span class="p">))</span>
+</code></pre></div>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p>The change management system can be configured via:</p>
+<ul>
+<li><code>auto_approve_low_risk</code> - Auto-approve low priority patches/hotfixes</li>
+<li><code>auto_approve_config</code> - Auto-approve configuration changes</li>
+<li><code>maintenance_window_start/end</code> - Restrict changes to maintenance windows</li>
+<li><code>review_interval_minutes</code> - How often to run scheduled reviews</li>
+</ul>
+<h2 id="directory-structure">Directory Structure<a class="headerlink" href="#directory-structure" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>~/.myclaw/
+├── medic/
+│   ├── changes/              # Change plan storage
+│   │   └── change_*.json
+│   ├── backup/               # Automatic backups before changes
+│   ├── audit_log.json        # Complete audit trail
+│   └── ...
+</code></pre></div>
+<h2 id="integration-with-tools">Integration with Tools<a class="headerlink" href="#integration-with-tools" title="Permanent link">&para;</a></h2>
+<p>The new functions can be registered as tools for the agent:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">register_tool</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">create_change_plan</span><span class="p">,</span> <span class="n">approve_change</span><span class="p">,</span> <span class="n">execute_change</span><span class="p">,</span>
+    <span class="n">analyze_system_logs</span><span class="p">,</span> <span class="n">get_pending_changes</span>
+<span class="p">)</span>
+
+<span class="c1"># Register as available tools</span>
+<span class="n">register_tool</span><span class="p">(</span><span class="s2">"create_change_plan"</span><span class="p">,</span> <span class="n">create_change_plan</span><span class="p">)</span>
+<span class="n">register_tool</span><span class="p">(</span><span class="s2">"approve_change"</span><span class="p">,</span> <span class="n">approve_change</span><span class="p">)</span>
+<span class="n">register_tool</span><span class="p">(</span><span class="s2">"execute_change"</span><span class="p">,</span> <span class="n">execute_change</span><span class="p">)</span>
+<span class="n">register_tool</span><span class="p">(</span><span class="s2">"analyze_logs"</span><span class="p">,</span> <span class="n">analyze_system_logs</span><span class="p">)</span>
+<span class="n">register_tool</span><span class="p">(</span><span class="s2">"get_pending_changes"</span><span class="p">,</span> <span class="n">get_pending_changes</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="security-features">Security Features<a class="headerlink" href="#security-features" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Least privilege</strong> - Changes are made with minimal required access</li>
+<li><strong>Audit trail</strong> - Every action logged with timestamp and identity</li>
+<li><strong>Backup before change</strong> - Automatic backups enable rollback</li>
+<li><strong>Approval workflow</strong> - Human oversight for high-risk changes</li>
+<li><strong>Maintenance windows</strong> - Restrict changes to approved windows</li>
+<li><strong>Dry-run capability</strong> - Test changes before applying</li>
+</ol>
+<h2 id="error-handling">Error Handling<a class="headerlink" href="#error-handling" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Failed changes automatically trigger rollback</li>
+<li>All errors logged to audit trail</li>
+<li>Notifications sent for failures requiring human intervention</li>
+<li>Graceful degradation when components are unavailable</li>
+</ul>
+<h2 id="example-usage">Example Usage<a class="headerlink" href="#example-usage" title="Permanent link">&para;</a></h2>
+<h3 id="manual-change-workflow">Manual Change Workflow<a class="headerlink" href="#manual-change-workflow" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">asyncio</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
+    <span class="n">create_change_plan</span><span class="p">,</span> <span class="n">approve_change</span><span class="p">,</span> <span class="n">execute_change</span><span class="p">,</span>
+    <span class="n">get_pending_changes</span>
+<span class="p">)</span>
+
+<span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">manual_fix</span><span class="p">():</span>
+    <span class="c1"># 1. Create change plan</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">create_change_plan</span><span class="p">(</span>
+        <span class="n">title</span><span class="o">=</span><span class="s2">"Update config timeout"</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">"Increase timeout from 30s to 60s"</span><span class="p">,</span>
+        <span class="n">rationale</span><span class="o">=</span><span class="s2">"Users experiencing timeouts on slow connections"</span><span class="p">,</span>
+        <span class="n">change_type</span><span class="o">=</span><span class="s2">"config"</span><span class="p">,</span>
+        <span class="n">priority</span><span class="o">=</span><span class="s2">"medium"</span><span class="p">,</span>
+        <span class="n">affected_components</span><span class="o">=</span><span class="p">[</span><span class="s2">"config.py"</span><span class="p">],</span>
+        <span class="n">proposed_changes</span><span class="o">=</span><span class="p">{</span><span class="s2">"config.py"</span><span class="p">:</span> <span class="s2">"TIMEOUT = 60"</span><span class="p">}</span>
+    <span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+    <span class="c1"># 2. Check pending (if not auto-approved)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">get_pending_changes</span><span class="p">())</span>
+
+    <span class="c1"># 3. Approve if needed</span>
+    <span class="k">await</span> <span class="n">approve_change</span><span class="p">(</span><span class="s2">"CHG_20250111_120000_abc123"</span><span class="p">,</span> <span class="s2">"admin"</span><span class="p">)</span>
+
+    <span class="c1"># 4. Execute</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">execute_change</span><span class="p">(</span><span class="s2">"CHG_20250111_120000_abc123"</span><span class="p">)</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+<span class="n">asyncio</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">manual_fix</span><span class="p">())</span>
+</code></pre></div>
+<h3 id="automated-monitoring">Automated Monitoring<a class="headerlink" href="#automated-monitoring" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">start_continuous_monitoring</span>
+
+<span class="c1"># Start monitoring - will automatically detect and fix issues</span>
+<span class="n">start_continuous_monitoring</span><span class="p">()</span>
+</code></pre></div>
+<h2 id="future-enhancements">Future Enhancements<a class="headerlink" href="#future-enhancements" title="Permanent link">&para;</a></h2>
+<p>Potential improvements:
+1. Integration with external change management systems (ServiceNow, Jira)
+2. Webhook notifications for approvals
+3. Multi-operator approval workflows
+4. Integration with testing frameworks for pre-change validation
+5. Metrics collection for change success rates
+6. Machine learning for anomaly detection</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

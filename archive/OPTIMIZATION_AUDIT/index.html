@@ -1,0 +1,1639 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/archive/OPTIMIZATION_AUDIT/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>ZenSynora — Optimization & Improvement Audit - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#zensynora-optimization-improvement-audit" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              ZenSynora — Optimization &amp; Improvement Audit
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#critical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Critical
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Critical">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-deploypy-hardcoded-ssh-credentials-committed-to-source-tree" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. deploy.py — Hardcoded SSH credentials committed to source tree
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-memorypy-unbounded-_history_cache-can-oom-on-long-sessions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. memory.py — Unbounded _history_cache can OOM on long sessions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-asynciocreate_task-without-exception-guards-silent-crashes-at-27-call-sites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. asyncio.create_task without exception guards — silent crashes at 27 call sites
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#high-impact" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High Impact
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="High Impact">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#4-re-module-recompiled-inside-hot-loops-in-11-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. re module recompiled inside hot loops in 11+ files
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-agentpy-still-1630-lines-class-decomposition-in-agent_internalsclassespy-exists-but-is-unused" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. agent.py still 1,630 lines — class decomposition in agent_internals/classes.py exists but is unused
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-semantic-cache-manual-npdot-loop-515-slower-than-batched-matmul" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Semantic cache manual np.dot loop — 5–15× slower than batched matmul
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-topic-extraction-uses-resub-on-every-think-call-replace-with-strtranslate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Topic extraction uses re.sub on every think() call — replace with str.translate
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medium" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Medium
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Medium">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#8-per-user-db-pool-fragments-sqlite-write-throughput" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Per-user DB pool fragments SQLite write throughput
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-_history_cache-not-thread-safe-across-syncasync-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. _history_cache not thread-safe across sync/async paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-asyncscheduler-jsonl-persistence-has-no-file-lock" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. AsyncScheduler JSONL persistence has no file lock
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-shell-regex-duplicated-between-sync-and-async-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Shell regex duplicated between sync and async functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-lrucachewithttl_cleanup_expired-is-on-on-every-nth-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. LRUCacheWithTTL._cleanup_expired is O(n) on every Nth access
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Security">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#13-deploypy-hardcoded-credentials-see-1-above-primary-finding" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. deploy.py hardcoded credentials (see #1 above — primary finding)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-configpy-_apply_env_overrides-secrets-silently-accepted-with-no-startup-warning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. config.py _apply_env_overrides — secrets silently accepted with no startup warning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-cors-fallback-to-dev-origin-not-guarded-against-empty-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. CORS fallback to dev origin not guarded against empty configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reliability-correctness" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reliability / Correctness
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reliability / Correctness">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#16-stream_think-word-splitting-corrupts-markdown-multi-byte-output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. stream_think word-splitting corrupts markdown / multi-byte output
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#developer-experience" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Developer Experience
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Developer Experience">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#17-requirementstxt-absent-requirements-locktxt-underutilized" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        17. requirements.txt absent; requirements-lock.txt underutilized
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#18-no-env-pydantic-settings-schema-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        18. No .env / pydantic-settings schema validation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#19-ruff-black-competing-in-pre-commit-config" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        19. Ruff + Black competing in pre-commit config
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="zensynora-optimization-improvement-audit">ZenSynora — Optimization &amp; Improvement Audit<a class="headerlink" href="#zensynora-optimization-improvement-audit" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Archived on 2026-10-13 (v0.7.0).</strong> Optimization audit. Kept for history; it describes the project at the time it was written and may not match the current code. Current documentation: <a href="../../README.md">docs/README.md</a>.</p>
+<p>Generated: 2026-05-17<br />
+Scope: Full codebase (<code>myclaw/</code>, <code>webui/</code>, tooling, config)<br />
+Method: Targeted file inspection across <code>agent.py</code>, <code>provider.py</code>, <code>memory.py</code>, <code>knowledge/db.py</code>, <code>config.py</code>, <code>defaults.py</code>, <code>tools/shell.py</code>, <code>deploy.py</code>, <code>async_scheduler.py</code>, <code>agent_internals/classes.py</code>, <code>task_timer.py</code>, <code>.pre-commit-config.yaml</code>, and related modules</p>
+</blockquote>
+<hr />
+<h2 id="critical">Critical<a class="headerlink" href="#critical" title="Permanent link">&para;</a></h2>
+<h3 id="1-deploypy-hardcoded-ssh-credentials-committed-to-source-tree">1. <code>deploy.py</code> — Hardcoded SSH credentials committed to source tree<a class="headerlink" href="#1-deploypy-hardcoded-ssh-credentials-committed-to-source-tree" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>deploy.py</code>, lines 23–26</p>
+<div class="highlight"><pre><span></span><code><span class="n">REMOTE_HOST</span> <span class="o">=</span> <span class="s2">"192.168.8.110"</span>
+<span class="n">REMOTE_USER</span> <span class="o">=</span> <span class="s2">"adi"</span>
+<span class="n">REMOTE_PASS</span> <span class="o">=</span> <span class="s2">"&lt;redacted&gt;"</span>
+<span class="n">REMOTE_DIR</span>  <span class="o">=</span> <span class="s2">"/home/adi/zensynora"</span>
+</code></pre></div>
+<p>Plaintext SSH password and host are committed. Anyone with repo access gets live credentials.</p>
+<p><strong>Fix:</strong> Replace literals with environment variable reads:</p>
+<div class="highlight"><pre><span></span><code><span class="n">REMOTE_HOST</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ZENSYNORA_DEPLOY_HOST"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
+<span class="n">REMOTE_USER</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ZENSYNORA_DEPLOY_USER"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
+<span class="n">REMOTE_PASS</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ZENSYNORA_DEPLOY_PASS"</span><span class="p">,</span> <span class="s2">""</span><span class="p">)</span>
+<span class="n">REMOTE_DIR</span>  <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">"ZENSYNORA_DEPLOY_DIR"</span><span class="p">,</span> <span class="s2">"/home/adi/zensynora"</span><span class="p">)</span>
+</code></pre></div>
+<p>Add a pre-commit hook that scans for <code>= "..."</code> / <code>= '...'</code> patterns on credential-named variables.</p>
+<hr />
+<h3 id="2-memorypy-unbounded-_history_cache-can-oom-on-long-sessions">2. <code>memory.py</code> — Unbounded <code>_history_cache</code> can OOM on long sessions<a class="headerlink" href="#2-memorypy-unbounded-_history_cache-can-oom-on-long-sessions" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/memory.py</code>, ~line 466</p>
+<p><code>Memory._history_cache</code> is a plain <code>dict</code> keyed by <code>limit</code> (an integer). Every distinct <code>limit</code> value ever requested becomes a permanent cache entry. A session calling <code>get_history(limit=10)</code> then <code>limit=20</code> then <code>limit=50</code> accumulates entries without bound. The <code>_cache_max_size</code> cap uses a simple FIFO eviction that only fires for the default-columns path:</p>
+<div class="highlight"><pre><span></span><code><span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_history_cache</span><span class="p">)</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache_max_size</span><span class="p">:</span>
+    <span class="n">oldest_key</span> <span class="o">=</span> <span class="nb">next</span><span class="p">(</span><span class="nb">iter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_history_cache</span><span class="p">))</span>
+    <span class="k">del</span> <span class="bp">self</span><span class="o">.</span><span class="n">_history_cache</span><span class="p">[</span><span class="n">oldest_key</span><span class="p">]</span>
+</code></pre></div>
+<p>This evicts one entry per overflow call — but never shrinks below the cap, and non-default column queries bypass the cap entirely.</p>
+<p><strong>Fix:</strong> Replace with <code>collections.OrderedDict</code> with a strict max-length policy, or use <code>cachetools.LRUCache</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">collections</span><span class="w"> </span><span class="kn">import</span> <span class="n">OrderedDict</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">_history_cache</span><span class="p">:</span> <span class="n">OrderedDict</span><span class="p">[</span><span class="nb">int</span><span class="p">,</span> <span class="nb">list</span><span class="p">]</span> <span class="o">=</span> <span class="n">OrderedDict</span><span class="p">()</span>
+<span class="c1"># On every put:</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">_history_cache</span><span class="p">[</span><span class="n">cache_key</span><span class="p">]</span> <span class="o">=</span> <span class="n">result</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">_history_cache</span><span class="o">.</span><span class="n">move_to_end</span><span class="p">(</span><span class="n">cache_key</span><span class="p">)</span>
+<span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_history_cache</span><span class="p">)</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">_cache_max_size</span><span class="p">:</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">_history_cache</span><span class="o">.</span><span class="n">popitem</span><span class="p">(</span><span class="n">last</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</code></pre></div>
+<p>Also: the sub-query <code>SELECT ... FROM (SELECT ... ORDER BY id DESC LIMIT ?) ORDER BY id ASC</code> forces SQLite to materialize a full reverse-sorted set before reversing. A primary-key scan <code>ORDER BY id DESC LIMIT ?</code> followed by in-Python reversal is cheaper for small <code>limit</code> values.</p>
+<hr />
+<h3 id="3-asynciocreate_task-without-exception-guards-silent-crashes-at-27-call-sites">3. <code>asyncio.create_task</code> without exception guards — silent crashes at 27 call sites<a class="headerlink" href="#3-asynciocreate_task-without-exception-guards-silent-crashes-at-27-call-sites" title="Permanent link">&para;</a></h3>
+<p><strong>Files across:</strong> <code>agent.py</code>, <code>skill_preloader.py</code>, <code>messaging/broker.py</code>, <code>agent_internals/tool_executor.py</code>, <code>agent_internals/context_builder.py</code>, <code>agent_internals/classes.py</code>, <code>worker_pool.py</code>, <code>gateway.py</code>, <code>mcp/client.py</code>, <code>async_scheduler.py</code>, <code>agents/medic_change_mgmt.py</code>, <code>tools/scheduler.py</code>, <code>task_timer.py</code>, <code>swarm/orchestrator.py</code>, <code>swarm/collaboration.py</code>, <code>swarm/storage.py</code>, <code>knowledge/sync.py</code></p>
+<p>27 fire-and-forget <code>asyncio.create_task()</code> / <code>loop.create_task()</code> calls exist. None attach a <code>.add_done_callback</code> that logs exceptions. If a background coroutine raises, the asyncio event loop either logs "Task exception was never retrieved" at shutdown (development) or silently discards the error (production with <code>loop.set_exception_handler</code> suppressed).</p>
+<p>Worst offenders:
+- <code>agent.py</code> lines 1608, 1615 — <code>_extract_and_save_knowledge</code> and <code>_background_summarize_context</code> (LLM calls that can raise silently)
+- <code>agent_internals/classes.py</code> lines 201, 222 — same KB/summarization tasks
+- <code>knowledge/sync.py</code> lines 349, 356, 360 — background file-watcher extraction tasks</p>
+<p><strong>Fix:</strong> Apply a module-level helper:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">_fire_and_forget</span><span class="p">(</span><span class="n">coro</span><span class="p">,</span> <span class="n">logger</span><span class="p">,</span> <span class="n">context</span><span class="o">=</span><span class="s2">""</span><span class="p">):</span>
+    <span class="n">task</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">create_task</span><span class="p">(</span><span class="n">coro</span><span class="p">)</span>
+    <span class="n">task</span><span class="o">.</span><span class="n">add_done_callback</span><span class="p">(</span>
+        <span class="k">lambda</span> <span class="n">t</span><span class="p">:</span> <span class="n">logger</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Bg task failed [</span><span class="si">{</span><span class="n">context</span><span class="si">}</span><span class="s2">]"</span><span class="p">,</span> <span class="n">exc_info</span><span class="o">=</span><span class="n">t</span><span class="o">.</span><span class="n">exception</span><span class="p">())</span>
+        <span class="k">if</span> <span class="n">t</span><span class="o">.</span><span class="n">exception</span><span class="p">()</span> <span class="k">else</span> <span class="kc">None</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">task</span>
+</code></pre></div>
+<p>Then replace every raw <code>asyncio.create_task(coro)</code> with <code>_fire_and_forget(coro, logger, "context-name")</code>.</p>
+<hr />
+<h2 id="high-impact">High Impact<a class="headerlink" href="#high-impact" title="Permanent link">&para;</a></h2>
+<h3 id="4-re-module-recompiled-inside-hot-loops-in-11-files">4. <code>re</code> module recompiled inside hot loops in 11+ files<a class="headerlink" href="#4-re-module-recompiled-inside-hot-loops-in-11-files" title="Permanent link">&para;</a></h3>
+<p><strong>Files:</strong> <code>agent.py</code>, <code>shell.py</code>, <code>memory.py</code>, <code>web_search.py</code>, <code>benchmark_runner.py</code>, <code>agents/medic_evolver.py</code>, <code>agents/medic_change_mgmt.py</code>, <code>backends/router.py</code>, <code>self_healer.py</code>, <code>skill_generator.py</code>, <code>agents/skill_adapter.py</code>, <code>sandbox.py</code></p>
+<p>Several files compile regex inline on every call instead of once at module scope:</p>
+<ul>
+<li><strong><code>agent.py</code> line 796:</strong> <code>re.sub(r"[^\w\s]", " ", ...)</code> on every <code>think()</code> call  </li>
+<li><strong><code>shell.py</code> line 52:</strong> <code>re.compile(r"[\n\r;&amp;|</code>$(){}[]\]")<code>once per</code>shell_async()` call  </li>
+<li><strong><code>memory.py</code>:</strong> <code>re.findall(pattern, text)</code> with uncompiled <code>pattern</code> strings in <code>extract_knowledge_candidates</code></li>
+</ul>
+<p><strong>Fix:</strong> Module-level compiled constants:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># agent.py</span>
+<span class="n">_TOPIC_SANITIZE_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"[^\w\s]"</span><span class="p">)</span>
+
+<span class="c1"># shell.py</span>
+<span class="n">_DANGEROUS_CHARS_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"[\n\r;&amp;|`$()</span><span class="si">{}</span><span class="s2">\[\]</span><span class="se">\\</span><span class="s2">]"</span><span class="p">)</span>
+
+<span class="c1"># memory.py</span>
+<span class="n">_ENTITY_PATTERNS_COMPILED</span> <span class="o">=</span> <span class="p">[</span><span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="n">p</span><span class="p">)</span> <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">ENTITY_PATTERNS</span><span class="p">]</span>
+</code></pre></div>
+<hr />
+<h3 id="5-agentpy-still-1630-lines-class-decomposition-in-agent_internalsclassespy-exists-but-is-unused">5. <code>agent.py</code> still 1,630 lines — class decomposition in <code>agent_internals/classes.py</code> exists but is unused<a class="headerlink" href="#5-agentpy-still-1630-lines-class-decomposition-in-agent_internalsclassespy-exists-but-is-unused" title="Permanent link">&para;</a></h3>
+<p>Sprint 5 extracted 4 free functions; Sprint 9 wrapped them in thin class adapters (<code>MessageRouter</code>, <code>ContextBuilder</code>, <code>ToolExecutor</code>, <code>ResponseHandler</code>). <code>agent.py</code> still imports and calls the free functions directly. The class layer was built for DI/testability but <code>Agent</code> was never migrated to it.</p>
+<p>Migrating <code>Agent._route_message → MessageRouter.run()</code>, <code>_build_context → ContextBuilder.run()</code>, <code>_execute_tools → ToolExecutor.run()</code> would cut <code>agent.py</code> by an estimated 40–50% and give every phase an explicit dependency surface for testing.</p>
+<hr />
+<h3 id="6-semantic-cache-manual-npdot-loop-515-slower-than-batched-matmul">6. Semantic cache manual <code>np.dot</code> loop — 5–15× slower than batched matmul<a class="headerlink" href="#6-semantic-cache-manual-npdot-loop-515-slower-than-batched-matmul" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/vector/semantic_cache.py</code> (or equivalent semantic cache module)</p>
+<p>The embedding scan iterates over every cached entry individually:</p>
+<div class="highlight"><pre><span></span><code><span class="k">for</span> <span class="n">entry</span> <span class="ow">in</span> <span class="n">cache</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+    <span class="n">score</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">dot</span><span class="p">(</span><span class="n">query_vec</span><span class="p">,</span> <span class="n">entry</span><span class="o">.</span><span class="n">embedding</span><span class="p">)</span>   <span class="c1"># O(N) BLAS calls</span>
+</code></pre></div>
+<p><strong>Fix:</strong> Stack embeddings into a single matrix and call <code>np.matmul</code> once:</p>
+<div class="highlight"><pre><span></span><code><span class="n">embeddings</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">stack</span><span class="p">([</span><span class="n">e</span><span class="o">.</span><span class="n">embedding</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">cache</span><span class="o">.</span><span class="n">values</span><span class="p">()])</span>   <span class="c1"># shape (N, dim)</span>
+<span class="n">scores</span> <span class="o">=</span> <span class="n">query_vec</span> <span class="o">@</span> <span class="n">embeddings</span><span class="o">.</span><span class="n">T</span>                               <span class="c1"># single BLAS call</span>
+<span class="n">top_k</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">argpartition</span><span class="p">(</span><span class="n">scores</span><span class="p">,</span> <span class="o">-</span><span class="n">k</span><span class="p">)[</span><span class="o">-</span><span class="n">k</span><span class="p">:]</span>
+</code></pre></div>
+<p>Also: <code>scan_cap</code> defaults to 64. With a typical cache of 256 entries only 25% are ever scored. Raising the cap to 256 or adding an L2-distance pre-filter (cheap approximate nearest-neighbors) before the dot-product pass would materially improve retrieval quality.</p>
+<hr />
+<h3 id="7-topic-extraction-uses-resub-on-every-think-call-replace-with-strtranslate">7. Topic extraction uses <code>re.sub</code> on every <code>think()</code> call — replace with <code>str.translate</code><a class="headerlink" href="#7-topic-extraction-uses-resub-on-every-think-call-replace-with-strtranslate" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/agent.py</code>, line 796</p>
+<div class="highlight"><pre><span></span><code><span class="n">cleaned</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">sub</span><span class="p">(</span><span class="sa">r</span><span class="s2">"[^\w\s]"</span><span class="p">,</span> <span class="s2">" "</span><span class="p">,</span> <span class="n">message</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+</code></pre></div>
+<p>This runs on every user message and recompiles the pattern each invocation. <code>str.translate</code> with a pre-built translation table runs in C and avoids the regex engine entirely:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># module scope</span>
+<span class="n">_TOPIC_TABLE</span> <span class="o">=</span> <span class="nb">str</span><span class="o">.</span><span class="n">maketrans</span><span class="p">(</span>
+    <span class="p">{</span><span class="nb">chr</span><span class="p">(</span><span class="n">c</span><span class="p">):</span> <span class="s2">" "</span> <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">128</span><span class="p">)</span> <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="nb">chr</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">.</span><span class="n">isalnum</span><span class="p">()</span> <span class="ow">or</span> <span class="nb">chr</span><span class="p">(</span><span class="n">c</span><span class="p">)</span><span class="o">.</span><span class="n">isspace</span><span class="p">())}</span>
+<span class="p">)</span>
+<span class="c1"># per call</span>
+<span class="n">cleaned</span> <span class="o">=</span> <span class="n">message</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span><span class="o">.</span><span class="n">translate</span><span class="p">(</span><span class="n">_TOPIC_TABLE</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="medium">Medium<a class="headerlink" href="#medium" title="Permanent link">&para;</a></h2>
+<h3 id="8-per-user-db-pool-fragments-sqlite-write-throughput">8. Per-user DB pool fragments SQLite write throughput<a class="headerlink" href="#8-per-user-db-pool-fragments-sqlite-write-throughput" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/memory.py</code>, <code>AsyncSQLitePool</code></p>
+<p><code>Memory()</code> creates a separate <code>AsyncSQLitePool</code> (3 connections) per <code>user_id.db</code>. Ten active users = 30 connection slots across 10 files. SQLite's WAL writer serializes at the filesystem level, so per-file pool concurrency does not help writes — it only adds connection-table overhead. The per-user read isolation is sound, but the pool size of 3 per DB is over-provisioned for write-heavy workloads.</p>
+<p><strong>Fix:</strong> Limit each pool to 1 connection for writes, 2 for reads. Detect workload type and resize accordingly.</p>
+<hr />
+<h3 id="9-_history_cache-not-thread-safe-across-syncasync-paths">9. <code>_history_cache</code> not thread-safe across sync/async paths<a class="headerlink" href="#9-_history_cache-not-thread-safe-across-syncasync-paths" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/memory.py</code></p>
+<p><code>Memory._history_cache</code> is a plain <code>dict</code> mutated from <code>get_history</code> (async/event-loop path) and from <code>close()</code> / <code>cleanup()</code> which can be called via <code>asyncio.to_thread</code>. The GIL serializes single opcodes but dict resizes are not atomic under <code>asyncio.to_thread</code>. In practice rare, but a <code>threading.Lock</code> on the cache mutations would eliminate the race.</p>
+<hr />
+<h3 id="10-asyncscheduler-jsonl-persistence-has-no-file-lock">10. <code>AsyncScheduler</code> JSONL persistence has no file lock<a class="headerlink" href="#10-asyncscheduler-jsonl-persistence-has-no-file-lock" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/async_scheduler.py</code></p>
+<p>Jobs are persisted to <code>~/.myclaw/async_scheduler_jobs.jsonl</code> with no <code>fcntl</code>/<code>msvcrt</code> advisory lock. If two scheduler instances start simultaneously (e.g., systemd <code>Restart=on-failure</code> races two starts), the JSONL can be interleaved and corrupted.</p>
+<p><strong>Fix:</strong> Wrap the JSONL file in an <code>fcntl.flock</code> context manager on both read and write paths.</p>
+<hr />
+<h3 id="11-shell-regex-duplicated-between-sync-and-async-functions">11. Shell regex duplicated between sync and async functions<a class="headerlink" href="#11-shell-regex-duplicated-between-sync-and-async-functions" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/tools/shell.py</code>, lines 52 and 137</p>
+<p>Both <code>shell_async()</code> and <code>shell()</code> compile the same <code>dangerous</code> regex on every call. Extract to a module-level constant:</p>
+<div class="highlight"><pre><span></span><code><span class="n">_DANGEROUS_CHARS_RE</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"[\n\r;&amp;|`$()</span><span class="si">{}</span><span class="s2">\[\]</span><span class="se">\\</span><span class="s2">]"</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h3 id="12-lrucachewithttl_cleanup_expired-is-on-on-every-nth-access">12. <code>LRUCacheWithTTL._cleanup_expired</code> is O(n) on every Nth access<a class="headerlink" href="#12-lrucachewithttl_cleanup_expired-is-on-on-every-nth-access" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/provider.py</code>, <code>LRUCacheWithTTL</code></p>
+<p><code>_cleanup_expired</code> rebuilds a list of all expired keys and deletes them in a loop. Called amortized on every N accesses, it is fine for <code>maxsize=128</code> but stalls for <code>maxsize=1000+</code> (possible with <code>semantic_cache</code> at scale). Make it lazy — only clean the specific expired key on <code>.get()</code> miss, or run a background cleanup task.</p>
+<hr />
+<h2 id="security">Security<a class="headerlink" href="#security" title="Permanent link">&para;</a></h2>
+<h3 id="13-deploypy-hardcoded-credentials-see-1-above-primary-finding">13. <code>deploy.py</code> hardcoded credentials (see #1 above — primary finding)<a class="headerlink" href="#13-deploypy-hardcoded-credentials-see-1-above-primary-finding" title="Permanent link">&para;</a></h3>
+<hr />
+<h3 id="14-configpy-_apply_env_overrides-secrets-silently-accepted-with-no-startup-warning">14. <code>config.py</code> <code>_apply_env_overrides</code> — secrets silently accepted with no startup warning<a class="headerlink" href="#14-configpy-_apply_env_overrides-secrets-silently-accepted-with-no-startup-warning" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/config.py</code>, line 212</p>
+<p>Environment variable names are logged at INFO level; values are not. That is correct. However, <code>save_config</code> writes plaintext secrets to <code>config.json</code> when no encryption key is configured, with no warning. If the operator enables <code>MYCLAW_SQLITE_KEY</code> after saving plaintext, a stale unencrypted <code>config.json</code> remains on disk.</p>
+<p><strong>Fix:</strong> Log a WARNING on first call to <code>save_config</code> when encryption is not active and secrets are present.</p>
+<hr />
+<h3 id="15-cors-fallback-to-dev-origin-not-guarded-against-empty-configuration">15. CORS fallback to dev origin not guarded against empty configuration<a class="headerlink" href="#15-cors-fallback-to-dev-origin-not-guarded-against-empty-configuration" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/web/api.py</code>, line 82</p>
+<div class="highlight"><pre><span></span><code><span class="n">_cors_origins</span> <span class="o">=</span> <span class="n">_cors_origins</span><span class="o">.</span><span class="n">cors_origins</span> <span class="k">if</span> <span class="n">_cors_origins</span> <span class="k">else</span> <span class="p">[</span><span class="s2">"http://localhost:5173"</span><span class="p">]</span>
+</code></pre></div>
+<p>If <code>security.cors_origins</code> is set to <code>[]</code> (empty list) the fallback kicks in to dev-only. If it accidently contains <code>"*"</code> the CORS middleware allows any origin with credentials — a known class of attack (any site can steal sessions). Add an explicit validation in <code>_validate_config</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="k">if</span> <span class="s2">"*"</span> <span class="ow">in</span> <span class="n">config</span><span class="o">.</span><span class="n">security</span><span class="o">.</span><span class="n">cors_origins</span><span class="p">:</span>
+    <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">"CORS wildcard with credentials is a security risk"</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="reliability-correctness">Reliability / Correctness<a class="headerlink" href="#reliability-correctness" title="Permanent link">&para;</a></h2>
+<h3 id="16-stream_think-word-splitting-corrupts-markdown-multi-byte-output">16. <code>stream_think</code> word-splitting corrupts markdown / multi-byte output<a class="headerlink" href="#16-stream_think-word-splitting-corrupts-markdown-multi-byte-output" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/agent.py</code></p>
+<div class="highlight"><pre><span></span><code><span class="n">words</span> <span class="o">=</span> <span class="n">final_response</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">" "</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">word</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">words</span><span class="p">):</span>
+    <span class="n">prefix</span> <span class="o">=</span> <span class="s2">" "</span> <span class="k">if</span> <span class="n">i</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="s2">""</span>
+    <span class="k">yield</span> <span class="n">prefix</span> <span class="o">+</span> <span class="n">word</span>
+</code></pre></div>
+<p>Splitting on ASCII space breaks code blocks, tables, and multi-byte Unicode strings. If <code>final_response</code> contains backtick-delimited code, <code>"```"</code> becomes a separate token, breaking the stream consumer's reconstruction. Use a fixed-size chunk strategy (e.g., 8-character windows with overlap) or stream the full string per character instead of word-splitting.</p>
+<hr />
+<h2 id="developer-experience">Developer Experience<a class="headerlink" href="#developer-experience" title="Permanent link">&para;</a></h2>
+<h3 id="17-requirementstxt-absent-requirements-locktxt-underutilized">17. <code>requirements.txt</code> absent; <code>requirements-lock.txt</code> underutilized<a class="headerlink" href="#17-requirementstxt-absent-requirements-locktxt-underutilized" title="Permanent link">&para;</a></h3>
+<p>The project ships <code>requirements-lock.txt</code> (14 entries, core only). <code>install.sh</code> ignores it and installs from <code>pyproject.toml</code> editable. The <code>Dockerfile</code> installs from <code>requirements.txt</code> but the file does not exist — it silently falls through elsewhere. Generate a fully-pinned <code>requirements.txt</code> from the existing <code>uv.lock</code> and have both <code>install.sh</code> and CI use it to pin environments.</p>
+<hr />
+<h3 id="18-no-env-pydantic-settings-schema-validation">18. No <code>.env</code> / <code>pydantic-settings</code> schema validation<a class="headerlink" href="#18-no-env-pydantic-settings-schema-validation" title="Permanent link">&para;</a></h3>
+<p><code>.env.example</code> documents 50+ variables without types. The app reads them via <code>os.environ.get</code> + manual Pydantic overrides in <code>config.py</code>. Mistyped environment variable names are silently ignored, producing default values at runtime. Adding <code>pydantic-settings</code> <code>BaseSettings</code> with explicit field types and a startup validation pass would surface misconfigurations with a clear error before the agent starts.</p>
+<hr />
+<h3 id="19-ruff-black-competing-in-pre-commit-config">19. Ruff + Black competing in pre-commit config<a class="headerlink" href="#19-ruff-black-competing-in-pre-commit-config" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>.pre-commit-config.yaml</code></p>
+<p>Both <code>ruff-format</code> and <code>black</code> are configured as formatters. Running both can silently undo each other's formatting — Ruff formats one way, Black reformats on the next hook, or vice-versa. Use one formatter:</p>
+<ul>
+<li><strong>Recommended:</strong> Remove <code>black</code> and keep <code>ruff-format</code> — it is faster and already configured.  </li>
+<li><strong>Alternative:</strong> Remove <code>ruff-format</code> and keep <code>black</code>, but run <code>ruff</code> (linter-only, not <code>ruff-format</code>).</li>
+</ul>
+<hr />
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Issue</th>
+<th>Severity</th>
+<th>Effort</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Hardcoded SSH credentials in <code>deploy.py</code></td>
+<td>🔴 Critical</td>
+<td>Trivial</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Unbounded <code>_history_cache</code> → OOM</td>
+<td>🔴 Critical</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>3</td>
+<td><code>create_task</code> without error guards (27 sites)</td>
+<td>🟠 High</td>
+<td>Large</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Regex recompiled in hot loops (11+ files)</td>
+<td>🟠 High</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>5</td>
+<td><code>agent.py</code> 1,630 lines; class adapters unused</td>
+<td>🟠 High</td>
+<td>Large</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Semantic cache manual <code>np.dot</code> loop</td>
+<td>🟡 Medium</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>7</td>
+<td><code>re.sub</code> on every <code>think()</code> call</td>
+<td>🟡 Medium</td>
+<td>Small</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Per-user DB pool fragments write throughput</td>
+<td>🟡 Medium</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>9</td>
+<td><code>_history_cache</code> no async/sync lock</td>
+<td>🟡 Medium</td>
+<td>Small</td>
+</tr>
+<tr>
+<td>10</td>
+<td>AsyncScheduler JSONL no file lock</td>
+<td>🟡 Medium</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>11</td>
+<td>Shell regex compiled per-call</td>
+<td>🟡 Medium</td>
+<td>Small</td>
+</tr>
+<tr>
+<td>12</td>
+<td><code>LRUCacheWithTTL</code> O(n) cleanup</td>
+<td>🟡 Medium</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>13</td>
+<td>Hardcoded deploy password (duplicate of #1)</td>
+<td>🔴 Critical</td>
+<td>Trivial</td>
+</tr>
+<tr>
+<td>14</td>
+<td>Secrets silently accepted, no startup warning</td>
+<td>🟡 Medium</td>
+<td>Small</td>
+</tr>
+<tr>
+<td>15</td>
+<td>CORS fallback to dev origin unguarded</td>
+<td>🟡 Medium</td>
+<td>Small</td>
+</tr>
+<tr>
+<td>16</td>
+<td><code>stream_think</code> word-splitting corrupts formatting</td>
+<td>🟡 Medium</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>17</td>
+<td><code>requirements.txt</code> absent; lock underused</td>
+<td>🟡 Medium</td>
+<td>Medium</td>
+</tr>
+<tr>
+<td>18</td>
+<td>No <code>.env</code> / <code>pydantic-settings</code> schema</td>
+<td>🟡 Medium</td>
+<td>Large</td>
+</tr>
+<tr>
+<td>19</td>
+<td>Ruff + Black competing in pre-commit</td>
+<td>🟢 Low</td>
+<td>Trivial</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Priority order for remediation:</strong><br />
+1 → 3 → 2 → 4 → 5 → (6, 7, 11 as a group) → (15, 16) → (8, 9, 10, 12, 14, 17, 18, 19)</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

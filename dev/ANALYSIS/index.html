@@ -1,0 +1,1545 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/dev/ANALYSIS/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>MyClaw Application Analysis - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#myclaw-application-analysis" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              MyClaw Application Analysis
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-myclaw" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📋 What is MyClaw?
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="📋 What is MyClaw?">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#architecture-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture Overview
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-swarms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Swarms
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#critical-issues-security-stability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🚨 Critical Issues (Security &amp; Stability)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🚨 Critical Issues (Security &amp; Stability)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-arbitrary-shell-command-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Arbitrary Shell Command Execution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-arbitrary-file-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Arbitrary File Access
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-missing-__init__py-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Missing __init__.py Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#medium-issues-reliability" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ⚠️ Medium Issues (Reliability)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="⚠️ Medium Issues (Reliability)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#4-no-error-handling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. No Error Handling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-sqlite-connection-never-closed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. SQLite Connection Never Closed
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-no-timeout-on-llm-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. No Timeout on LLM Calls
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-memory-grows-unbounded" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Memory Grows Unbounded
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-telegram-channel-missing-__init__py" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Telegram Channel Missing __init__.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#feature-improvements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        💡 Feature Improvements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="💡 Feature Improvements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#9-use-native-ollama-tool-calling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Use Native Ollama Tool Calling
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-add-multiple-channel-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Add Multiple Channel Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-conversation-context-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Conversation Context Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-async-enhancement" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Async Enhancement
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#performance-optimizations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        📈 Performance Optimizations
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remaining-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🎯 Remaining Priority
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-swarm-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🐝 Agent Swarm Features
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="🐝 Agent Swarm Features">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#implemented-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented Strategies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Swarm Tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#file-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Structure
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#root-level-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Root Level Files
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="myclaw-application-analysis">MyClaw Application Analysis<a class="headerlink" href="#myclaw-application-analysis" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Developer notes — status as of 2026-10-13 (v0.7.0).</strong> Working plan/report written during development; it may describe planned or superseded work. For current behaviour see <a href="../../">docs/README.md</a>.</p>
+</blockquote>
+<h2 id="what-is-myclaw">📋 What is MyClaw?<a class="headerlink" href="#what-is-myclaw" title="Permanent link">&para;</a></h2>
+<p>MyClaw is a personal AI agent that combines:
+- <strong>Ollama</strong> (local LLM - llama3.2) for AI conversations
+- <strong>Telegram</strong> integration for messaging
+- <strong>SQLite</strong> memory for persistent conversations
+- <strong>Tool system</strong> for shell commands and file operations
+- <strong>Agent Swarms</strong> for multi-agent collaboration</p>
+<h3 id="architecture-overview">Architecture Overview<a class="headerlink" href="#architecture-overview" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>Channels (CLI, Telegram)
+        ↓
+     Agent
+   ↙    ↓    ↘
+Memory  Provider  Tools  Swarms
+(SQLite) (Ollama) (shell,...) (Multi-Agent)
+</code></pre></div>
+<h3 id="agent-swarms">Agent Swarms<a class="headerlink" href="#agent-swarms" title="Permanent link">&para;</a></h3>
+<p>MyClaw now supports <strong>Agent Swarms</strong> - a powerful multi-agent coordination system:</p>
+<ul>
+<li><strong>Parallel Strategy</strong> - All agents work simultaneously on the same task</li>
+<li><strong>Sequential Strategy</strong> - Agents work in pipeline (output feeds to next)</li>
+<li><strong>Hierarchical Strategy</strong> - Coordinator delegates tasks to workers</li>
+<li><strong>Voting Strategy</strong> - Multiple agents vote on solutions</li>
+</ul>
+<p><strong>Key Benefits:</strong>
+- Solve complex problems requiring multiple perspectives
+- Distribute workloads across specialized agents
+- Validate results through consensus
+- Create powerful multi-stage workflows</p>
+<p><strong>Usage:</strong>
+<div class="highlight"><pre><span></span><code>swarm_create("research_team", "parallel", "agent1,agent2,agent3")
+swarm_assign("swarm_xxx", "Research AI developments")
+</code></pre></div></p>
+<hr />
+<h2 id="critical-issues-security-stability">🚨 Critical Issues (Security &amp; Stability)<a class="headerlink" href="#critical-issues-security-stability" title="Permanent link">&para;</a></h2>
+<h3 id="1-arbitrary-shell-command-execution">1. Arbitrary Shell Command Execution<a class="headerlink" href="#1-arbitrary-shell-command-execution" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: ✅ FIXED
+<strong>Resolution</strong>: The agent now employs a strict command allowlist (<code>ALLOWED_COMMANDS</code>) and blocklist within <code>myclaw/tools/</code>.</p>
+<h3 id="2-arbitrary-file-access">2. Arbitrary File Access<a class="headerlink" href="#2-arbitrary-file-access" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: ✅ FIXED
+<strong>Resolution</strong>: The <code>read_file</code> and <code>write_file</code> tools utilize a <code>validate_path</code> function to prevent path traversal attacks and ensure operations remain within the workspace directory.</p>
+<h3 id="3-missing-__init__py-files">3. Missing <code>__init__.py</code> Files<a class="headerlink" href="#3-missing-__init__py-files" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: ✅ FIXED
+<strong>Resolution</strong>: Missing <code>__init__.py</code> files were created, resolving import errors seen with <code>cli.py</code> and <code>onboard.py</code>.</p>
+<hr />
+<h2 id="medium-issues-reliability">⚠️ Medium Issues (Reliability)<a class="headerlink" href="#medium-issues-reliability" title="Permanent link">&para;</a></h2>
+<h3 id="4-no-error-handling">4. No Error Handling<a class="headerlink" href="#4-no-error-handling" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: ✅ FIXED
+<strong>Resolution</strong>: Tool execution calls and provider interactions now use proper <code>try/except</code> constructs with logging outputs instead of silently failing.</p>
+<h3 id="5-sqlite-connection-never-closed">5. SQLite Connection Never Closed<a class="headerlink" href="#5-sqlite-connection-never-closed" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: ✅ FIXED
+<strong>Resolution</strong>: The <code>Memory</code> module in <code>myclaw/memory.py</code> uses context management (<code>__enter__</code> and <code>__exit__</code>) to correctly close connection instances.</p>
+<h3 id="6-no-timeout-on-llm-calls">6. No Timeout on LLM Calls<a class="headerlink" href="#6-no-timeout-on-llm-calls" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: ✅ FIXED
+<strong>Resolution</strong>: The network APIs in <code>myclaw/provider.py</code> now implement a uniform 60s timeout policy.</p>
+<h3 id="7-memory-grows-unbounded">7. Memory Grows Unbounded<a class="headerlink" href="#7-memory-grows-unbounded" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: ✅ FIXED
+<strong>Resolution</strong>: Added a <code>cleanup</code> utility in the memory database to automatically reap chat records older than 30 days.</p>
+<h3 id="8-telegram-channel-missing-__init__py">8. Telegram Channel Missing <code>__init__.py</code><a class="headerlink" href="#8-telegram-channel-missing-__init__py" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: ✅ FIXED
+<strong>Resolution</strong>: Created missing init to satisfy path imports.</p>
+<hr />
+<h2 id="feature-improvements">💡 Feature Improvements<a class="headerlink" href="#feature-improvements" title="Permanent link">&para;</a></h2>
+<h3 id="9-use-native-ollama-tool-calling">9. Use Native Ollama Tool Calling<a class="headerlink" href="#9-use-native-ollama-tool-calling" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: ✅ FIXED
+<strong>Resolution</strong>: Expanded provider modules map to the strict schema JSON outputs expected by <code>httpx</code> native Ollama clients.</p>
+<h3 id="10-add-multiple-channel-support">10. Add Multiple Channel Support<a class="headerlink" href="#10-add-multiple-channel-support" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: 🚧 PENDING
+<strong>Proposal</strong>: Add Discord, Slack, WebSocket endpoint drivers alongside the Telegram adapter.</p>
+<h3 id="11-conversation-context-management">11. Conversation Context Management<a class="headerlink" href="#11-conversation-context-management" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: ✅ FIXED
+<strong>Resolution</strong>: Summarization triggers over large conversation bounds, collapsing older tokens to save LLM context limitations. </p>
+<h3 id="12-async-enhancement">12. Async Enhancement<a class="headerlink" href="#12-async-enhancement" title="Permanent link">&para;</a></h3>
+<p><strong>Status</strong>: ✅ FIXED
+<strong>Resolution</strong>: The gateway operates asynchronously, preventing blocking threads on high workloads.</p>
+<hr />
+<h2 id="performance-optimizations">📈 Performance Optimizations<a class="headerlink" href="#performance-optimizations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Issue</th>
+<th>Current Status</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LLM calls</td>
+<td>✅ FIXED</td>
+<td>Streaming responses implemented (all providers)</td>
+</tr>
+<tr>
+<td>Memory</td>
+<td>✅ FIXED</td>
+<td>Sliding window summaries implemented</td>
+</tr>
+<tr>
+<td>DB</td>
+<td>✅ FIXED</td>
+<td>Added <code>idx_timestamp</code> on chat entries</td>
+</tr>
+<tr>
+<td>Config</td>
+<td>✅ FIXED</td>
+<td>Pydantic validation schema implemented</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="remaining-priority">🎯 Remaining Priority<a class="headerlink" href="#remaining-priority" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Feature</strong>: ✅ Agent Swarms - Multi-agent coordination system implemented.</li>
+<li><strong>Feature</strong>: ✅ WhatsApp Business Cloud API channel implemented.</li>
+<li><strong>Feature</strong>: Expand integration support via Discord / Slack / Webhooks.</li>
+<li><strong>Enhancement</strong>: ✅ Streaming logic fully implemented for all LLM providers.</li>
+</ol>
+<h2 id="agent-swarm-features">🐝 Agent Swarm Features<a class="headerlink" href="#agent-swarm-features" title="Permanent link">&para;</a></h2>
+<h3 id="implemented-strategies">Implemented Strategies<a class="headerlink" href="#implemented-strategies" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Strategy</th>
+<th>Status</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Parallel</td>
+<td>✅</td>
+<td>All agents work simultaneously</td>
+</tr>
+<tr>
+<td>Sequential</td>
+<td>✅</td>
+<td>Pipeline execution</td>
+</tr>
+<tr>
+<td>Hierarchical</td>
+<td>✅</td>
+<td>Coordinator + workers</td>
+</tr>
+<tr>
+<td>Voting</td>
+<td>✅</td>
+<td>Consensus-based decisions</td>
+</tr>
+</tbody>
+</table>
+<h3 id="swarm-tools">Swarm Tools<a class="headerlink" href="#swarm-tools" title="Permanent link">&para;</a></h3>
+<ul>
+<li>✅ <code>swarm_create()</code> - Create new swarms</li>
+<li>✅ <code>swarm_assign()</code> - Execute tasks</li>
+<li>✅ <code>swarm_status()</code> - Check status</li>
+<li>✅ <code>swarm_result()</code> - Get results</li>
+<li>✅ <code>swarm_terminate()</code> - Stop execution</li>
+<li>✅ <code>swarm_list()</code> - List swarms</li>
+<li>✅ <code>swarm_stats()</code> - View statistics</li>
+<li>✅ <code>swarm_message()</code> - Inter-agent communication</li>
+</ul>
+<h3 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"swarm"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"max_concurrent_swarms"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"default_strategy"</span><span class="p">:</span><span class="w"> </span><span class="s2">"parallel"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"default_aggregation"</span><span class="p">:</span><span class="w"> </span><span class="s2">"synthesis"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"timeout_seconds"</span><span class="p">:</span><span class="w"> </span><span class="mi">300</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>See <a href="docs/agent_swarm_guide.md">docs/agent_swarm_guide.md</a> for detailed documentation.</p>
+<hr />
+<h2 id="file-structure">File Structure<a class="headerlink" href="#file-structure" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>myclaw/
+│   ├── __init__.py              # ✅ Created
+│   ├── config.py                # Config loading with Pydantic validation
+│   ├── memory.py            # SQLite persistence
+│   ├── provider.py          # API Client abstraction with swarm schemas
+│   ├── tools/              # Shell, files, network, tasks, rules, SWARM TOOLS
+│   ├── agent.py             # Main agent routing with swarm context
+│   ├── gateway.py               # Channel endpoints
+│   ├── skills.md                # Agent skills and toolbox definitions
+│   ├── profiles/               # Agent profile prompts
+│   │   ├── __init__.py
+│   │   ├── agent.md
+│   │   ├── bootstrap.md
+│   │   ├── default.md
+│   │   ├── heartbeat.md
+│   │   ├── identity.md
+│   │   ├── memory.md
+│   │   ├── soul.md
+│   │   └── user.md
+│   ├── swarm/               # 🐝 Agent Swarm System
+│   │   ├── __init__.py      # Package exports
+│   │   ├── models.py        # SwarmConfig, SwarmTask, SwarmResult
+│   │   ├── storage.py       # SQLite persistence for swarms
+│   │   ├── strategies.py    # Execution strategies
+│   │   └── orchestrator.py  # Main coordination logic
+│   ├── knowledge/           # MemoPad knowledge engine integration
+│   ├── channels/
+│       ├── __init__.py      # ✅ Created
+│       ├── telegram.py      # Telegram bot
+│       └── whatsapp.py      # ✅ WhatsApp Business Cloud API bot
+</code></pre></div>
+<h2 id="root-level-files">Root Level Files<a class="headerlink" href="#root-level-files" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>├── cli.py                   # Command-line interface
+├── onboard.py               # Setup wizard
+├── requirements.txt         # Dependencies
+├── docs/
+│   └── agent_swarm_guide.md # 📚 Swarm documentation
+└── docs/dev/plans/
+    └── agent_swarm_implementation_plan.md # Implementation details
+</code></pre></div>
+<blockquote>
+<p><strong>Note</strong>: Configuration is stored in <code>~/.myclaw/config.json</code> (not included in repo)</p>
+</blockquote>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

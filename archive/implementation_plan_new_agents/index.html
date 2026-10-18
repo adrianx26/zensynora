@@ -1,0 +1,1911 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/archive/implementation_plan_new_agents/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>ZenSynora Implementation Plan: New Agents & Features - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#zensynora-implementation-plan-new-agents-features" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              ZenSynora Implementation Plan: New Agents &amp; Features
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-skill-compatibility-agent-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Skill Compatibility Agent ✅ COMPLETE
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2-medic-agent-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2: Medic Agent ✅ COMPLETE
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3-new-tech-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: New Tech Agent
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 3: New Tech Agent">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#22-github-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 GitHub Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-llm-evaluation-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 LLM Evaluation &amp; Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-infinite-loop-prevention" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Infinite Loop Prevention
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-hash-check-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5 Hash Check Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3-new-tech-agent-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3: New Tech Agent ✅ COMPLETE
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-4-cross-platform-backends-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Cross-Platform Backends ✅ COMPLETE
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Summary">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#32-user-consent-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 User Consent System
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-4-cross-platform-backends-complete_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4: Cross-Platform Backends ✅ COMPLETE
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-5-future-implementations-complete" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Future Implementations ✅ COMPLETE
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 5: Future Implementations ✅ COMPLETE">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-local-backup-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Local Backup Recovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-real-github-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Real GitHub Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-config-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Config Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#54-agent-pipeline-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.4 Agent Pipeline Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#55-virustotal-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.5 VirusTotal Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-5-integration-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5: Integration &amp; Testing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Phase 5: Integration &amp; Testing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-agent-integration-with-main-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Agent Integration with Main System
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#priority-order-dependencies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Order &amp; Dependencies
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#estimated-files-to-createmodify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Estimated Files to Create/Modify
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#clarifications-addressed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clarifications Addressed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-skill-compatibility-agent" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1: Skill Compatibility Agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="zensynora-implementation-plan-new-agents-features">ZenSynora Implementation Plan: New Agents &amp; Features<a class="headerlink" href="#zensynora-implementation-plan-new-agents-features" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Archived on 2026-10-13 (v0.7.0).</strong> Implementation plan for new agents. Kept for history; it describes the project at the time it was written and may not match the current code. Current documentation: <a href="../../README.md">docs/README.md</a>.</p>
+</blockquote>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>This plan addresses the following requirements:
+1. <strong>Skill Compatibility Agent</strong> - Analyze and replicate skills from external standards (agentskills.io)
+2. <strong>Medic Agent</strong> - System health monitoring, validation, error recovery, hash integrity checking
+3. <strong>New Tech Agent</strong> - AI news monitoring and technology proposals
+4. <strong>Cross-platform Execution</strong> - Terminal backends (local, Docker, SSH, WSL2)</p>
+<hr />
+<h2 id="phase-1-skill-compatibility-agent-complete">Phase 1: Skill Compatibility Agent ✅ COMPLETE<a class="headerlink" href="#phase-1-skill-compatibility-agent-complete" title="Permanent link">&para;</a></h2>
+<p><strong>Status:</strong> Fully implemented in <code>myclaw/agents/skill_adapter.py</code></p>
+<p><strong>Implementation Summary:</strong>
+- <code>myclaw/agents/__init__.py</code> - Package initialized with SkillAdapter export
+- <code>myclaw/agents/skill_adapter.py</code> - Full SkillAdapter class with all methods
+- Tools registered in <code>myclaw/tools/</code> lines 2792-2795
+- Documentation: <code>docs/skill_adapter_guide.md</code>
+- Architecture diagram updated with Skill Adapter component</p>
+<hr />
+<h2 id="phase-2-medic-agent-complete">Phase 2: Medic Agent ✅ COMPLETE<a class="headerlink" href="#phase-2-medic-agent-complete" title="Permanent link">&para;</a></h2>
+<p><strong>Status:</strong> Fully implemented in <code>myclaw/agents/medic_agent.py</code></p>
+<p><strong>Implementation Summary:</strong>
+- <code>myclaw/agents/medic_agent.py</code> - Full MedicAgent class with all methods
+  - <code>calculate_hash()</code> - SHA-256 hash calculation
+  - <code>check_integrity()</code> - Compare hashes with baseline
+  - <code>scan_system()</code> - Scan and record baseline hashes
+  - <code>detect_errors()</code> - AST syntax error detection
+  - <code>validate_modification()</code> - Pre-execution validation with AST
+  - <code>fetch_from_github()</code> - GitHub file fetching
+  - <code>recover_from_github()</code> - File recovery
+  - <code>record_task()</code> - Task execution logging
+  - <code>get_task_analytics()</code> - Analytics retrieval
+  - <code>detect_loop()</code> - Infinite loop detection
+  - <code>check_execution()</code> - Execution guard
+  - <code>handle_timeout()</code> - Timeout handling
+  - <code>get_health_report()</code> - Formatted health report
+- <code>myclaw/agents/__init__.py</code> - Updated with MedicAgent export
+- Tools registered in <code>myclaw/tools/</code> lines 2797-2808
+- Documentation: <code>docs/medic_agent_guide.md</code></p>
+<hr />
+<h2 id="phase-3-new-tech-agent">Phase 3: New Tech Agent<a class="headerlink" href="#phase-3-new-tech-agent" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Task</th>
+<th>File</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2.1.1</td>
+<td>Create medic agent module</td>
+<td><code>myclaw/agents/medic_agent.py</code></td>
+<td>New module with MedicAgent class</td>
+</tr>
+<tr>
+<td>2.1.2</td>
+<td>Implement hash checker</td>
+<td>medic_agent.py:calculate_hash()</td>
+<td>SHA-256 hash calculation</td>
+</tr>
+<tr>
+<td>2.1.3</td>
+<td>Implement integrity registry</td>
+<td>medic_agent.py:check_integrity()</td>
+<td>Compare current vs recorded hashes</td>
+</tr>
+<tr>
+<td>2.1.4</td>
+<td>Implement health scanner</td>
+<td>medic_agent.py:scan_system()</td>
+<td>Scan all system files</td>
+</tr>
+<tr>
+<td>2.1.5</td>
+<td>Implement error detector</td>
+<td>medic_agent.py:detect_errors()</td>
+<td>Syntax/runtime error detection</td>
+</tr>
+<tr>
+<td>2.1.6</td>
+<td>Implement validaton logic</td>
+<td>medic_agent.py:validate_modification()</td>
+<td>Pre-execution validation</td>
+</tr>
+</tbody>
+</table>
+<h3 id="22-github-integration">2.2 GitHub Integration<a class="headerlink" href="#22-github-integration" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation Tasks:</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Task</th>
+<th>File</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2.2.1</td>
+<td>Implement GitHub fetcher</td>
+<td>medic_agent.py:fetch_from_github()</td>
+<td>Get file from GitHub raw URL</td>
+</tr>
+<tr>
+<td>2.2.2</td>
+<td>Implement recovery logic</td>
+<td>medic_agent.py:recover_from_github()</td>
+<td>Replace corrupted/missing file</td>
+</tr>
+<tr>
+<td>2.2.3</td>
+<td>Add GitHub API config</td>
+<td>config.py</td>
+<td>Add GitHub token, repo config</td>
+</tr>
+</tbody>
+</table>
+<h3 id="23-llm-evaluation-documentation">2.3 LLM Evaluation &amp; Documentation<a class="headerlink" href="#23-llm-evaluation-documentation" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation Tasks:</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Task</th>
+<th>File</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2.3.1</td>
+<td>Implement task tracker</td>
+<td>medic_agent.py:record_task()</td>
+<td>Record task execution times</td>
+</tr>
+<tr>
+<td>2.3.2</td>
+<td>Implement proposal generator</td>
+<td>medic_agent.py:generate_proposal()</td>
+<td>Propose system improvements</td>
+</tr>
+<tr>
+<td>2.3.3</td>
+<td>Implement analyzer agent</td>
+<td>medic_agent.py:analyze_with_llm()</td>
+<td>Use secondary LLM for analysis</td>
+</tr>
+<tr>
+<td>2.3.4</td>
+<td>Implement documentation log</td>
+<td>medic_agent.py:log_documentation()</td>
+<td>Write to knowledge base</td>
+</tr>
+</tbody>
+</table>
+<h3 id="24-infinite-loop-prevention">2.4 Infinite Loop Prevention<a class="headerlink" href="#24-infinite-loop-prevention" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation Tasks:</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Task</th>
+<th>File</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2.4.1</td>
+<td>Implement loop detector</td>
+<td>medic_agent.py:detect_loop()</td>
+<td>Detect repeated patterns</td>
+</tr>
+<tr>
+<td>2.4.2</td>
+<td>Implement execution guard</td>
+<td>medic_agent.py:check_execution()</td>
+<td>Max iterations check</td>
+</tr>
+<tr>
+<td>2.4.3</td>
+<td>Implement timeout handler</td>
+<td>medic_agent.py:handle_timeout()</td>
+<td>Execution timeout handling</td>
+</tr>
+</tbody>
+</table>
+<h3 id="25-hash-check-configuration">2.5 Hash Check Configuration<a class="headerlink" href="#25-hash-check-configuration" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation Tasks:</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Task</th>
+<th>File</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2.5.1</td>
+<td>Add hash config section</td>
+<td>config.py</td>
+<td>Add ENABLE_HASH_CHECK setting</td>
+</tr>
+<tr>
+<td>2.5.2</td>
+<td>Implement config toggle</td>
+<td>medic_agent.py:is_hash_check_enabled()</td>
+<td>Check config on startup</td>
+</tr>
+</tbody>
+</table>
+<p><strong>New Tools:</strong>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">check_system_health</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">verify_file_integrity</span><span class="p">(</span><span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">recover_file</span><span class="p">(</span><span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"github"</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_health_report</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">validate_modification</span><span class="p">(</span><span class="n">proposed_change</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">record_task_execution</span><span class="p">(</span><span class="n">task_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">duration</span><span class="p">:</span> <span class="nb">float</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_task_analytics</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">enable_hash_check</span><span class="p">(</span><span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">prevent_infinite_loop</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span>  <span class="c1"># Returns status</span>
+</code></pre></div></p>
+<hr />
+<h2 id="phase-3-new-tech-agent-complete">Phase 3: New Tech Agent ✅ COMPLETE<a class="headerlink" href="#phase-3-new-tech-agent-complete" title="Permanent link">&para;</a></h2>
+<p><strong>Status:</strong> Fully implemented in <code>myclaw/agents/newtech_agent.py</code></p>
+<p><strong>Implementation Summary:</strong>
+- <code>myclaw/agents/newtech_agent.py</code> - Full NewTechAgent class
+- Tools registered in <code>myclaw/tools/</code> lines 2833-2842
+- Documentation: <code>docs/newtech_agent_guide.md</code></p>
+<hr />
+<h2 id="phase-4-cross-platform-backends-complete">Phase 4: Cross-Platform Backends ✅ COMPLETE<a class="headerlink" href="#phase-4-cross-platform-backends-complete" title="Permanent link">&para;</a></h2>
+<p><strong>Status:</strong> Fully implemented in <code>myclaw/backends/</code></p>
+<p><strong>Implementation Summary:</strong>
+- <code>myclaw/backends/base.py</code> - AbstractBackend + BackendRegistry
+- <code>myclaw/backends/local.py</code> - LocalBackend
+- <code>myclaw/backends/docker.py</code> - DockerBackend
+- <code>myclaw/backends/ssh.py</code> - SSHBackend
+- <code>myclaw/backends/wsl2.py</code> - WSL2Backend
+- <code>myclaw/backends/discover.py</code> - Backend discovery
+- Documentation: <code>docs/backends_guide.md</code></p>
+<hr />
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<p>All 4 phases are now complete:
+- ✅ Phase 1: Skill Adapter
+- ✅ Phase 2: Medic Agent
+- ✅ Phase 3: New Tech Agent
+- ✅ Phase 4: Cross-Platform Backends</p>
+<p><strong>Functionality:</strong>
+- AI news monitoring
+- Technology proposals
+- Roadmap integration</p>
+<p><strong>Implementation Tasks:</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Task</th>
+<th>File</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3.1.1</td>
+<td>Create newtech agent module</td>
+<td><code>myclaw/agents/newtech_agent.py</code></td>
+<td>New module with NewTechAgent class</td>
+</tr>
+<tr>
+<td>3.1.2</td>
+<td>Implement news fetcher</td>
+<td>newtech_agent.py:fetch_ai_news()</td>
+<td>Fetch from AI news sources</td>
+</tr>
+<tr>
+<td>3.1.3</td>
+<td>Implement summarizer</td>
+<td>newtech_agent.py:summarize_technology()</td>
+<td>Create 10-row summaries</td>
+</tr>
+<tr>
+<td>3.1.4</td>
+<td>Implement proposal generator</td>
+<td>newtech_agent.py:generate_proposal()</td>
+<td>Generate implementation proposal</td>
+</tr>
+<tr>
+<td>3.1.5</td>
+<td>Implement roadmap updater</td>
+<td>newtech_agent.py:add_to_roadmap()</td>
+<td>Add to roadmap if approved</td>
+</tr>
+<tr>
+<td>3.1.6</td>
+<td>Implement share function</td>
+<td>newtech_agent.py:share_to_github()</td>
+<td>Share on GitHub (opt-in)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-user-consent-system">3.2 User Consent System<a class="headerlink" href="#32-user-consent-system" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation Tasks:</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Task</th>
+<th>File</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3.2.1</td>
+<td>Add consent config</td>
+<td>config.py</td>
+<td>Add NEWTECH_ENABLED, SHARE_CONSENT</td>
+</tr>
+<tr>
+<td>3.2.2</td>
+<td>Implement consent checker</td>
+<td>newtech_agent.py:check_consent()</td>
+<td>Verify user permission</td>
+</tr>
+<tr>
+<td>3.2.3</td>
+<td>Implement manual trigger</td>
+<td>newtech_agent.py:run_ondemand()</td>
+<td>Allow manual execution</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Configuration:</strong>
+<div class="highlight"><pre><span></span><code><span class="c1"># config.py additions</span>
+<span class="n">NEWTECH_ENABLED</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># User must opt-in</span>
+<span class="n">NEWTECH_INTERVAL_HOURS</span> <span class="o">=</span> <span class="mi">24</span>
+<span class="n">SHARE_CONSENT</span> <span class="o">=</span> <span class="kc">False</span>  <span class="c1"># User must explicitly allow</span>
+<span class="n">GITHUB_REPO_FOR_SHARE</span> <span class="o">=</span> <span class="s2">""</span>  <span class="c1"># User specifies</span>
+</code></pre></div></p>
+<p><strong>New Tools:</strong>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">fetch_ai_news</span><span class="p">(</span><span class="n">limit</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_technology_proposals</span><span class="p">()</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">add_to_roadmap</span><span class="p">(</span><span class="n">technology</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">enable_newtech_agent</span><span class="p">(</span><span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span>
+</code></pre></div></p>
+<hr />
+<h2 id="phase-4-cross-platform-backends-complete_1">Phase 4: Cross-Platform Backends ✅ COMPLETE<a class="headerlink" href="#phase-4-cross-platform-backends-complete_1" title="Permanent link">&para;</a></h2>
+<p><strong>Status:</strong> Fully implemented in <code>myclaw/backends/</code></p>
+<p><strong>Implementation Summary:</strong>
+- <code>myclaw/backends/base.py</code> - AbstractBackend + BackendRegistry
+- <code>myclaw/backends/local.py</code> - LocalBackend
+- <code>myclaw/backends/docker.py</code> - DockerBackend
+- <code>myclaw/backends/ssh.py</code> - SSHBackend
+- <code>myclaw/backends/wsl2.py</code> - WSL2Backend
+- <code>myclaw/backends/discover.py</code> - Backend discovery
+- Documentation: <code>docs/backends_guide.md</code></p>
+<hr />
+<h2 id="phase-5-future-implementations-complete">Phase 5: Future Implementations ✅ COMPLETE<a class="headerlink" href="#phase-5-future-implementations-complete" title="Permanent link">&para;</a></h2>
+<h3 id="51-local-backup-recovery">5.1 Local Backup Recovery<a class="headerlink" href="#51-local-backup-recovery" title="Permanent link">&para;</a></h3>
+<p><strong>Implemented:</strong>
+- <code>recover_from_local()</code> - Recover from local backup folder
+- <code>create_local_backup()</code> - Create local backup
+- <code>list_backups()</code> - List all backups
+- <code>LOCAL_BACKUP_DIR = ~/.myclaw/medic/backup/</code></p>
+<h3 id="52-real-github-integration">5.2 Real GitHub Integration<a class="headerlink" href="#52-real-github-integration" title="Permanent link">&para;</a></h3>
+<p><strong>Implemented:</strong>
+- Actual GitHub Gist creation via API
+- Actual GitHub Issue creation via API
+- <code>github_token</code> configuration in NewTechConfig</p>
+<h3 id="53-config-integration">5.3 Config Integration<a class="headerlink" href="#53-config-integration" title="Permanent link">&para;</a></h3>
+<p><strong>Implemented:</strong>
+- <code>MedicConfig</code> with: enabled, enable_hash_check, repo_url, scan_on_startup, max_loop_iterations, secondary_llm_provider, secondary_llm_model, backup_dir, virustotal_api_key
+- <code>NewTechConfig</code> with: enabled, interval_hours, share_consent, github_repo_for_share, max_news_items, github_token</p>
+<h3 id="54-agent-pipeline-integration">5.4 Agent Pipeline Integration<a class="headerlink" href="#54-agent-pipeline-integration" title="Permanent link">&para;</a></h3>
+<p><strong>Implemented:</strong>
+- Loop prevention in <code>agent.think()</code> with <code>_depth &gt; 10</code> check
+- <code>prevent_infinite_loop()</code> call before processing</p>
+<h3 id="55-virustotal-integration">5.5 VirusTotal Integration<a class="headerlink" href="#55-virustotal-integration" title="Permanent link">&para;</a></h3>
+<p><strong>Implemented:</strong>
+- <code>check_file_virustotal()</code> - Check file hash against VirusTotal API
+- <code>virustotal_api_key</code> configuration in MedicConfig</p>
+<hr />
+<p><em>Generated: 2026-03-29</em>
+<em>Last Updated: 2026-03-29 (All phases complete including future implementations)</em>
+<em>Part of: ZenSynora Full Implementation</em>
+    def is_available(self) -&gt; bool
+<div class="highlight"><pre><span></span><code>### 4.2 Backend Configuration
+
+**Implementation Tasks:**
+
+| # | Task | File | Details |
+|---|------|------|---------|
+| 4.2.1 | Add backend config | config.py | Add BACKEND_TYPE, BACKEND_CONFIG |
+| 4.2.2 | Add backend discovery |backends/discover.py| Auto-detect available backends |
+
+**Configuration:**
+```python
+# config.py additions
+DEFAULT_BACKEND = "local"  # local, docker, ssh, wsl2
+BACKEND_CONFIG = {
+    "docker": {"container": "zensynora"},
+    "ssh": {"host": "", "user": "", "key_path": ""},
+    "wsl2": {"distro": "Ubuntu"}
+}
+</code></pre></div></p>
+<hr />
+<h2 id="phase-5-integration-testing">Phase 5: Integration &amp; Testing<a class="headerlink" href="#phase-5-integration-testing" title="Permanent link">&para;</a></h2>
+<h3 id="51-agent-integration-with-main-system">5.1 Agent Integration with Main System<a class="headerlink" href="#51-agent-integration-with-main-system" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation Tasks:</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Task</th>
+<th>File</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5.1.1</td>
+<td>Update agent initialization</td>
+<td><code>myclaw/agent.py</code></td>
+<td>Load new agents on startup</td>
+</tr>
+<tr>
+<td>5.1.2</td>
+<td>Add lifecycle hooks for medic</td>
+<td>agent.py</td>
+<td>Integrate with think() pipeline</td>
+</tr>
+<tr>
+<td>5.1.3</td>
+<td>Update tools registry</td>
+<td>myclaw/tools/</td>
+<td>Register all new tools</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-testing">5.2 Testing<a class="headerlink" href="#52-testing" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation Tasks:</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Task</th>
+<th>File</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5.2.1</td>
+<td>Create skill adapter tests</td>
+<td><code>tests/test_skill_adapter.py</code></td>
+<td>Unit tests</td>
+</tr>
+<tr>
+<td>5.2.2</td>
+<td>Create medic tests</td>
+<td><code>tests/test_medic_agent.py</code></td>
+<td>Unit tests</td>
+</tr>
+<tr>
+<td>5.2.3</td>
+<td>Create newtech tests</td>
+<td><code>tests/test_newtech_agent.py</code></td>
+<td>Unit tests</td>
+</tr>
+<tr>
+<td>5.2.4</td>
+<td>Create backend tests</td>
+<td><code>tests/test_backends.py</code></td>
+<td>Unit tests</td>
+</tr>
+<tr>
+<td>5.2.5</td>
+<td>Integration smoke tests</td>
+<td><code>tests/test_integration.py</code></td>
+<td>E2E tests</td>
+</tr>
+</tbody>
+</table>
+<h3 id="53-documentation">5.3 Documentation<a class="headerlink" href="#53-documentation" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation Tasks:</strong></p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Task</th>
+<th>File</th>
+<th>Details</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5.3.1</td>
+<td>Update architecture diagram</td>
+<td>docs/architecture_diagram.md</td>
+<td>Add new components</td>
+</tr>
+<tr>
+<td>5.3.2</td>
+<td>Create agent guides</td>
+<td>docs/medic_agent_guide.md</td>
+<td>User documentation</td>
+</tr>
+<tr>
+<td>5.3.3</td>
+<td>Create backend guide</td>
+<td>docs/backends_guide.md</td>
+<td>Configuration guide</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="priority-order-dependencies">Priority Order &amp; Dependencies<a class="headerlink" href="#priority-order-dependencies" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>Phase 1 (Skill Adapter)
+    │
+    ├── 1.1.1-1.1.3 (Core adapter)
+    └── 1.1.4-1.1.6 (Integration) → Phase 5
+
+Phase 2 (Medic Agent)
+    ├── 2.1.1-2.1.6 (Core) ← AFTER Phase 1.1.1
+    ├── 2.2.1-2.2.3 (GitHub)
+    ├── 2.3.1-2.3.4 (LLM + docs) → Phase 5
+    ├── 2.4.1-2.4.3 (Loop prevention)
+    └── 2.5.1-2.5.2 (Config) → Phase 5
+
+Phase 3 (New Tech Agent)
+    └── 3.1.1-3.2.3 (All) ← REQUIRES user consent
+
+Phase 4 (Backends)
+    ├── 4.1.1-4.1.3 (Core backends)
+    ├── 4.1.4-4.1.6 (Extended backends)
+    └── 4.2.1-4.2.2 (Config)
+
+Phase 5 (Integration)
+    └── All integration tasks
+</code></pre></div>
+<hr />
+<h2 id="estimated-files-to-createmodify">Estimated Files to Create/Modify<a class="headerlink" href="#estimated-files-to-createmodify" title="Permanent link">&para;</a></h2>
+<p><strong>New Files:</strong>
+- <code>myclaw/agents/__init__.py</code>
+- <code>myclaw/agents/skill_adapter.py</code>
+- <code>myclaw/agents/medic_agent.py</code>
+- <code>myclaw/agents/newtech_agent.py</code>
+- <code>myclaw/backends/__init__.py</code>
+- <code>myclaw/backends/base.py</code>
+- <code>myclaw/backends/local.py</code>
+- <code>myclaw/backends/docker.py</code>
+- <code>myclaw/backends/ssh.py</code>
+- <code>myclaw/backends/wsl2.py</code>
+- <code>tests/test_*_agent.py</code> (4 files)
+- <code>docs/medic_agent_guide.md</code>
+- <code>docs/backends_guide.md</code></p>
+<p><strong>Modified Files:</strong>
+- <code>myclaw/myclaw/tools/</code> - Register new tools
+- <code>myclaw/config.py</code> - Add new config options
+- <code>myclaw/agent.py</code> - Agent initialization
+- <code>myclaw/gateway.py</code> - Backend integration
+- <code>docs/architecture_diagram.md</code> - Update diagram
+- <code>docs/implementation_plan_new_agents.md</code> - This plan</p>
+<hr />
+<h2 id="clarifications-addressed">Clarifications Addressed<a class="headerlink" href="#clarifications-addressed" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>GitHub Integration</strong>: User-specified repo OR local fallback folder (<code>~/.myclaw/medic/backup/</code>)</li>
+<li><strong>Secondary LLM</strong>: Uses main agent provider if not explicitly configured otherwise</li>
+<li><strong>New Tech Sharing</strong>: Implemented but remains disabled until user activates</li>
+<li><strong>Backends</strong>: User-selected or default to local</li>
+</ol>
+<hr />
+<h2 id="phase-1-skill-compatibility-agent">Phase 1: Skill Compatibility Agent<a class="headerlink" href="#phase-1-skill-compatibility-agent" title="Permanent link">&para;</a></h2>
+<p><strong>Objective:</strong> Implement a skill adapter that can analyze skills from external standards (agentskills.io) and replicate them for ZenSynora use.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

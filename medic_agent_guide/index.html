@@ -1,0 +1,1940 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/medic_agent_guide/">
+      
+      
+        <link rel="prev" href="../UPDATING/">
+      
+      
+        <link rel="next" href="../llm_recommendations/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Medic & Doctor - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#medic-doctor-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Medic & Doctor
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The doctor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The doctor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-it-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#diagnostics-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics report
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a check
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-medic-tools-for-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Medic tools (for agents)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Medic tools (for agents)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#integrity-and-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integrity and recovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runaway-loop-guard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runaway-loop guard
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-log-analysis-evolution-and-change-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Log analysis, evolution and change management
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-self-update-proposals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Self-update proposals
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Self-update proposals">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#learning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Learning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#troubleshooting-v072" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting (v0.7.2)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-the-doctor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. The doctor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. The doctor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-it-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What it checks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#diagnostics-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Diagnostics report
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-check" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a check
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-medic-tools-for-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Medic tools (for agents)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Medic tools (for agents)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#integrity-and-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Integrity and recovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#runaway-loop-guard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Runaway-loop guard
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-log-analysis-evolution-and-change-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Log analysis, evolution and change management
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-self-update-proposals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Self-update proposals
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Self-update proposals">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#learning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Learning
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#troubleshooting-v072" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting (v0.7.2)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="medic-doctor-guide">Medic &amp; Doctor Guide<a class="headerlink" href="#medic-doctor-guide" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Applies to:</strong> v0.7.1 · <strong>Rewritten:</strong> 2026-10-13 · <strong>v0.7.1:</strong> self-update
+proposals and learning (<a href="#6-self-update-proposals">section 6</a>)
+Before 0.7.0 most medic tools described here did not exist in the code
+(two "health" tools returned fixed text). Everything below is implemented
+and covered by <code>tests/test_doctor_medic.py</code>.</p>
+</blockquote>
+<p>The <strong>doctor</strong> checks your installation and tells you how to fix what's
+wrong. The <strong>medic agent</strong> gives the AI agents the same checks as tools,
+plus file-integrity protection, recovery, code validation and a guard
+against runaway loops.</p>
+<table>
+<thead>
+<tr>
+<th>You want to…</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Check everything from a terminal</td>
+<td><code>zensynora doctor</code></td>
+</tr>
+<tr>
+<td>See the same report in the browser</td>
+<td>Web UI → <strong>Doctor</strong></td>
+</tr>
+<tr>
+<td>Repair safe things automatically</td>
+<td><code>zensynora doctor --fix</code> or <strong>Fix automatically</strong></td>
+</tr>
+<tr>
+<td>Get one file to understand or share a problem</td>
+<td><code>zensynora doctor --report</code> or Doctor → <strong>Report</strong> → Download</td>
+</tr>
+<tr>
+<td>Let an agent check/repair itself</td>
+<td>the medic tools below (available to every agent)</td>
+</tr>
+<tr>
+<td>Let agents propose fixes to the code (you approve)</td>
+<td>Doctor → <strong>Change proposals</strong>, <code>zensynora medic</code> (<a href="#6-self-update-proposals">section 6</a>)</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="1-the-doctor">1. The doctor<a class="headerlink" href="#1-the-doctor" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>zensynora<span class="w"> </span>doctor<span class="w">              </span><span class="c1"># full report</span>
+zensynora<span class="w"> </span>doctor<span class="w"> </span>--problems<span class="w">   </span><span class="c1"># only warnings and failures</span>
+zensynora<span class="w"> </span>doctor<span class="w"> </span>--offline<span class="w">    </span><span class="c1"># skip the model-server checks</span>
+zensynora<span class="w"> </span>doctor<span class="w"> </span>--fix<span class="w">        </span><span class="c1"># apply safe fixes, then re-check</span>
+zensynora<span class="w"> </span>doctor<span class="w"> </span>--json<span class="w">       </span><span class="c1"># machine-readable</span>
+zensynora<span class="w"> </span>doctor<span class="w"> </span>--report<span class="w">     </span><span class="c1"># diagnostics report → ./zensynora-report-YYYYmmdd-HHMM.md</span>
+zensynora<span class="w"> </span>doctor<span class="w"> </span>--report<span class="w"> </span>~/r.json<span class="w">   </span><span class="c1"># .json, or .zip (report + log tail); --hours 168 = 7 days</span>
+</code></pre></div>
+<p>Exit code: <code>0</code> healthy, <code>1</code> warnings, <code>2</code> failures — handy for scripts and
+monitoring.</p>
+<p><img alt="Doctor page" src="../images/webui-doctor.png" /></p>
+<h3 id="what-it-checks">What it checks<a class="headerlink" href="#what-it-checks" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Check</th>
+<th>Auto-fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>environment</td>
+<td>Python ≥ 3.11 · running inside the venv · required packages · <strong>provider libraries</strong> (e.g. <code>openai</code> for llama.cpp) · free disk · RAM · CPU load</td>
+<td>—</td>
+</tr>
+<tr>
+<td>configuration</td>
+<td>config file exists and matches the schema · providers known · API keys present for cloud providers · Telegram bot: token set, someone allowed, where it runs (<a href="../telegram_guide/">Telegram guide</a>)</td>
+<td>—</td>
+</tr>
+<tr>
+<td>llm <em>(network)</em></td>
+<td>default model server reachable (latency) · configured model is offered by the server</td>
+<td>—</td>
+</tr>
+<tr>
+<td>data</td>
+<td><code>~/.myclaw</code> writable, standard folders present · every SQLite database passes <code>PRAGMA quick_check</code> · data migrations up to date · knowledge index (see below) · chat channels (see below)</td>
+<td>folders, migrations, knowledge sync</td>
+</tr>
+<tr>
+<td>security</td>
+<td><code>config.json</code>, <code>.config_key</code>, audit secret and update backups are owner-only · Web UI access mode</td>
+<td>permissions</td>
+</tr>
+<tr>
+<td>install</td>
+<td>version, managed vs. legacy layout, updater present · Web UI built</td>
+<td>—</td>
+</tr>
+<tr>
+<td>runtime</td>
+<td>errors and repeated warnings in <code>~/.myclaw/logs/zensynora.log</code> in the last 24 h · restarts (crash loop) · systemd service state</td>
+<td>—</td>
+</tr>
+<tr>
+<td>integrity</td>
+<td>installed code matches the recorded hash baseline</td>
+<td>—</td>
+</tr>
+</tbody>
+</table>
+<p>Safe fixes never delete anything: they create missing folders, tighten
+file permissions (<code>600</code>/<code>700</code>), run pending data migrations and sync the
+knowledge index.</p>
+<p>Checks that look for trouble a running install collects:</p>
+<table>
+<thead>
+<tr>
+<th>Check (id)</th>
+<th>Warning / failure when…</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Restarts (<code>restart_loop</code>)</td>
+<td>more than 10 starts of the service (<code>gateway</code> / <code>webui</code>) in 15 minutes. <strong>Failure</strong> if it is still happening, <strong>warning</strong> if it happened earlier in the last 24 h. Short commands like <code>zensynora doctor</code> do not count.</td>
+<td><code>sudo systemctl status myclaw</code>, <code>journalctl -u myclaw -n 100</code> — the errors in the report are usually the cause</td>
+</tr>
+<tr>
+<td>Errors in the last 24 h (<code>recent_errors</code>)</td>
+<td>any ERROR or CRITICAL line, or a WARNING seen 5 times or more. Messages that differ only in numbers or ids count as one kind (<code>task_webui_123</code> and <code>task_webui_456</code>). <strong>Failure</strong> with 3 or more CRITICAL lines.</td>
+<td>Doctor → Report → Errors shows each kind with its log lines and traceback</td>
+</tr>
+<tr>
+<td>Custom tools (<code>custom_tools</code>)</td>
+<td>an enabled tool in <code>~/.myclaw/TOOLBOX</code> holds placeholder credentials (<code>YOUR_…_HERE</code>, <code>YOUR_BOT_TOKEN</code>, <code>"xxx"</code>, <code>&lt;token&gt;</code>) or a hard-coded secret (Telegram token, <code>sk-…</code> key)</td>
+<td>disable it (<code>disable_skill</code>, or <code>"enabled": false</code> in <code>toolbox_registry.json</code>) and use the built-in tools, e.g. <code>send_telegram_message</code></td>
+</tr>
+<tr>
+<td>Knowledge index (<code>knowledge_index</code>)</td>
+<td>3 or more note files (or more than 10 %) are not in the index, or the full-text index of note text is missing</td>
+<td><code>zensynora knowledge sync</code> or <code>zensynora doctor --fix</code></td>
+</tr>
+<tr>
+<td>Agent skills (<code>skills</code>)</td>
+<td>an agent lists a skill that does not exist, or a <code>SKILL.md</code> of yours is unreadable or empty</td>
+<td>Skills page, or Settings → Agents</td>
+</tr>
+<tr>
+<td>MCP servers (<code>mcp_servers</code>)</td>
+<td>a configured server's command is not installed (not on <code>PATH</code>)</td>
+<td>install it (Node.js for <code>npx</code>, uv for <code>uvx</code>) or fix the command</td>
+</tr>
+<tr>
+<td>Chat channels (<code>chat_db</code>)</td>
+<td>answers left unfinished by a stop, or channel members that are no longer agents</td>
+<td>restart the Web UI — it repairs both at start</td>
+</tr>
+</tbody>
+</table>
+<p>All of them read local files only and take well under a second.</p>
+<h3 id="diagnostics-report">Diagnostics report<a class="headerlink" href="#diagnostics-report" title="Permanent link">&para;</a></h3>
+<p><code>zensynora doctor --report [PATH]</code> (or Web UI → Doctor → <strong>Report</strong>) writes
+one file with everything needed to understand a problem:</p>
+<ul>
+<li>all doctor checks with hints;</li>
+<li>warnings and errors of the period, grouped (count, first/last time,
+  module, message) with up to a few raw log lines and tracebacks each;</li>
+<li>restarts (how many, most in 15 minutes, typical gap);</li>
+<li>failed, timed-out or interrupted job runs, open change proposals, number of
+  medic lessons;</li>
+<li>system (OS, Python, CPU, RAM, disk) and installation (folders, release);</li>
+<li>a configuration summary — which providers have a key, agents with provider
+  and model, channels on/off — <strong>never the keys or tokens themselves</strong>;</li>
+<li>the last 200 log lines.</li>
+</ul>
+<p>Anything in log text that looks like a token, API key or password
+(Telegram tokens, <code>sk-…</code>, <code>AIza…</code>, <code>Bearer …</code>, <code>api_key=…</code>, passwords in
+URLs) is replaced by <code>[redacted]</code>. Formats: Markdown (default), <code>.json</code>, and
+<code>.zip</code> (report.md + report.json + <code>zensynora.log.tail.txt</code>). API:
+<code>GET /api/doctor/report</code>, <code>GET /api/doctor/report/download?format=md|json|zip&amp;hours=24</code>,
+<code>GET /api/doctor/errors?hours=24&amp;level=ERROR&amp;q=text</code>.</p>
+<h3 id="adding-a-check">Adding a check<a class="headerlink" href="#adding-a-check" title="Permanent link">&para;</a></h3>
+<p>Checks live in <code>myclaw/doctor/checks.py</code>. One function per check:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">.registry</span><span class="w"> </span><span class="kn">import</span> <span class="n">OK</span><span class="p">,</span> <span class="n">WARN</span><span class="p">,</span> <span class="n">FAIL</span><span class="p">,</span> <span class="n">check</span><span class="p">,</span> <span class="n">fixer</span>
+
+<span class="nd">@check</span><span class="p">(</span><span class="s2">"ollama_models"</span><span class="p">,</span> <span class="s2">"Ollama has at least one model"</span><span class="p">,</span> <span class="s2">"llm"</span><span class="p">,</span> <span class="n">network</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_ollama_models</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">return</span> <span class="n">WARN</span><span class="p">,</span> <span class="s2">"no models pulled"</span><span class="p">,</span> <span class="s2">"Run: ollama pull llama3.2"</span>
+
+<span class="nd">@fixer</span><span class="p">(</span><span class="s2">"ollama_models"</span><span class="p">)</span>          <span class="c1"># optional, only for safe repairs</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">_fix</span><span class="p">(</span><span class="n">ctx</span><span class="p">):</span>
+    <span class="o">...</span>
+    <span class="k">return</span> <span class="s2">"pulled llama3.2"</span>
+</code></pre></div>
+<p>Return <code>(status, detail, hint)</code>. A check that raises is reported as a
+failure instead of breaking the report.</p>
+<hr />
+<h2 id="2-medic-tools-for-agents">2. Medic tools (for agents)<a class="headerlink" href="#2-medic-tools-for-agents" title="Permanent link">&para;</a></h2>
+<p>All tools are registered in <code>myclaw/tools/__init__.py</code> and implemented in
+<code>myclaw/agents/medic_agent.py</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>check_system_health(offline=False)</code></td>
+<td>One-line verdict plus every warning/failure from the doctor</td>
+</tr>
+<tr>
+<td><code>get_health_report(offline=False, as_json=False)</code></td>
+<td>Full doctor report</td>
+</tr>
+<tr>
+<td><code>check_memory_usage(threshold_percent=85)</code></td>
+<td>RAM usage, warns above the threshold</td>
+</tr>
+<tr>
+<td><code>scan_files(file_paths="")</code></td>
+<td>Record SHA-256 hashes of the installed code as the integrity baseline</td>
+</tr>
+<tr>
+<td><code>verify_file_integrity(file_path="")</code></td>
+<td>Report files modified or missing since the baseline</td>
+</tr>
+<tr>
+<td><code>enable_hash_check(enabled=True)</code></td>
+<td>Turn integrity checking on/off</td>
+</tr>
+<tr>
+<td><code>create_backup(file_path)</code> / <code>list_backups()</code></td>
+<td>Copy a file to <code>~/.myclaw/medic/backups/</code> / list copies</td>
+</tr>
+<tr>
+<td><code>recover_file(file_path, allow_main=False)</code></td>
+<td>Restore a file — see below</td>
+</tr>
+<tr>
+<td><code>detect_errors_in_file(file_path)</code></td>
+<td>Syntax check for <code>.py</code>, <code>.json</code>, <code>.yaml</code>, <code>.toml</code></td>
+</tr>
+<tr>
+<td><code>validate_modification(file_path, new_content)</code></td>
+<td>Check a proposed change before writing it: syntax, size, risky calls (<code>eval</code>, <code>os.system</code>, <code>shell=True</code> …)</td>
+</tr>
+<tr>
+<td><code>check_file_virustotal(file_path, api_key="")</code></td>
+<td>Look up the file's SHA-256 on VirusTotal (the file is <strong>not</strong> uploaded)</td>
+</tr>
+<tr>
+<td><code>record_task_execution(task_name, success, duration_seconds, error)</code></td>
+<td>Log a task outcome</td>
+</tr>
+<tr>
+<td><code>get_task_analytics(days=7)</code></td>
+<td>Success rate, average duration, most-failing tasks</td>
+</tr>
+<tr>
+<td><code>prevent_infinite_loop(record=True)</code></td>
+<td>Runaway-loop guard status (see below)</td>
+</tr>
+<tr>
+<td><code>read_source_file(path, start_line, max_lines)</code> / <code>list_source_files(pattern)</code></td>
+<td>Read the installed code (read-only; never <code>venv/</code>, <code>.git</code>, <code>.env</code>) — v0.7.1</td>
+</tr>
+<tr>
+<td><code>propose_code_change(title, reason, file_path, new_content, files_json)</code></td>
+<td>File a change proposal; installed only after you approve it — v0.7.1</td>
+</tr>
+<tr>
+<td><code>list_change_proposals(status)</code></td>
+<td>Proposals and their status — v0.7.1</td>
+</tr>
+<tr>
+<td><code>get_recent_problems(hours=24)</code></td>
+<td>Grouped log errors (incl. CRITICAL), repeated warnings, restarts / crash loop, risky custom tools, failed or low-scoring job runs, open proposals — v0.7.1</td>
+</tr>
+<tr>
+<td><code>record_lesson(topic, lesson)</code></td>
+<td>Save a lesson to the knowledge note <code>medic-lessons</code> — v0.7.1</td>
+</tr>
+</tbody>
+</table>
+<h3 id="integrity-and-recovery">Integrity and recovery<a class="headerlink" href="#integrity-and-recovery" title="Permanent link">&para;</a></h3>
+<ul>
+<li>The doctor records a baseline automatically the first time it runs and
+  after every update (a new version means new reference files).</li>
+<li><code>verify_file_integrity</code> compares the installed files with it.</li>
+<li><code>recover_file</code> restores a file <strong>only inside the installation folder</strong>
+  (paths like <code>../../etc/passwd</code> are refused). It first saves a copy of the
+  current (possibly damaged) file, then restores:</li>
+<li>the local backup whose hash matches the baseline (the known-good copy),
+     otherwise the newest local backup;</li>
+<li>otherwise the file from GitHub at the tag <code>v&lt;installed version&gt;</code>;</li>
+<li>from the latest <code>main</code> only if you pass <code>allow_main=True</code>.</li>
+</ul>
+<p>For a whole broken installation, <code>zensynora update rollback</code> or
+<code>zensynora update --force</code> is the better tool (<a href="../UPDATING/">UPDATING.md</a>).</p>
+<h3 id="runaway-loop-guard">Runaway-loop guard<a class="headerlink" href="#runaway-loop-guard" title="Permanent link">&para;</a></h3>
+<p>The agent router calls <code>prevent_infinite_loop()</code> on every processing step.
+If more than <code>medic.max_loop_iterations</code> steps (default <strong>100</strong>) happen
+within one minute, further processing is refused until the rate drops —
+protection against an agent that keeps calling tools or delegating forever.
+Before 0.7.0 this guard imported a function that did not exist and never
+triggered.</p>
+<hr />
+<h2 id="3-configuration">3. Configuration<a class="headerlink" href="#3-configuration" title="Permanent link">&para;</a></h2>
+<p><code>~/.myclaw/config.json</code> → <code>medic</code> (also editable in Web UI → Settings for
+the commonly used keys):</p>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>false</code></td>
+<td>Enables the startup scan in the gateway</td>
+</tr>
+<tr>
+<td><code>scan_on_startup</code></td>
+<td><code>false</code></td>
+<td>Run the doctor when <code>zensynora gateway</code> starts</td>
+</tr>
+<tr>
+<td><code>enable_hash_check</code></td>
+<td><code>true</code></td>
+<td>Integrity checking on/off (tool <code>enable_hash_check</code> overrides it)</td>
+</tr>
+<tr>
+<td><code>max_loop_iterations</code></td>
+<td><code>100</code></td>
+<td>Steps per minute before the loop guard blocks</td>
+</tr>
+<tr>
+<td><code>repo_url</code></td>
+<td><code>https://github.com/adrianx26/zensynora</code></td>
+<td>Source for <code>recover_file</code> from GitHub</td>
+</tr>
+<tr>
+<td><code>backup_dir</code></td>
+<td><code>""</code></td>
+<td>Custom folder for file backups (default <code>~/.myclaw/medic/backups</code>)</td>
+</tr>
+<tr>
+<td><code>virustotal_api_key</code></td>
+<td><code>""</code></td>
+<td>Needed by <code>check_file_virustotal</code></td>
+</tr>
+</tbody>
+</table>
+<p>Files written by the medic: <code>~/.myclaw/medic/integrity.json</code> (baseline),
+<code>state.json</code> (hash-check override), <code>tasks.jsonl</code> (analytics),
+<code>backups/</code>.</p>
+<p>Logs: since 0.7.0 ZenSynora writes a rotating JSON log to
+<code>~/.myclaw/logs/zensynora.log</code> (10 MB × 5). Set <code>MYCLAW_LOG_FILE=off</code> to
+disable it, or <code>MYCLAW_LOG_FILE=/path/file.log</code> to move it.</p>
+<hr />
+<h2 id="4-log-analysis-evolution-and-change-management">4. Log analysis, evolution and change management<a class="headerlink" href="#4-log-analysis-evolution-and-change-management" title="Permanent link">&para;</a></h2>
+<p>The deeper medic modules are Python APIs (not LLM tools):</p>
+<ul>
+<li><code>myclaw/agents/medic_evolver.py</code> — deterministic log analysis: pattern
+  and cascade detection, a 0–100 health score and prioritised
+  recommendations (<code>analyze_logs</code>, <code>generate_evolution_proposal</code>).</li>
+<li><code>myclaw/agents/medic_change_mgmt.py</code> — change plans with approval,
+  rollback steps, audit log, scheduled reviews and continuous monitoring
+  (<code>create_change_plan</code>, <code>approve_change</code>, <code>execute_change</code>,
+  <code>analyze_system_logs</code>, <code>start_continuous_monitoring</code>, …). Its log analyzer
+  now reads <code>~/.myclaw/logs/zensynora.log</code> (before 0.7.0 no log file was
+  written, so it never found anything).</li>
+</ul>
+<p>Details: <a href="../MEDIC_CHANGE_MGMT/">MEDIC_CHANGE_MGMT.md</a>.</p>
+<hr />
+<h2 id="5-troubleshooting">5. Troubleshooting<a class="headerlink" href="#5-troubleshooting" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause / fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>LLM server reachable: cannot reach …</code></td>
+<td>Start your model server (llama.cpp, Ollama…) and check the URL in Settings → Model.</td>
+</tr>
+<tr>
+<td><code>LLM provider libraries: llamacpp needs 'openai'</code></td>
+<td><code>zensynora update --force</code> (or <code>pip install openai</code> in the venv).</td>
+</tr>
+<tr>
+<td><code>Configuration file: invalid</code></td>
+<td>The config doesn't match the schema; restore the last backup: <code>zensynora update status</code> → <code>zensynora update restore --backup NAME</code>.</td>
+</tr>
+<tr>
+<td><code>Databases: … malformed</code></td>
+<td>Restore your data from an update backup (same commands).</td>
+</tr>
+<tr>
+<td><code>Code integrity: N file(s) differ</code></td>
+<td>If you didn't edit them, use <code>recover_file</code> or <code>zensynora update --force</code>.</td>
+</tr>
+<tr>
+<td>Loop guard blocks normal use</td>
+<td>Raise <code>medic.max_loop_iterations</code>.</td>
+</tr>
+<tr>
+<td>The chat says "the model … returned an empty answer twice"</td>
+<td>The model server answered with nothing (overloaded free tier, a reasoning model that ran out of tokens, a model without tool support). Try again, pick another model on the <strong>Models</strong> page, or turn on rotation there.</td>
+</tr>
+<tr>
+<td><code>Errors in the last 24 h … no such column: write</code></td>
+<td>Fixed in 0.7.1 (knowledge search parsed text as FTS5 syntax). Update with <code>zensynora update</code>.</td>
+</tr>
+<tr>
+<td>Delegation answers "Agent registry not initialized"</td>
+<td>Fixed in 0.7.1. Update with <code>zensynora update</code>.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="6-self-update-proposals">6. Self-update proposals<a class="headerlink" href="#6-self-update-proposals" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p>Added in v0.7.1 · code: <code>myclaw/selfupdate.py</code> · tests: <code>tests/test_selfupdate.py</code></p>
+</blockquote>
+<p>Agents can improve ZenSynora's own code — but <strong>never by writing to the
+program folder</strong>. They propose; you decide; the safe updater installs.</p>
+<pre class="mermaid"><code>flowchart LR
+    agent["Agent / medic self-review"] -- read_source_file --&gt; code[("installed code&lt;br/&gt;read-only")]
+    agent -- propose_code_change --&gt; prop["Proposal&lt;br/&gt;~/.myclaw/medic/proposals/"]
+    prop -- checks --&gt; chk{"inside program folder?&lt;br/&gt;Python compiles?&lt;br/&gt;size ok?"}
+    chk -- no --&gt; rej["refused, reason told to the agent"]
+    chk -- yes --&gt; you{"You: Doctor → Change proposals&lt;br/&gt;or zensynora medic approve"}
+    you -- reject --&gt; done1["rejected"]
+    you -- approve --&gt; stage["copy of current release&lt;br/&gt;+ the change"]
+    stage --&gt; upd["safe updater&lt;br/&gt;backup · build · verify · switch"]
+    upd -- ok --&gt; applied["new release active&lt;br/&gt;(restart ZenSynora)"]
+    upd -- failure --&gt; rb["automatic rollback&lt;br/&gt;running version unchanged"]</code></pre>
+<p><strong>How a proposal is checked.</strong> Paths must stay inside the installed program
+folder; <code>venv/</code>, <code>.git</code>, <code>node_modules</code>, build output, <code>.env</code> and the config
+key are off limits; Python files must compile; at most 20 files of 400 KB
+each; a unified diff is stored for review. Changes that touch only <code>.md</code>,
+<code>.txt</code> or <code>.rst</code> files are <em>low risk</em>; everything else is <em>high risk</em>.</p>
+<p><strong>How it is installed.</strong> On approval, the current release is copied (without
+<code>venv/</code>), the change is applied to the copy, and <code>update.sh update
+--from-dir &lt;copy&gt; --force</code> runs — full data and program-folder backup,
+side-by-side build, checks against your settings (and the test suite when
+<code>medic.self_update.run_tests</code> is on), switch, automatic rollback on any
+failure. If a file changed after the proposal was made, the install is
+refused ("ask for a new proposal"). The result and the updater log are kept
+with the proposal. Undo an installed change with <code>zensynora update rollback</code>.</p>
+<p><strong>Commands.</strong></p>
+<div class="highlight"><pre><span></span><code>zensynora<span class="w"> </span>medic<span class="w"> </span>proposals<span class="w"> </span><span class="o">[</span>--status<span class="w"> </span>pending<span class="o">]</span>
+zensynora<span class="w"> </span>medic<span class="w"> </span>show<span class="w"> </span>ID<span class="w">          </span><span class="c1"># reason + diff</span>
+zensynora<span class="w"> </span>medic<span class="w"> </span>approve<span class="w"> </span>ID<span class="w">       </span><span class="c1"># approve and install now</span>
+zensynora<span class="w"> </span>medic<span class="w"> </span>reject<span class="w"> </span>ID<span class="w"> </span>--note<span class="w"> </span><span class="s2">"not needed"</span>
+zensynora<span class="w"> </span>medic<span class="w"> </span>apply<span class="w"> </span>ID<span class="w">         </span><span class="c1"># install an approved one / retry a failed one</span>
+zensynora<span class="w"> </span>medic<span class="w"> </span>problems<span class="w">         </span><span class="c1"># what the medic looks at</span>
+</code></pre></div>
+<p><strong>Settings</strong> (Settings → Features → <em>Self-update by agents</em>, or <code>config.json</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>medic.self_update.enabled</code></td>
+<td><code>true</code></td>
+<td>Agents may read the code and file proposals</td>
+</tr>
+<tr>
+<td><code>medic.self_update.auto_approve_low_risk</code></td>
+<td><code>false</code></td>
+<td>Install documentation-only proposals without asking</td>
+</tr>
+<tr>
+<td><code>medic.self_update.run_tests</code></td>
+<td><code>false</code></td>
+<td>Run the test suite on the new release before switching (needs <code>pytest</code> in the venv)</td>
+</tr>
+</tbody>
+</table>
+<p>Self-update needs the standard install (<code>~/.local/share/zensynora</code>, made by
+<code>install-online.sh</code> or <code>zensynora update</code>). Docker and portable installs can
+still review proposals but install them by rebuilding / copying.</p>
+<h3 id="learning">Learning<a class="headerlink" href="#learning" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>get_recent_problems</code> groups identical errors from the log and lists
+  failed or low-scoring job runs (score below 6) and open proposals.</li>
+<li><code>record_lesson</code> appends to the knowledge note <strong>medic-lessons</strong>, so every
+  agent can find past causes and fixes with a normal knowledge search; the
+  Doctor page lists them.</li>
+<li><strong>Run self-review</strong> (Doctor page) — or the <em>Medic self-review</em> job
+  template, e.g. daily at 03:00 — asks the default agent to look at the
+  problems, read the code involved, propose at most one small fix and record
+  what it learned. The run is scored like any job, so the Jobs page shows how
+  useful the reviews are. Other agents can join through the chat (for
+  example <code>@coder review proposal …</code>) and by delegation.</li>
+</ul>
+<h3 id="troubleshooting-v072">Troubleshooting (v0.7.2)<a class="headerlink" href="#troubleshooting-v072" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Symptom</th>
+<th>Cause / fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The Web UI still shows the old version after <code>zensynora update</code></td>
+<td>The old server is still running. Stop it (Ctrl+C), start <code>zensynora webui</code> again (from 0.7.2 on, an old terminal switches to the new version by itself) and reload the page.</td>
+</tr>
+<tr>
+<td>The chat shows <code>{"tool": "…", "args": …}</code> as the answer</td>
+<td>The model writes tool calls as text. Fixed in 0.7.2 — such calls now run.</td>
+</tr>
+<tr>
+<td>A job or chat ends with "[Error] … only available to specific apps"</td>
+<td>OpenRouter refuses that model for ZenSynora. Pick another model; use <strong>Test</strong> on the Models page. (v0.7.3)</td>
+</tr>
+<tr>
+<td>"[Error] … rate-limited"</td>
+<td>Free models are often busy. Wait a minute or turn on rotation with a second model. (v0.7.3)</td>
+</tr>
+<tr>
+<td>LM Studio answers nothing / "Unexpected endpoint"</td>
+<td>Load a model in LM Studio; the URL needs <code>/v1</code> (added automatically since 0.7.3).</td>
+</tr>
+<tr>
+<td>A job ends with "I needed more tool steps"</td>
+<td>Raise the job's <em>Tool steps</em> (default 8), or name the website in the prompt. <strong>🩺 Ask the medic</strong> on the run suggests both. (v0.7.5)</td>
+</tr>
+<tr>
+<td>A job keeps failing and you don't know why</td>
+<td><strong>🩺 Ask the medic</strong> on the failed run (Jobs page), or set the job's <em>When a run fails</em> to <em>diagnose</em> or <em>fix</em>. (v0.7.5)</td>
+</tr>
+<tr>
+<td>A channel member can't be removed / no agent can be added ("Unknown agent")</td>
+<td>An agent was renamed or deleted. Fixed in 0.7.5: open the Web UI once and the channel is repaired.</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

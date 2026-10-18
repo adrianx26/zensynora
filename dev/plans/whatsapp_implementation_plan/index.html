@@ -1,0 +1,1736 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/dev/plans/whatsapp_implementation_plan/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>WhatsApp Channel Implementation Plan - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#whatsapp-channel-implementation-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              WhatsApp Channel Implementation Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#technology-choice-whatsapp-business-cloud-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Technology Choice: WhatsApp Business Cloud API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Technology Choice: WhatsApp Business Cloud API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-cloud-api-over-third-party-libraries" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Cloud API over third-party libraries
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dependencies-added" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dependencies Added
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-modified-created" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files Modified / Created
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Files Modified / Created">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#created" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Created
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#modified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modified
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#config-json-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Config JSON Structure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#environment-variable-overrides" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variable Overrides
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#whatsapp-business-setup-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WhatsApp Business Setup Guide
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="WhatsApp Business Setup Guide">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#step-1-create-a-meta-developer-account" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 1: Create a Meta Developer Account
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-2-get-api-credentials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 2: Get API Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-3-configure-webhook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 3: Configure Webhook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step-4-development-with-ngrok" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Step 4: Development with ngrok
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implementation-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implementation Details
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implementation Details">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#whatsappchannel-class" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WhatsAppChannel Class
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#message-flow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Message Flow
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#supported-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Supported Commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-routing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Routing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#notification-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notification System
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#remaining-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Remaining Work
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Remaining Work">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#high-priority-completed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High Priority — ✅ COMPLETED
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#medium-priority-completed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Medium Priority — ✅ COMPLETED
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#low-priority" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Low Priority
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Testing">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#manual-testing-checklist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Manual Testing Checklist
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#automated-testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Automated Testing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#security-considerations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Security Considerations
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="whatsapp-channel-implementation-plan">WhatsApp Channel Implementation Plan<a class="headerlink" href="#whatsapp-channel-implementation-plan" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Developer notes — status as of 2026-10-13 (v0.7.0).</strong> Working plan/report written during development; it may describe planned or superseded work. For current behaviour see <a href="../../../">docs/README.md</a>.</p>
+</blockquote>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>This document describes the implementation of WhatsApp as a communication channel for the MyClaw agent framework, mirroring the existing Telegram channel functionality. The implementation uses the <strong>WhatsApp Business Cloud API</strong> (Meta Graph API) with a <strong>FastAPI webhook server</strong> to receive and respond to messages.</p>
+<h2 id="architecture">Architecture<a class="headerlink" href="#architecture" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart TD
+    A[WhatsApp User] --&gt;|Sends message| B[Meta Cloud API]
+    B --&gt;|Webhook POST| C[FastAPI Server - /webhook]
+    C --&gt;|Parse payload| D[WhatsAppChannel._handle_webhook]
+    D --&gt;|Text message| E{Command or Agent?}
+    E --&gt;|/command| F[Command Handler]
+    E --&gt;|@agent or plain text| G[Agent Router]
+    G --&gt;|agent.think| H[MyClaw Agent]
+    H --&gt;|Response| I[WhatsApp Cloud API - Send Message]
+    I --&gt;|Delivered| A
+    F --&gt;|Result| I
+
+    J[Meta Cloud API] --&gt;|GET /webhook| K[Webhook Verification]
+    K --&gt;|hub.challenge| J</code></pre>
+<h2 id="technology-choice-whatsapp-business-cloud-api">Technology Choice: WhatsApp Business Cloud API<a class="headerlink" href="#technology-choice-whatsapp-business-cloud-api" title="Permanent link">&para;</a></h2>
+<h3 id="why-cloud-api-over-third-party-libraries">Why Cloud API over third-party libraries<a class="headerlink" href="#why-cloud-api-over-third-party-libraries" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Approach</th>
+<th>Pros</th>
+<th>Cons</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>WhatsApp Business Cloud API</strong></td>
+<td>Official, reliable, free tier, no bans</td>
+<td>Requires Meta Business account, webhook server</td>
+</tr>
+<tr>
+<td>Twilio WhatsApp API</td>
+<td>Easy setup, good docs</td>
+<td>Paid per message, adds middleman</td>
+</tr>
+<tr>
+<td>whatsapp-web.js / Baileys</td>
+<td>No business account needed</td>
+<td>Unofficial, risk of bans, fragile</td>
+</tr>
+<tr>
+<td>Green API</td>
+<td>Simple REST API</td>
+<td>Paid, third-party dependency</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Decision</strong>: WhatsApp Business Cloud API — it is the official, free, and most reliable approach. It uses the same webhook pattern as many other integrations and fits naturally into the existing MyClaw architecture.</p>
+<h3 id="dependencies-added">Dependencies Added<a class="headerlink" href="#dependencies-added" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>fastapi&gt;=0.100.0</code> — ASGI web framework for the webhook server</li>
+<li><code>uvicorn&gt;=0.23.0</code> — ASGI server to run FastAPI</li>
+<li><code>requests</code> — already in requirements, used for sending messages to the Cloud API</li>
+</ul>
+<h2 id="files-modified-created">Files Modified / Created<a class="headerlink" href="#files-modified-created" title="Permanent link">&para;</a></h2>
+<h3 id="created">Created<a class="headerlink" href="#created" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="myclaw/channels/whatsapp.py"><code>myclaw/channels/whatsapp.py</code></a></td>
+<td>WhatsApp channel implementation with webhook server, message handling, agent routing, and all commands</td>
+</tr>
+</tbody>
+</table>
+<h3 id="modified">Modified<a class="headerlink" href="#modified" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Changes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="myclaw/config.py"><code>myclaw/config.py</code></a></td>
+<td>Added <code>WhatsAppConfig</code> model, added <code>whatsapp</code> to <code>ChannelsConfig</code>, added env var overrides for WhatsApp credentials</td>
+</tr>
+<tr>
+<td><a href="myclaw/gateway.py"><code>myclaw/gateway.py</code></a></td>
+<td>Added WhatsApp channel import and startup logic</td>
+</tr>
+<tr>
+<td><a href="myclaw/tools/"><code>myclaw/tools/</code></a></td>
+<td>Added <code>set_notification_callback()</code> for channel-agnostic scheduled job notifications; updated <code>_create_job_internal</code> to use callback when available</td>
+</tr>
+<tr>
+<td><a href="requirements.txt"><code>requirements.txt</code></a></td>
+<td>Added <code>fastapi&gt;=0.100.0</code> and <code>uvicorn&gt;=0.23.0</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<h3 id="config-json-structure">Config JSON Structure<a class="headerlink" href="#config-json-structure" title="Permanent link">&para;</a></h3>
+<p>Add to <code>~/.myclaw/config.json</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"channels"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"whatsapp"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"phone_number_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"YOUR_PHONE_NUMBER_ID"</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"business_account_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"YOUR_BUSINESS_ACCOUNT_ID"</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"access_token"</span><span class="p">:</span><span class="w"> </span><span class="s2">"YOUR_PERMANENT_ACCESS_TOKEN"</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"verify_token"</span><span class="p">:</span><span class="w"> </span><span class="s2">"YOUR_CUSTOM_VERIFY_TOKEN"</span><span class="p">,</span>
+<span class="w">      </span><span class="nt">"allowFrom"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"1234567890"</span><span class="p">]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<h3 id="environment-variable-overrides">Environment Variable Overrides<a class="headerlink" href="#environment-variable-overrides" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Config Key</th>
+<th>Environment Variable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>channels.whatsapp.phone_number_id</code></td>
+<td><code>MYCLAW_WHATSAPP_PHONE_NUMBER_ID</code></td>
+</tr>
+<tr>
+<td><code>channels.whatsapp.business_account_id</code></td>
+<td><code>MYCLAW_WHATSAPP_BUSINESS_ACCOUNT_ID</code></td>
+</tr>
+<tr>
+<td><code>channels.whatsapp.access_token</code></td>
+<td><code>MYCLAW_WHATSAPP_ACCESS_TOKEN</code></td>
+</tr>
+<tr>
+<td><code>channels.whatsapp.verify_token</code></td>
+<td><code>MYCLAW_WHATSAPP_VERIFY_TOKEN</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="whatsapp-business-setup-guide">WhatsApp Business Setup Guide<a class="headerlink" href="#whatsapp-business-setup-guide" title="Permanent link">&para;</a></h2>
+<h3 id="step-1-create-a-meta-developer-account">Step 1: Create a Meta Developer Account<a class="headerlink" href="#step-1-create-a-meta-developer-account" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Go to <a href="https://developers.facebook.com">developers.facebook.com</a></li>
+<li>Create a developer account if you do not have one</li>
+<li>Create a new App — select <strong>Business</strong> type</li>
+<li>Add the <strong>WhatsApp</strong> product to your app</li>
+</ol>
+<h3 id="step-2-get-api-credentials">Step 2: Get API Credentials<a class="headerlink" href="#step-2-get-api-credentials" title="Permanent link">&para;</a></h3>
+<ol>
+<li>In the WhatsApp section of your app, go to <strong>API Setup</strong></li>
+<li>Note your <strong>Phone Number ID</strong> and <strong>WhatsApp Business Account ID</strong></li>
+<li>Generate a <strong>Permanent Access Token</strong>:</li>
+<li>Go to <strong>System Users</strong> in Business Settings</li>
+<li>Create a system user with admin access</li>
+<li>Generate a token with <code>whatsapp_business_messaging</code> permission</li>
+</ol>
+<h3 id="step-3-configure-webhook">Step 3: Configure Webhook<a class="headerlink" href="#step-3-configure-webhook" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Set up a publicly accessible server (use ngrok for development)</li>
+<li>In the WhatsApp app settings, go to <strong>Configuration</strong> &gt; <strong>Webhook</strong></li>
+<li>Set the callback URL to <code>https://your-domain.com/webhook</code></li>
+<li>Set the verify token to match your <code>verify_token</code> in config</li>
+<li>Subscribe to the <code>messages</code> webhook field</li>
+</ol>
+<h3 id="step-4-development-with-ngrok">Step 4: Development with ngrok<a class="headerlink" href="#step-4-development-with-ngrok" title="Permanent link">&para;</a></h3>
+<p>For local development:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># Start ngrok tunnel</span>
+ngrok<span class="w"> </span>http<span class="w"> </span><span class="m">8000</span>
+
+<span class="c1"># Use the HTTPS URL from ngrok as your webhook URL</span>
+<span class="c1"># Example: https://abc123.ngrok.io/webhook</span>
+</code></pre></div>
+<h2 id="implementation-details">Implementation Details<a class="headerlink" href="#implementation-details" title="Permanent link">&para;</a></h2>
+<h3 id="whatsappchannel-class">WhatsAppChannel Class<a class="headerlink" href="#whatsappchannel-class" title="Permanent link">&para;</a></h3>
+<p>The <a href="myclaw/channels/whatsapp.py:33"><code>WhatsAppChannel</code></a> class mirrors the <a href="myclaw/channels/telegram.py:33"><code>TelegramChannel</code></a> structure:</p>
+<pre class="mermaid"><code>classDiagram
+    class WhatsAppChannel {
+        +phone_number_id: str
+        +business_account_id: str
+        +access_token: str
+        +verify_token: str
+        +allow_from: list
+        +registry: dict
+        +app: FastAPI
+        +api_base_url: str
+        -_setup_routes()
+        -_verify_webhook(request)
+        -_handle_webhook(request)
+        -_handle_message(user_id, message)
+        -_route(text) tuple
+        -_send_typing_indicator(user_id)
+        -_send_message(user_id, text)
+        -_split_message(text, max_length) list
+        -_handle_command(user_id, command, args)
+        -_remind_command(user_id, args)
+        -_jobs_command(user_id)
+        -_cancel_command(user_id, args)
+        -_agents_command(user_id)
+        -_knowledge_search_command(user_id, args)
+        -_knowledge_list_command(user_id)
+        -_knowledge_read_command(user_id, args)
+        -_knowledge_write_command(user_id, args)
+        -_knowledge_sync_command(user_id)
+        -_knowledge_tags_command(user_id)
+        -_register_notification_callback()
+        +run(host, port)
+        +run_webhook(webhook_url, port)
+    }</code></pre>
+<h3 id="message-flow">Message Flow<a class="headerlink" href="#message-flow" title="Permanent link">&para;</a></h3>
+<ol>
+<li>
+<p><strong>Webhook Verification</strong>: Meta sends a GET request with <code>hub.verify_token</code> and <code>hub.challenge</code>. The server validates the token and returns the challenge.</p>
+</li>
+<li>
+<p><strong>Incoming Messages</strong>: Meta sends a POST request with the message payload. The handler:</p>
+</li>
+<li>Extracts the sender's WhatsApp ID (<code>wa_id</code>)</li>
+<li>Checks if the sender is in <code>allowFrom</code></li>
+<li>Parses <code>/commands</code> or routes to agents via <code>@agentname</code> prefix</li>
+<li>
+<p>Sends the response back via the Cloud API</p>
+</li>
+<li>
+<p><strong>Message Splitting</strong>: WhatsApp has a 4096-character limit per message. Long responses are automatically split at newlines or spaces.</p>
+</li>
+</ol>
+<h3 id="supported-commands">Supported Commands<a class="headerlink" href="#supported-commands" title="Permanent link">&para;</a></h3>
+<p>All commands from Telegram are supported with <code>/</code> prefix:</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/remind &lt;seconds&gt; &lt;message&gt;</code></td>
+<td>Schedule a one-shot reminder</td>
+</tr>
+<tr>
+<td><code>/remind every &lt;seconds&gt; &lt;message&gt;</code></td>
+<td>Schedule a recurring reminder</td>
+</tr>
+<tr>
+<td><code>/jobs</code></td>
+<td>List all active scheduled jobs</td>
+</tr>
+<tr>
+<td><code>/cancel &lt;job_id&gt;</code></td>
+<td>Cancel a scheduled job</td>
+</tr>
+<tr>
+<td><code>/agents</code></td>
+<td>List available named agents</td>
+</tr>
+<tr>
+<td><code>/knowledge_search &lt;query&gt;</code></td>
+<td>Search the knowledge base</td>
+</tr>
+<tr>
+<td><code>/knowledge_list</code></td>
+<td>List all knowledge notes</td>
+</tr>
+<tr>
+<td><code>/knowledge_read &lt;permalink&gt;</code></td>
+<td>Read a specific note</td>
+</tr>
+<tr>
+<td><code>/knowledge_write &lt;title&gt; \| &lt;content&gt;</code></td>
+<td>Create a new note</td>
+</tr>
+<tr>
+<td><code>/knowledge_sync</code></td>
+<td>Sync knowledge base</td>
+</tr>
+<tr>
+<td><code>/knowledge_tags</code></td>
+<td>List all tags</td>
+</tr>
+</tbody>
+</table>
+<h3 id="agent-routing">Agent Routing<a class="headerlink" href="#agent-routing" title="Permanent link">&para;</a></h3>
+<p>Same as Telegram — prefix messages with <code>@agentname</code>:</p>
+<div class="highlight"><pre><span></span><code>@coder write a binary search function
+@default what is the weather today
+</code></pre></div>
+<h3 id="notification-system">Notification System<a class="headerlink" href="#notification-system" title="Permanent link">&para;</a></h3>
+<p>The implementation adds a channel-agnostic notification callback to <a href="myclaw/tools/"><code>tools.py</code></a>:</p>
+<ul>
+<li><a href="myclaw/tools/:66"><code>set_notification_callback(callback)</code></a> — registers an async callback function</li>
+<li><a href="myclaw/tools/:564"><code>_create_job_internal()</code></a> — updated to try the callback first, then fall back to Telegram's <code>context.bot.send_message</code></li>
+</ul>
+<p>This ensures scheduled jobs can send results back to WhatsApp users without depending on Telegram's bot object.</p>
+<h2 id="remaining-work">Remaining Work<a class="headerlink" href="#remaining-work" title="Permanent link">&para;</a></h2>
+<h3 id="high-priority-completed">High Priority — ✅ COMPLETED<a class="headerlink" href="#high-priority-completed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] Add <code>/help</code> command listing all available commands</li>
+<li>[x] Handle media messages (images, documents, audio, video, sticker, location)</li>
+<li>[x] Add message deduplication (<code>_MessageDeduplicator</code> with LRU cache + TTL)</li>
+<li>[x] Add webhook signature verification (<code>X-Hub-Signature-256</code> via <code>_verify_signature()</code>)</li>
+</ul>
+<h3 id="medium-priority-completed">Medium Priority — ✅ COMPLETED<a class="headerlink" href="#medium-priority-completed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] Add rate limiting (<code>_RateLimiter</code> token-bucket per user, 10 tokens, 0.5/s refill)</li>
+<li>[x] Add health check endpoint (<code>GET /health</code>)</li>
+<li>[x] Support WhatsApp interactive messages (buttons, lists) — <a href="myclaw/channels/whatsapp.py:433"><code>_send_interactive_buttons()</code></a>, <a href="myclaw/channels/whatsapp.py:471"><code>_send_interactive_list()</code></a></li>
+<li>[x] Support WhatsApp message templates for proactive messaging — <a href="myclaw/channels/whatsapp.py:518"><code>send_template_message()</code></a></li>
+</ul>
+<h3 id="low-priority">Low Priority<a class="headerlink" href="#low-priority" title="Permanent link">&para;</a></h3>
+<ul>
+<li>[x] Add message read receipts — <a href="myclaw/channels/whatsapp.py:348"><code>_mark_as_read()</code></a></li>
+<li>[x] Add metrics/monitoring for message throughput — <a href="myclaw/channels/whatsapp.py:92"><code>_Metrics</code></a> class, available at <code>GET /health</code></li>
+<li>[x] Support WhatsApp Business Profile management — <a href="myclaw/channels/whatsapp.py:573"><code>get_business_profile()</code></a> (placeholder, Meta API limited)</li>
+<li>[ ] WhatsApp Flows for structured interactions — requires Meta Business Manager setup, not purely code</li>
+</ul>
+<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
+<h3 id="manual-testing-checklist">Manual Testing Checklist<a class="headerlink" href="#manual-testing-checklist" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Start the server: <code>python cli.py agent</code> with WhatsApp enabled in config</li>
+<li>Verify webhook: Meta should successfully verify the webhook URL</li>
+<li>Send a text message from an allowed number</li>
+<li>Test <code>/agents</code> command</li>
+<li>Test <code>@agentname</code> routing</li>
+<li>Test <code>/remind 10 hello</code> scheduling</li>
+<li>Test <code>/knowledge_search</code> and other knowledge commands</li>
+<li>Test long message splitting (send a query that produces a long response)</li>
+<li>Test message from a non-allowed number (should be ignored)</li>
+</ol>
+<h3 id="automated-testing">Automated Testing<a class="headerlink" href="#automated-testing" title="Permanent link">&para;</a></h3>
+<p>Tests should be added to <code>tests/</code> covering:</p>
+<ul>
+<li>Webhook verification (GET /webhook)</li>
+<li>Message parsing from webhook payload</li>
+<li>Command parsing</li>
+<li>Agent routing</li>
+<li>Message splitting</li>
+<li>Access control (allowFrom filtering)</li>
+</ul>
+<h2 id="security-considerations">Security Considerations<a class="headerlink" href="#security-considerations" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Access Control</strong>: Only phone numbers in <code>allowFrom</code> can interact with the bot</li>
+<li><strong>Webhook Verification</strong>: The verify token prevents unauthorized webhook registration</li>
+<li><strong>Signature Verification</strong>: TODO — validate <code>X-Hub-Signature-256</code> header on incoming webhooks</li>
+<li><strong>Token Security</strong>: Access token is stored as <code>SecretStr</code> in Pydantic config</li>
+<li><strong>Environment Variables</strong>: All sensitive values can be set via environment variables instead of config file</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": [], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

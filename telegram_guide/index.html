@@ -1,0 +1,1671 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/telegram_guide/">
+      
+      
+        <link rel="prev" href="../webui_guide/">
+      
+      
+        <link rel="next" href="../UPDATING/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Telegram - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#telegram-guide-chat-with-your-agents-from-your-phone" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Telegram
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#set-it-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Set it up
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agents-and-mentions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agents and @mentions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reminders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reminders
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#knowledge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Knowledge
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Groups
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#privacy-who-may-use-the-bot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Privacy: who may use the bot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inside-the-web-ui-or-zensynora-gateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inside the Web UI or zensynora gateway
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings-in-myclawconfigjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings in ~/.myclaw/config.json
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-your-own-telegram-bot-api-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced: your own Telegram Bot API server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#set-it-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Set it up
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Commands
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agents-and-mentions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agents and @mentions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reminders" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reminders
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#knowledge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Knowledge
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#groups" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Groups
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#privacy-who-may-use-the-bot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Privacy: who may use the bot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inside-the-web-ui-or-zensynora-gateway" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inside the Web UI or zensynora gateway
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#settings-in-myclawconfigjson" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Settings in ~/.myclaw/config.json
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-your-own-telegram-bot-api-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced: your own Telegram Bot API server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="telegram-guide-chat-with-your-agents-from-your-phone">Telegram Guide — chat with your agents from your phone<a class="headerlink" href="#telegram-guide-chat-with-your-agents-from-your-phone" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Applies to:</strong> v0.7.5 + Unreleased changes · <strong>Added:</strong> 2026-10-16 — the
+Telegram bot was reviewed and fixed, and it now runs inside the Web UI.</p>
+</blockquote>
+<p>The Telegram bot lets you talk to your ZenSynora agents from the Telegram app
+on your phone or computer. It uses the same agents, models and knowledge base
+as the Web UI. Your bot is private: only the people you allow can use it.</p>
+<p>What it can do:</p>
+<ul>
+<li>answer your messages (the default agent, or any agent with <code>@name</code>);</li>
+<li>run reminders and repeating tasks (<code>/remind</code>);</li>
+<li>search, read and save notes in the knowledge base (<code>/knowledge_…</code>);</li>
+<li>answer several people at the same time, while keeping each chat in order.</li>
+</ul>
+<p>Settings, buttons and status are in the Web UI under <strong>Settings → Channels</strong>
+(see the <a href="../webui_guide/#telegram-bot-settings--channels">Web UI guide</a>).</p>
+<h2 id="set-it-up">Set it up<a class="headerlink" href="#set-it-up" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Create a bot.</strong> In Telegram, open <strong>@BotFather</strong>, send <code>/newbot</code>, choose
+   a name and a username (it must end in <code>bot</code>). BotFather replies with a
+   <strong>token</strong> — a long text like <code>123456:ABC-DEF…</code>. Copy it. Keep it secret:
+   anyone with the token can run your bot.</li>
+<li><strong>Add the token.</strong> Start the Web UI (<code>zensynora webui</code>) and open
+   <strong>Settings → Channels</strong>. Paste the token, turn on <strong>Telegram bot
+   enabled</strong>, click <strong>Save</strong>, then click <strong>Test bot</strong>. It should say
+   <em>Token works — bot @YourBot (Name)</em>.</li>
+<li><strong>Find your user id.</strong> Open your bot in Telegram (search for its username)
+   and send <code>/whoami</code>. It answers with a number — your Telegram user id.
+   Copy it.</li>
+<li><strong>Allow yourself.</strong> Back in Settings → Channels, add the number to
+   <strong>Allowed Telegram users</strong> and click <strong>Save</strong>. The bot restarts by itself
+   (or click <strong>Restart bot</strong>).</li>
+<li>Click <strong>Send test message</strong>: the bot writes to every number in <em>Allowed
+   Telegram users</em>. Telegram does not let a bot write first, so open the bot
+   and press <strong>Start</strong> once before that.</li>
+<li><strong>Chat.</strong> Write to your bot. The default agent answers.</li>
+</ol>
+<p>The <strong>Telegram bot</strong> panel in Settings → Channels shows <em>Status: Running as
+@YourBot</em> when everything works (the sidebar health shows <em>Telegram: running
+@YourBot</em>). Until someone is allowed, it warns: <em>Nobody can use the bot yet:
+add your user id to Allowed Telegram users below.</em></p>
+<p><strong>Without the Web UI.</strong> You can run the bot on its own with
+<code>zensynora gateway</code> instead. If you do, turn off <strong>Run the bot inside the Web
+UI</strong> in Settings → Channels — otherwise two copies of the bot run and
+Telegram reports a <em>conflict</em> (see <a href="#troubleshooting">Troubleshooting</a>).</p>
+<h2 id="commands">Commands<a class="headerlink" href="#commands" title="Permanent link">&para;</a></h2>
+<p>Type <code>/</code> in the chat to see the list — the bot registers its command menu
+with Telegram by itself.</p>
+<table>
+<thead>
+<tr>
+<th>Command</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/start</code></td>
+<td>Welcome message and the command list</td>
+</tr>
+<tr>
+<td><code>/help</code></td>
+<td>The command list</td>
+</tr>
+<tr>
+<td><code>/whoami</code></td>
+<td>Shows your Telegram user id and whether you are allowed</td>
+</tr>
+<tr>
+<td><code>/agents</code></td>
+<td>Lists the agents you can address with <code>@name</code></td>
+</tr>
+<tr>
+<td><code>/remind &lt;seconds&gt; &lt;text&gt;</code></td>
+<td>Runs <code>&lt;text&gt;</code> once, after that many seconds</td>
+</tr>
+<tr>
+<td><code>/remind every &lt;seconds&gt; &lt;text&gt;</code></td>
+<td>Runs <code>&lt;text&gt;</code> again and again, every that many seconds</td>
+</tr>
+<tr>
+<td><code>/jobs</code></td>
+<td>Lists the reminders, with their ids</td>
+</tr>
+<tr>
+<td><code>/cancel &lt;id&gt;</code></td>
+<td>Cancels a reminder (the id comes from <code>/jobs</code>)</td>
+</tr>
+<tr>
+<td><code>/knowledge_search &lt;words&gt;</code></td>
+<td>Searches the knowledge base</td>
+</tr>
+<tr>
+<td><code>/knowledge_list</code></td>
+<td>Lists the notes</td>
+</tr>
+<tr>
+<td><code>/knowledge_read &lt;permalink&gt;</code></td>
+<td>Shows one note (the permalink comes from <code>/knowledge_list</code>)</td>
+</tr>
+<tr>
+<td><code>/knowledge_write &lt;title&gt; \| &lt;text&gt;</code></td>
+<td>Saves a note, for example <code>/knowledge_write Wi-Fi \| The router is in the hall</code></td>
+</tr>
+<tr>
+<td><code>/knowledge_sync</code></td>
+<td>Re-reads the note files (after you edited them by hand)</td>
+</tr>
+<tr>
+<td><code>/knowledge_tags</code></td>
+<td>Lists the tags</td>
+</tr>
+</tbody>
+</table>
+<p><code>/start</code>, <code>/help</code> and <code>/whoami</code> answer everyone (people who are not allowed
+get only their own id and how to be allowed). All other commands, and normal
+messages, work only for allowed users.</p>
+<h2 id="agents-and-mentions">Agents and @mentions<a class="headerlink" href="#agents-and-mentions" title="Permanent link">&para;</a></h2>
+<ul>
+<li>A normal message goes to the <strong>default</strong> agent.</li>
+<li>Start a message with <code>@name</code> to ask another agent:
+  <code>@writer a short poem about rain</code>. Upper or lower case does not matter.
+  Answers from other agents start with their name (<code>@writer: …</code>), so you
+  know who replied. <code>@writer</code> alone, with nothing after it, gets the question
+  <em>What should @writer do?</em> — write the task after the name.</li>
+<li><code>/agents</code> lists the agents. Agents created later — in Settings → Agents, or
+  by another agent with <code>create_agent</code> — can be used right away, without a
+  restart.</li>
+<li>An <code>@word</code> that is not an agent stays part of the message for the default
+  agent.</li>
+</ul>
+<p>While the agent works, Telegram shows <strong>typing…</strong>. Long answers come as
+several messages (Telegram allows at most 4096 characters per message). If
+something goes wrong, you get a short explanation — the same wording as in the
+Web UI, for example that the model is rate-limited or the model server cannot
+be reached. Technical details go only to the log
+(<code>~/.myclaw/logs/zensynora.log</code>), never to the chat.</p>
+<p><strong>Photos, voice messages, documents.</strong> The bot reads only text for now. If you
+add a caption, the caption is used as the message; without one the bot says
+it can only read text.</p>
+<p><strong>Too many messages at once</strong> are slowed down: the bot answers <em>Too many
+messages. Please wait a moment.</em> Wait a few seconds and send again.</p>
+<h2 id="reminders">Reminders<a class="headerlink" href="#reminders" title="Permanent link">&para;</a></h2>
+<p><code>/remind 600 check the oven</code> makes the default agent carry out "check the
+oven" in 10 minutes and send you the result. <code>/remind every 3600 any news
+about the weather?</code> repeats every hour. <code>/jobs</code> lists them; <code>/cancel &lt;id&gt;</code>
+stops one. You can also simply ask an agent ("remind me in 10 minutes to …").</p>
+<p>Reminders live in the running bot: they stop when the bot (or the Web UI)
+stops or restarts, so set them again afterwards. For tasks that must survive
+restarts, use a job in the Web UI (<strong>Jobs</strong> page).</p>
+<h2 id="knowledge">Knowledge<a class="headerlink" href="#knowledge" title="Permanent link">&para;</a></h2>
+<p>By default, allowed Telegram users use <strong>the same knowledge base as the Web
+UI</strong>: a note you save from Telegram is found in the Web UI, and the other way
+round. Conversation memory stays separate — each Telegram user has their own.</p>
+<p>To give every Telegram user their own, separate knowledge base, turn off
+<strong>Telegram uses the same knowledge base as the Web UI</strong> in Settings → Channels
+(<code>channels.telegram.shared_knowledge: false</code>).</p>
+<h2 id="groups">Groups<a class="headerlink" href="#groups" title="Permanent link">&para;</a></h2>
+<p>You can add the bot to a Telegram group.</p>
+<ul>
+<li>Each person in the group must be in <strong>Allowed Telegram users</strong>; the bot
+  ignores the others.</li>
+<li>Mentioning the bot itself (<code>@YourBot what is …</code>) works: the mention is
+  removed before the message goes to the agent. <code>@YourBot @writer …</code> reaches
+  the writer agent.</li>
+<li>In a group, one message is answered at a time, in order.</li>
+<li>Telegram's <em>privacy mode</em> (on by default for new bots) lets a bot see only
+  some group messages, such as commands and replies to the bot. To let it
+  read every message, send <code>/setprivacy</code> to @BotFather and turn it off.</li>
+<li>Memory is per person, not per group.</li>
+</ul>
+<h2 id="privacy-who-may-use-the-bot">Privacy: who may use the bot<a class="headerlink" href="#privacy-who-may-use-the-bot" title="Permanent link">&para;</a></h2>
+<p><strong>Allowed Telegram users</strong> (<code>channels.telegram.allowFrom</code>) is the list of
+people who may use the bot. Each entry is either a numeric user id (what
+<code>/whoami</code> shows — the safest choice) or a <code>@username</code>. A username can be
+changed by its owner, a user id cannot.</p>
+<ul>
+<li>People who are not on the list get no answers. Only <code>/start</code>, <code>/help</code> and
+  <code>/whoami</code> reply, and they show nothing but the person's own id.</li>
+<li>Each not-allowed person is written to the log once, with their id — useful
+  if you forgot to add someone.</li>
+<li>While the list is empty, or still holds a placeholder such as
+  <code>YOUR_USER_ID</code>, nobody can use the bot. The startup log, <code>zensynora doctor</code>
+  and Settings → Channels warn about it.</li>
+</ul>
+<h2 id="inside-the-web-ui-or-zensynora-gateway">Inside the Web UI or <code>zensynora gateway</code><a class="headerlink" href="#inside-the-web-ui-or-zensynora-gateway" title="Permanent link">&para;</a></h2>
+<p>Only one copy may run. When <em>Run the bot inside the Web UI</em> is on, <code>zensynora
+gateway</code> (and the <code>myclaw</code> service, which runs it) does not start the bot and
+says so; use <code>zensynora gateway --telegram</code> to run it there anyway, or turn the
+setting off. Agents can write to you with the <code>send_telegram_message</code> tool
+(only to allowed users).</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Inside the Web UI (default)</th>
+<th><code>zensynora gateway</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Start</td>
+<td><code>zensynora webui</code> starts the bot too</td>
+<td>Run <code>zensynora gateway</code> in a terminal or as a service</td>
+</tr>
+<tr>
+<td>Settings</td>
+<td>Change them in Settings → Channels; the bot restarts by itself</td>
+<td>Restart the gateway after a change</td>
+</tr>
+<tr>
+<td>Status, Test bot, Restart bot</td>
+<td>In Settings → Channels and the sidebar</td>
+<td>Messages in the terminal</td>
+</tr>
+<tr>
+<td>Good for</td>
+<td>Most people</td>
+<td>A server without the Web UI</td>
+</tr>
+</tbody>
+</table>
+<p>Telegram allows <strong>only one copy</strong> of a bot at a time. If the gateway already
+runs your bot, the Web UI shows <em>Another ZenSynora (zensynora gateway?) is
+already running this bot — stop it or turn off 'Run the bot inside the Web
+UI'.</em> and stops its own copy. When <em>Run the bot inside the Web UI</em> is off, the
+status says <em>Runs in zensynora gateway, not in the Web UI</em>, and <strong>Restart
+bot</strong> is not available. Pick one:
+leave <strong>Run the bot inside the Web UI</strong> on and do not start the gateway, or
+turn it off and use the gateway. <code>zensynora gateway</code> prints a reminder when
+<strong>Run the bot inside the Web UI</strong> is still on.</p>
+<p><strong>Polling and webhook.</strong> By default the bot asks Telegram for new messages
+(<em>polling</em>). This works anywhere, also behind a home router — nothing to set
+up. The gateway can also run in <em>webhook</em> mode, where Telegram calls your
+server instead:</p>
+<div class="highlight"><pre><span></span><code>zensynora<span class="w"> </span>gateway<span class="w"> </span>--webhook-url<span class="w"> </span>https://bot.example.com/webhook<span class="w"> </span>--port<span class="w"> </span><span class="m">8443</span>
+</code></pre></div>
+<p>Telegram then sends every message to that URL. The bot listens on all
+network addresses (<code>0.0.0.0</code>) at the given port (default 8443), path
+<code>/webhook</code>, so the URL should end in <code>/webhook</code>. Your server needs a public
+HTTPS address that reaches that port. Webhook
+mode is only for <code>zensynora gateway</code>; the bot inside the Web UI always uses
+polling. If you are not sure, use polling.</p>
+<h2 id="settings-in-myclawconfigjson">Settings in <code>~/.myclaw/config.json</code><a class="headerlink" href="#settings-in-myclawconfigjson" title="Permanent link">&para;</a></h2>
+<p>The Web UI writes these for you; you can also edit the file.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">"channels"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="nt">"telegram"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"token"</span><span class="p">:</span><span class="w"> </span><span class="s2">"123456:ABC-DEF…"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"allowFrom"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"123456789"</span><span class="p">,</span><span class="w"> </span><span class="s2">"@yourname"</span><span class="p">],</span>
+<span class="w">    </span><span class="nt">"run_in_webui"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"shared_knowledge"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"max_workers"</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td>Switch the bot on or off</td>
+</tr>
+<tr>
+<td><code>token</code></td>
+<td>The token from @BotFather (or set <code>MYCLAW_TELEGRAM_TOKEN</code>)</td>
+</tr>
+<tr>
+<td><code>allowFrom</code></td>
+<td>Allowed users: numeric ids or <code>@usernames</code></td>
+</tr>
+<tr>
+<td><code>run_in_webui</code></td>
+<td><code>true</code>: <code>zensynora webui</code> runs the bot (default)</td>
+</tr>
+<tr>
+<td><code>shared_knowledge</code></td>
+<td><code>true</code>: same knowledge base as the Web UI (default)</td>
+</tr>
+<tr>
+<td><code>max_workers</code></td>
+<td>How many chats are answered at the same time</td>
+</tr>
+</tbody>
+</table>
+<h2 id="advanced-your-own-telegram-bot-api-server">Advanced: your own Telegram Bot API server<a class="headerlink" href="#advanced-your-own-telegram-bot-api-server" title="Permanent link">&para;</a></h2>
+<p>Normally the bot talks to Telegram's servers (<code>api.telegram.org</code>). If you run
+your own <a href="https://github.com/tdlib/telegram-bot-api">Telegram Bot API server</a>,
+point the bot at it with an environment variable before starting ZenSynora:</p>
+<div class="highlight"><pre><span></span><code><span class="nv">ZENSYNORA_TELEGRAM_API_URL</span><span class="o">=</span>http://localhost:8081<span class="w"> </span>zensynora<span class="w"> </span>webui
+</code></pre></div>
+<p>Most people never need this. The tests use it too, to run the bot against a
+local fake server.</p>
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Problem</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The bot works for a few seconds, then <em>conflict</em> — and the log shows ZenSynora starting every few seconds</td>
+<td>The <code>myclaw</code> service (<code>zensynora gateway</code>) was crash-looping and grabbing the bot (fixed 2026-10-18: the gateway now leaves Telegram to the Web UI). If you only use the Web UI: <code>sudo systemctl disable --now myclaw</code>. <code>zensynora doctor</code> warns about it.</td>
+</tr>
+<tr>
+<td>An agent says it needs a "bot token" or "chat id" to message you</td>
+<td>Agents use the <code>send_telegram_message</code> tool (since 2026-10-18) — the bot must be running. Disable home-made Telegram tools an agent created earlier (Tools page, or ask an agent: <code>disable_skill telegram_integration</code>).</td>
+</tr>
+<tr>
+<td>The bot does not answer</td>
+<td>Send <code>/whoami</code>. If it says you are not allowed, add the number to <strong>Allowed Telegram users</strong> and Save. Check that the status in Settings → Channels says <em>Running as @YourBot</em>.</td>
+</tr>
+<tr>
+<td>Status: <em>Another ZenSynora (zensynora gateway?) is already running this bot …</em> (sidebar: <em>conflict</em>)</td>
+<td>Two copies of the bot are running — for example <code>zensynora gateway</code> and the Web UI, or two computers with the same token. Stop one (or turn off <strong>Run the bot inside the Web UI</strong>), then click <strong>Restart bot</strong>.</td>
+</tr>
+<tr>
+<td>Status: <em>No bot token yet</em></td>
+<td>Paste the token from @BotFather in <strong>Telegram bot token</strong> and Save.</td>
+</tr>
+<tr>
+<td><code>zensynora doctor</code> says <em>Telegram bot: nobody is allowed to use the bot</em></td>
+<td>Send <code>/whoami</code> to the bot and add the number to <strong>Allowed Telegram users</strong>.</td>
+</tr>
+<tr>
+<td><code>zensynora doctor</code> says <em>Telegram bot: enabled but no bot token</em></td>
+<td>Paste the token from @BotFather in Settings → Channels, or turn the bot off.</td>
+</tr>
+<tr>
+<td><em>Test bot</em> says the token works, but the status says <em>The token is wrong</em></td>
+<td>Fixed on 2026-10-18: a space or line break copied with the token. Update ZenSynora, or paste the token again without spaces and Save.</td>
+</tr>
+<tr>
+<td>Status: <em>Error: …</em></td>
+<td>Click <strong>Test bot</strong>. <em>The token is wrong — copy it again from @BotFather.</em>: send <code>/token</code> to @BotFather, paste the token and Save. <em>Cannot reach Telegram — check the internet connection.</em>: this computer cannot reach Telegram.</td>
+</tr>
+<tr>
+<td>The bot answers with a model error (rate-limited, server cannot be reached)</td>
+<td>The bot works; the model does not. Open the <strong>Models</strong> page and click <strong>Test</strong> on the default model, or pick another one.</td>
+</tr>
+<tr>
+<td>Nothing happens in a group</td>
+<td>Make sure every person is allowed, and check privacy mode (see <a href="#groups">Groups</a>).</td>
+</tr>
+<tr>
+<td>"I can only read text for now"</td>
+<td>You sent a photo, voice message or file without a caption. Add a caption or type the message.</td>
+</tr>
+<tr>
+<td>Reminders are gone</td>
+<td>The bot was restarted. Set them again, or use a job in the Web UI.</td>
+</tr>
+</tbody>
+</table>
+<p>More help: <code>zensynora doctor</code> has a <strong>Telegram bot</strong> check (category
+<em>configuration</em>): <em>off</em>, <em>enabled but no bot token</em>, <em>nobody is allowed to use
+the bot</em>, or how many users are allowed and where the bot runs (inside the
+Web UI or with <code>zensynora gateway</code>). How the bot
+works inside: <a href="../architecture_diagram/#15-telegram-bot">architecture diagrams §15</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,1945 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/architecture_diagram/">
+      
+      
+        <link rel="prev" href="../newtech_agent_guide/">
+      
+      
+        <link rel="next" href="../ARCHITECTURE/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Visual guide - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#zensynora-architecture-visual-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Visual guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-system-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. System context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-component-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Component map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-a-chat-message-end-to-end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. A chat message, end to end
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-provider-selection-rotation-and-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Provider selection, rotation and fallback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-tool-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Tool execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-swarms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Swarms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-settings-from-the-web-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Settings from the Web UI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-where-data-lives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Where data lives
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-safe-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Safe updates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-doctor-and-medic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Doctor and medic
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-install-layout-on-disk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Install layout on disk
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-chat-channels-and-agent-to-agent-talk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Chat channels and agent-to-agent talk
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Jobs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-self-update-proposals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Self-update proposals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-telegram-bot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Telegram bot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-providers-keys-and-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Providers, keys and agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-system-context" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. System context
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-component-map" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Component map
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-a-chat-message-end-to-end" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. A chat message, end to end
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-provider-selection-rotation-and-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Provider selection, rotation and fallback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-tool-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Tool execution
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-swarms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Swarms
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-settings-from-the-web-ui" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Settings from the Web UI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-where-data-lives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Where data lives
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-safe-updates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Safe updates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-doctor-and-medic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Doctor and medic
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-install-layout-on-disk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Install layout on disk
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-chat-channels-and-agent-to-agent-talk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Chat channels and agent-to-agent talk
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-jobs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Jobs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#14-self-update-proposals" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Self-update proposals
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#15-telegram-bot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        15. Telegram bot
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#16-providers-keys-and-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        16. Providers, keys and agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="zensynora-architecture-visual-guide">ZenSynora Architecture — Visual Guide<a class="headerlink" href="#zensynora-architecture-visual-guide" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Version:</strong> 0.7.1 · <strong>Last updated:</strong> 2026-10-13
+0.7.1: chat channels and agent-to-agent events (§12), jobs (§13),
+approval-gated self-update (§14), backups, model rotation and custom
+providers (§4), full program-folder backup in updates (§9).
+Unreleased: the Telegram bot can run inside the Web UI process, message
+flow through queue and workers, shared knowledge base (§1, §2, §15).
+Rewritten for 0.7.0. The previous version showed planning phases and
+modules that no longer match the code. Every diagram below reflects the
+current source tree; file names are given so you can jump to the code.
+Text-oriented companion: <a href="../ARCHITECTURE/">ARCHITECTURE.md</a>.</p>
+</blockquote>
+<p><strong>Contents</strong></p>
+<ol>
+<li><a href="#1-system-context">System context</a></li>
+<li><a href="#2-component-map">Component map</a></li>
+<li><a href="#3-a-chat-message-end-to-end">A chat message, end to end</a></li>
+<li><a href="#4-provider-selection-and-fallback">Provider selection and fallback</a></li>
+<li><a href="#5-tool-execution">Tool execution</a></li>
+<li><a href="#6-swarms">Swarms</a></li>
+<li><a href="#7-settings-from-the-web-ui">Settings from the Web UI</a></li>
+<li><a href="#8-where-data-lives">Where data lives</a></li>
+<li><a href="#9-safe-updates">Safe updates</a></li>
+<li><a href="#10-doctor-and-medic">Doctor and medic</a></li>
+<li><a href="#11-install-layout-on-disk">Install layout on disk</a></li>
+<li><a href="#12-chat-channels-and-agent-to-agent-talk">Chat channels and agent-to-agent talk</a></li>
+<li><a href="#13-jobs">Jobs</a></li>
+<li><a href="#14-self-update-proposals">Self-update proposals</a></li>
+<li><a href="#15-telegram-bot">Telegram bot</a></li>
+</ol>
+<hr />
+<h2 id="1-system-context">1. System context<a class="headerlink" href="#1-system-context" title="Permanent link">&para;</a></h2>
+<p>Who talks to ZenSynora, and what ZenSynora talks to.</p>
+<pre class="mermaid"><code>flowchart LR
+    user(["You"])
+    subgraph entry["Entry points"]
+        webui["Web UI&lt;br/&gt;browser · port 8000"]
+        cli["Terminal&lt;br/&gt;zensynora agent"]
+        tg["Telegram bot&lt;br/&gt;inside zensynora webui&lt;br/&gt;or zensynora gateway"]
+        wa["WhatsApp Cloud"]
+        mcpc["MCP clients&lt;br/&gt;zensynora mcp-server"]
+    end
+    core["ZenSynora core&lt;br/&gt;agents · tools · memory · knowledge"]
+    subgraph llm["LLM providers"]
+        local["Local: llama.cpp · Ollama · LM Studio"]
+        cloud["Cloud: OpenAI · Anthropic · Gemini · Groq · OpenRouter"]
+    end
+    subgraph ext["Outside services (optional)"]
+        web["Web pages / search"]
+        mcps["External MCP servers"]
+        vt["VirusTotal"]
+        gh["GitHub (updates, file recovery)"]
+    end
+    disk[("~/.myclaw&lt;br/&gt;config · databases · knowledge")]
+
+    user --&gt; webui &amp; cli &amp; tg &amp; wa
+    mcpc --&gt; core
+    webui &amp; cli &amp; tg &amp; wa --&gt; core
+    core --&gt; local &amp; cloud
+    core --&gt; web &amp; mcps &amp; vt &amp; gh
+    core &lt;--&gt; disk</code></pre>
+<hr />
+<h2 id="2-component-map">2. Component map<a class="headerlink" href="#2-component-map" title="Permanent link">&para;</a></h2>
+<p>The main packages under <code>myclaw/</code>, grouped by layer. Arrows point from a
+layer to the layer it uses.</p>
+<pre class="mermaid"><code>flowchart TB
+    subgraph L1["Interfaces"]
+        direction LR
+        cli2["cli.py&lt;br/&gt;click commands"]
+        webapi["web/&lt;br/&gt;api · settings · models · chat · jobs · backup · medic · telegram"]
+        gw["gateway.py&lt;br/&gt;zensynora gateway: Telegram / WhatsApp / console"]
+        channels["channels/&lt;br/&gt;telegram · whatsapp · discord"]
+        mcpsrv["mcp/server.py&lt;br/&gt;tools over MCP (stdio)"]
+        apisrv["api_server.py&lt;br/&gt;REST API library (/api/v1)"]
+    end
+
+    subgraph L2["Agents"]
+        direction LR
+        agent["agent.py&lt;br/&gt;Agent: think · stream_think"]
+        internals["agent_internals/&lt;br/&gt;router · context_builder · tool_executor"]
+        swarm["swarm/&lt;br/&gt;orchestrator · strategies"]
+        registry["agents/registry.py&lt;br/&gt;agents.yaml profiles"]
+        special["agents/&lt;br/&gt;medic · newtech · skill_adapter"]
+        chatx["chat/&lt;br/&gt;channels · multi-agent turns"]
+        jobsx["jobs/&lt;br/&gt;store · runner · evaluate · benchmark"]
+    end
+
+    subgraph L3["Capabilities"]
+        direction LR
+        tools["tools/&lt;br/&gt;shell · files · web · browser · kb · scheduler · swarm · toolbox"]
+        provider["provider.py&lt;br/&gt;8 built-in + your own providers · rotation"]
+        events["events.py&lt;br/&gt;agent-to-agent activity"]
+        resilience["resilience/ + offline.py&lt;br/&gt;circuit breaker · offline fallback"]
+        prompts["prompts/ · structured_output/"]
+        sandbox["sandbox.py · worker_pool.py · backends/"]
+    end
+
+    subgraph L4["State"]
+        direction LR
+        memory["memory.py&lt;br/&gt;conversation history (aiosqlite pool)"]
+        knowledge["knowledge/&lt;br/&gt;notes · FTS5 · graph"]
+        cache["semantic_cache.py · caching/"]
+        vector["vector/&lt;br/&gt;sqlite · qdrant · memory"]
+        config["config.py&lt;br/&gt;pydantic · hot reload"]
+        stats["cost_tracker.py · metering.py · audit_log.py"]
+    end
+
+    subgraph L5["Operations"]
+        direction LR
+        doctor["doctor/&lt;br/&gt;health checks · integrity"]
+        updater["updater/ (repo root)&lt;br/&gt;safe updates · app backup · migrations"]
+        selfupd["selfupdate.py&lt;br/&gt;agent proposals → updater"]
+        backupx["backup.py&lt;br/&gt;settings · keys · knowledge"]
+        obs["observability/ · metrics.py · logging_config.py"]
+    end
+
+    L1 --&gt; L2 --&gt; L3 --&gt; L4
+    L5 -.-&gt; L1 &amp; L2 &amp; L3 &amp; L4</code></pre>
+<hr />
+<h2 id="3-a-chat-message-end-to-end">3. A chat message, end to end<a class="headerlink" href="#3-a-chat-message-end-to-end" title="Permanent link">&para;</a></h2>
+<p>What happens inside one agent when it answers (Telegram and the terminal
+follow the same path from <code>Agent</code> onwards; the Telegram steps before <code>Agent</code>
+are in <a href="#15-telegram-bot">§15</a>). Since 0.7.1 the Web UI reaches
+<code>Agent.stream_think</code> through chat channels — see <a href="#12-chat-channels-and-agent-to-agent-talk">§12</a>;
+the per-agent socket shown here still works for scripts.</p>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    actor U as You
+    participant UI as Web UI (React)
+    participant WS as web/api.py&lt;br/&gt;WebSocket /ws/chat/{agent}
+    participant A as Agent.stream_think
+    participant R as router + medic loop guard
+    participant C as context_builder
+    participant M as memory.py
+    participant K as knowledge/
+    participant P as provider.py
+    participant T as tools/
+
+    U-&gt;&gt;UI: type a message
+    UI-&gt;&gt;WS: send text
+    WS-&gt;&gt;WS: quota + optional MFA check
+    WS-&gt;&gt;A: stream_think(text, user="webui")
+    A-&gt;&gt;R: start task timer, depth + loop limits
+    A-&gt;&gt;M: add(user message)
+    A-&gt;&gt;C: build context
+    C-&gt;&gt;M: get_history() (flushes buffered turns)
+    C-&gt;&gt;K: search notes for relevant knowledge
+    C--&gt;&gt;A: system prompt + history + knowledge
+    A-&gt;&gt;P: chat(messages, stream=True)
+    P--&gt;&gt;A: token stream (+ tool calls, collected at the end)
+    A--&gt;&gt;WS: tokens
+    opt no text and no tool calls (empty reply)
+        A-&gt;&gt;P: ask once more without streaming
+        P--&gt;&gt;A: reply, or "model returned an empty answer" note
+    end
+    WS--&gt;&gt;UI: __STREAM_START__ … tokens … __STREAM_END__
+    opt the model asked for tools
+        A-&gt;&gt;T: execute (parallel when independent)
+        T--&gt;&gt;A: results
+        A-&gt;&gt;P: chat again with tool results
+        P--&gt;&gt;A: final answer stream
+        A--&gt;&gt;WS: tokens
+    end
+    A-&gt;&gt;M: add(assistant reply)
+    UI--&gt;&gt;U: rendered reply</code></pre>
+<hr />
+<h2 id="4-provider-selection-rotation-and-fallback">4. Provider selection, rotation and fallback<a class="headerlink" href="#4-provider-selection-rotation-and-fallback" title="Permanent link">&para;</a></h2>
+<p>How a request reaches a model, and what happens when that fails. Changed in
+0.5.0: the agent never silently switches to another provider <em>unless you
+asked for it</em> — 0.7.1 adds an explicit rotation list (Models page).</p>
+<pre class="mermaid"><code>flowchart TD
+    start(["Agent needs a reply"]) --&gt; rot{"Rotation on and this agent&lt;br/&gt;uses the default model?"}
+    rot -- yes --&gt; order["Candidates = default + rotation list&lt;br/&gt;(round-robin: start at the next one)"]
+    order --&gt; tryc["provider.chat() with candidate"]
+    tryc -- ok --&gt; replied(["Stream reply&lt;br/&gt;(model shown on the message)"])
+    tryc -- "error: rate limit, down,&lt;br/&gt;missing model, in-stream error" --&gt; nextc{"more candidates?"}
+    nextc -- yes --&gt; tryc
+    nextc -- no --&gt; fail(["Error shown in chat"])
+    rot -- no --&gt; pick["Provider = agent's own, else agents.defaults.provider&lt;br/&gt;(built-in or one of your providers)"]
+    pick --&gt; init{"Provider can start?&lt;br/&gt;(SDK installed, API key set)"}
+    init -- no --&gt; err["ProviderUnavailableError&lt;br/&gt;clear message shown in chat"]
+    init -- yes --&gt; breaker{"Circuit breaker&lt;br/&gt;open?"}
+    breaker -- closed --&gt; llmcall["provider.chat()"]
+    llmcall -- ok --&gt; replied
+    llmcall -- "server rejects tool list&lt;br/&gt;(llama.cpp without --jinja)" --&gt; notools["Retry once without tools&lt;br/&gt;remember for next calls"]
+    notools --&gt; replied
+    llmcall -- "connection error" --&gt; offline{"intelligence.offline_mode?"}
+    breaker -- open --&gt; offline
+    offline -- no --&gt; fail
+    offline -- yes --&gt; fb["Try local providers in order&lt;br/&gt;Ollama → LM Studio → llama.cpp&lt;br/&gt;(skipping the one that just failed)"]
+    fb -- ok --&gt; replied
+    fb -- none reachable --&gt; fail</code></pre>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Talks to</th>
+<th>Python package</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>llamacpp</code></td>
+<td><code>llama-server</code> (OpenAI API, default <code>:8080/v1</code>)</td>
+<td><code>openai</code></td>
+</tr>
+<tr>
+<td><code>ollama</code></td>
+<td>Ollama native API (<code>:11434/api/chat</code>)</td>
+<td>— (httpx)</td>
+</tr>
+<tr>
+<td><code>lmstudio</code></td>
+<td>LM Studio (OpenAI API, <code>:1234/v1</code>)</td>
+<td><code>openai</code></td>
+</tr>
+<tr>
+<td><code>openai</code>, <code>groq</code>, <code>openrouter</code></td>
+<td>OpenAI-compatible cloud APIs</td>
+<td><code>openai</code></td>
+</tr>
+<tr>
+<td><code>anthropic</code></td>
+<td>Anthropic Messages API</td>
+<td><code>anthropic</code> (optional)</td>
+</tr>
+<tr>
+<td><code>gemini</code></td>
+<td>Google Gemini</td>
+<td><code>google-generativeai</code> (optional)</td>
+</tr>
+<tr>
+<td><em>your own</em> (<code>providers.custom</code>)</td>
+<td>any OpenAI-compatible server, or another Ollama</td>
+<td><code>openai</code> / httpx</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5-tool-execution">5. Tool execution<a class="headerlink" href="#5-tool-execution" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart LR
+    llm["Model returns tool calls"] --&gt; exec["agent_internals/tool_executor.py"]
+    exec --&gt; indep{"Independent&lt;br/&gt;of each other?"}
+    indep -- yes --&gt; par["Run in parallel"]
+    indep -- no --&gt; seq["Run in order"]
+    par &amp; seq --&gt; hooks["pre/post hooks&lt;br/&gt;tools/core.py"]
+    hooks --&gt; kind{"Tool type"}
+    kind -- shell --&gt; allow["Allow-list + blocked commands&lt;br/&gt;tools/shell.py"]
+    kind -- generated / external skill --&gt; sb["Sandbox&lt;br/&gt;sandbox.py · worker_pool.py"]
+    kind -- web / browser --&gt; ssrf["URL safety checks&lt;br/&gt;tools/web.py · tools/browser.py"]
+    kind -- other --&gt; direct["Run function"]
+    allow &amp; sb &amp; ssrf &amp; direct --&gt; audit["audit_log.py · metrics"]
+    audit --&gt; back["Results back to the model"]</code></pre>
+<hr />
+<h2 id="6-swarms">6. Swarms<a class="headerlink" href="#6-swarms" title="Permanent link">&para;</a></h2>
+<p>A swarm splits one task across several agents (<code>swarm/orchestrator.py</code>).</p>
+<pre class="mermaid"><code>flowchart LR
+    task(["Task"]) --&gt; orch["SwarmOrchestrator"]
+    orch --&gt; strat{"Strategy"}
+    strat --&gt; p["Parallel&lt;br/&gt;all agents at once"]
+    strat --&gt; s["Sequential&lt;br/&gt;each builds on the last"]
+    strat --&gt; h["Hierarchical&lt;br/&gt;coordinator delegates"]
+    strat --&gt; v["Voting&lt;br/&gt;agents vote on answers"]
+    p &amp; s &amp; h &amp; v --&gt; agg["Aggregation&lt;br/&gt;synthesis · best · concatenate"]
+    agg --&gt; store[("swarm/storage.py&lt;br/&gt;SQLite")]
+    agg --&gt; result(["Result"])</code></pre>
+<hr />
+<h2 id="7-settings-from-the-web-ui">7. Settings from the Web UI<a class="headerlink" href="#7-settings-from-the-web-ui" title="Permanent link">&para;</a></h2>
+<p>Added in 0.5.0 (<code>web/settings_api.py</code>).</p>
+<pre class="mermaid"><code>sequenceDiagram
+    actor U as You
+    participant S as Settings page
+    participant API as /api/settings
+    participant G as access guard
+    participant F as ~/.myclaw/config.json
+    participant R as agent registry
+
+    U-&gt;&gt;S: change model / keys / agents
+    S-&gt;&gt;API: PUT {changes, clear_secrets}
+    API-&gt;&gt;G: from localhost, or X-API-Key = admin key?
+    G--&gt;&gt;API: allowed
+    API-&gt;&gt;API: validate against AppConfig schema&lt;br/&gt;(empty secret = keep stored value)
+    API-&gt;&gt;F: save (encrypted if a key exists)
+    API-&gt;&gt;R: rebuild agents, clear provider cache
+    API--&gt;&gt;S: saved (+ which changes need a restart)
+    Note over S,API: GET never returns secrets — only which ones are set</code></pre>
+<hr />
+<h2 id="8-where-data-lives">8. Where data lives<a class="headerlink" href="#8-where-data-lives" title="Permanent link">&para;</a></h2>
+<p>Everything personal is under <code>~/.myclaw</code>, shared by every installed version.</p>
+<pre class="mermaid"><code>flowchart TB
+    subgraph data["~/.myclaw"]
+        direction TB
+        cfgf["config.json · .config_key&lt;br/&gt;settings + API keys (mode 600)"]
+        mem["memory_&amp;lt;user&amp;gt;.db&lt;br/&gt;conversation history"]
+        kdb["knowledge/ + knowledge_&amp;lt;user&amp;gt;.db&lt;br/&gt;Markdown notes + FTS5 index"]
+        tlb["tools/ · skills/ · plugins/ · hub/&lt;br/&gt;generated tools and installed skills"]
+        misc["cost · metering · audit · swarm · state DBs"]
+        med["medic/&lt;br/&gt;integrity baseline · file backups · task log · proposals/"]
+        chatdb["chat.db · jobs.db&lt;br/&gt;channels + messages · jobs + runs (0.7.1)"]
+        logs["logs/zensynora.log&lt;br/&gt;rotating JSON log (since 0.7.0)"]
+        mig[".migrations.json&lt;br/&gt;applied data migrations"]
+    end
+    app["ZenSynora (any version)"] &lt;--&gt; data
+    upd["updater"] -- "backup before every update" --&gt; data
+    bkp["~/.myclaw-backups/&lt;br/&gt;your backups (manual / automatic)"] &lt;-- "zensynora backup · Backups page" --&gt; data
+    doc["doctor / medic"] -- "reads + safe fixes" --&gt; data</code></pre>
+<hr />
+<h2 id="9-safe-updates">9. Safe updates<a class="headerlink" href="#9-safe-updates" title="Permanent link">&para;</a></h2>
+<p><code>zensynora update</code> (<code>updater/</code>, added in 0.6.0; program-folder backup and
+data check added in 0.7.1). Steps 1–10 never touch the running version; any
+failure undoes the completed steps in reverse order.</p>
+<pre class="mermaid"><code>flowchart TD
+    s1["1 Preflight&lt;br/&gt;Python, disk space, service state"] --&gt; s2["2 Fetch&lt;br/&gt;GitHub, folder or archive"]
+    s2 --&gt; s3["3 Hand-off&lt;br/&gt;newer updater takes over"]
+    s3 --&gt; s4["4 Back up ~/.myclaw + .env"]
+    s4 --&gt; s5["5 Back up the whole program folder&lt;br/&gt;archive + inventory of every file"]
+    s5 --&gt; s6["6 Carry over .env, data/"]
+    s6 --&gt; s7["7 Build side by side&lt;br/&gt;venv · packages · extras · Web UI"]
+    s7 --&gt; s8["8 Verify&lt;br/&gt;imports new code, loads YOUR config"]
+    s8 --&gt; s9["9 Stop service"]
+    s9 --&gt; s10["10 Data migrations"]
+    s10 --&gt; s11["11 Activate&lt;br/&gt;atomic symlink switch"]
+    s11 --&gt; s12["12 Settings, API keys, knowledge&lt;br/&gt;checked, restored if missing"]
+    s12 --&gt; s13["13 Start service, confirm up"]
+    s13 --&gt; s14(["14 Record, prune old releases"])
+
+    s2 &amp; s7 &amp; s8 &amp; s10 &amp; s11 &amp; s13 -. "failure" .-&gt; rb["Roll back&lt;br/&gt;old version active again · data restored if migrated ·&lt;br/&gt;program folder compared with the inventory and&lt;br/&gt;restored from the archive if anything differs"]</code></pre>
+<hr />
+<h2 id="10-doctor-and-medic">10. Doctor and medic<a class="headerlink" href="#10-doctor-and-medic" title="Permanent link">&para;</a></h2>
+<p><code>zensynora doctor</code>, the Web UI <strong>Doctor</strong> page and the medic agent's tools
+share one set of checks (<code>myclaw/doctor/</code>, rewritten in 0.7.0).</p>
+<pre class="mermaid"><code>flowchart LR
+    subgraph callers["Callers"]
+        c1["zensynora doctor [--fix]"]
+        c2["Web UI → Doctor"]
+        c3["Medic tools&lt;br/&gt;check_system_health · get_health_report"]
+        c4["Gateway startup scan"]
+        c5["Agent error diagnosis"]
+    end
+    callers --&gt; run["run_checks()"]
+    subgraph checks["Checks (doctor/checks.py)"]
+        e["environment&lt;br/&gt;Python · packages · provider SDKs · disk · RAM · CPU"]
+        cf["configuration&lt;br/&gt;file valid · providers · API keys"]
+        l["llm (network)&lt;br/&gt;server reachable · model exists"]
+        d["data&lt;br/&gt;folders · SQLite quick_check · migrations"]
+        sec["security&lt;br/&gt;file permissions · Web UI access"]
+        i["install · runtime · integrity&lt;br/&gt;layout · Web UI build · log errors · service · hashes"]
+    end
+    run --&gt; checks --&gt; rep["Report&lt;br/&gt;ok / warn / fail + how to fix"]
+    rep -- "--fix" --&gt; fx["Safe fixes&lt;br/&gt;folders · permissions · migrations"]
+
+    subgraph medicx["Other medic tools"]
+        m1["scan_files · verify_file_integrity · recover_file"]
+        m2["create_backup · list_backups"]
+        m3["validate_modification · detect_errors_in_file · check_file_virustotal"]
+        m4["record_task_execution · get_task_analytics"]
+        m5["prevent_infinite_loop&lt;br/&gt;called by the router on every step"]
+        m6["read_source_file · propose_code_change ·&lt;br/&gt;get_recent_problems · record_lesson (0.7.1, §14)"]
+    end</code></pre>
+<hr />
+<h2 id="11-install-layout-on-disk">11. Install layout on disk<a class="headerlink" href="#11-install-layout-on-disk" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart TB
+    base["~/.local/share/zensynora/"]
+    base --&gt; src["source → releases/0.7.1-…&lt;br/&gt;(symlink: the active version)"]
+    base --&gt; rel["releases/"]
+    rel --&gt; r1["0.7.1-20261013T…&lt;br/&gt;code + venv/ + webui/dist"]
+    rel --&gt; r2["0.7.0-…&lt;br/&gt;kept for rollback"]
+    base --&gt; bk["backups/&lt;br/&gt;~/.myclaw snapshots + app-folder.tar.gz (mode 700)"]
+    base --&gt; stg["staging/&lt;br/&gt;temporary copies for approved proposals"]
+    base --&gt; lg["logs/update-*.log"]
+    base --&gt; st["updater-state.json"]
+    svc["systemd myclaw.service&lt;br/&gt;and source/venv/bin/activate"] -. "use the path through" .-&gt; src</code></pre>
+<hr />
+<h2 id="12-chat-channels-and-agent-to-agent-talk">12. Chat channels and agent-to-agent talk<a class="headerlink" href="#12-chat-channels-and-agent-to-agent-talk" title="Permanent link">&para;</a></h2>
+<p>Added in 0.7.1 (<code>myclaw/chat/</code>, <code>myclaw/events.py</code>, <code>myclaw/web/chat_api.py</code>,
+<code>webui/src/components/ChatView.tsx</code>).</p>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    actor U as You
+    participant UI as Chat (React)
+    participant WS as /ws/channels/{id}
+    participant E as ChatEngine
+    participant S as chat.db
+    participant A1 as @default
+    participant A2 as @writer
+    participant EV as events.py
+
+    U-&gt;&gt;UI: "@default ask writer for a haiku"
+    UI-&gt;&gt;WS: {type: message}
+    WS-&gt;&gt;E: post()
+    E-&gt;&gt;S: save your message
+    E-&gt;&gt;E: who answers? @mentions, else reply mode&lt;br/&gt;(lead · everyone in turn · everyone at once)
+    E-&gt;&gt;A1: stream_think(group context + message)&lt;br/&gt;CURRENT_CHANNEL / CURRENT_AGENT set
+    A1-&gt;&gt;EV: delegation_start (default → writer)
+    EV--&gt;&gt;WS: event → card in chat + Activity panel
+    EV-&gt;&gt;S: saved as an "event" message
+    A1-&gt;&gt;A2: delegate tool → think(task)
+    A2--&gt;&gt;A1: haiku
+    A1-&gt;&gt;EV: delegation_end (+ result, ms)
+    A1--&gt;&gt;E: answer tokens
+    E--&gt;&gt;WS: stream_start · chunk… · stream_end (model, time)
+    E-&gt;&gt;S: save the answer</code></pre>
+<ul>
+<li>Each <code>(channel, agent)</code> pair has its own conversation memory
+  (<code>MEMORY_SCOPE</code>); the knowledge base is shared.</li>
+<li>Tool calls (<code>tool_start</code> / <code>tool_end</code>), swarm hand-offs and job runs travel
+  the same way. Nothing is emitted when no channel is set, so the CLI,
+  Telegram and tests are unaffected.</li>
+</ul>
+<hr />
+<h2 id="13-jobs">13. Jobs<a class="headerlink" href="#13-jobs" title="Permanent link">&para;</a></h2>
+<p>Added in 0.7.1 (<code>myclaw/jobs/</code>, <code>myclaw/web/jobs_api.py</code>, Jobs page).</p>
+<pre class="mermaid"><code>flowchart LR
+    ui["Jobs page / API&lt;br/&gt;add · edit · pause · run now"] --&gt; store[("jobs.db&lt;br/&gt;jobs + runs")]
+    tick["runner loop&lt;br/&gt;(every few s, inside zensynora webui)"] -- "due jobs" --&gt; run
+    ui -- "Run now" --&gt; run["run_job()&lt;br/&gt;agent.think(prompt)&lt;br/&gt;timeout · retries · clean memory"]
+    run --&gt; store
+    run -- "post result" --&gt; chan["channel (optional)"]
+    run -- "auto-evaluate" --&gt; judge["main model scores 0-10&lt;br/&gt;against success criteria"]
+    ui -- "Benchmark" --&gt; bench["same prompt on up to 8 models&lt;br/&gt;time + score side by side"]
+    bench --&gt; store
+    judge --&gt; store
+    tick -- "also" --&gt; ab["automatic backups when due"]</code></pre>
+<hr />
+<h2 id="14-self-update-proposals">14. Self-update proposals<a class="headerlink" href="#14-self-update-proposals" title="Permanent link">&para;</a></h2>
+<p>Added in 0.7.1 (<code>myclaw/selfupdate.py</code>, <code>myclaw/web/medic_api.py</code>, Doctor page,
+<code>zensynora medic</code>). Agents never write to the program folder.</p>
+<pre class="mermaid"><code>flowchart TD
+    probs["get_recent_problems&lt;br/&gt;log errors · failed / low-score jobs"] --&gt; agent["Agent (medic self-review job,&lt;br/&gt;or any agent you ask in chat)"]
+    agent -- read_source_file --&gt; code[("installed code, read-only")]
+    agent -- propose_code_change --&gt; check{"inside program folder? no venv/.git/.env?&lt;br/&gt;Python compiles? size ok?"}
+    check -- no --&gt; back["refused · reason returned to the agent"]
+    check -- yes --&gt; prop["proposal + diff&lt;br/&gt;~/.myclaw/medic/proposals/"]
+    prop --&gt; you{"You review&lt;br/&gt;Doctor → Change proposals"}
+    you -- reject --&gt; rj["rejected"]
+    you -- approve --&gt; stale{"code unchanged&lt;br/&gt;since the proposal?"}
+    stale -- no --&gt; outd["failed: ask for a new proposal"]
+    stale -- yes --&gt; stage["staging/ = copy of current release + change"]
+    stage --&gt; upd["update.sh update --from-dir staging --force&lt;br/&gt;(all steps of §9)"]
+    upd -- ok --&gt; ok["new release active · restart to use it ·&lt;br/&gt;zensynora update rollback undoes it"]
+    upd -- failure --&gt; rb["rolled back · running version unchanged"]
+    agent -- record_lesson --&gt; kb[("knowledge note&lt;br/&gt;medic-lessons")]
+    kb -. "found by later searches" .-&gt; agent</code></pre>
+<hr />
+<h2 id="15-telegram-bot">15. Telegram bot<a class="headerlink" href="#15-telegram-bot" title="Permanent link">&para;</a></h2>
+<p><code>myclaw/channels/telegram.py</code>, started by <code>myclaw/web/telegram_api.py</code> (inside
+<code>zensynora webui</code>) or by <code>myclaw/gateway.py</code> (<code>zensynora gateway</code>). User guide:
+<a href="../telegram_guide/">telegram_guide.md</a>.</p>
+<p><strong>Where the bot runs.</strong> With <code>channels.telegram.enabled</code> and
+<code>channels.telegram.run_in_webui</code> (default on) the Web UI process starts the
+bot. <code>zensynora gateway</code> runs it without the Web UI. Telegram lets only one
+copy of a bot receive messages: a second copy gets "conflict" and the Web UI
+stops its own.</p>
+<pre class="mermaid"><code>flowchart LR
+    tgapp(["Telegram app&lt;br/&gt;you, on your phone"]) &lt;--&gt; tgsrv["Telegram servers"]
+    subgraph webproc["zensynora webui · one process"]
+        tapi["web/telegram_api.py&lt;br/&gt;status · test · restart"]
+        tch1["TelegramChannel"]
+        reg1["agent registry&lt;br/&gt;same agents as the Web UI"]
+        tapi --&gt; tch1 --&gt; reg1
+    end
+    subgraph gwproc["zensynora gateway · alternative"]
+        tch2["TelegramChannel"]
+        reg2["agent registry"]
+        tch2 --&gt; reg2
+    end
+    tch1 -- "polling" --&gt; tgsrv
+    tch2 -. "polling, only if the Web UI copy is off" .-&gt; tgsrv
+    reg1 &amp; reg2 --&gt; kb[("main knowledge base&lt;br/&gt;shared with the Web UI")]
+    reg1 &amp; reg2 --&gt; mem[("conversation memory&lt;br/&gt;one per Telegram user")]
+    settings["Settings → Channels&lt;br/&gt;Test bot · Restart bot"] --&gt; tapi</code></pre>
+<p><strong>One message, end to end.</strong></p>
+<pre class="mermaid"><code>sequenceDiagram
+    autonumber
+    actor U as You in Telegram
+    participant T as Telegram servers
+    participant C as TelegramChannel
+    participant Q as Queue
+    participant W as Worker
+    participant A as Agent
+    U-&gt;&gt;T: "@writer a haiku about rain"
+    T-&gt;&gt;C: update via polling
+    C-&gt;&gt;C: allowFrom check: numeric id or @username
+    alt not allowed
+        C--&gt;&gt;C: log the user id once and ignore
+    else allowed
+        C-&gt;&gt;Q: put the message
+        Q-&gt;&gt;W: next message of this chat
+        Note over Q,W: several workers, so several chats in parallel,&lt;br/&gt;one message at a time per chat
+        W-&gt;&gt;T: typing… while the agent works
+        W-&gt;&gt;W: @agent routing: remove @YourBot,&lt;br/&gt;match @writer ignoring case, else default agent
+        W-&gt;&gt;A: think(text) with this user's memory
+        A--&gt;&gt;W: answer, or a short plain error
+        W-&gt;&gt;W: split into messages of at most 4096 characters
+        W-&gt;&gt;T: send each part, as plain text if Markdown fails
+        T--&gt;&gt;U: answer
+    end</code></pre>
+<ul>
+<li><code>/start</code>, <code>/help</code> and <code>/whoami</code> answer everyone; all other commands need an
+  allowed user.</li>
+<li>Photos, voice messages and documents: the caption is used as the message;
+  without a caption the bot says it can only read text for now.</li>
+<li>Agents created later (<code>create_agent</code>, Settings) are found without a restart.</li>
+<li>Answers from a named agent start with <code>@Name:</code>.</li>
+<li>Polling is the default; <code>zensynora gateway --webhook-url … --port 8443</code>
+  switches the gateway copy to webhook mode (path <code>/webhook</code>). The Web UI copy
+  always polls. <code>ZENSYNORA_TELEGRAM_API_URL</code> points either copy at a
+  self-hosted Bot API server.</li>
+</ul>
+<hr />
+<p><em>Diagrams are Mermaid; GitHub renders them directly. Standalone dark-theme
+pages are generated into <a href="../diagrams/index.html"><code>diagrams/</code></a> with
+<code>python diagrams/generate.py</code>.</em></p>
+<h2 id="16-providers-keys-and-agents">16. Providers, keys and agents<a class="headerlink" href="#16-providers-keys-and-agents" title="Permanent link">&para;</a></h2>
+<p>Since the Unreleased changes a provider can hold several named API keys
+(<code>providers.&lt;name&gt;.keys</code>; the plain <code>api_key</code> is the <em>Default key</em>). Each agent,
+the default model and every rotation entry pick a provider, a key and a model.
+With <code>providers.&lt;name&gt;.rotate_keys</code> on, a rate-limited or exhausted key makes
+the agent try the same model with the provider's other keys before the next
+model. Cooldowns are kept per provider, model and key.</p>
+<pre class="mermaid"><code>flowchart LR
+    agent["Agent&lt;br/&gt;provider · key · model"] --&gt; pick{"key id"}
+    pick -- "empty" --&gt; defkey["Default key&lt;br/&gt;providers.X.api_key"]
+    pick -- "work" --&gt; named["Named key&lt;br/&gt;providers.X.keys[work]"]
+    pick -- "unknown" --&gt; warn["warning in the log&lt;br/&gt;uses the Default key"] --&gt; defkey
+    defkey &amp; named --&gt; client["provider client&lt;br/&gt;cached per provider + key"]
+    client --&gt; llm(["model server"])
+    llm -- "429 · quota · 401" --&gt; rot{"rotate_keys on?"}
+    rot -- "yes" --&gt; other["same model,&lt;br/&gt;next key of the provider"] --&gt; client
+    rot -- "no" --&gt; next["next model in the rotation list"]</code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

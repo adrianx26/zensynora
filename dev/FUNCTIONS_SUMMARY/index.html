@@ -1,0 +1,2337 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/dev/FUNCTIONS_SUMMARY/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Functions Summary - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#functions-summary" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Functions Summary
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#core-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Modules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Modules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#myclawagentpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/agent.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawmemorypy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/memory.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawtools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/tools/
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawproviderpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/provider.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawconfigpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/config.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawcontext_windowpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/context_window.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawsemantic_cachepy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/semantic_cache.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawsemantic_memorypy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/semantic_memory.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swarm-system-myclawswarm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Swarm System (myclaw/swarm/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Swarm System (myclaw/swarm/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#myclawswarmmodelspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/swarm/models.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawswarmorchestratorpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/swarm/orchestrator.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawswarmstrategiespy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/swarm/strategies.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawswarmcollaborationpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/swarm/collaboration.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawswarmstoragepy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/swarm/storage.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#knowledge-system-myclawknowledge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Knowledge System (myclaw/knowledge/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Knowledge System (myclaw/knowledge/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#myclawknowledgedbpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/knowledge/db.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawknowledgestoragepy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/knowledge/storage.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawknowledgeparserpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/knowledge/parser.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawknowledgegraphpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/knowledge/graph.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawknowledgesyncpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/knowledge/sync.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-system-myclawagents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent System (myclaw/agents/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent System (myclaw/agents/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#myclawagentsregistrypy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/agents/registry.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawagentsdiscoverypy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/agents/discovery.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawagentsmedic_agentpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/agents/medic_agent.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawagentsnewtech_agentpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/agents/newtech_agent.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawagentsskill_adapterpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/agents/skill_adapter.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#channels-myclawchannels" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Channels (myclaw/channels/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Channels (myclaw/channels/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#myclawchannelstelegrampy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/channels/telegram.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawchannelswhatsapppy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/channels/whatsapp.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#backends-myclawbackends" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Backends (myclaw/backends/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Backends (myclaw/backends/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#myclawbackendsbasepy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/backends/base.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawbackendslocalpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/backends/local.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawbackendsdockerpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/backends/docker.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawbackendssshpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/backends/ssh.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawbackendswsl2py" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/backends/wsl2.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawbackendsdiscoverpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/backends/discover.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#other-core-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Other Core Modules
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Other Core Modules">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#myclawapi_serverpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/api_server.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawplugin_systempy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/plugin_system.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawsandboxpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/sandbox.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawself_healerpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/self_healer.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawskill_preloaderpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/skill_preloader.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawskill_generatorpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/skill_generator.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawmultimodalpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/multimodal.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawvoice_channelpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/voice_channel.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawweb_searchpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/web_search.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawdashboardpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/dashboard.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawdashboard_serverpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/dashboard_server.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawlogging_configpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/logging_config.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawgatewaypy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/gateway.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#myclawexceptionspy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        myclaw/exceptions.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hub-system-myclawhub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hub System (myclaw/hub/)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-profiles-myclawagent_profiles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Profiles (myclaw/agent_profiles/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Agent Profiles (myclaw/agent_profiles/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-development" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Development
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#language-specialists" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Language Specialists
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#infrastructure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Infrastructure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#quality-security" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality &amp; Security
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#data-ai" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data &amp; AI
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#meta-orchestration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Meta &amp; Orchestration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swarm-strategies-myclawswarmstrategiespy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Swarm Strategies (myclaw/swarm/strategies.py)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-categories-136-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Categories (136+ agents)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#statistics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Statistics
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="functions-summary">Functions Summary<a class="headerlink" href="#functions-summary" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Developer notes — status as of 2026-10-13 (v0.7.0).</strong> Working plan/report written during development; it may describe planned or superseded work. For current behaviour see <a href="../../">docs/README.md</a>.</p>
+</blockquote>
+<p><strong>Last Updated:</strong> 2026-03-29
+<strong>Total Functions:</strong> 300+</p>
+<hr />
+<h2 id="core-modules">Core Modules<a class="headerlink" href="#core-modules" title="Permanent link">&para;</a></h2>
+<h3 id="myclawagentpy">myclaw/agent.py<a class="headerlink" href="#myclawagentpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>Agent</code> — Personal AI agent with per-user memory, native tool calling, multi-agent delegation</p>
+<p><strong>Methods:</strong>
+- <code>__init__(self, config, name="default", model=None, system_prompt=None, provider_name=None)</code> — Initialize agent
+- <code>provider</code> (property) — Lazy provider initialization
+- <code>close(self)</code> — Close all memory instances
+- <code>__aenter__</code>, <code>__aexit__</code> — Async context manager support
+- <code>_get_memory(user_id)</code> — Get or create memory for user
+- <code>_search_knowledge_context(message, user_id, max_results)</code> — Auto-search knowledge base</p>
+<hr />
+<h3 id="myclawmemorypy">myclaw/memory.py<a class="headerlink" href="#myclawmemorypy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>AsyncSQLitePool</code> — Async connection pool for SQLite databases
+- <code>SQLitePool</code> — Sync connection pool for SQLite databases
+- <code>Memory</code> — Async SQLite-backed conversation memory with per-user isolation</p>
+<p><strong>Async Functions:</strong>
+- <code>cleanup_on_shutdown()</code> — Clean up resources on shutdown</p>
+<p><strong>Memory Methods:</strong>
+- <code>initialize()</code> — Initialize async connection and schema
+- <code>add(role, content)</code> — Add message to history
+- <code>get_history()</code> — Retrieve conversation history
+- <code>get_recent(n)</code> — Get n most recent messages
+- <code>search(query, limit)</code> — Search conversation history
+- <code>cleanup_days(days)</code> — Delete messages older than days
+- <code>close()</code> — Close database connection</p>
+<hr />
+<h3 id="myclawtools">myclaw/tools/<a class="headerlink" href="#myclawtools" title="Permanent link">&para;</a></h3>
+<p><strong>Main Functions:</strong>
+- <code>get_tools()</code> — Get list of all available tools
+- <code>register_tool(name, code, documentation, parameters)</code> — Register new tool
+- <code>list_tools()</code> — List all registered tools
+- <code>list_toolbox()</code> — List toolbox tools
+- <code>get_tool_documentation(name)</code> — Get tool docs
+- <code>trigger_hook(name, *args)</code> — Trigger hook by name
+- <code>is_tool_independent(name)</code> — Check if tool is independent</p>
+<p><strong>Async Tool Functions:</strong>
+- <code>shell_async(cmd, timeout)</code> — Execute shell command async
+- <code>delegate(agent_name, task, _depth)</code> — Delegate to agent
+- <code>swarm_create(name, strategy, workers, coordinator, aggregation)</code> — Create swarm
+- <code>swarm_assign(swarm_id, task, user_id)</code> — Assign task to swarm
+- <code>swarm_status(swarm_id)</code> — Get swarm status
+- <code>swarm_result(swarm_id)</code> — Get swarm result
+- <code>swarm_terminate(swarm_id)</code> — Terminate swarm
+- <code>swarm_list(status)</code> — List swarms
+- <code>swarm_stats()</code> — Get swarm statistics
+- <code>swarm_message(swarm_id, message)</code> — Send message to swarm</p>
+<p><strong>Schedule Tool Functions:</strong>
+- <code>schedule(task, delay, every, user_id)</code> — Schedule task
+- <code>edit_schedule(job_id, new_task, delay, every)</code> — Edit scheduled task
+- <code>split_schedule(job_id, sub_tasks_json)</code> — Split schedule into subtasks
+- <code>suspend_schedule(job_id)</code> — Suspend scheduled task
+- <code>resume_schedule(job_id)</code> — Resume scheduled task
+- <code>cancel_schedule(job_id)</code> — Cancel scheduled task
+- <code>list_schedules()</code> — List all schedules</p>
+<p><strong>Knowledge Tool Functions:</strong>
+- <code>write_to_knowledge(title, content)</code> — Write to knowledge base
+- <code>search_knowledge(query)</code> — Search knowledge base
+- <code>read_knowledge(permalink)</code> — Read knowledge note
+- <code>get_knowledge_context(permalink, depth)</code> — Get related context
+- <code>list_knowledge()</code> — List all knowledge
+- <code>get_related_knowledge(permalink)</code> — Get related entities
+- <code>sync_knowledge_base()</code> — Sync knowledge base
+- <code>list_knowledge_tags()</code> — List all tags</p>
+<hr />
+<h3 id="myclawproviderpy">myclaw/provider.py<a class="headerlink" href="#myclawproviderpy" title="Permanent link">&para;</a></h3>
+<p><strong>Functions:</strong>
+- <code>get_provider(config, name)</code> — Get provider instance
+- <code>list_providers()</code> — List available providers</p>
+<hr />
+<h3 id="myclawconfigpy">myclaw/config.py<a class="headerlink" href="#myclawconfigpy" title="Permanent link">&para;</a></h3>
+<p><strong>Functions:</strong>
+- <code>_start_config_watcher()</code> — Start file watcher for config changes
+- <code>save_config(config)</code> — Save config to disk
+- <code>load_config(path)</code> — Load config from disk
+- <code>get_config()</code> — Get current config</p>
+<hr />
+<h3 id="myclawcontext_windowpy">myclaw/context_window.py<a class="headerlink" href="#myclawcontext_windowpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>ContextWindow</code> — Configuration for context window
+- <code>MessageToken</code> — Message with token tracking
+- <code>TokenCounter</code> — Token counting utility
+- <code>ContextSummary</code> — Summary of context for compression
+- <code>AdvancedContextManager</code> — Manages large context windows</p>
+<p><strong>Functions:</strong>
+- <code>create_context_manager(model)</code> — Create context manager instance
+- <code>get_model_context_limit(model)</code> — Get context limit for model</p>
+<p><strong>ContextManager Methods:</strong>
+- <code>set_system_prompt(prompt, token_count)</code> — Set system prompt
+- <code>add_message(role, content)</code> — Add message
+- <code>get_messages()</code> — Get messages
+- <code>get_token_count()</code> — Get total token count
+- <code>get_token_budget()</code> — Get remaining budget
+- <code>fit_within_limit(additional_tokens)</code> — Check if fits
+- <code>optimize_context(preserve_recent)</code> — Summarize context</p>
+<hr />
+<h3 id="myclawsemantic_cachepy">myclaw/semantic_cache.py<a class="headerlink" href="#myclawsemantic_cachepy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>CacheEntry</code> — Cached LLM response with embedding
+- <code>SemanticCache</code> — Semantic similarity-based cache</p>
+<p><strong>Methods:</strong>
+- <code>get(messages, model)</code> — Lookup cached response
+- <code>set(messages, model, response, tool_calls)</code> — Store cached response
+- <code>invalidate(pattern)</code> — Invalidate cache entries
+- <code>clear()</code> — Clear all cache
+- <code>get_stats()</code> — Get cache statistics
+- <code>save()</code> — Persist cache to disk
+- <code>load()</code> — Load cache from disk</p>
+<hr />
+<h3 id="myclawsemantic_memorypy">myclaw/semantic_memory.py<a class="headerlink" href="#myclawsemantic_memorypy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>Preference</code> — Single user preference
+- <code>UserProfile</code> — User profile with learned preferences
+- <code>PreferenceLearner</code> — Learns user preferences from interactions</p>
+<p><strong>Methods:</strong>
+- <code>get_profile(user_id)</code> — Get user profile
+- <code>learn_from_conversation(user_id, messages, assistant_response)</code> — Learn preferences
+- <code>get_preference(user_id, key)</code> — Get specific preference
+- <code>set_preference(user_id, key, value, confidence, source)</code> — Set preference</p>
+<hr />
+<h2 id="swarm-system-myclawswarm">Swarm System (myclaw/swarm/)<a class="headerlink" href="#swarm-system-myclawswarm" title="Permanent link">&para;</a></h2>
+<h3 id="myclawswarmmodelspy">myclaw/swarm/models.py<a class="headerlink" href="#myclawswarmmodelspy" title="Permanent link">&para;</a></h3>
+<p><strong>Enums:</strong>
+- <code>SwarmStrategy</code> — PARALLEL, SEQUENTIAL, HIERARCHICAL, VOTING
+- <code>AggregationMethod</code> — CONSENSUS, BEST_PICK, CONCATENATION, SYNTHESIS
+- <code>TaskStatus</code> — PENDING, RUNNING, COMPLETED, FAILED, TERMINATED
+- <code>MessageType</code> — TASK, RESULT, QUERY, BROADCAST, STATUS</p>
+<p><strong>Classes:</strong>
+- <code>SwarmConfig</code> — Swarm configuration
+- <code>SwarmTask</code> — Task assigned to swarm
+- <code>SwarmResult</code> — Result from task execution
+- <code>SwarmInfo</code> — Information about a swarm
+- <code>SwarmMessage</code> — Inter-agent message
+- <code>ActiveExecution</code> — Active task execution</p>
+<hr />
+<h3 id="myclawswarmorchestratorpy">myclaw/swarm/orchestrator.py<a class="headerlink" href="#myclawswarmorchestratorpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>SwarmOrchestrator</code> — Coordinates swarm operations</p>
+<p><strong>Methods:</strong>
+- <code>create_swarm(config, user_id)</code> — Create new swarm
+- <code>execute_task(swarm_id, task)</code> — Execute task
+- <code>get_status(swarm_id)</code> — Get swarm status
+- <code>get_result(swarm_id)</code> — Get swarm result
+- <code>terminate_swarm(swarm_id)</code> — Terminate swarm
+- <code>list_swarms(status, user_id)</code> — List swarms
+- <code>get_stats()</code> — Get swarm statistics</p>
+<hr />
+<h3 id="myclawswarmstrategiespy">myclaw/swarm/strategies.py<a class="headerlink" href="#myclawswarmstrategiespy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>ParallelStrategy</code> — All agents work simultaneously
+- <code>SequentialStrategy</code> — Agents work in pipeline
+- <code>HierarchicalStrategy</code> — Coordinator + workers
+- <code>VotingStrategy</code> — Consensus-based decision
+- <code>AggregationEngine</code> — Result aggregation</p>
+<p><strong>Functions:</strong>
+- <code>get_strategy(strategy)</code> — Get strategy instance</p>
+<hr />
+<h3 id="myclawswarmcollaborationpy">myclaw/swarm/collaboration.py<a class="headerlink" href="#myclawswarmcollaborationpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>TeamCollaboration</code> — Multi-agent team collaboration
+- <code>TeamChat</code> — Team chat interface
+- <code>SharedTeamContext</code> — Shared context for team
+- <code>TeamMember</code> — Team member representation
+- <code>CollaborationEvent</code> — Collaboration event
+- <code>CollaborationEventType</code> — Event type enum</p>
+<hr />
+<h3 id="myclawswarmstoragepy">myclaw/swarm/storage.py<a class="headerlink" href="#myclawswarmstoragepy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>SwarmStorage</code> — Persistent swarm storage</p>
+<hr />
+<h2 id="knowledge-system-myclawknowledge">Knowledge System (myclaw/knowledge/)<a class="headerlink" href="#knowledge-system-myclawknowledge" title="Permanent link">&para;</a></h2>
+<h3 id="myclawknowledgedbpy">myclaw/knowledge/db.py<a class="headerlink" href="#myclawknowledgedbpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>Entity</code> — Database entity representation
+- <code>EntityWithData</code> — Entity with observations/relations
+- <code>KnowledgeDB</code> — SQLite database for knowledge storage</p>
+<p><strong>Methods:</strong>
+- <code>get_entity(permalink)</code> — Get entity by permalink
+- <code>get_entity_by_name(name)</code> — Get entity by name
+- <code>search_entities(query, limit)</code> — Search entities
+- <code>get_relations_from(entity_id)</code> — Get outgoing relations
+- <code>get_relations_to(entity_id)</code> — Get incoming relations
+- <code>get_observations(entity_id)</code> — Get entity observations</p>
+<hr />
+<h3 id="myclawknowledgestoragepy">myclaw/knowledge/storage.py<a class="headerlink" href="#myclawknowledgestoragepy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>Note</code> — Note representation
+- <code>Observation</code> — Observation about entity
+- <code>Relation</code> — Relation between entities</p>
+<p><strong>Functions:</strong>
+- <code>write_note(name, title, observations, relations, tags, user_id, content)</code> — Write note
+- <code>read_note(permalink, user_id)</code> — Read note
+- <code>delete_note(permalink, user_id)</code> — Delete note
+- <code>list_notes(user_id, tags)</code> — List all notes
+- <code>update_note(permalink, user_id, **kwargs)</code> — Update note
+- <code>get_knowledge_dir(user_id)</code> — Get knowledge directory
+- <code>validate_permalink(permalink)</code> — Validate permalink</p>
+<hr />
+<h3 id="myclawknowledgeparserpy">myclaw/knowledge/parser.py<a class="headerlink" href="#myclawknowledgeparserpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>Note</code> — Note data class
+- <code>Observation</code> — Observation data class
+- <code>Relation</code> — Relation data class</p>
+<p><strong>Functions:</strong>
+- <code>parse_note(file_path)</code> — Parse note from file
+- <code>parse_frontmatter(content)</code> — Parse frontmatter
+- <code>parse_observations(content)</code> — Parse observations
+- <code>parse_relations(content)</code> — Parse relations
+- <code>generate_markdown(note)</code> — Generate markdown</p>
+<hr />
+<h3 id="myclawknowledgegraphpy">myclaw/knowledge/graph.py<a class="headerlink" href="#myclawknowledgegraphpy" title="Permanent link">&para;</a></h3>
+<p><strong>Functions:</strong>
+- <code>get_related_entities(permalink, user_id, depth, relation_type)</code> — Get related entities
+- <code>get_entity_network(permalink, user_id, max_depth)</code> — Get entity network
+- <code>find_path(permalink1, permalink2, user_id)</code> — Find path between entities
+- <code>get_central_entities(user_id, limit)</code> — Get central entities
+- <code>build_context(permalink, user_id, depth)</code> — Build context for entity</p>
+<hr />
+<h3 id="myclawknowledgesyncpy">myclaw/knowledge/sync.py<a class="headerlink" href="#myclawknowledgesyncpy" title="Permanent link">&para;</a></h3>
+<p><strong>Async Functions:</strong>
+- <code>_background_extraction_loop(user_id, interval_seconds)</code> — Background sync loop
+- <code>sync_knowledge(user_id)</code> — Sync knowledge base
+- <code>sync_and_report(user_id)</code> — Sync and report status
+- <code>verify_sync(user_id)</code> — Verify sync status</p>
+<hr />
+<h2 id="agent-system-myclawagents">Agent System (myclaw/agents/)<a class="headerlink" href="#agent-system-myclawagents" title="Permanent link">&para;</a></h2>
+<h3 id="myclawagentsregistrypy">myclaw/agents/registry.py<a class="headerlink" href="#myclawagentsregistrypy" title="Permanent link">&para;</a></h3>
+<p><strong>Enums:</strong>
+- <code>AgentCategory</code> — 10 agent category classifications
+- <code>AgentCapability</code> — Agent capability tags</p>
+<p><strong>Classes:</strong>
+- <code>AgentDefinition</code> — Definition of specialized agent</p>
+<p><strong>Functions:</strong>
+- <code>get_agent(name)</code> — Get agent definition by name
+- <code>list_agents(category, capability, tags, query)</code> — List filtered agents
+- <code>list_agents_by_category()</code> — List agents grouped by category
+- <code>get_agent_count()</code> — Get total agent count
+- <code>get_categories_with_count()</code> — Get categories with counts</p>
+<hr />
+<h3 id="myclawagentsdiscoverypy">myclaw/agents/discovery.py<a class="headerlink" href="#myclawagentsdiscoverypy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>AgentMatch</code> — Matched agent with relevance score
+- <code>AgentDiscovery</code> — Agent discovery and recommendations</p>
+<p><strong>Methods:</strong>
+- <code>find_agents_for_task(task_description, required_capabilities, category, limit)</code> — Find best agents
+- <code>get_swarm_composition(task, strategy)</code> — Suggest swarm composition
+- <code>list_capabilities()</code> — List all capabilities</p>
+<p><strong>Functions:</strong>
+- <code>integrate_with_swarm(orchestrator)</code> — Integrate with swarm
+- <code>delegate_to_agent(agent_name, task, context)</code> — Delegate to agent
+- <code>get_agent_info(name)</code> — Get detailed agent info
+- <code>list_all_agents_brief()</code> — Get brief agent list</p>
+<hr />
+<h3 id="myclawagentsmedic_agentpy">myclaw/agents/medic_agent.py<a class="headerlink" href="#myclawagentsmedic_agentpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>MedicAgent</code> — Health monitoring and self-healing agent</p>
+<p><strong>Async Functions:</strong>
+- <code>recover_file(file_path, source)</code> — Recover corrupted file</p>
+<hr />
+<h3 id="myclawagentsnewtech_agentpy">myclaw/agents/newtech_agent.py<a class="headerlink" href="#myclawagentsnewtech_agentpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>NewTechAgent</code> — New technology tracking agent</p>
+<hr />
+<h3 id="myclawagentsskill_adapterpy">myclaw/agents/skill_adapter.py<a class="headerlink" href="#myclawagentsskill_adapterpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>SkillAdapter</code> — Adapts external skills to ZenSynora format</p>
+<p><strong>Methods:</strong>
+- <code>parse_external_skill(skill_data, source)</code> — Parse skill from external format
+- <code>register_skill(skill_dict)</code> — Register parsed skill</p>
+<hr />
+<h2 id="channels-myclawchannels">Channels (myclaw/channels/)<a class="headerlink" href="#channels-myclawchannels" title="Permanent link">&para;</a></h2>
+<h3 id="myclawchannelstelegrampy">myclaw/channels/telegram.py<a class="headerlink" href="#myclawchannelstelegrampy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>TelegramGateway</code> — Telegram bot gateway</p>
+<p><strong>Methods:</strong>
+- <code>start()</code> — Start Telegram bot
+- <code>stop()</code> — Stop bot
+- <code>send_message(chat_id, text)</code> — Send message
+- <code>handle_update(update)</code> — Handle Telegram update</p>
+<hr />
+<h3 id="myclawchannelswhatsapppy">myclaw/channels/whatsapp.py<a class="headerlink" href="#myclawchannelswhatsapppy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>WhatsAppGateway</code> — WhatsApp Business API gateway</p>
+<p><strong>Methods:</strong>
+- <code>start()</code> — Start WhatsApp gateway
+- <code>stop()</code> — Stop gateway
+- <code>send_message(phone, text)</code> — Send message
+- <code>handle_webhook(data)</code> — Handle webhook</p>
+<hr />
+<h2 id="backends-myclawbackends">Backends (myclaw/backends/)<a class="headerlink" href="#backends-myclawbackends" title="Permanent link">&para;</a></h2>
+<h3 id="myclawbackendsbasepy">myclaw/backends/base.py<a class="headerlink" href="#myclawbackendsbasepy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>AbstractBackend</code> — Abstract base for backends</p>
+<hr />
+<h3 id="myclawbackendslocalpy">myclaw/backends/local.py<a class="headerlink" href="#myclawbackendslocalpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>LocalBackend</code> — Local terminal execution</p>
+<hr />
+<h3 id="myclawbackendsdockerpy">myclaw/backends/docker.py<a class="headerlink" href="#myclawbackendsdockerpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>DockerBackend</code> — Docker container execution</p>
+<hr />
+<h3 id="myclawbackendssshpy">myclaw/backends/ssh.py<a class="headerlink" href="#myclawbackendssshpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>SSHBackend</code> — SSH remote execution</p>
+<hr />
+<h3 id="myclawbackendswsl2py">myclaw/backends/wsl2.py<a class="headerlink" href="#myclawbackendswsl2py" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>WSL2Backend</code> — WSL2 backend execution</p>
+<hr />
+<h3 id="myclawbackendsdiscoverpy">myclaw/backends/discover.py<a class="headerlink" href="#myclawbackendsdiscoverpy" title="Permanent link">&para;</a></h3>
+<p><strong>Functions:</strong>
+- <code>discover_backends()</code> — Discover available backends
+- <code>get_default_backend()</code> — Get default backend</p>
+<hr />
+<h2 id="other-core-modules">Other Core Modules<a class="headerlink" href="#other-core-modules" title="Permanent link">&para;</a></h2>
+<h3 id="myclawapi_serverpy">myclaw/api_server.py<a class="headerlink" href="#myclawapi_serverpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>APIKey</code> — API key information
+- <code>RateLimitEntry</code> — Rate limit tracking
+- <code>APIServer</code> — REST API server</p>
+<p><strong>Async Functions:</strong>
+- <code>run_api_server(**kwargs)</code> — Run API server</p>
+<p><strong>Endpoints:</strong>
+- <code>root()</code> — Root endpoint
+- <code>health()</code> — Health check
+- <code>list_agents()</code> — List agents
+- <code>list_tools()</code> — List tools
+- <code>list_swarms()</code> — List swarms
+- <code>create_swarm()</code> — Create swarm</p>
+<hr />
+<h3 id="myclawplugin_systempy">myclaw/plugin_system.py<a class="headerlink" href="#myclawplugin_systempy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>PluginManifest</code> — Plugin manifest/descriptor
+- <code>PluginInfo</code> — Information about loaded plugin
+- <code>PluginHook</code> — Hook for integration points
+- <code>PluginSystem</code> — Main plugin system controller</p>
+<p><strong>Functions:</strong>
+- <code>get_plugin_system()</code> — Get global plugin system
+- <code>register_plugin_hook(hook_name, handler)</code> — Register hook
+- <code>emit_plugin_hook(hook_name, *args, **kwargs)</code> — Emit hook</p>
+<hr />
+<h3 id="myclawsandboxpy">myclaw/sandbox.py<a class="headerlink" href="#myclawsandboxpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>SecurityPolicy</code> — Security policy for sandbox
+- <code>ExecutionResult</code> — Result of sandboxed execution
+- <code>AuditEntry</code> — Security audit log entry
+- <code>SecuritySandbox</code> — Security sandbox for code execution
+- <code>SandboxedImporter</code> — Sandboxed import handler
+- <code>SandboxedFunction</code> — Decorator for sandboxed functions</p>
+<p><strong>Async Functions:</strong>
+- <code>execute_in_sandbox(code, timeout, max_memory_mb)</code> — Execute code in sandbox</p>
+<hr />
+<h3 id="myclawself_healerpy">myclaw/self_healer.py<a class="headerlink" href="#myclawself_healerpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>ErrorInfo</code> — Information about error
+- <code>FixResult</code> — Result of error fix attempt
+- <code>RecoveryStrategy</code> — Recovery strategy</p>
+<p><strong>Functions:</strong>
+- <code>extract_error_info(exception)</code> — Extract structured error info
+- <code>suggest_fixes(error_message)</code> — Suggest potential fixes</p>
+<p><strong>Async Functions:</strong>
+- <code>heal_code(code, error)</code> — Heal code with fixes</p>
+<hr />
+<h3 id="myclawskill_preloaderpy">myclaw/skill_preloader.py<a class="headerlink" href="#myclawskill_preloaderpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>SkillPredictor</code> — Analyzes context to predict needed skills
+- <code>SkillPreloader</code> — Proactive skill preloader with caching</p>
+<p><strong>Methods:</strong>
+- <code>predict_and_preload(messages, current_message)</code> — Predict and load skills in background
+- <code>is_preloaded(skill_name)</code> — Check if skill is in cache
+- <code>get_stats()</code> — Get preloading statistics
+- <code>_load_skill_code(skill_name)</code> — Load skill script from TOOLBOX into memory</p>
+<p><strong>Async Functions:</strong>
+- <code>start_preloader()</code> — Start global preloader
+- <code>stop_preloader()</code> — Stop global preloader
+- <code>get_skill_preloader()</code> — Get preloader instance</p>
+<hr />
+<h3 id="myclawskill_generatorpy">myclaw/skill_generator.py<a class="headerlink" href="#myclawskill_generatorpy" title="Permanent link">&para;</a></h3>
+<p><strong>Async Functions:</strong>
+- <code>auto_generate_skill(description, name, parameters)</code> — Auto-generate skill</p>
+<hr />
+<h3 id="myclawmultimodalpy">myclaw/multimodal.py<a class="headerlink" href="#myclawmultimodalpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>ImageInfo</code> — Image metadata
+- <code>VideoInfo</code> — Video metadata</p>
+<p><strong>Functions:</strong>
+- <code>get_image_info(path)</code> — Get image info
+- <code>describe_image(path, detail)</code> — Describe image with vision
+- <code>create_thumbnail(path, output_path, size)</code> — Create thumbnail
+- <code>get_video_info(path)</code> — Get video info
+- <code>record_screen(output_path, duration)</code> — Record screen
+- <code>image_to_base64(path)</code> — Convert image to base64</p>
+<p><strong>Async Functions:</strong>
+- <code>analyze_image_async(path, prompt)</code> — Analyze image async
+- <code>extract_video_frames(video_path, output_dir, fps, max_frames)</code> — Extract frames
+- <code>summarize_video(video_path)</code> — Summarize video
+- <code>process_screenshot(region)</code> — Take screenshot</p>
+<hr />
+<h3 id="myclawvoice_channelpy">myclaw/voice_channel.py<a class="headerlink" href="#myclawvoice_channelpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>VoiceConfig</code> — Voice configuration
+- <code>AudioSegment</code> — Audio segment data
+- <code>TranscriptionResult</code> — Speech transcription result
+- <code>SynthesisResult</code> — TTS synthesis result
+- <code>TTSProvider</code> — Text-to-Speech provider interface
+- <code>STTProvider</code> — Speech-to-Text provider interface
+- <code>GTTSProvider</code> — Google TTS provider
+- <code>pyttsx3Provider</code> — Offline TTS provider
+- <code>WhisperSTTProvider</code> — Whisper-based STT
+- <code>VoskSTTProvider</code> — Vosk offline STT
+- <code>VoiceChannel</code> — Main voice controller with VAD and streaming
+- <code>VoiceActivityDetector</code> — VAD for detecting speech in audio chunks</p>
+<p><strong>Methods:</strong>
+- <code>speak(text, provider)</code> — Synthesize text to speech
+- <code>listen(audio_data, provider)</code> — Transcribe audio to text
+- <code>listen_stream(stream_id, audio_chunk)</code> — Process real-time audio stream</p>
+<p><strong>Functions:</strong>
+- <code>create_voice_channel(config)</code> — Create voice channel</p>
+<hr />
+<h3 id="myclawweb_searchpy">myclaw/web_search.py<a class="headerlink" href="#myclawweb_searchpy" title="Permanent link">&para;</a></h3>
+<p><strong>Async Functions:</strong>
+- <code>_fetch_url(url, headers, timeout)</code> — Fetch URL content
+- <code>search_web(query, num_results, source)</code> — Search web
+- <code>search_wikipedia(query)</code> — Search Wikipedia
+- <code>search_news(query, num_results)</code> — Search news
+- <code>get_webpage_content(url)</code> — Get webpage content
+- <code>search_multiple(query, sources)</code> — Search multiple sources</p>
+<hr />
+<h3 id="myclawdashboardpy">myclaw/dashboard.py<a class="headerlink" href="#myclawdashboardpy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>MyClawDashboard</code> — Web-based administrative interface</p>
+<p><strong>Methods:</strong>
+- <code>start()</code> — Start the dashboard server (via dashboard_server)
+- <code>_log(message, level)</code> — Internal dashboard logging</p>
+<p><strong>Async Functions:</strong>
+- <code>dashboard_app(dashboard)</code> — Create FastAPI app context (async manager)</p>
+<hr />
+<h3 id="myclawdashboard_serverpy">myclaw/dashboard_server.py<a class="headerlink" href="#myclawdashboard_serverpy" title="Permanent link">&para;</a></h3>
+<p><strong>Functions:</strong>
+- <code>create_dashboard_app(dashboard)</code> — Factory to create the FastAPI web application</p>
+<hr />
+<h3 id="myclawlogging_configpy">myclaw/logging_config.py<a class="headerlink" href="#myclawlogging_configpy" title="Permanent link">&para;</a></h3>
+<p><strong>Functions:</strong>
+- <code>setup_logging(level, log_file)</code> — Setup logging configuration</p>
+<hr />
+<h3 id="myclawgatewaypy">myclaw/gateway.py<a class="headerlink" href="#myclawgatewaypy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- <code>Gateway</code> — Base gateway class</p>
+<hr />
+<h3 id="myclawexceptionspy">myclaw/exceptions.py<a class="headerlink" href="#myclawexceptionspy" title="Permanent link">&para;</a></h3>
+<p><strong>Classes:</strong>
+- Custom exception classes for MyClaw</p>
+<hr />
+<h2 id="hub-system-myclawhub">Hub System (myclaw/hub/)<a class="headerlink" href="#hub-system-myclawhub" title="Permanent link">&para;</a></h2>
+<p><strong>Functions:</strong>
+- Hub-related utilities (see <code>myclaw/hub/__init__.py</code>)</p>
+<hr />
+<h2 id="agent-profiles-myclawagent_profiles">Agent Profiles (myclaw/agent_profiles/)<a class="headerlink" href="#agent-profiles-myclawagent_profiles" title="Permanent link">&para;</a></h2>
+<h3 id="core-development">Core Development<a class="headerlink" href="#core-development" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>backend-developer.md</code> — Backend development specialist</li>
+<li><code>frontend-developer.md</code> — Frontend development specialist</li>
+</ul>
+<h3 id="language-specialists">Language Specialists<a class="headerlink" href="#language-specialists" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>python-pro.md</code> — Python ecosystem master</li>
+</ul>
+<h3 id="infrastructure">Infrastructure<a class="headerlink" href="#infrastructure" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>devops-engineer.md</code> — DevOps specialist</li>
+</ul>
+<h3 id="quality-security">Quality &amp; Security<a class="headerlink" href="#quality-security" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>code-reviewer.md</code> — Code quality guardian</li>
+</ul>
+<h3 id="data-ai">Data &amp; AI<a class="headerlink" href="#data-ai" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>llm-architect.md</code> — LLM system architect</li>
+</ul>
+<h3 id="meta-orchestration">Meta &amp; Orchestration<a class="headerlink" href="#meta-orchestration" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>multi-agent-coordinator.md</code> — Multi-agent orchestration</li>
+</ul>
+<hr />
+<h2 id="swarm-strategies-myclawswarmstrategiespy">Swarm Strategies (myclaw/swarm/strategies.py)<a class="headerlink" href="#swarm-strategies-myclawswarmstrategiespy" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>ParallelStrategy.execute()</code> — Execute tasks in parallel</li>
+<li><code>SequentialStrategy.execute()</code> — Execute tasks sequentially</li>
+<li><code>HierarchicalStrategy.execute()</code> — Execute with coordinator</li>
+<li><code>VotingStrategy.execute()</code> — Execute with voting</li>
+<li><code>AggregationEngine.aggregate()</code> — Aggregate results</li>
+</ul>
+<hr />
+<h2 id="agent-categories-136-agents">Agent Categories (136+ agents)<a class="headerlink" href="#agent-categories-136-agents" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Category</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Core Development</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Language Specialists</td>
+<td>27</td>
+</tr>
+<tr>
+<td>Infrastructure</td>
+<td>16</td>
+</tr>
+<tr>
+<td>Quality &amp; Security</td>
+<td>16</td>
+</tr>
+<tr>
+<td>Data &amp; AI</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Developer Experience</td>
+<td>13</td>
+</tr>
+<tr>
+<td>Specialized Domains</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Business &amp; Product</td>
+<td>11</td>
+</tr>
+<tr>
+<td>Meta &amp; Orchestration</td>
+<td>12</td>
+</tr>
+<tr>
+<td>Research &amp; Analysis</td>
+<td>7</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>136</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="statistics">Statistics<a class="headerlink" href="#statistics" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Count</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Total Python Modules</td>
+<td>40+</td>
+</tr>
+<tr>
+<td>Total Functions</td>
+<td>300+</td>
+</tr>
+<tr>
+<td>Total Classes</td>
+<td>100+</td>
+</tr>
+<tr>
+<td>Total Agent Definitions</td>
+<td>136+</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<p><em>Generated from codebase analysis</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

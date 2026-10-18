@@ -1,0 +1,117 @@
+zensynora/
+├── myclaw/
+│   ├── __init__.py
+│   ├── agent.py
+│   ├── config.py
+│   ├── exceptions.py
+│   ├── gateway.py
+│   ├── logging_config.py
+│   ├── memory.py
+│   ├── provider.py
+│   ├── skills.md
+│   ├── tools/
+│   ├── channels/
+│   │   ├── __init__.py
+│   │   ├── telegram.py
+│   │   └── whatsapp.py
+│   ├── knowledge/
+│   │   ├── __init__.py
+│   │   ├── db.py
+│   │   ├── graph.py
+│   │   ├── parser.py
+│   │   ├── storage.py
+│   │   └── sync.py
+│   ├── profiles/
+│   │   ├── __init__.py
+│   │   ├── agent.md
+│   │   ├── bootstrap.md
+│   │   ├── heartbeat.md
+│   │   ├── identity.md
+│   │   ├── memory.md
+│   │   ├── soul.md
+│   │   └── user.md
+│   └── swarm/
+│       ├── __init__.py
+│       ├── models.py
+│       ├── orchestrator.py
+│       ├── storage.py
+│       └── strategies.py
+├── docs/
+│   ├── agent_catalog.md
+│   ├── agent_swarm_guide.md
+│   ├── architecture_diagram.md
+│   ├── architecture_with_optimizations.md
+│   ├── backends_guide.md
+│   ├── exception_handling_implementation.md
+│   ├── future_implementation_plan.md
+│   ├── implementation_plan_new_agents.md
+│   ├── medic_agent_guide.md
+│   ├── MEDIC_CHANGE_MGMT.md
+│   ├── newtech_agent_guide.md
+│   ├── scrapling_agent_guide.md
+│   ├── skill_adapter_guide.md
+│   └── TASK_TIMER_INTEGRATION.md
+│   └── dev/
+│       ├── ANALYSIS.md
+│       ├── CLAUDE.md
+│       ├── code_analysis_summary.md
+│       ├── CODE_OPTIMIZATION_PROPOSAL.md
+│       ├── FUNCTIONS_SUMMARY.md
+│       ├── how to run.md
+│       ├── implementation_gap_report.md
+│       ├── IMPLEMENTATION_PLAN.md
+│       ├── IMPLEMENTATION_SUMMARY_KNOWLEDGE_GAP_v2.1.md
+│       ├── new_think_methods.py
+│       ├── OPTIMIZATION_SUMMARY.md
+│       ├── roadmap.md
+│       ├── Structure.txt
+│       ├── tasktodo.md
+│       ├── ark/
+│       │   ├── agent_swarm_implementation_plan.md
+│       │   ├── ARK_merged_20260416_232212.md
+│       │   ├── IMPLEMENTATION_PLAN_FROM_PLANX.md
+│       │   ├── planA1.md
+│       │   └── planx.md
+│       ├── plans/
+│       │   ├── agent_swarm_implementation_plan.md
+│       │   ├── CHANGELOG.md
+│       │   ├── future_updates_proposal.md
+│       │   ├── glm5.md
+│       │   ├── implementation_plan.md
+│       │   ├── kimi.md
+│       │   ├── knowledge_integration_plan.md
+│       │   ├── last_implementation_plan.md
+│       │   ├── MyClaw Todo List - Non-Implemented Ite.md
+│       │   ├── turboquant_implementation_plan.md
+│       │   └── whatsapp_implementation_plan.md
+│       └── scripts/
+│           ├── deploy_remote.py
+│           ├── deploy_ssh.ps1
+│           ├── extract_core.py
+│           ├── extract_modules.py
+│           ├── find_sections.py
+│           ├── find_sections2.py
+│           ├── test_import.py
+│           └── test_ssh.py
+├── eval/
+│   ├── eval_agent_skills.py
+│   └── results/
+├── tests/
+│   ├── test_agent.py
+│   ├── test_knowledge.py
+│   ├── test_memory.py
+│   ├── test_security.py
+│   └── test_tools/
+├── webui/
+├── Scrapling/
+├── .gitignore
+├── CHANGELOG.md
+├── LICENSE
+├── README.md
+├── requirements.txt
+├── cleanup.sh
+├── cli.py
+├── deploy.py
+├── install.sh
+├── onboard.py
+└── uninstall.sh

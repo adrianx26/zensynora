@@ -1,0 +1,2702 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/agent_swarm_guide/">
+      
+      
+        <link rel="prev" href="../agent_catalog/">
+      
+      
+        <link rel="next" href="../scheduler_features_guide/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Agent swarms - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#agent-swarm-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Agent swarms
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-swarm-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🏗️ Agent Swarm Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swarm-coordinator-hierarchical-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🎯 Swarm Coordinator (Hierarchical Strategy)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-swarm-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Swarm Components
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-flow-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Flow Diagram
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swarm-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Swarm Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-basic-parallel-swarm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Basic Parallel Swarm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-sequential-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Sequential Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-hierarchical-with-coordinator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Hierarchical with Coordinator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-voting-for-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Voting for Decisions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#use-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Cases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Use Cases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#use-case-1-research-team-parallel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Case 1: Research Team (Parallel)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-case-2-content-pipeline-sequential" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Case 2: Content Pipeline (Sequential)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-case-3-code-review-with-coordinator-hierarchical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Case 3: Code Review with Coordinator (Hierarchical)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-case-4-decision-making-voting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Case 4: Decision Making (Voting)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-agent-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Agent Selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-strategy-selection-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Strategy Selection Guide
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-aggregation-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Aggregation Selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-resource-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Resource Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="API Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#swarm_create" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_create()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_assign" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_assign()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_status()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_result()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_terminate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_terminate()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_list()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_stats()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#maximum-concurrent-swarms-reached" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "Maximum concurrent swarms reached"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-not-found-in-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "Agent not found in registry"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm-execution-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Swarm execution timeout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#low-confidence-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Low confidence scores
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Storage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cleanup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Strategies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-orchestrator-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct Orchestrator Access
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-swarm-architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🏗️ Agent Swarm Architecture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swarm-coordinator-hierarchical-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        🎯 Swarm Coordinator (Hierarchical Strategy)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#agent-swarm-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agent Swarm Components
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#data-flow-diagram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Data Flow Diagram
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#swarm-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Swarm Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quick-start" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quick Start
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Quick Start">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-basic-parallel-swarm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Basic Parallel Swarm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-sequential-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Sequential Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-hierarchical-with-coordinator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Hierarchical with Coordinator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-voting-for-decisions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Voting for Decisions
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#configuration-options" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration Options
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#use-cases" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Cases
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Use Cases">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#use-case-1-research-team-parallel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Case 1: Research Team (Parallel)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-case-2-content-pipeline-sequential" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Case 2: Content Pipeline (Sequential)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-case-3-code-review-with-coordinator-hierarchical" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Case 3: Code Review with Coordinator (Hierarchical)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#use-case-4-decision-making-voting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Use Case 4: Decision Making (Voting)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-agent-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Agent Selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-strategy-selection-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Strategy Selection Guide
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-aggregation-selection" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Aggregation Selection
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-resource-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Resource Management
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#api-reference" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        API Reference
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="API Reference">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#core-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Core Functions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Core Functions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#swarm_create" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_create()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_assign" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_assign()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_status" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_status()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_result()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_terminate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_terminate()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_list()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm_stats" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        swarm_stats()
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Issues">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#maximum-concurrent-swarms-reached" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "Maximum concurrent swarms reached"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#agent-not-found-in-registry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        "Agent not found in registry"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#swarm-execution-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Swarm execution timeout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#low-confidence-scores" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Low confidence scores
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#storage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Storage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Storage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#tables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tables
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cleanup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#advanced-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Advanced Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Advanced Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#custom-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Custom Strategies
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#direct-orchestrator-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Direct Orchestrator Access
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="agent-swarm-guide">Agent Swarm Guide<a class="headerlink" href="#agent-swarm-guide" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Applies to:</strong> v0.7.1 · <strong>Reviewed:</strong> 2026-10-13. <strong>v0.7.1:</strong> delegation
+works again (before, every <code>delegate</code> call answered "Agent registry not
+initialized"), and in the Web UI each hand-over between agents — delegation
+or swarm — is shown in the chat channel and its Activity panel
+(<a href="../webui_guide/#chat-channels-and-several-agents">Web UI guide</a>). Commands use the installed <code>zensynora</code> CLI (<code>python cli.py …</code> from the source folder is equivalent).</p>
+</blockquote>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Agent Swarms is a powerful multi-agent coordination system for MyClaw that enables multiple AI agents to collaborate on complex tasks. Instead of relying on a single agent, swarms distribute work across specialized agents using various coordination strategies.</p>
+<h2 id="agent-swarm-architecture">🏗️ Agent Swarm Architecture<a class="headerlink" href="#agent-swarm-architecture" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart TB
+    UI["USER INTERFACE&lt;br/&gt;(CLI, Telegram, WhatsApp, API)"] --&gt; Orchestrator["SWARM ORCHESTRATOR&lt;br/&gt;(Central Controller)"]
+
+    Orchestrator --- Ops["Create Swarms | Execute Tasks | Monitor Status"]
+
+    Orchestrator --&gt; Strategies
+
+    subgraph Strategies ["COORDINATION STRATEGIES"]
+        direction LR
+        Parallel["PARALLEL&lt;br/&gt;(Simultaneous)"]
+        Sequential["SEQUENTIAL&lt;br/&gt;(Pipeline)"]
+        Hierarchical["HIERARCHICAL&lt;br/&gt;(Managed)"]
+        Voting["VOTING&lt;br/&gt;(Consensus)"]
+    end
+
+    Strategies --&gt; Aggregator["AGGREGATION ENGINE&lt;br/&gt;(Consensus | Best Pick | Synthesis)"]
+    Aggregator --&gt; Result["SWARM RESULT"]</code></pre>
+<h2 id="swarm-coordinator-hierarchical-strategy">🎯 Swarm Coordinator (Hierarchical Strategy)<a class="headerlink" href="#swarm-coordinator-hierarchical-strategy" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart TD
+    Coord["Coordinator (lead_dev)"] --&gt; Plan["1. Analyze Task &amp; Plan"]
+    Plan --&gt; Delegate["2. Delegate to Workers"]
+
+    subgraph Workers ["Specialized Workers"]
+        W1["Security Expert"]
+        W2["Performance Reviewer"]
+        W3["Style Checker"]
+    end
+
+    Delegate --&gt; W1 &amp; W2 &amp; W3
+    W1 &amp; W2 &amp; W3 --&gt; Synthesize["3. Synthesize Results"]
+    Synthesize --&gt; Final["Final Coherent Report"]</code></pre>
+<h2 id="agent-swarm-components">Agent Swarm Components<a class="headerlink" href="#agent-swarm-components" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>flowchart LR
+    subgraph Config ["Configuration"]
+        direction TB
+        C1["name"]
+        C2["strategy"]
+        C3["workers"]
+        C4["coordinator"]
+    end
+
+    subgraph Task ["Task Execution"]
+        direction TB
+        T1["description"]
+        T2["input_data"]
+        T3["status"]
+    end
+
+    Config &amp; Task --&gt; Orchestrator["SWARM ORCHESTRATOR"]
+    Orchestrator --&gt; Engine["AGGREGATION ENGINE"]
+    Engine --&gt; SResult["SWARM RESULT&lt;br/&gt;(Confidence, Time, Data)"]</code></pre>
+<h2 id="data-flow-diagram">Data Flow Diagram<a class="headerlink" href="#data-flow-diagram" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>sequenceDiagram
+    participant User
+    participant UI as CLI/Telegram/WhatsApp
+    participant Orchestrator
+    participant Storage as SQLite (swarm.db)
+    participant Agents as Agent Registry
+    participant Engine as Aggregator
+
+    User-&gt;&gt;UI: Task Request
+    UI-&gt;&gt;Orchestrator: swarm_assign(swarm_id, task)
+    Orchestrator-&gt;&gt;Storage: Load Swarm Config
+    Orchestrator-&gt;&gt;Agents: Initialize Workers
+
+    rect rgb(200, 220, 240)
+        Note over Orchestrator, Agents: Strategy Execution (Parallel/Sequential/...)
+        Orchestrator-&gt;&gt;Agents: Execute sub-tasks
+        Agents--&gt;&gt;Orchestrator: Individual results
+    end
+
+    Orchestrator-&gt;&gt;Engine: Aggregate results
+    Engine--&gt;&gt;Orchestrator: Final result
+    Orchestrator-&gt;&gt;Storage: Save execution history
+    Orchestrator--&gt;&gt;User: Return Swarm Result</code></pre>
+<h2 id="swarm-lifecycle">Swarm Lifecycle<a class="headerlink" href="#swarm-lifecycle" title="Permanent link">&para;</a></h2>
+<pre class="mermaid"><code>stateDiagram-v2
+    [*] --&gt; PENDING: Created by User
+    PENDING --&gt; RUNNING: Execution Started
+    RUNNING --&gt; COMPLETED: Success Result
+    RUNNING --&gt; FAILED: Error Occurred
+    RUNNING --&gt; TERMINATED: User Stopped
+    FAILED --&gt; [*]
+    COMPLETED --&gt; [*]
+    TERMINATED --&gt; [*]</code></pre>
+<hr />
+<h2 id="quick-start">Quick Start<a class="headerlink" href="#quick-start" title="Permanent link">&para;</a></h2>
+<h3 id="1-basic-parallel-swarm">1. Basic Parallel Swarm<a class="headerlink" href="#1-basic-parallel-swarm" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Create a research team</span>
+<span class="n">swarm_create</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"research_team"</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="o">=</span><span class="s2">"parallel"</span><span class="p">,</span>
+    <span class="n">workers</span><span class="o">=</span><span class="s2">"researcher1,researcher2,researcher3"</span><span class="p">,</span>
+    <span class="n">aggregation</span><span class="o">=</span><span class="s2">"synthesis"</span>
+<span class="p">)</span>
+<span class="c1"># Returns: swarm_abc123def456</span>
+
+<span class="c1"># Assign a task</span>
+<span class="n">swarm_assign</span><span class="p">(</span>
+    <span class="n">swarm_id</span><span class="o">=</span><span class="s2">"swarm_abc123def456"</span><span class="p">,</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">"Research quantum computing breakthroughs in 2024"</span>
+<span class="p">)</span>
+</code></pre></div>
+<h3 id="2-sequential-pipeline">2. Sequential Pipeline<a class="headerlink" href="#2-sequential-pipeline" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Content creation workflow</span>
+<span class="n">swarm_create</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"blog_pipeline"</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="o">=</span><span class="s2">"sequential"</span><span class="p">,</span>
+    <span class="n">workers</span><span class="o">=</span><span class="s2">"outline_writer,content_writer,editor"</span><span class="p">,</span>
+    <span class="n">aggregation</span><span class="o">=</span><span class="s2">"concatenation"</span>
+<span class="p">)</span>
+
+<span class="n">swarm_assign</span><span class="p">(</span>
+    <span class="n">swarm_id</span><span class="o">=</span><span class="s2">"swarm_xyz789"</span><span class="p">,</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">"Write an article about Python async programming"</span>
+<span class="p">)</span>
+<span class="c1"># Output flows: Outline → Draft → Edited Content</span>
+</code></pre></div>
+<h3 id="3-hierarchical-with-coordinator">3. Hierarchical with Coordinator<a class="headerlink" href="#3-hierarchical-with-coordinator" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Code review with lead developer</span>
+<span class="n">swarm_create</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"security_review"</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="o">=</span><span class="s2">"hierarchical"</span><span class="p">,</span>
+    <span class="n">coordinator</span><span class="o">=</span><span class="s2">"lead_security_expert"</span><span class="p">,</span>
+    <span class="n">workers</span><span class="o">=</span><span class="s2">"sql_injection_checker,auth_reviewer,input_validator"</span><span class="p">,</span>
+    <span class="n">aggregation</span><span class="o">=</span><span class="s2">"synthesis"</span>
+<span class="p">)</span>
+
+<span class="n">swarm_assign</span><span class="p">(</span>
+    <span class="n">swarm_id</span><span class="o">=</span><span class="s2">"swarm_sec456"</span><span class="p">,</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">"Review this login module for security vulnerabilities"</span>
+<span class="p">)</span>
+<span class="c1"># Coordinator plans, delegates, and synthesizes results</span>
+</code></pre></div>
+<h3 id="4-voting-for-decisions">4. Voting for Decisions<a class="headerlink" href="#4-voting-for-decisions" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Multiple agents vote on architecture decision</span>
+<span class="n">swarm_create</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"architecture_vote"</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="o">=</span><span class="s2">"voting"</span><span class="p">,</span>
+    <span class="n">workers</span><span class="o">=</span><span class="s2">"architect1,architect2,architect3,architect4"</span><span class="p">,</span>
+    <span class="n">aggregation</span><span class="o">=</span><span class="s2">"consensus"</span>
+<span class="p">)</span>
+
+<span class="n">swarm_assign</span><span class="p">(</span>
+    <span class="n">swarm_id</span><span class="o">=</span><span class="s2">"swarm_vote123"</span><span class="p">,</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">"Should we use microservices or monolith?"</span>
+<span class="p">)</span>
+<span class="c1"># Consensus determines the winning approach</span>
+</code></pre></div>
+<hr />
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p>Add to your <code>~/.myclaw/config.json</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"swarm"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"max_concurrent_swarms"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"default_strategy"</span><span class="p">:</span><span class="w"> </span><span class="s2">"parallel"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"default_aggregation"</span><span class="p">:</span><span class="w"> </span><span class="s2">"synthesis"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"timeout_seconds"</span><span class="p">:</span><span class="w"> </span><span class="mi">300</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"swarm_memory_limit"</span><span class="p">:</span><span class="w"> </span><span class="mi">50</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<h3 id="configuration-options">Configuration Options<a class="headerlink" href="#configuration-options" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Option</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>enabled</code></td>
+<td><code>true</code></td>
+<td>Enable/disable swarm functionality</td>
+</tr>
+<tr>
+<td><code>max_concurrent_swarms</code></td>
+<td><code>3</code></td>
+<td>Maximum parallel swarms per user</td>
+</tr>
+<tr>
+<td><code>default_strategy</code></td>
+<td><code>"parallel"</code></td>
+<td>Default execution strategy</td>
+</tr>
+<tr>
+<td><code>default_aggregation</code></td>
+<td><code>"synthesis"</code></td>
+<td>Default result aggregation</td>
+</tr>
+<tr>
+<td><code>timeout_seconds</code></td>
+<td><code>300</code></td>
+<td>Maximum execution time</td>
+</tr>
+<tr>
+<td><code>swarm_memory_limit</code></td>
+<td><code>50</code></td>
+<td>Max messages stored per swarm</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="use-cases">Use Cases<a class="headerlink" href="#use-cases" title="Permanent link">&para;</a></h2>
+<h3 id="use-case-1-research-team-parallel">Use Case 1: Research Team (Parallel)<a class="headerlink" href="#use-case-1-research-team-parallel" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> Get multiple perspectives on a research topic</p>
+<div class="highlight"><pre><span></span><code><span class="n">swarm_create</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"ai_impact_research"</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="o">=</span><span class="s2">"parallel"</span><span class="p">,</span>
+    <span class="n">workers</span><span class="o">=</span><span class="s2">"tech_analyst,market_researcher,ethics_reviewer"</span><span class="p">,</span>
+    <span class="n">aggregation</span><span class="o">=</span><span class="s2">"synthesis"</span>
+<span class="p">)</span>
+
+<span class="n">swarm_assign</span><span class="p">(</span>
+    <span class="n">swarm_id</span><span class="o">=</span><span class="s2">"swarm_xxx"</span><span class="p">,</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">"Analyze the impact of AI on healthcare in 2024"</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Result:</strong> Combined insights from technical, market, and ethical perspectives</p>
+<hr />
+<h3 id="use-case-2-content-pipeline-sequential">Use Case 2: Content Pipeline (Sequential)<a class="headerlink" href="#use-case-2-content-pipeline-sequential" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> Create polished content through multiple stages</p>
+<div class="highlight"><pre><span></span><code><span class="n">swarm_create</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"technical_blog_pipeline"</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="o">=</span><span class="s2">"sequential"</span><span class="p">,</span>
+    <span class="n">workers</span><span class="o">=</span><span class="s2">"topic_researcher,outline_writer,content_writer,editor,seo_optimizer"</span><span class="p">,</span>
+    <span class="n">aggregation</span><span class="o">=</span><span class="s2">"concatenation"</span>
+<span class="p">)</span>
+
+<span class="n">swarm_assign</span><span class="p">(</span>
+    <span class="n">swarm_id</span><span class="o">=</span><span class="s2">"swarm_xxx"</span><span class="p">,</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">"Create a comprehensive guide on async/await in Python"</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Flow:</strong> Research → Outline → Draft → Edit → SEO Optimize</p>
+<hr />
+<h3 id="use-case-3-code-review-with-coordinator-hierarchical">Use Case 3: Code Review with Coordinator (Hierarchical)<a class="headerlink" href="#use-case-3-code-review-with-coordinator-hierarchical" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> Thorough multi-aspect code review</p>
+<div class="highlight"><pre><span></span><code><span class="n">swarm_create</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"comprehensive_code_review"</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="o">=</span><span class="s2">"hierarchical"</span><span class="p">,</span>
+    <span class="n">coordinator</span><span class="o">=</span><span class="s2">"senior_architect"</span><span class="p">,</span>
+    <span class="n">workers</span><span class="o">=</span><span class="s2">"security_specialist,performance_engineer,style_reviewer"</span><span class="p">,</span>
+    <span class="n">aggregation</span><span class="o">=</span><span class="s2">"synthesis"</span>
+<span class="p">)</span>
+
+<span class="n">swarm_assign</span><span class="p">(</span>
+    <span class="n">swarm_id</span><span class="o">=</span><span class="s2">"swarm_xxx"</span><span class="p">,</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">"Review this authentication microservice"</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Process:</strong>
+1. Senior architect analyzes and creates review plan
+2. Specialists review their assigned aspects
+3. Architect synthesizes findings into actionable report</p>
+<hr />
+<h3 id="use-case-4-decision-making-voting">Use Case 4: Decision Making (Voting)<a class="headerlink" href="#use-case-4-decision-making-voting" title="Permanent link">&para;</a></h3>
+<p><strong>Goal:</strong> Make important architectural decisions with consensus</p>
+<div class="highlight"><pre><span></span><code><span class="n">swarm_create</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"tech_stack_decision"</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="o">=</span><span class="s2">"voting"</span><span class="p">,</span>
+    <span class="n">workers</span><span class="o">=</span><span class="s2">"backend_lead,frontend_lead,devops_lead,architect"</span><span class="p">,</span>
+    <span class="n">aggregation</span><span class="o">=</span><span class="s2">"consensus"</span>
+<span class="p">)</span>
+
+<span class="n">swarm_assign</span><span class="p">(</span>
+    <span class="n">swarm_id</span><span class="o">=</span><span class="s2">"swarm_xxx"</span><span class="p">,</span>
+    <span class="n">task</span><span class="o">=</span><span class="s2">"Should we migrate from REST to GraphQL?"</span>
+<span class="p">)</span>
+</code></pre></div>
+<p><strong>Result:</strong> Decision backed by team consensus</p>
+<hr />
+<h2 id="best-practices">Best Practices<a class="headerlink" href="#best-practices" title="Permanent link">&para;</a></h2>
+<h3 id="1-agent-selection">1. Agent Selection<a class="headerlink" href="#1-agent-selection" title="Permanent link">&para;</a></h3>
+<p><strong>Complementary Skills:</strong>
+- Research team: <code>researcher1, researcher2, researcher3</code> (different specialties)
+- Code review: <code>security_expert, performance_reviewer, style_checker</code>
+- Content: <code>researcher, writer, editor</code></p>
+<p><strong>Coordinator Selection:</strong>
+- Should have good planning capabilities
+- Needs to understand the big picture
+- Prefer models with strong reasoning</p>
+<h3 id="2-strategy-selection-guide">2. Strategy Selection Guide<a class="headerlink" href="#2-strategy-selection-guide" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Task Type</th>
+<th>Strategy</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Research/Broad Analysis</td>
+<td><strong>Parallel</strong></td>
+<td>Multiple perspectives simultaneously</td>
+</tr>
+<tr>
+<td>Content Creation</td>
+<td><strong>Sequential</strong></td>
+<td>Progressive refinement</td>
+</tr>
+<tr>
+<td>Complex Multi-part Tasks</td>
+<td><strong>Hierarchical</strong></td>
+<td>Orchestrated subtasks</td>
+</tr>
+<tr>
+<td>Decision Making</td>
+<td><strong>Voting</strong></td>
+<td>Consensus validation</td>
+</tr>
+<tr>
+<td>Code Review</td>
+<td><strong>Parallel</strong> or <strong>Hierarchical</strong></td>
+<td>Different aspects or orchestrated</td>
+</tr>
+<tr>
+<td>Data Processing</td>
+<td><strong>Sequential</strong></td>
+<td>Step-by-step transformation</td>
+</tr>
+</tbody>
+</table>
+<h3 id="3-aggregation-selection">3. Aggregation Selection<a class="headerlink" href="#3-aggregation-selection" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Goal</th>
+<th>Method</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Get diverse perspectives</td>
+<td><strong>Concatenation</strong></td>
+<td>Research reports</td>
+</tr>
+<tr>
+<td>Find best single answer</td>
+<td><strong>Best Pick</strong></td>
+<td>Code solutions</td>
+</tr>
+<tr>
+<td>Quick agreement</td>
+<td><strong>Consensus</strong></td>
+<td>Yes/No decisions</td>
+</tr>
+<tr>
+<td>Comprehensive summary</td>
+<td><strong>Synthesis</strong></td>
+<td>Final reports</td>
+</tr>
+</tbody>
+</table>
+<h3 id="4-resource-management">4. Resource Management<a class="headerlink" href="#4-resource-management" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># Check current usage</span>
+<span class="n">swarm_stats</span><span class="p">()</span>
+
+<span class="c1"># Clean up old swarms</span>
+<span class="n">swarm_list</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">"completed"</span><span class="p">)</span>  <span class="c1"># Find completed</span>
+<span class="n">swarm_terminate</span><span class="p">(</span><span class="s2">"swarm_old123"</span><span class="p">)</span>  <span class="c1"># Clean up</span>
+</code></pre></div>
+<hr />
+<h2 id="api-reference">API Reference<a class="headerlink" href="#api-reference" title="Permanent link">&para;</a></h2>
+<h3 id="core-functions">Core Functions<a class="headerlink" href="#core-functions" title="Permanent link">&para;</a></h3>
+<h4 id="swarm_create"><code>swarm_create()</code><a class="headerlink" href="#swarm_create" title="Permanent link">&para;</a></h4>
+<p>Create a new swarm.</p>
+<p><strong>Parameters:</strong>
+- <code>name</code> (str): Descriptive name for the swarm
+- <code>strategy</code> (str): One of: <code>parallel</code>, <code>sequential</code>, <code>hierarchical</code>, <code>voting</code>
+- <code>workers</code> (str): Comma-separated list of agent names
+- <code>coordinator</code> (str, optional): Coordinator agent name (required for hierarchical)
+- <code>aggregation</code> (str): One of: <code>consensus</code>, <code>best_pick</code>, <code>concatenation</code>, <code>synthesis</code>
+- <code>user_id</code> (str, optional): User identifier</p>
+<p><strong>Returns:</strong> Swarm ID (e.g., <code>swarm_abc123def456</code>)</p>
+<hr />
+<h4 id="swarm_assign"><code>swarm_assign()</code><a class="headerlink" href="#swarm_assign" title="Permanent link">&para;</a></h4>
+<p>Execute a task with the swarm.</p>
+<p><strong>Parameters:</strong>
+- <code>swarm_id</code> (str): Swarm identifier
+- <code>task</code> (str): Task description/prompt
+- <code>user_id</code> (str, optional): User identifier</p>
+<p><strong>Returns:</strong> Formatted results including:
+- Individual agent outputs
+- Confidence score
+- Execution time
+- Aggregated final result</p>
+<hr />
+<h4 id="swarm_status"><code>swarm_status()</code><a class="headerlink" href="#swarm_status" title="Permanent link">&para;</a></h4>
+<p>Get current swarm status.</p>
+<p><strong>Parameters:</strong>
+- <code>swarm_id</code> (str): Swarm identifier</p>
+<p><strong>Returns:</strong> Status information (pending, running, completed, failed, terminated)</p>
+<hr />
+<h4 id="swarm_result"><code>swarm_result()</code><a class="headerlink" href="#swarm_result" title="Permanent link">&para;</a></h4>
+<p>Get detailed execution result.</p>
+<p><strong>Parameters:</strong>
+- <code>swarm_id</code> (str): Swarm identifier</p>
+<p><strong>Returns:</strong> Complete result with individual agent outputs</p>
+<hr />
+<h4 id="swarm_terminate"><code>swarm_terminate()</code><a class="headerlink" href="#swarm_terminate" title="Permanent link">&para;</a></h4>
+<p>Force stop a running swarm.</p>
+<p><strong>Parameters:</strong>
+- <code>swarm_id</code> (str): Swarm identifier</p>
+<hr />
+<h4 id="swarm_list"><code>swarm_list()</code><a class="headerlink" href="#swarm_list" title="Permanent link">&para;</a></h4>
+<p>List all swarms.</p>
+<p><strong>Parameters:</strong>
+- <code>status</code> (str, optional): Filter by status
+- <code>user_id</code> (str, optional): User identifier</p>
+<hr />
+<h4 id="swarm_stats"><code>swarm_stats()</code><a class="headerlink" href="#swarm_stats" title="Permanent link">&para;</a></h4>
+<p>Get usage statistics.</p>
+<p><strong>Parameters:</strong>
+- <code>user_id</code> (str, optional): User identifier</p>
+<p><strong>Returns:</strong> Statistics including counts, avg confidence, execution times</p>
+<hr />
+<h2 id="troubleshooting">Troubleshooting<a class="headerlink" href="#troubleshooting" title="Permanent link">&para;</a></h2>
+<h3 id="common-issues">Common Issues<a class="headerlink" href="#common-issues" title="Permanent link">&para;</a></h3>
+<h4 id="maximum-concurrent-swarms-reached">"Maximum concurrent swarms reached"<a class="headerlink" href="#maximum-concurrent-swarms-reached" title="Permanent link">&para;</a></h4>
+<p><strong>Cause:</strong> Hit the <code>max_concurrent_swarms</code> limit</p>
+<p><strong>Solutions:</strong>
+1. Wait for existing swarms to complete
+2. Terminate unused swarms:
+   <div class="highlight"><pre><span></span><code><span class="n">swarm_list</span><span class="p">(</span><span class="n">status</span><span class="o">=</span><span class="s2">"running"</span><span class="p">)</span>
+<span class="n">swarm_terminate</span><span class="p">(</span><span class="s2">"swarm_xxx"</span><span class="p">)</span>
+</code></pre></div>
+3. Increase limit in config:
+   <div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"swarm"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"max_concurrent_swarms"</span><span class="p">:</span><span class="w"> </span><span class="mi">5</span><span class="p">}}</span>
+</code></pre></div></p>
+<h4 id="agent-not-found-in-registry">"Agent not found in registry"<a class="headerlink" href="#agent-not-found-in-registry" title="Permanent link">&para;</a></h4>
+<p><strong>Cause:</strong> Agent name doesn't exist in the agent registry</p>
+<p><strong>Solution:</strong> Check available agents and correct the name:
+<div class="highlight"><pre><span></span><code><span class="c1"># List available agents</span>
+<span class="c1"># (Check your config.json agents.named section)</span>
+</code></pre></div></p>
+<h4 id="swarm-execution-timeout">Swarm execution timeout<a class="headerlink" href="#swarm-execution-timeout" title="Permanent link">&para;</a></h4>
+<p><strong>Cause:</strong> Task took longer than <code>timeout_seconds</code></p>
+<p><strong>Solutions:</strong>
+- Break task into smaller parts
+- Increase timeout in config
+- Use fewer workers for faster execution</p>
+<h4 id="low-confidence-scores">Low confidence scores<a class="headerlink" href="#low-confidence-scores" title="Permanent link">&para;</a></h4>
+<p><strong>Cause:</strong> Agents disagree significantly or quality varies</p>
+<p><strong>Solutions:</strong>
+- Try different aggregation method
+- Provide clearer, more specific task description
+- Add more workers (for voting strategy)
+- Use coordinator for better synthesis</p>
+<hr />
+<h2 id="storage">Storage<a class="headerlink" href="#storage" title="Permanent link">&para;</a></h2>
+<p>Swarm data is stored in <code>~/.myclaw/swarm.db</code>:</p>
+<h3 id="tables">Tables<a class="headerlink" href="#tables" title="Permanent link">&para;</a></h3>
+<p><strong>swarms</strong>
+- Swarm configurations and status
+- Strategy, workers, coordinator settings</p>
+<p><strong>swarm_tasks</strong>
+- Individual task assignments
+- Input/output data</p>
+<p><strong>swarm_messages</strong>
+- Inter-agent communication log
+- Useful for debugging</p>
+<p><strong>swarm_results</strong>
+- Execution results
+- Individual and aggregated outputs</p>
+<h3 id="cleanup">Cleanup<a class="headerlink" href="#cleanup" title="Permanent link">&para;</a></h3>
+<p>Old swarms are automatically cleaned up after 30 days. You can manually clean up:</p>
+<div class="highlight"><pre><span></span><code><span class="c1"># In Python code</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.swarm</span><span class="w"> </span><span class="kn">import</span> <span class="n">SwarmStorage</span>
+<span class="n">storage</span> <span class="o">=</span> <span class="n">SwarmStorage</span><span class="p">()</span>
+<span class="n">deleted</span> <span class="o">=</span> <span class="n">storage</span><span class="o">.</span><span class="n">cleanup_old_swarms</span><span class="p">(</span><span class="n">days</span><span class="o">=</span><span class="mi">7</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Cleaned up </span><span class="si">{</span><span class="n">deleted</span><span class="si">}</span><span class="s2"> old swarms"</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="advanced-usage">Advanced Usage<a class="headerlink" href="#advanced-usage" title="Permanent link">&para;</a></h2>
+<h3 id="custom-strategies">Custom Strategies<a class="headerlink" href="#custom-strategies" title="Permanent link">&para;</a></h3>
+<p>You can extend the system with custom strategies by inheriting from <code>BaseStrategy</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.swarm.strategies</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseStrategy</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MyCustomStrategy</span><span class="p">(</span><span class="n">BaseStrategy</span><span class="p">):</span>
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">execute</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">task</span><span class="p">,</span> <span class="n">workers</span><span class="p">,</span> <span class="n">coordinator</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="c1"># Your custom logic here</span>
+        <span class="k">pass</span>
+</code></pre></div>
+<h3 id="direct-orchestrator-access">Direct Orchestrator Access<a class="headerlink" href="#direct-orchestrator-access" title="Permanent link">&para;</a></h3>
+<p>For programmatic control:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">myclaw.swarm</span><span class="w"> </span><span class="kn">import</span> <span class="n">SwarmOrchestrator</span><span class="p">,</span> <span class="n">SwarmConfig</span><span class="p">,</span> <span class="n">SwarmStrategy</span>
+
+<span class="n">orchestrator</span> <span class="o">=</span> <span class="n">SwarmOrchestrator</span><span class="p">(</span><span class="n">agent_registry</span><span class="p">,</span> <span class="n">config</span><span class="p">)</span>
+
+<span class="c1"># Create swarm</span>
+<span class="n">config</span> <span class="o">=</span> <span class="n">SwarmConfig</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">"my_swarm"</span><span class="p">,</span>
+    <span class="n">strategy</span><span class="o">=</span><span class="n">SwarmStrategy</span><span class="o">.</span><span class="n">PARALLEL</span><span class="p">,</span>
+    <span class="n">workers</span><span class="o">=</span><span class="p">[</span><span class="s2">"agent1"</span><span class="p">,</span> <span class="s2">"agent2"</span><span class="p">]</span>
+<span class="p">)</span>
+<span class="n">swarm_id</span> <span class="o">=</span> <span class="k">await</span> <span class="n">orchestrator</span><span class="o">.</span><span class="n">create_swarm</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+<span class="c1"># Execute and get result object directly</span>
+<span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">orchestrator</span><span class="o">.</span><span class="n">execute_task</span><span class="p">(</span><span class="n">swarm_id</span><span class="p">,</span> <span class="s2">"My task"</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">confidence_score</span><span class="p">)</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">individual_results</span><span class="p">)</span>
+</code></pre></div>
+<hr />
+<h2 id="summary">Summary<a class="headerlink" href="#summary" title="Permanent link">&para;</a></h2>
+<p>Agent Swarms enable powerful multi-agent collaboration through:</p>
+<ol>
+<li><strong>Four Strategies</strong> - Parallel, Sequential, Hierarchical, Voting</li>
+<li><strong>Flexible Aggregation</strong> - Combine results intelligently</li>
+<li><strong>Coordinator Role</strong> - For complex orchestrated tasks</li>
+<li><strong>Persistent Storage</strong> - Track and analyze swarm operations</li>
+<li><strong>Easy Integration</strong> - Works with all existing MyClaw features</li>
+</ol>
+<p>Start simple with Parallel strategy, then explore Hierarchical with a Coordinator for complex workflow</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

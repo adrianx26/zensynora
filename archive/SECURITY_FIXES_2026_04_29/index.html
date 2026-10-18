@@ -1,0 +1,1955 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/archive/SECURITY_FIXES_2026_04_29/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Security & Stability Fixes — 2026-04-29 (+ 2026-05-17/18) - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#security-stability-fixes-2026-04-29-2026-05-1718" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Security &amp; Stability Fixes — 2026-04-29 (+ 2026-05-17/18)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#fixes-from-2026-04-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixes from 2026-04-29
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fixes from 2026-04-29">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-infinite-recursion-in-agent_track_preload" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Infinite recursion in Agent._track_preload
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#root-cause" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Root cause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-plan" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test plan
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-shell-injection-via-newline-characters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Shell injection via newline characters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Shell injection via newline characters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#root-cause_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Root cause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-plan_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test plan
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-missing-auth-on-apiv1keys-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Missing auth on /api/v1/keys endpoints
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Missing auth on /api/v1/keys endpoints">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#root-cause_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Root cause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-plan_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test plan
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-cors-misconfiguration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. CORS misconfiguration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. CORS misconfiguration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#root-cause_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Root cause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#operator-action-required" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operator action required
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-plan_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test plan
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-asyncsqlitepool-race-condition-unsafe-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. AsyncSQLitePool race condition + unsafe fallback
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. AsyncSQLitePool race condition + unsafe fallback">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#root-cause_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Root cause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-plan_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test plan
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-ast-sandbox-bypass-in-dynamic-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. AST sandbox bypass in dynamic tools
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. AST sandbox bypass in dynamic tools">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#root-cause_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Root cause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-plan_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test plan
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#note-for-operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Note for operators
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-broken-stream_chat-across-all-four-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Broken stream_chat across all four providers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Broken stream_chat across all four providers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#root-cause_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Root cause
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fix-applied-to-all-four-providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fix (applied to all four providers)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#test-plan_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test plan
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-changed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files changed
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-not-changed-verified-already-fixed-in-this-branch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files NOT changed (verified already-fixed in this branch)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fixes-from-2026-05-17-changeset-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixes from 2026-05-17 (Changeset 1)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fixes from 2026-05-17 (Changeset 1)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#8-url-injection-via-string-interpolation-in-web_searchpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. URL injection via string interpolation in web_search.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-missing-fernet-key-validation-in-config_encryptionpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Missing Fernet key validation in config_encryption.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-no-security-linters-in-pre-commit-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. No security linters in pre-commit pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fixes-from-2026-05-18-changeset-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fixes from 2026-05-18 (Changeset 2)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Fixes from 2026-05-18 (Changeset 2)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-timing-attack-on-api-key-comparison-in-webauthpy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Timing attack on API key comparison in web/auth.py
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-billion-laughs-xml-attack-vector-in-search_news" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Billion-laughs XML attack vector in search_news()
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-missing-rate-limiting-on-public-web-search-functions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. Missing rate limiting on public web search functions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-deprecated-logging-module-retained-as-footgun" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        14. Deprecated logging module retained as footgun
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#files-changed-2026-05-1718" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Files changed (2026-05-17/18)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="security-stability-fixes-2026-04-29-2026-05-1718">Security &amp; Stability Fixes — 2026-04-29 (+ 2026-05-17/18)<a class="headerlink" href="#security-stability-fixes-2026-04-29-2026-05-1718" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Archived on 2026-10-13 (v0.7.0).</strong> Security fix report (2026-04-29). Kept for history; it describes the project at the time it was written and may not match the current code. Current documentation: <a href="../../README.md">docs/README.md</a>.</p>
+<p><strong>Audit rounds:</strong> post-0.4.1 critical-bug sweep (04-29) + optimization audit (05-17/18)
+<strong>Scope:</strong> seven defects (04-29) + eight security/performance improvements (05-17/18)
+<strong>Outcome:</strong> all P0 items closed; 18/20 optimization items resolved</p>
+</blockquote>
+<p>This document describes each fix with root cause, exact change, and test plan.
+Use it to review the diff or to onboard a new contributor to the touched code.</p>
+<hr />
+<h2 id="fixes-from-2026-04-29">Fixes from 2026-04-29<a class="headerlink" href="#fixes-from-2026-04-29" title="Permanent link">&para;</a></h2>
+<h3 id="1-infinite-recursion-in-agent_track_preload">1. Infinite recursion in <code>Agent._track_preload</code><a class="headerlink" href="#1-infinite-recursion-in-agent_track_preload" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/agent.py:340-356</code>
+<strong>Severity:</strong> Critical (every preload call crashed)</p>
+<h3 id="root-cause">Root cause<a class="headerlink" href="#root-cause" title="Permanent link">&para;</a></h3>
+<p>The method that should record a preload <code>Task</code> in <code>self._pending_preloads</code>
+ended with <code>self._track_preload(task)</code> — calling itself unconditionally.
+Hits Python's recursion limit (~1000) on the first call and raises
+<code>RecursionError</code>.</p>
+<h3 id="fix">Fix<a class="headerlink" href="#fix" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="c1"># before</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">_track_preload</span><span class="p">(</span><span class="n">task</span><span class="p">)</span>
+
+<span class="c1"># after</span>
+<span class="bp">self</span><span class="o">.</span><span class="n">_pending_preloads</span><span class="o">.</span><span class="n">add</span><span class="p">(</span><span class="n">task</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="test-plan">Test plan<a class="headerlink" href="#test-plan" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Direct unit call must not raise <code>RecursionError</code>.</li>
+<li>After filling the set to <code>_max_pending_preloads</code>, the next call must keep
+  the size at <code>_max_pending_preloads</code> (eviction path).</li>
+<li><code>agent.think()</code> integration test must complete without recursion.</li>
+</ul>
+<hr />
+<h2 id="2-shell-injection-via-newline-characters">2. Shell injection via newline characters<a class="headerlink" href="#2-shell-injection-via-newline-characters" title="Permanent link">&para;</a></h2>
+<p><strong>Files:</strong> <code>myclaw/tools/shell.py</code> — <code>shell</code> and <code>shell_async</code>
+<strong>Severity:</strong> Critical (bypass of dangerous-character regex)</p>
+<h3 id="root-cause_1">Root cause<a class="headerlink" href="#root-cause_1" title="Permanent link">&para;</a></h3>
+<p>The regex <code>r"[;&amp;|</code>$(){}[]\]"<code>did not include</code>\n<code>or</code>\r<code>. An attacker
+could submit</code>ls\nwhoami<code>and pass validation. While</code>subprocess<code>is invoked
+with</code>shell=False<code>so the OS shell does not interpret the newline, the
+defensive regex's intent was to block the entire family of injection
+characters. In addition, only</code>parts[0]<code>was re-validated against the
+allow/blocklist — dangerous characters embedded in later arguments were not
+re-checked after</code>shlex.split`.</p>
+<h3 id="fix_1">Fix<a class="headerlink" href="#fix_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Added <code>\n</code> and <code>\r</code> to the dangerous-character class.</li>
+<li>Added a loop after <code>shlex.split(cmd)</code> that re-checks every token
+  (<code>parts[1:]</code>) against the same regex.</li>
+</ul>
+<div class="highlight"><pre><span></span><code><span class="n">dangerous</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">compile</span><span class="p">(</span><span class="sa">r</span><span class="s2">"[\n\r;&amp;|`$()</span><span class="si">{}</span><span class="s2">\[\]</span><span class="se">\\</span><span class="s2">]"</span><span class="p">)</span>
+<span class="o">...</span>
+<span class="n">parts</span> <span class="o">=</span> <span class="n">shlex</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">cmd</span><span class="p">)</span>
+<span class="k">for</span> <span class="n">part</span> <span class="ow">in</span> <span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">:]:</span>
+    <span class="k">if</span> <span class="n">dangerous</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="n">part</span><span class="p">):</span>
+        <span class="k">return</span> <span class="s2">"Error: Command contains dangerous characters"</span>
+</code></pre></div>
+<h3 id="test-plan_1">Test plan<a class="headerlink" href="#test-plan_1" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Parametrized tests for <code>"ls\nwhoami"</code>, <code>"ls\rwhoami"</code>, mixed payloads
+  asserting "Error" / "dangerous" in the response.</li>
+<li>Async version covered separately with <code>pytest.mark.asyncio</code>.</li>
+</ul>
+<hr />
+<h2 id="3-missing-auth-on-apiv1keys-endpoints">3. Missing auth on <code>/api/v1/keys</code> endpoints<a class="headerlink" href="#3-missing-auth-on-apiv1keys-endpoints" title="Permanent link">&para;</a></h2>
+<p><strong>File:</strong> <code>myclaw/api_server.py</code> — <code>list_api_keys</code>, <code>create_api_key</code>, <code>revoke_key</code>
+<strong>Severity:</strong> Critical (unauthenticated admin operations)</p>
+<h3 id="root-cause_2">Root cause<a class="headerlink" href="#root-cause_2" title="Permanent link">&para;</a></h3>
+<p>Each endpoint declared <code>api_key: Optional[str] = Depends(...)</code> and either
+performed no permission check at all (<code>list_api_keys</code>, <code>revoke_key</code>) or
+performed one only when <code>api_key</code> was truthy (<code>create_api_key</code>). Result:
+unauthenticated requests succeeded.</p>
+<h3 id="fix_2">Fix<a class="headerlink" href="#fix_2" title="Permanent link">&para;</a></h3>
+<p>Introduced a single guard inside <code>create_app()</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">_require_admin</span><span class="p">(</span><span class="n">api_key</span><span class="p">:</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">api_key</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">401</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">"Authentication required"</span><span class="p">)</span>
+    <span class="n">key_obj</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_api_keys</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">api_key</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">key_obj</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> <span class="s2">"admin"</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">key_obj</span><span class="o">.</span><span class="n">permissions</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">HTTPException</span><span class="p">(</span><span class="n">status_code</span><span class="o">=</span><span class="mi">403</span><span class="p">,</span> <span class="n">detail</span><span class="o">=</span><span class="s2">"Admin permission required"</span><span class="p">)</span>
+</code></pre></div>
+<p>All three endpoints now call <code>_require_admin(api_key)</code> as their first line.
+Also fixed the latent <code>APIKey("", "")</code> <code>TypeError</code> (<code>created_at</code> is required)
+by removing the buggy default-construction code path entirely.</p>
+<h3 id="test-plan_2">Test plan<a class="headerlink" href="#test-plan_2" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>TestClient</code> GET/POST/DELETE on <code>/api/v1/keys</code> without <code>Authorization</code>
+  header → <code>401</code>.</li>
+<li>With a non-admin key → <code>403</code>.</li>
+<li>With an admin key → success path returns the expected payload.</li>
+</ul>
+<hr />
+<h2 id="4-cors-misconfiguration">4. CORS misconfiguration<a class="headerlink" href="#4-cors-misconfiguration" title="Permanent link">&para;</a></h2>
+<p><strong>File:</strong> <code>myclaw/api_server.py:238-247</code>
+<strong>Severity:</strong> Critical (CSRF from any origin)</p>
+<h3 id="root-cause_3">Root cause<a class="headerlink" href="#root-cause_3" title="Permanent link">&para;</a></h3>
+<p><code>allow_origins=["*"]</code> combined with <code>allow_credentials=True</code> is a textbook
+CSRF setup. Browsers will attach the user's cookies/auth headers to
+cross-origin requests from any site.</p>
+<h3 id="fix_3">Fix<a class="headerlink" href="#fix_3" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Added <code>cors_origins: Optional[List[str]]</code> to <code>APIServer.__init__</code> (defaults
+  to <code>["http://localhost:5173"]</code> for development).</li>
+<li>Replaced <code>allow_origins=["*"]</code> with <code>allow_origins=self._cors_origins</code>.</li>
+<li>Narrowed <code>allow_methods</code> to <code>["GET","POST","PUT","DELETE","OPTIONS"]</code> and
+  <code>allow_headers</code> to <code>["Authorization","X-API-Key","Content-Type"]</code>.</li>
+</ul>
+<h3 id="operator-action-required">Operator action required<a class="headerlink" href="#operator-action-required" title="Permanent link">&para;</a></h3>
+<p>Production deployments <strong>must</strong> pass <code>cors_origins=config.security.cors_origins</code>
+when constructing <code>APIServer</code>. Audit the instantiation site before the next
+deploy.</p>
+<h3 id="test-plan_3">Test plan<a class="headerlink" href="#test-plan_3" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Preflight from listed origin → <code>Access-Control-Allow-Origin</code> echoes the origin.</li>
+<li>Preflight from unlisted origin → header omitted (no <code>*</code>).</li>
+</ul>
+<hr />
+<h2 id="5-asyncsqlitepool-race-condition-unsafe-fallback">5. <code>AsyncSQLitePool</code> race condition + unsafe fallback<a class="headerlink" href="#5-asyncsqlitepool-race-condition-unsafe-fallback" title="Permanent link">&para;</a></h2>
+<p><strong>File:</strong> <code>myclaw/memory.py:122-164</code>
+<strong>Severity:</strong> High (silent data corruption under concurrency)</p>
+<h3 id="root-cause_4">Root cause<a class="headerlink" href="#root-cause_4" title="Permanent link">&para;</a></h3>
+<p>The check-and-create block was correctly guarded by <code>cls._get_lock()</code>, but a
+fallback at the end of the block returned <code>pool[0]</code> unconditionally — even
+when that connection was already checked out by another caller. Any code path
+that reached the fallback would hand the same <code>aiosqlite.Connection</code> to two
+coroutines simultaneously, corrupting transactions.</p>
+<h3 id="fix_4">Fix<a class="headerlink" href="#fix_4" title="Permanent link">&para;</a></h3>
+<p>Replaced the silent fallback with an explicit <code>RuntimeError</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+    <span class="sa">f</span><span class="s2">"AsyncSQLitePool invariant violated for </span><span class="si">{</span><span class="n">key</span><span class="si">}</span><span class="s2">: "</span>
+    <span class="sa">f</span><span class="s2">"semaphore acquired but no free connection available "</span>
+    <span class="sa">f</span><span class="s2">"(pool=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">pool</span><span class="p">)</span><span class="si">}</span><span class="s2">, checked_out=</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">checked</span><span class="p">)</span><span class="si">}</span><span class="s2">)"</span>
+<span class="p">)</span>
+</code></pre></div>
+<p>If the semaphore is correct, this branch is unreachable. If the semaphore
+ever drifts, the bug now surfaces immediately instead of silently corrupting
+data.</p>
+<h3 id="test-plan_4">Test plan<a class="headerlink" href="#test-plan_4" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Existing <code>test_pool_concurrent_access</code> continues to pass (verifies no
+  regression in the happy path).</li>
+<li>Stress test with 50 concurrent acquire/release pairs on a pool of size 3
+  — no connection-id is double-checked-out.</li>
+<li>Monkey-patched <code>_pool_size = 0</code> test asserting <code>RuntimeError</code> is raised
+  with the expected message.</li>
+</ul>
+<hr />
+<h2 id="6-ast-sandbox-bypass-in-dynamic-tools">6. AST sandbox bypass in dynamic tools<a class="headerlink" href="#6-ast-sandbox-bypass-in-dynamic-tools" title="Permanent link">&para;</a></h2>
+<p><strong>File:</strong> <code>myclaw/tools/toolbox.py</code> — <code>register_tool</code> and <code>improve_skill</code>
+<strong>Severity:</strong> High (dynamic-tool sandbox escape)</p>
+<h3 id="root-cause_5">Root cause<a class="headerlink" href="#root-cause_5" title="Permanent link">&para;</a></h3>
+<p>Three independent gaps:</p>
+<ol>
+<li><code>pathlib</code> was not in <code>forbidden_imports</code> for <code>register_tool</code>. An agent
+   could register a tool that did <code>Path("/etc/passwd").read_text()</code>.</li>
+<li><code>improve_skill</code> had a <em>different, shorter</em> forbidden list than
+   <code>register_tool</code> — missing <code>importlib</code>, <code>pathlib</code>, and <code>getattr</code>. Two code
+   paths, two policies, drift over time guaranteed.</li>
+<li>Native-code escapes (<code>ctypes</code>, <code>cffi</code>, <code>mmap</code>) were not on either list.</li>
+</ol>
+<h3 id="fix_5">Fix<a class="headerlink" href="#fix_5" title="Permanent link">&para;</a></h3>
+<p>Centralized validation in a single helper at the top of <code>toolbox.py</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="n">_FORBIDDEN_IMPORTS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span>
+    <span class="s2">"os"</span><span class="p">,</span> <span class="s2">"sys"</span><span class="p">,</span> <span class="s2">"subprocess"</span><span class="p">,</span> <span class="s2">"shutil"</span><span class="p">,</span> <span class="s2">"socket"</span><span class="p">,</span> <span class="s2">"urllib"</span><span class="p">,</span> <span class="s2">"http"</span><span class="p">,</span> <span class="s2">"pty"</span><span class="p">,</span>
+    <span class="s2">"commands"</span><span class="p">,</span> <span class="s2">"importlib"</span><span class="p">,</span>
+    <span class="s2">"pathlib"</span><span class="p">,</span> <span class="s2">"ctypes"</span><span class="p">,</span> <span class="s2">"cffi"</span><span class="p">,</span> <span class="s2">"mmap"</span><span class="p">,</span>   <span class="c1"># newly added</span>
+<span class="p">})</span>
+<span class="n">_FORBIDDEN_CALLS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span>
+    <span class="s2">"eval"</span><span class="p">,</span> <span class="s2">"exec"</span><span class="p">,</span> <span class="s2">"__import__"</span><span class="p">,</span> <span class="s2">"globals"</span><span class="p">,</span> <span class="s2">"locals"</span><span class="p">,</span> <span class="s2">"compile"</span><span class="p">,</span> <span class="s2">"getattr"</span><span class="p">,</span>
+<span class="p">})</span>
+<span class="n">_RESTRICTED_CALLS</span> <span class="o">=</span> <span class="nb">frozenset</span><span class="p">({</span><span class="s2">"open"</span><span class="p">})</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_validate_tool_ast</span><span class="p">(</span><span class="n">code</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
+    <span class="o">...</span>
+</code></pre></div>
+<p>Both <code>register_tool</code> and <code>improve_skill</code> now do:</p>
+<div class="highlight"><pre><span></span><code><span class="n">ast_error</span> <span class="o">=</span> <span class="n">_validate_tool_ast</span><span class="p">(</span><span class="n">code</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">ast_error</span><span class="p">:</span>
+    <span class="k">return</span> <span class="n">ast_error</span>
+</code></pre></div>
+<p>The helper additionally checks <code>ast.Attribute</code> nodes so that
+<code>pathlib.Path(...)</code> (attribute access on a forbidden module name) is rejected
+even if the <code>import pathlib</code> line slips through unusual aliasing.</p>
+<h3 id="test-plan_5">Test plan<a class="headerlink" href="#test-plan_5" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Parametrized tests rejecting: <code>import pathlib</code>, <code>import ctypes</code>,
+  <code>import importlib</code>, <code>__builtins__['eval']</code>, <code>getattr(__builtins__, 'eval')</code>,
+  <code>open(...)</code>, <code>eval(...)</code>, <code>pathlib.Path(...)</code>.</li>
+<li>Positive test: a docstring + try/except + <code>logger.error</code> tool passes
+  validation.</li>
+</ul>
+<h3 id="note-for-operators">Note for operators<a class="headerlink" href="#note-for-operators" title="Permanent link">&para;</a></h3>
+<p>Existing dynamically registered tools that import <code>pathlib</code> (rare) will be
+rejected on next reload. Audit <code>~/.myclaw/toolbox/</code> before merging.</p>
+<hr />
+<h2 id="7-broken-stream_chat-across-all-four-providers">7. Broken <code>stream_chat</code> across all four providers<a class="headerlink" href="#7-broken-stream_chat-across-all-four-providers" title="Permanent link">&para;</a></h2>
+<p><strong>File:</strong> <code>myclaw/provider.py</code> — Ollama, OpenAI-compat, Anthropic, Gemini
+<strong>Severity:</strong> High (streaming has never worked)</p>
+<h3 id="root-cause_6">Root cause<a class="headerlink" href="#root-cause_6" title="Permanent link">&para;</a></h3>
+<p><code>chat(messages, model, stream=True)</code> returns a tuple
+<code>(async_generator, tool_calls_collector)</code>, not an async iterable. The code</p>
+<div class="highlight"><pre><span></span><code><span class="k">async</span> <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">chat</span><span class="p">(</span><span class="n">messages</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">stream</span><span class="o">=</span><span class="kc">True</span><span class="p">):</span>
+    <span class="k">yield</span> <span class="n">chunk</span>
+</code></pre></div>
+<p>iterates over the tuple itself, silently yielding the generator object
+followed by the empty <code>tool_calls_collector</code> list, then terminating. No text
+chunks are ever streamed.</p>
+<h3 id="fix-applied-to-all-four-providers">Fix (applied to all four providers)<a class="headerlink" href="#fix-applied-to-all-four-providers" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="n">iterator</span><span class="p">,</span> <span class="n">_</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">chat</span><span class="p">(</span><span class="n">messages</span><span class="p">,</span> <span class="n">model</span><span class="p">,</span> <span class="n">stream</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">async</span> <span class="k">for</span> <span class="n">chunk</span> <span class="ow">in</span> <span class="n">iterator</span><span class="p">:</span>
+    <span class="k">yield</span> <span class="n">chunk</span>
+</code></pre></div>
+<h3 id="test-plan_6">Test plan<a class="headerlink" href="#test-plan_6" title="Permanent link">&para;</a></h3>
+<p>For each provider, mock <code>chat</code> to return <code>(fake_async_generator(), [])</code> and
+assert that <code>stream_chat</code> yields the generator's chunks in order.</p>
+<hr />
+<h2 id="files-changed">Files changed<a class="headerlink" href="#files-changed" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Lines touched</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>myclaw/agent.py</code></td>
+<td>1</td>
+<td>Recursion fix</td>
+</tr>
+<tr>
+<td><code>myclaw/tools/shell.py</code></td>
+<td>~14</td>
+<td>Newline regex + token re-validation (×2 functions)</td>
+</tr>
+<tr>
+<td><code>myclaw/api_server.py</code></td>
+<td>~30</td>
+<td>Auth guards, CORS allow-list, init param</td>
+</tr>
+<tr>
+<td><code>myclaw/memory.py</code></td>
+<td>~10</td>
+<td>Replace unsafe fallback with <code>RuntimeError</code></td>
+</tr>
+<tr>
+<td><code>myclaw/tools/toolbox.py</code></td>
+<td>+95 / −95</td>
+<td>Extract <code>_validate_tool_ast</code>, expand forbidden set</td>
+</tr>
+<tr>
+<td><code>myclaw/provider.py</code></td>
+<td>4×3</td>
+<td>Destructure <code>chat(...)</code> tuple</td>
+</tr>
+<tr>
+<td><code>archive/tools_backup.py</code></td>
+<td>(deleted)</td>
+<td>Dead code removal</td>
+</tr>
+</tbody>
+</table>
+<h2 id="files-not-changed-verified-already-fixed-in-this-branch">Files NOT changed (verified already-fixed in this branch)<a class="headerlink" href="#files-not-changed-verified-already-fixed-in-this-branch" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SSH <code>AutoAddPolicy</code></td>
+<td><code>myclaw/backends/ssh.py:46</code> already uses <code>RejectPolicy()</code></td>
+</tr>
+<tr>
+<td>OpenAI sync client in async</td>
+<td><code>myclaw/provider.py:660,668</code> already uses <code>AsyncOpenAI</code></td>
+</tr>
+<tr>
+<td>MFA secret exposure</td>
+<td><code>myclaw/mfa.py:96-131</code> already redacts the raw secret</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="fixes-from-2026-05-17-changeset-1">Fixes from 2026-05-17 (Changeset 1)<a class="headerlink" href="#fixes-from-2026-05-17-changeset-1" title="Permanent link">&para;</a></h2>
+<h3 id="8-url-injection-via-string-interpolation-in-web_searchpy">8. URL injection via string interpolation in web_search.py<a class="headerlink" href="#8-url-injection-via-string-interpolation-in-web_searchpy" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/web_search.py</code> — <code>search_web</code>, <code>search_wikipedia</code>, <code>search_news</code>
+<strong>Severity:</strong> Medium (potential URL injection through query parameters)</p>
+<p><strong>Root cause:</strong> URLs were constructed with raw f-strings:
+<code>f"https://html.duckduckgo.com/html/?q={encoded_query}"</code>. While <code>urllib.parse.quote()</code> was used on the query, the base URL was hardcoded in the f-string and could be manipulated if the function signature changed.</p>
+<p><strong>Fix:</strong> Switched to <code>urllib.parse.urlencode({"q": query}, quote_via=urllib.parse.quote_plus)</code> + <code>urllib.parse.urljoin(_DDG_BASE, "/html/")</code>. Defined <code>_DDG_BASE</code>, <code>_WIKI_BASE</code>, <code>_NEWS_BASE</code> as trusted host constants.</p>
+<p><strong>Test plan:</strong> URLs are validated at construction time; all existing web search tests pass.</p>
+<h3 id="9-missing-fernet-key-validation-in-config_encryptionpy">9. Missing Fernet key validation in config_encryption.py<a class="headerlink" href="#9-missing-fernet-key-validation-in-config_encryptionpy" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/config_encryption.py</code> — <code>_get_or_create_key</code>, <code>_load_key</code>
+<strong>Severity:</strong> Medium (corrupted/invalid keys silently breaking config)</p>
+<p><strong>Root cause:</strong> <code>ZENSYNORA_CONFIG_KEY</code> env var was used as-is without checking whether it actually was a valid Fernet key (must be 43 url-safe base64 chars + <code>=</code>). A typo in the env var would cause silent decryption failures.</p>
+<p><strong>Fix:</strong> Added <code>_validate_key_format()</code> with regex <code>^[A-Za-z0-9_\-]{43}=$</code> and entropy heuristic. Env var, keyring, and file keys all validated on load. Invalid keys logged with clear warning and fallback to next source.</p>
+<h3 id="10-no-security-linters-in-pre-commit-pipeline">10. No security linters in pre-commit pipeline<a class="headerlink" href="#10-no-security-linters-in-pre-commit-pipeline" title="Permanent link">&para;</a></h3>
+<p><strong>Severity:</strong> Low (vulnerabilities accumulate over time)</p>
+<p><strong>Fix:</strong> Added <code>bandit</code> (v1.7.10) SAST hook and <code>safety</code> (v3.2.14) dependency vulnerability scanner to <code>.pre-commit-config.yaml</code>. Both scoped to application source files only.</p>
+<hr />
+<h2 id="fixes-from-2026-05-18-changeset-2">Fixes from 2026-05-18 (Changeset 2)<a class="headerlink" href="#fixes-from-2026-05-18-changeset-2" title="Permanent link">&para;</a></h2>
+<h3 id="11-timing-attack-on-api-key-comparison-in-webauthpy">11. Timing attack on API key comparison in web/auth.py<a class="headerlink" href="#11-timing-attack-on-api-key-comparison-in-webauthpy" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/web/auth.py:27</code> — <code>require_admin_api_key</code>
+<strong>Severity:</strong> Medium (timing side-channel on API key validation)</p>
+<p><strong>Root cause:</strong> <code>if x_api_key != expected:</code> performs byte-by-byte comparison, leaking key length and prefix information through response timing.</p>
+<p><strong>Fix:</strong> Replaced with <code>secrets.compare_digest(x_api_key, expected)</code> — constant-time comparison regardless of key content.</p>
+<p><strong>Test plan:</strong> Functionally identical; all existing auth tests pass.</p>
+<h3 id="12-billion-laughs-xml-attack-vector-in-search_news">12. Billion-laughs XML attack vector in search_news()<a class="headerlink" href="#12-billion-laughs-xml-attack-vector-in-search_news" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/web_search.py</code> — <code>search_news</code>
+<strong>Severity:</strong> Medium (DoS via XML entity expansion)</p>
+<p><strong>Root cause:</strong> <code>search_news()</code> parsed Google News RSS with <code>xml.etree.ElementTree.fromstring()</code> which is vulnerable to exponential entity expansion (billion laughs attack).</p>
+<p><strong>Fix:</strong> Added <code>_safe_parse_xml()</code> that uses <code>defusedxml.ElementTree</code> when installed. Falls back to standard <code>ElementTree</code> with clear logging. Defusedxml blocks entity expansion and raises <code>EntitiesForbidden</code>.</p>
+<h3 id="13-missing-rate-limiting-on-public-web-search-functions">13. Missing rate limiting on public web search functions<a class="headerlink" href="#13-missing-rate-limiting-on-public-web-search-functions" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/web_search.py</code> — all public search functions
+<strong>Severity:</strong> Low (potential for API abuse)</p>
+<p><strong>Root cause:</strong> <code>search_web()</code>, <code>search_wikipedia()</code>, <code>search_news()</code>, and <code>get_webpage_content()</code> had no rate limiting, allowing unbounded calls to external services.</p>
+<p><strong>Fix:</strong> Added <code>_rate_limit_check()</code> token-bucket limiter with per-function limits: 30/min (DuckDuckGo), 60/min (Wikipedia), 20/min (Google News), 30/min (webpage fetch). Returns structured error on limit exceeded.</p>
+<h3 id="14-deprecated-logging-module-retained-as-footgun">14. Deprecated logging module retained as footgun<a class="headerlink" href="#14-deprecated-logging-module-retained-as-footgun" title="Permanent link">&para;</a></h3>
+<p><strong>File:</strong> <code>myclaw/logging.py</code>
+<strong>Severity:</strong> Low (duplicate logging configuration path)</p>
+<p><strong>Root cause:</strong> Two logging modules (<code>logging.py</code> with simple <code>basicConfig</code>, <code>logging_config.py</code> with structured formatting + PII scrubbing) caused confusion. <code>init_app()</code> was importing the wrong one.</p>
+<p><strong>Fix:</strong> <code>logging.py</code> now emits <code>DeprecationWarning</code> and delegates to <code>logging_config.py</code>. <code>init_app()</code> updated to import the structured logger directly. All new code should import from <code>logging_config</code>.</p>
+<h2 id="files-changed-2026-05-1718">Files changed (2026-05-17/18)<a class="headerlink" href="#files-changed-2026-05-1718" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Changeset</th>
+<th>Change</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pyproject.toml</code></td>
+<td>1</td>
+<td>Dependency upper bounds; coverage enforcement</td>
+</tr>
+<tr>
+<td><code>.pre-commit-config.yaml</code></td>
+<td>1</td>
+<td>Bandit + Safety hooks</td>
+</tr>
+<tr>
+<td><code>myclaw/web_search.py</code></td>
+<td>1 + 2</td>
+<td>URL safety; shared session; safe XML; rate limiting</td>
+</tr>
+<tr>
+<td><code>myclaw/aiohttp_session.py</code></td>
+<td>1</td>
+<td><strong>New file</strong> — shared async HTTP session singleton</td>
+</tr>
+<tr>
+<td><code>myclaw/config_encryption.py</code></td>
+<td>1</td>
+<td>Fernet key format validation</td>
+</tr>
+<tr>
+<td><code>myclaw/__init__.py</code></td>
+<td>1</td>
+<td><code>init_app()</code> centralized bootstrapper</td>
+</tr>
+<tr>
+<td><code>myclaw/cli.py</code></td>
+<td>1</td>
+<td>Use <code>init_app()</code> instead of inline shutdown handlers</td>
+</tr>
+<tr>
+<td><code>myclaw/context_window.py</code></td>
+<td>1</td>
+<td>Consolidated model limits dictionary</td>
+</tr>
+<tr>
+<td><code>myclaw/logging.py</code></td>
+<td>2</td>
+<td>Deprecated; delegates to <code>logging_config.py</code></td>
+</tr>
+<tr>
+<td><code>myclaw/web/auth.py</code></td>
+<td>2</td>
+<td><code>secrets.compare_digest()</code> for API key comparison</td>
+</tr>
+<tr>
+<td><code>myclaw/defaults.py</code></td>
+<td>2</td>
+<td><code>MAX_DELEGATION_DEPTH</code>, <code>TASK_TIMER_STEPS_TOTAL</code>, <code>DEFAULT_SUMMARIZATION_THRESHOLD</code></td>
+</tr>
+<tr>
+<td><code>myclaw/agent_internals/router.py</code></td>
+<td>2</td>
+<td>Named constants replacing magic numbers</td>
+</tr>
+<tr>
+<td><code>tests/test_swarm_integration.py</code></td>
+<td>1</td>
+<td><code>pytest.mark.xfail</code> for Windows</td>
+</tr>
+<tr>
+<td><code>tests/test_memory_pool_concurrency.py</code></td>
+<td>2</td>
+<td><code>asyncio.Event</code> replacing <code>asyncio.sleep()</code></td>
+</tr>
+<tr>
+<td><code>docs/review01.md</code></td>
+<td>1 + 2</td>
+<td>Comprehensive application review (new)</td>
+</tr>
+<tr>
+<td>Various <code>.md</code> files</td>
+<td>2</td>
+<td>Documentation updates and stale reference resolutions</td>
+</tr>
+</tbody>
+</table>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

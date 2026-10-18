@@ -1,0 +1,1612 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/archive/future_implementation_plan/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>ZenSynora Future Implementation Plan - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#zensynora-future-implementation-plan" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              ZenSynora Future Implementation Plan
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#implemented-features" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Implemented Features ✅
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Implemented Features ✅">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#medium-priority-completed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Medium Priority (Completed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#high-priority-completed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        High Priority (Completed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#low-priority-completed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Low Priority (Completed)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-phase-1-agent-integration-automation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Phase 1: Agent Integration &amp; Automation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Future Phase 1: Agent Integration &amp; Automation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-already-completed" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Already Completed ✅
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-auto-health-check-on-startup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Auto Health Check on Startup
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#priority-order-remaining" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Order (Remaining)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Priority Order (Remaining)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-integrate-agents-into-agentthink-pipeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 Integrate Agents into Agent.think() Pipeline
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-config-integration-for-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 Config Integration for Agents
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-phase-2-medic-agent-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Phase 2: Medic Agent Enhancements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Future Phase 2: Medic Agent Enhancements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-local-backup-recovery" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Local Backup Recovery
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-virustotal-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 VirusTotal Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-proactive-latency-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Proactive Latency Optimization
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-phase-3-new-tech-agent-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Phase 3: New Tech Agent Enhancements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Future Phase 3: New Tech Agent Enhancements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-real-github-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Real GitHub Integration
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-additional-news-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 Additional News Sources
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-phase-4-testing-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Phase 4: Testing &amp; Documentation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Future Phase 4: Testing &amp; Documentation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-unit-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Unit Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-integration-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Integration Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-phase-5-performance-optimization" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Phase 5: Performance Optimization
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Future Phase 5: Performance Optimization">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-caching-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Caching Layer
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-parallel-processing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Parallel Processing
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-phase-6-security-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Phase 6: Security Enhancements
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Future Phase 6: Security Enhancements">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-skill-sandboxing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 Skill Sandboxing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#62-audit-logging" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.2 Audit Logging
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#priority-order" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Priority Order
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="zensynora-future-implementation-plan">ZenSynora Future Implementation Plan<a class="headerlink" href="#zensynora-future-implementation-plan" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong>Archived on 2026-10-13 (v0.7.0).</strong> Implementation plan. Kept for history; it describes the project at the time it was written and may not match the current code. Current documentation: <a href="../../README.md">docs/README.md</a>.</p>
+</blockquote>
+<h2 id="overview">Overview<a class="headerlink" href="#overview" title="Permanent link">&para;</a></h2>
+<p>Based on code review, this document outlines future improvements and missing features from the original requirements.</p>
+<hr />
+<h2 id="implemented-features">Implemented Features ✅<a class="headerlink" href="#implemented-features" title="Permanent link">&para;</a></h2>
+<h3 id="medium-priority-completed">Medium Priority (Completed)<a class="headerlink" href="#medium-priority-completed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Local Backup Recovery</strong> - Implemented <code>recover_from_local()</code>, <code>create_local_backup()</code>, <code>list_backups()</code></li>
+<li><strong>Real GitHub Integration</strong> - Implemented actual GitHub Gist/Issue creation with API token</li>
+</ul>
+<h3 id="high-priority-completed">High Priority (Completed)<a class="headerlink" href="#high-priority-completed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Config Integration</strong> - Added <code>MedicConfig</code> and <code>NewTechConfig</code> with all fields</li>
+<li><strong>Agent Pipeline Integration</strong> - Added loop prevention in <code>agent.think()</code></li>
+</ul>
+<h3 id="low-priority-completed">Low Priority (Completed)<a class="headerlink" href="#low-priority-completed" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>VirusTotal Integration</strong> - Implemented <code>check_file_virustotal()</code> with API key support</li>
+</ul>
+<hr />
+<h2 id="future-phase-1-agent-integration-automation">Future Phase 1: Agent Integration &amp; Automation<a class="headerlink" href="#future-phase-1-agent-integration-automation" title="Permanent link">&para;</a></h2>
+<h3 id="11-already-completed">1.1 Already Completed ✅<a class="headerlink" href="#11-already-completed" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Agent pipeline loop prevention in <code>agent.think()</code></li>
+<li>Config integration for agents</li>
+</ul>
+<h3 id="12-auto-health-check-on-startup">1.2 Auto Health Check on Startup<a class="headerlink" href="#12-auto-health-check-on-startup" title="Permanent link">&para;</a></h3>
+<p><strong>Current:</strong> Implemented as config option <code>scan_on_startup</code></p>
+<p><strong>Implementation:</strong> Already available - add to gateway startup</p>
+<hr />
+<h2 id="priority-order-remaining">Priority Order (Remaining)<a class="headerlink" href="#priority-order-remaining" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>Feature</th>
+<th>Status</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MEDIUM</td>
+<td>Local Backup</td>
+<td>✅ Complete</td>
+<td>Recover from local backup folder</td>
+</tr>
+<tr>
+<td>MEDIUM</td>
+<td>GitHub Integration</td>
+<td>✅ Complete</td>
+<td>Real Gist/Issue creation</td>
+</tr>
+<tr>
+<td>HIGH</td>
+<td>Config Integration</td>
+<td>✅ Complete</td>
+<td>MedicConfig/NewTechConfig</td>
+</tr>
+<tr>
+<td>HIGH</td>
+<td>Agent Pipeline</td>
+<td>✅ Complete</td>
+<td>Loop prevention in think()</td>
+</tr>
+<tr>
+<td>LOW</td>
+<td>VirusTotal</td>
+<td>✅ Complete</td>
+<td>File hash scanning</td>
+</tr>
+</tbody>
+</table>
+<p>All requested features are now implemented!</p>
+<h3 id="11-integrate-agents-into-agentthink-pipeline">1.1 Integrate Agents into Agent.think() Pipeline<a class="headerlink" href="#11-integrate-agents-into-agentthink-pipeline" title="Permanent link">&para;</a></h3>
+<p><strong>Current State:</strong> Agents are standalone tools but not automatically invoked during agent execution.</p>
+<p><strong>Implementation:</strong>
+- Add automatic health check on agent startup
+- Integrate loop prevention into agent execution
+- Auto-run newtech scan on scheduled intervals</p>
+<p><strong>Files to Modify:</strong>
+- <code>myclaw/agent.py</code> - Add agent lifecycle hooks for medic</p>
+<h3 id="12-config-integration-for-agents">1.2 Config Integration for Agents<a class="headerlink" href="#12-config-integration-for-agents" title="Permanent link">&para;</a></h3>
+<p><strong>Current State:</strong> Agents have defaults but no explicit config sections.</p>
+<p><strong>Implementation:</strong>
+Add to <code>config.py</code>:
+<div class="highlight"><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">MedicConfig</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">enable_hash_check</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
+    <span class="n">repo_url</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span>
+    <span class="n">scan_on_startup</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">max_loop_iterations</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">100</span>
+    <span class="n">backup_dir</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">NewTechConfig</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="n">enabled</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">interval_hours</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">24</span>
+    <span class="n">share_consent</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+    <span class="n">github_repo</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span>
+    <span class="n">max_news_items</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">10</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">AppConfig</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
+    <span class="c1"># ... existing fields</span>
+    <span class="n">medic</span><span class="p">:</span> <span class="n">MedicConfig</span> <span class="o">=</span> <span class="n">MedicConfig</span><span class="p">()</span>
+    <span class="n">newtech</span><span class="p">:</span> <span class="n">NewTechConfig</span> <span class="o">=</span> <span class="n">NewTechConfig</span><span class="p">()</span>
+</code></pre></div></p>
+<hr />
+<h2 id="future-phase-2-medic-agent-enhancements">Future Phase 2: Medic Agent Enhancements<a class="headerlink" href="#future-phase-2-medic-agent-enhancements" title="Permanent link">&para;</a></h2>
+<h3 id="21-local-backup-recovery">2.1 Local Backup Recovery<a class="headerlink" href="#21-local-backup-recovery" title="Permanent link">&para;</a></h3>
+<p><strong>Current State:</strong> Only GitHub recovery implemented.</p>
+<p><strong>Implementation:</strong>
+- Implement local backup folder (<code>~/.myclaw/medic/backup/</code>)
+- Add <code>recover_file(source="local")</code> option</p>
+<p><strong>Files to Modify:</strong>
+- <code>myclaw/agents/medic_agent.py</code></p>
+<h3 id="22-virustotal-integration">2.2 VirusTotal Integration<a class="headerlink" href="#22-virustotal-integration" title="Permanent link">&para;</a></h3>
+<p><strong>Original Requirement:</strong> Check files on Virustotal or with anti-malware engine.</p>
+<p><strong>Implementation:</strong>
+<div class="highlight"><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">check_file_virustotal</span><span class="p">(</span><span class="n">file_path</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">api_key</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Check file hash against VirusTotal API."""</span>
+    <span class="c1"># Calculate hash</span>
+    <span class="c1"># Query VT API</span>
+    <span class="c1"># Return detection ratio</span>
+</code></pre></div></p>
+<h3 id="23-proactive-latency-optimization">2.3 Proactive Latency Optimization<a class="headerlink" href="#23-proactive-latency-optimization" title="Permanent link">&para;</a></h3>
+<p><strong>Original Requirement:</strong> Perform proactive operations to reduce latency.</p>
+<p><strong>Implementation:</strong>
+- Pre-load frequently used skills
+- Cache LLM responses for similar queries
+- Pre-warm connection pools</p>
+<hr />
+<h2 id="future-phase-3-new-tech-agent-enhancements">Future Phase 3: New Tech Agent Enhancements<a class="headerlink" href="#future-phase-3-new-tech-agent-enhancements" title="Permanent link">&para;</a></h2>
+<h3 id="31-real-github-integration">3.1 Real GitHub Integration<a class="headerlink" href="#31-real-github-integration" title="Permanent link">&para;</a></h3>
+<p><strong>Current State:</strong> Placeholder implementation.</p>
+<p><strong>Implementation:</strong>
+<div class="highlight"><pre><span></span><code><span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">_create_gist</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">title</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">content</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create actual GitHub Gist."""</span>
+    <span class="c1"># Use GitHub API with token</span>
+</code></pre></div></p>
+<h3 id="32-additional-news-sources">3.2 Additional News Sources<a class="headerlink" href="#32-additional-news-sources" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation:</strong>
+- Add more AI news sources (OpenAI Blog, DeepAI, etc.)
+- Add RSS feed parsing
+- Add newsletter integration</p>
+<hr />
+<h2 id="future-phase-4-testing-documentation">Future Phase 4: Testing &amp; Documentation<a class="headerlink" href="#future-phase-4-testing-documentation" title="Permanent link">&para;</a></h2>
+<h3 id="41-unit-tests">4.1 Unit Tests<a class="headerlink" href="#41-unit-tests" title="Permanent link">&para;</a></h3>
+<p><strong>Files to Create:</strong>
+- <code>tests/test_skill_adapter.py</code>
+- <code>tests/test_medic_agent.py</code>
+- <code>tests/test_newtech_agent.py</code>
+- <code>tests/test_backends.py</code></p>
+<h3 id="42-integration-tests">4.2 Integration Tests<a class="headerlink" href="#42-integration-tests" title="Permanent link">&para;</a></h3>
+<p><strong>Files to Create:</strong>
+- <code>tests/test_agent_integration.py</code>
+- <code>tests/test_swarm_integration.py</code></p>
+<hr />
+<h2 id="future-phase-5-performance-optimization">Future Phase 5: Performance Optimization<a class="headerlink" href="#future-phase-5-performance-optimization" title="Permanent link">&para;</a></h2>
+<h3 id="51-caching-layer">5.1 Caching Layer<a class="headerlink" href="#51-caching-layer" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation:</strong>
+- Add Redis-like caching for LLM responses
+- Implement skill result caching
+- Add memory-mapped file optimization</p>
+<h3 id="52-parallel-processing">5.2 Parallel Processing<a class="headerlink" href="#52-parallel-processing" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation:</strong>
+- Parallel tool execution where possible
+- Async optimization for I/O-bound tasks
+- Worker pool management</p>
+<hr />
+<h2 id="future-phase-6-security-enhancements">Future Phase 6: Security Enhancements<a class="headerlink" href="#future-phase-6-security-enhancements" title="Permanent link">&para;</a></h2>
+<h3 id="61-skill-sandboxing">6.1 Skill Sandboxing<a class="headerlink" href="#61-skill-sandboxing" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation:</strong>
+- Run skills in isolated containers
+- Add resource limits (CPU, memory)
+- Implement skill permissions system</p>
+<h3 id="62-audit-logging">6.2 Audit Logging<a class="headerlink" href="#62-audit-logging" title="Permanent link">&para;</a></h3>
+<p><strong>Implementation:</strong>
+- Log all skill executions
+- Add tamper-evident logging
+- Implement log rotation</p>
+<hr />
+<h2 id="priority-order">Priority Order<a class="headerlink" href="#priority-order" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Priority</th>
+<th>Feature</th>
+<th>Impact</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HIGH</td>
+<td>Config integration</td>
+<td>Required for production use</td>
+</tr>
+<tr>
+<td>HIGH</td>
+<td>Agent pipeline integration</td>
+<td>Core functionality</td>
+</tr>
+<tr>
+<td>MEDIUM</td>
+<td>Local backup recovery</td>
+<td>Reliability</td>
+</tr>
+<tr>
+<td>MEDIUM</td>
+<td>Real GitHub integration</td>
+<td>User value</td>
+</tr>
+<tr>
+<td>LOW</td>
+<td>VirusTotal integration</td>
+<td>Security</td>
+</tr>
+<tr>
+<td>LOW</td>
+<td>Testing</td>
+<td>Quality assurance</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<ul>
+<li>All LSP errors in existing files should be fixed</li>
+<li>Consider adding type hints throughout</li>
+<li>Performance testing should be done before Phase 5</li>
+</ul>
+<hr />
+<p><em>Generated: 2026-03-29</em>
+<em>Part of: ZenSynora Future Planning</em></p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
