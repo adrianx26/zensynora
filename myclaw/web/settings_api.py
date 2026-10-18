@@ -293,6 +293,10 @@ async def update_settings(update: SettingsUpdate):
     for path, value in update.changes.items():
         if not _path_exists_in_schema(path):
             raise HTTPException(status_code=400, detail=f"Unknown setting: {path}")
+        if path in secret_paths and isinstance(value, str):
+            # A space or line break copied with a key or token broke it silently
+            # (seen with the Telegram token); keys never contain whitespace.
+            value = "".join(value.split())
         if path in secret_paths and (value is None or value == ""):
             continue  # empty secret field = keep the stored value
         if path == "providers.custom":

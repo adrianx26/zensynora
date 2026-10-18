@@ -251,6 +251,7 @@ def test_real_library_end_to_end_with_a_fake_telegram_server(home, monkeypatch):
             await asyncio.sleep(0.1)
             if len(ft.SENT) >= 4:
                 break
+        await ch.send_text("111", "test message")                                # Send test message
         await ch.stop()
         return ch.status()["state"]
 
@@ -259,5 +260,6 @@ def test_real_library_end_to_end_with_a_fake_telegram_server(home, monkeypatch):
     finally:
         srv.shutdown()
     assert ft.SENT[0] == "ok hello" and ft.SENT[1] == "@Executor: Executor: go"
-    assert len(ft.SENT) == 4 and all(len(t) <= 4096 for t in ft.SENT)      # long answer split, stranger ignored
+    assert len(ft.SENT) == 5 and all(len(t) <= 4096 for t in ft.SENT)      # long answer split, stranger ignored
+    assert ft.SENT[-1] == "test message"
     assert len(json.loads(ft.COMMANDS[0])) == 12                               # command menu registered

@@ -33,6 +33,9 @@ Settings, buttons and status are in the Web UI under **Settings → Channels**
 4. **Allow yourself.** Back in Settings → Channels, add the number to
    **Allowed Telegram users** and click **Save**. The bot restarts by itself
    (or click **Restart bot**).
+6. Click **Send test message**: the bot writes to every number in *Allowed
+   Telegram users*. Telegram does not let a bot write first, so open the bot
+   and press **Start** once before that.
 5. **Chat.** Write to your bot. The default agent answers.
 
 The **Telegram bot** panel in Settings → Channels shows *Status: Running as
@@ -233,6 +236,7 @@ local fake server.
 | Status: *No bot token yet* | Paste the token from @BotFather in **Telegram bot token** and Save. |
 | `zensynora doctor` says *Telegram bot: nobody is allowed to use the bot* | Send `/whoami` to the bot and add the number to **Allowed Telegram users**. |
 | `zensynora doctor` says *Telegram bot: enabled but no bot token* | Paste the token from @BotFather in Settings → Channels, or turn the bot off. |
+| *Test bot* says the token works, but the status says *The token is wrong* | Fixed on 2026-10-18: a space or line break copied with the token. Update ZenSynora, or paste the token again without spaces and Save. |
 | Status: *Error: …* | Click **Test bot**. *The token is wrong — copy it again from @BotFather.*: send `/token` to @BotFather, paste the token and Save. *Cannot reach Telegram — check the internet connection.*: this computer cannot reach Telegram. |
 | The bot answers with a model error (rate-limited, server cannot be reached) | The bot works; the model does not. Open the **Models** page and click **Test** on the default model, or pick another one. |
 | Nothing happens in a group | Make sure every person is allowed, and check privacy mode (see [Groups](#groups)). |

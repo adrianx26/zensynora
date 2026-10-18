@@ -279,3 +279,45 @@ def test_telegram_changes_need_no_restart_when_in_webui(tg, monkeypatch):
                                                  "channels.whatsapp.enabled": True}})
     assert r.status_code == 200, r.text
     assert r.json()["restart_needed_for"] == ["channels.whatsapp.enabled"]
+
+
+# ── 2026-10-18: a token pasted with a line break; "Send test message" ──────────
+def test_token_with_spaces_or_line_break_is_trimmed(home):  # noqa: F811
+    """Real case: Test bot (which trimmed) said OK, the bot said 'token is wrong'."""
+    from myclaw.channels.telegram import TelegramChannel
+    from myclaw.config import load_config
+
+    _write_config(home, token=" 123456:ABC-secret-token\n")
+    ch = TelegramChannel(load_config(force_reload=True), {"default": None})
+    assert ch.token == "123456:ABC-secret-token"
+
+
+def test_saving_settings_trims_secret_values(home):  # noqa: F811
+    from myclaw.config import load_config
+    from myclaw.web import settings_api
+
+    _write_config(home)
+    asyncio.run(settings_api.update_settings(settings_api.SettingsUpdate(
+        changes={"channels.telegram.token": "  999:NEW-token \n"})))
+    assert load_config(force_reload=True).channels.telegram.token.get_secret_value() == "999:NEW-token"
+
+
+def test_send_test_message_to_allowed_users(tg):
+    c, telegram_api, home_dir = tg
+    _write_config(home_dir, allowFrom=["8008359361", "@alice", "777"])
+    sent = []
+
+    async def send_text(chat_id, text):
+        if chat_id == "777":
+            raise RuntimeError("Forbidden: bot can't initiate conversation with a user")
+        sent.append((chat_id, text))
+
+    assert c.post("/api/telegram/send-test", json={}).status_code == 409        # bot not running
+    asyncio.run(telegram_api.start_bot())
+    telegram_api._channel.send_text = send_text
+    r = c.post("/api/telegram/send-test", json={}).json()
+    assert [x["chat_id"] for x in r["results"]] == ["8008359361", "777"]     # @usernames skipped
+    assert sent[0][0] == "8008359361" and "ZenSynora is connected" in sent[0][1]
+    assert r["ok"] is False and "press Start" in r["results"][1]["error"]
+    assert c.post("/api/telegram/send-test", json={"chat_id": "8008359361"}).json()["ok"] is True
+    asyncio.run(telegram_api.stop_bot())

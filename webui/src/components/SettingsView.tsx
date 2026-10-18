@@ -308,6 +308,22 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
     }
   };
 
+  // "Send test message": the bot writes to the allowed users (checks the whole path).
+  const [tgSent, setTgSent] = useState<{ ok: boolean; text: string } | null>(null);
+  const sendTelegramTest = async () => {
+    setTgSent(null);
+    try {
+      const r = await api<{ ok: boolean; results: { chat_id: string; ok: boolean; error?: string }[] }>(
+        '/api/telegram/send-test', { method: 'POST', body: '{}' });
+      setTgSent({
+        ok: r.ok,
+        text: r.results.map(x => (x.ok ? `Sent to ${x.chat_id} ✔` : `${x.chat_id}: ${x.error}`)).join(' · '),
+      });
+    } catch (e) {
+      setTgSent({ ok: false, text: (e as Error).message });
+    }
+  };
+
   // Refresh the bot state while the Channels tab is open (it may change on its own).
   useEffect(() => {
     if (tab !== 'Channels') return;
@@ -590,12 +606,18 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
                     disabled={tgBusy || !tgStatus.enabled || !tgStatus.run_in_webui || !tgStatus.token_set}>
                     {tgBusy ? 'Restarting…' : 'Restart bot'}
                   </button>
+                  <button type="button" className="ghost-btn" onClick={sendTelegramTest}
+                    disabled={tgStatus.bot?.state !== 'running'}
+                    title="The bot sends a short message to every user id in Allowed Telegram users">
+                    Send test message
+                  </button>
                   {tgTest && !tgTest.loading && (
                     <span className={tgTest.ok ? 'probe-ok' : 'probe-err'}>
                       {tgTest.ok ? `Token works — bot @${tgTest.bot_username}${tgTest.bot_name ? ` (${tgTest.bot_name})` : ''}` : tgTest.error}
                     </span>
                   )}
                   {tgError && <span className="probe-err">{tgError}</span>}
+                  {tgSent && <span className={tgSent.ok ? 'probe-ok' : 'probe-err'}>{tgSent.text}</span>}
                 </div>
               </div>
             )}

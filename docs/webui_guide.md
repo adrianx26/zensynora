@@ -184,6 +184,7 @@ after changing WhatsApp settings.
 | **Telegram uses the same knowledge base as the Web UI** | On (default): notes are shared; each Telegram user keeps their own conversation memory |
 | **Test bot** | Checks the token with Telegram — the token you just typed, or else the saved one. Success: *Token works — bot @name (Name)*. |
 | **Restart bot** | Starts the bot again. Not available when the bot is turned off, runs in `zensynora gateway`, or has no saved token. |
+| **Send test message** | The running bot writes a short message to every numeric id in *Allowed Telegram users* — proves the whole path works. If it says the bot cannot write first, open the bot in Telegram and press **Start**. |
 
 The **Telegram bot** panel shows the **Status**:
 

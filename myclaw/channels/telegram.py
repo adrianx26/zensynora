@@ -122,7 +122,9 @@ class TelegramChannel:
     def __init__(self, config: Any, registry: dict | Callable[[], dict]):
         tg = config.channels.telegram
         self.config = config
-        self.token = tg.token.get_secret_value()
+        # Spaces or a line break pasted with the token made every request fail
+        # ("token wrong") while the Test bot button (which trimmed it) worked.
+        self.token = "".join(tg.token.get_secret_value().split())
         self.allow_from = [str(a).strip() for a in (tg.allowFrom or []) if str(a).strip()]
         self.shared_knowledge = bool(getattr(tg, "shared_knowledge", True))
         self._registry_src = registry
@@ -477,6 +479,14 @@ class TelegramChannel:
     def _set(self, state: str, error: str | None = None) -> None:
         self._status.update(state=state, error=error, since=time.time(), bot_username=self._bot_username)
 
+    async def send_text(self, chat_id: int | str, text: str) -> None:
+        """Send a message to a chat or user id (the person must have pressed
+        Start in the bot once — Telegram forbids bots to write first)."""
+        if self.app is None:
+            raise RuntimeError("The bot is not running.")
+        for part in split_message(text):
+            await self.app.bot.send_message(chat_id=int(chat_id), text=part)
+
     def status(self) -> dict[str, Any]:
         return dict(self._status, bot_username=self._bot_username,
                     allow_from_problem=allow_list_problem(self.allow_from))
@@ -496,8 +506,9 @@ class TelegramChannel:
                                                  drop_pending_updates=False)
             if self._status["state"] == "starting":
                 self._set("running")
-        except InvalidToken:
+        except InvalidToken as e:
             self._set("error", "The bot token is wrong — copy it again from @BotFather.")
+            logger.error("Telegram: the token was refused (%s)", str(e).replace(self.token, "***"))
             await self._cleanup()
         except Exception as e:
             self._set("error", f"Could not start the Telegram bot: {e}")
