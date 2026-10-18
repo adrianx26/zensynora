@@ -136,6 +136,41 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
 
 ### Fixed
 
+**Errors from a real `zensynora.log` (2026-10-18)**
+- **Broken imports after `tools` became a package.** Several modules still
+  imported `from .swarm`, `.memory`, `.config`, `.provider`, `.backends` as
+  if they lived in `myclaw/`, so they looked inside `myclaw/tools/`:
+  - swarm tools (`swarm_list`, `swarm_status`, `swarm_create` …) failed with
+    "cannot import name 'TaskStatus' / 'SwarmOrchestrator'";
+  - `extract_user_preferences` and `generate_session_insights` failed with
+    "No module named 'myclaw.tools.memory'";
+  - the SSH / hardware tools could not load their backends;
+  - the **medic diagnosis** after an unexpected error failed with "cannot
+    import name 'check_system_health' from 'myclaw.tools'" (those tools are
+    loaded lazily there);
+  - the admin dashboard (`..config` went above the package);
+  - `zensynora memory list|clear` imported a `get_db` that no longer exists
+    (memory is one `memory_<user>.db` per user).
+  A new test checks that every relative import in `myclaw/` points at a real
+  module and name.
+- **Swarm storage** then failed with "SQLitePool has no attribute
+  '_get_lock'" (the sync pool used the async pool's helper).
+- **Rate limits and timeouts are no longer treated as crashes.** "Model is
+  temporarily rate-limited upstream", "Request timed out" or "not a valid
+  model ID" are the model server's answer: logged as one warning with the
+  reason, no traceback, and no medic diagnosis run. Without a rotation list
+  a rate-limited model is **retried once after 5 s** (same key) before the
+  turn — or a delegated task — fails.
+- **Log noise.** The configuration warnings (e.g. `curl`/`wget` in allowed
+  commands) were written as 7 lines every time the settings were re-read —
+  232 times in one day. They are now one entry, logged again only when they
+  change. "pyotp not installed" (31×) is logged once, as info. A disabled
+  TOOLBOX tool whose file was removed no longer warns.
+- Already fixed earlier and only present in the old log: the gateway restart
+  loop ("Could not start background knowledge extraction",
+  `_background_extraction_task`) and the Telegram conflict (another program —
+  Hermes — used the same bot token).
+
 **Telegram errors on a real install (2026-10-18)**
 - **The `myclaw` service (`zensynora gateway`) crashed every ~7 seconds** with
   "There is no current event loop" and systemd restarted it. Each start sent

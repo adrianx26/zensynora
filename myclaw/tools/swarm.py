@@ -74,8 +74,8 @@ def _get_swarm_orchestrator():
     """Get or create the swarm orchestrator instance."""
     global _swarm_orchestrator
     if _swarm_orchestrator is None:
-        from .swarm import SwarmOrchestrator
-        from .config import load_config
+        from ..swarm import SwarmOrchestrator
+        from ..config import load_config
         config = load_config()
         _swarm_orchestrator = SwarmOrchestrator(_agent_registry, config)
     return _swarm_orchestrator
@@ -109,7 +109,7 @@ async def swarm_create(
         swarm_create("research_team", "parallel", "agent1,agent2,agent3")
     """
     try:
-        from .swarm import SwarmConfig, SwarmStrategy, AggregationMethod
+        from ..swarm import SwarmConfig, SwarmStrategy, AggregationMethod
 
         orchestrator = _get_swarm_orchestrator()
 
@@ -314,7 +314,7 @@ def swarm_list(status: str = None, user_id: str = "default") -> str:
         List of swarms with their status.
     """
     try:
-        from .swarm import TaskStatus
+        from ..swarm import TaskStatus
 
         orchestrator = _get_swarm_orchestrator()
 

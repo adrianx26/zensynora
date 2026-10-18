@@ -159,6 +159,16 @@ All tools are registered in `myclaw/tools/__init__.py` and implemented in
 For a whole broken installation, `zensynora update rollback` or
 `zensynora update --force` is the better tool ([UPDATING.md](UPDATING.md)).
 
+### Diagnosis after an unexpected error
+
+When an agent turn fails with an error ZenSynora does not know, the agent
+runs `check_system_health`, `check_memory_usage` and `get_health_report` and
+writes the result to the log ("Medic Agent Diagnosis"); the chat answer gets
+a short note. Errors that come from the model server — rate limits,
+timeouts, refused keys, unknown models — are expected and only logged as one
+warning with the reason (2026-10-18). A rate-limited model is retried once
+after 5 s when no rotation list is set.
+
 ### Runaway-loop guard
 
 The agent router calls `prevent_infinite_loop()` on every processing step.
@@ -226,6 +236,10 @@ Details: [MEDIC_CHANGE_MGMT.md](MEDIC_CHANGE_MGMT.md).
 | The chat says "the model … returned an empty answer twice" | The model server answered with nothing (overloaded free tier, a reasoning model that ran out of tokens, a model without tool support). Try again, pick another model on the **Models** page, or turn on rotation there. |
 | `Errors in the last 24 h … no such column: write` | Fixed in 0.7.1 (knowledge search parsed text as FTS5 syntax). Update with `zensynora update`. |
 | Delegation answers "Agent registry not initialized" | Fixed in 0.7.1. Update with `zensynora update`. |
+| Log: `Medic diagnosis itself failed: cannot import name 'check_system_health'` | Fixed 2026-10-18 (the diagnosis imported the tools from the wrong place). Update. |
+| Log: `cannot import name 'TaskStatus' / 'SwarmOrchestrator' from 'myclaw.tools.swarm'` or `No module named 'myclaw.tools.memory'` | Fixed 2026-10-18 (wrong imports after the tools were split into modules). Update. |
+| Log: `… is temporarily rate-limited upstream` | The (free) model is busy. ZenSynora retries once after 5 s; add models to the rotation list on the **Models** page so another model answers. Since 2026-10-18 this no longer starts a medic diagnosis. |
+| The same configuration warning many times in the log | Fixed 2026-10-18: it is logged once and again only when it changes. Remove `curl`/`wget` from Settings → Security → allowed commands if you don't need them. |
 
 ---
 

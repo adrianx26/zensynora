@@ -49,13 +49,20 @@ except ImportError:
     _QR_AVAILABLE = False
 
 
+_PYOTP_WARNED = False
+
+
 class MFAAuth:
     """TOTP-based multi-factor authentication."""
 
     def __init__(self, issuer: str = "ZenSynora"):
         self.issuer = issuer
-        if not _PYOTP_AVAILABLE:
-            logger.warning("pyotp not installed. MFA is disabled. Install: pip install pyotp")
+        global _PYOTP_WARNED
+        if not _PYOTP_AVAILABLE and not _PYOTP_WARNED:
+            # Once per process: MFAAuth is created for every Web UI request
+            # that checks MFA (31 identical warnings in one day).
+            _PYOTP_WARNED = True
+            logger.info("pyotp not installed: two-factor login (MFA) is off. Install with: pip install pyotp")
 
     def _get_db(self) -> sqlite3.Connection:
         _MFA_DB_PATH.parent.mkdir(parents=True, exist_ok=True)

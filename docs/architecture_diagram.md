@@ -381,6 +381,18 @@ flowchart LR
     end
 ```
 
+When an agent turn fails (2026-10-18), errors from the model server are told
+apart from real crashes; only the latter start the medic diagnosis.
+
+```mermaid
+flowchart LR
+    err["exception in the agent turn"] --> kind{"is_provider_error?<br/>(llm_errors.py)"}
+    kind -- "rate limit, no rotation" --> retry["wait 5 s, retry once<br/>same model + key"] --> ok(["answer"])
+    retry -- "still failing" --> warn
+    kind -- "rate limit · timeout · bad key ·<br/>unknown model" --> warn["one WARNING line<br/>+ readable reason in chat"]
+    kind -- "anything else" --> crash["ERROR + traceback"] --> diag["medic diagnosis<br/>check_system_health · check_memory_usage ·<br/>get_health_report (from agents.medic_agent)"]
+```
+
 ---
 
 ## 11. Install layout on disk
