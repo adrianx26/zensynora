@@ -814,72 +814,80 @@ class Agent:
         Errors that aren't connection-shaped propagate immediately when
         offline_mode is off, matching the historical behavior.
         """
-        from .observability import span
-        from .resilience import CircuitBreakerError
+        from .context_budget import CONTEXT_LENGTH, agent_context_length
+        from .config import load_config as _load_cfg
 
-        # v0.7.1: default-LLM rotation / fallback list (Settings → Model).
-        candidates = self._rotation_candidates()
-        if not candidates and self._key_fallback_on():
-            # v0.7.5: no model rotation, but other keys of this provider may answer.
-            candidates = [self._own_candidate(model)]
-        if candidates:
-            return await self._rotating_chat(candidates, messages, stream)
-
-        async def _primary():
-            from .llm_errors import is_rate_limit
-
-            with span("provider.chat", provider=self._provider_name, model=model):
-                try:
-                    return await self.provider.chat(messages, model, stream=stream)
-                except Exception as e:
-                    # 2026-10-18: free models are often "temporarily rate-limited
-                    # upstream"; without rotation the turn (and delegations)
-                    # failed at once. Wait a moment and try once more.
-                    if not is_rate_limit(e):
-                        raise
-                    logger.warning("%s/%s is rate-limited; retrying once in %ss",
-                                   self._provider_name, model, RATE_LIMIT_RETRY_SECONDS)
-                    await asyncio.sleep(RATE_LIMIT_RETRY_SECONDS)
-                    return await self.provider.chat(messages, model, stream=stream)
-
-        # Fast path: no breaker, no fallback — direct call.
-        if self._provider_breaker is None and not self._offline_mode:
-            return await _primary()
-
-        # Try the primary call (through the breaker if configured).
+        # The agent's context length (Ollama sends it as num_ctx).
+        token = CONTEXT_LENGTH.set(agent_context_length(_load_cfg(), self.name))
         try:
-            if self._provider_breaker is not None:
-                return await self._provider_breaker.call(_primary)
-            return await _primary()
-        except CircuitBreakerError as e:
-            # Breaker is OPEN — skip the primary call but still try the
-            # fallback (the local providers may be reachable even when the
-            # remote one is flapping).
-            if not self._offline_mode:
-                raise
-            logger.info("Provider circuit %s open; using offline fallback", self._provider_name)
-        except (ConnectionError, TimeoutError, OSError) as e:
-            if not self._offline_mode:
-                raise
-            logger.warning(f"Primary provider failed: {e}. Trying offline fallback...")
-        except Exception as e:
-            if not self._offline_mode:
-                raise
-            err_str = str(e).lower()
-            if any(kw in err_str for kw in ("connection", "timeout", "unreachable", "refused")):
+            from .observability import span
+            from .resilience import CircuitBreakerError
+
+            # v0.7.1: default-LLM rotation / fallback list (Settings → Model).
+            candidates = self._rotation_candidates()
+            if not candidates and self._key_fallback_on():
+                # v0.7.5: no model rotation, but other keys of this provider may answer.
+                candidates = [self._own_candidate(model)]
+            if candidates:
+                return await self._rotating_chat(candidates, messages, stream)
+
+            async def _primary():
+                from .llm_errors import is_rate_limit
+
+                with span("provider.chat", provider=self._provider_name, model=model):
+                    try:
+                        return await self.provider.chat(messages, model, stream=stream)
+                    except Exception as e:
+                        # 2026-10-18: free models are often "temporarily rate-limited
+                        # upstream"; without rotation the turn (and delegations)
+                        # failed at once. Wait a moment and try once more.
+                        if not is_rate_limit(e):
+                            raise
+                        logger.warning("%s/%s is rate-limited; retrying once in %ss",
+                                       self._provider_name, model, RATE_LIMIT_RETRY_SECONDS)
+                        await asyncio.sleep(RATE_LIMIT_RETRY_SECONDS)
+                        return await self.provider.chat(messages, model, stream=stream)
+
+            # Fast path: no breaker, no fallback — direct call.
+            if self._provider_breaker is None and not self._offline_mode:
+                return await _primary()
+
+            # Try the primary call (through the breaker if configured).
+            try:
+                if self._provider_breaker is not None:
+                    return await self._provider_breaker.call(_primary)
+                return await _primary()
+            except CircuitBreakerError as e:
+                # Breaker is OPEN — skip the primary call but still try the
+                # fallback (the local providers may be reachable even when the
+                # remote one is flapping).
+                if not self._offline_mode:
+                    raise
+                logger.info("Provider circuit %s open; using offline fallback", self._provider_name)
+            except (ConnectionError, TimeoutError, OSError) as e:
+                if not self._offline_mode:
+                    raise
                 logger.warning(f"Primary provider failed: {e}. Trying offline fallback...")
-            else:
-                raise
+            except Exception as e:
+                if not self._offline_mode:
+                    raise
+                err_str = str(e).lower()
+                if any(kw in err_str for kw in ("connection", "timeout", "unreachable", "refused")):
+                    logger.warning(f"Primary provider failed: {e}. Trying offline fallback...")
+                else:
+                    raise
 
-        # Initialize fallback wrapper on first need.
-        if self._fallback_wrapper is None:
-            from .offline import FallbackChatWrapper
-            self._fallback_wrapper = FallbackChatWrapper(
-                self.provider, self.config, primary_name=self._provider_name
-            )
+            # Initialize fallback wrapper on first need.
+            if self._fallback_wrapper is None:
+                from .offline import FallbackChatWrapper
+                self._fallback_wrapper = FallbackChatWrapper(
+                    self.provider, self.config, primary_name=self._provider_name
+                )
 
-        with span("provider.fallback_chat", provider=self._provider_name, model=model):
-            return await self._fallback_wrapper.chat(messages, model, stream=stream)
+            with span("provider.fallback_chat", provider=self._provider_name, model=model):
+                return await self._fallback_wrapper.chat(messages, model, stream=stream)
+        finally:
+            CONTEXT_LENGTH.reset(token)
 
     # ── Default-LLM rotation (v0.7.1) ────────────────────────────────────────
     def _follows_default_model(self) -> bool:

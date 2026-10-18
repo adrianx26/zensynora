@@ -28,6 +28,27 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
   `GET|PUT|DELETE /api/knowledge/note/{permalink}`, `POST /api/knowledge/note`,
   `GET /api/knowledge/search`, `POST /api/knowledge/sync`.
 
+**Settings → Agents: context length per agent (2026-10-18)**
+- Every agent (and the default agent) has a **Context length**: a slider
+  (logarithmic, 1k up to the model's maximum) and a box for the exact number,
+  both editable; *model default* leaves it to the model.
+- Markers on the slider show the **estimated minimum** (system prompt + skills
+  + team list + the tool definitions sent with every request + one exchange
+  + a short reply) and the **recommended** size (plus knowledge results, the
+  recent conversation and a longer reply). The estimate is redone whenever
+  the prompt is written, generated or changed, or the skills or model change.
+  The bar is red below the minimum, amber up to the recommended size, green
+  above; a line says what the chosen value means, *use recommended* sets it.
+- The slider's end is the **model's own maximum**, asked from the provider
+  (Ollama `/api/show`, LM Studio, llama.cpp `/props`, OpenRouter / Groq /
+  vLLM model lists, Gemini, Anthropic) or the built-in model library.
+- The value is used: Ollama receives it as `num_ctx` (Ollama's own default,
+  usually 4k, is smaller than the ~7k the 105 tool definitions alone take — a
+  warning says so); for every provider the oldest messages are left out when
+  a turn would not fit (tool results never without their tool call).
+- Config: `agents.defaults.context_length`, `agents.named[].context_length`
+  (0 = model default). API: `POST /api/agents/context-estimate`.
+
 **Settings → Agents: provider, model list and latency test (2026-10-18)**
 - The default agent now has its own *Provider / Key / Model* row on the
   Agents tab too. For every agent the model is picked from a list of the

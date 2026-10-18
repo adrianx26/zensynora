@@ -169,9 +169,17 @@ ollama pull llama3.2:3b
 
 ZenSynora's `agent.py` builds a context window from:
 
+Settings → Agents → **Context length** estimates this for each agent from
+its real prompt, skills and tools, shows a minimum and a recommended value,
+and sends the chosen size to Ollama as `num_ctx` (2026-10-18). Measured on
+0.7.5: the ~105 tool definitions alone are about **7,000 tokens** per request
+— more than Ollama's default context (usually 4,096), so set a context length
+for Ollama agents.
+
 | Component | Typical Size | Notes |
 |-----------|-------------|-------|
-| System prompt | 500–1,500 tokens | Agent personality + available tools schema |
+| Tool definitions | ~7,000 tokens | Sent with every request (105 tools) |
+| System prompt | 500–1,500 tokens | Agent personality, skills list, team list |
 | Memory history | 2,000–6,000 tokens | Last N messages (configurable) |
 | Knowledge RAG | 1,000–4,000 tokens | Top-K retrieved notes |
 | Tool results | 500–3,000 tokens | Shell output, web browse content |

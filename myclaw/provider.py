@@ -633,6 +633,10 @@ class OllamaProvider(BaseLLMProvider):
             "stream": stream,
             "tools": _get_tool_schemas(),
         }
+        from .context_budget import CONTEXT_LENGTH
+
+        if CONTEXT_LENGTH.get() > 0:  # the agent's context length (Settings → Agents)
+            payload["options"] = {"num_ctx": CONTEXT_LENGTH.get()}
         try:
             # Use pooled client instead of creating new one
             client = HTTPClientPool.get_client(self.timeout)

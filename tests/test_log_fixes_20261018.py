@@ -156,6 +156,7 @@ def test_rate_limit_retried_once(monkeypatch):
     agent = Agent.__new__(Agent)
     agent._provider = P()
     agent._provider_name = "openrouter"
+    agent.name = "default"
     agent._provider_breaker = None
     agent._offline_mode = False
     agent._rotation_candidates = lambda: []

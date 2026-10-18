@@ -170,6 +170,30 @@ it into memory — test a second time to see the normal speed.
 
 ![Agents tab with model list and latency test](images/webui-agents-latency.png)
 
+**Context length.** How much text (in tokens) the agent's model works with
+per turn. Each agent has a slider and a number box (type `16384` or `16k`);
+*model default* leaves it to the model.
+
+![Context length slider](images/webui-agent-context.png)
+
+* **min** (amber mark) — what the agent needs at the very least: its system
+  prompt, skills list and team list, the tool definitions sent with every
+  request (about 7k tokens for ZenSynora's ~105 tools), one exchange and a
+  short reply. Below it the bar is red: the agent forgets the conversation or
+  fails.
+* **rec.** (green mark) — the minimum plus knowledge-base results, the recent
+  conversation (`agents.summarization_threshold` messages) and a longer
+  reply.
+* **The end of the bar** is the model's own maximum, asked from the provider
+  (or the model library; "max unknown" if neither knows it).
+
+The marks are recalculated (≈ 1 s) after you write, generate or change the
+prompt, or change the skills or the model. Token counts are estimates
+(±20 %). The setting takes effect on save: Ollama loads the model with this
+`num_ctx` (Ollama's own default is usually 4k — less than ZenSynora needs);
+for every provider the oldest messages are left out when a turn would not
+fit.
+
 **Writing agent prompts.** In Settings → Agents, give a new agent a name and a
 short description and click **✨ Generate prompt**: the default model writes
 a system prompt (role, how to work, tools to prefer, limits). Review it and

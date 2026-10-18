@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, ApiError, getAdminKey, setAdminKey, type ProbeResult, type ProviderKeysMap } from '../api';
 import { KeySelect, ProviderKeysPanel } from './ProviderKeys';
 import { LatencyTest, ModelPicker } from './ModelPicker';
+import { ContextLength } from './ContextLength';
 
 type Json = any;
 
@@ -600,6 +601,9 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
                 </div>
               </div>
               <LatencyTest provider={defaultProvider} model={getPath(draft, 'agents.defaults.model') || ''} keyId={getPath(draft, 'agents.defaults.key') || ''} />
+              <ContextLength agentName="default" systemPrompt="" skills={getPath(draft, 'agents.defaults.skills') || []}
+                provider={defaultProvider} model={getPath(draft, 'agents.defaults.model') || ''} keyId={getPath(draft, 'agents.defaults.key') || ''}
+                value={getPath(draft, 'agents.defaults.context_length') || 0} onChange={v => update('agents.defaults.context_length', v)} />
             </div>
             {skillChips(getPath(draft, 'agents.defaults.skills') || [], next => update('agents.defaults.skills', next))}
             <h3>Named agents</h3>
@@ -643,6 +647,9 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
                     </div>
                   </div>
                   <LatencyTest provider={agentProvider} model={a.model || getPath(draft, 'agents.defaults.model') || ''} keyId={agentKey} />
+                  <ContextLength agentName={a.name || `agent${i + 1}`} systemPrompt={a.system_prompt || ''} skills={a.skills || []}
+                    provider={agentProvider} model={a.model || getPath(draft, 'agents.defaults.model') || ''} keyId={agentKey}
+                    value={a.context_length || 0} onChange={v => setAgent('context_length', v)} />
                   <div className="field">
                     <label className="field-label">Short description</label>
                     <input className="field-input" value={a.description || ''} placeholder="e.g. Reviews Python code for bugs and explains fixes simply"
@@ -667,7 +674,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
               );
             })}
             <button type="button" className="ghost-btn" onClick={() => update('agents.named', [...named, {
-              name: `agent${named.length + 1}`, provider: '', key: '', model: getPath(draft, 'agents.defaults.model') || '', system_prompt: '', description: '', skills: [],
+              name: `agent${named.length + 1}`, provider: '', key: '', model: getPath(draft, 'agents.defaults.model') || '', system_prompt: '', description: '', skills: [], context_length: 0,
             }])}>+ Add agent</button>
           </div>
         )}

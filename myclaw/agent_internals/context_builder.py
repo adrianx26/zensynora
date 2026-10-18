@@ -106,6 +106,13 @@ async def build_message_context(
 
     messages = [{"role": "system", "content": system_content}] + history
 
+    # Context length of this agent (Settings → Agents): leave out the oldest
+    # messages when the turn would not fit.
+    from ..context_budget import agent_context_length, fit_messages
+    from ..config import load_config
+
+    messages, _ = fit_messages(messages, agent_context_length(load_config(), agent.name))
+
     # ``pre_llm_call`` hooks may rewrite the message list (used by, e.g.,
     # PII filters). Last-write-wins is intentional and matches the
     # original behavior.

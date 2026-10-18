@@ -627,3 +627,20 @@ The model test on Settings → Agents uses `POST /api/models/test` (one short
 real request) and colours the round-trip time: green < 1.5 s, amber < 5 s,
 red above or failed.
 
+## 18. Context length per agent
+
+```mermaid
+flowchart LR
+    ui["Settings → Agents<br/>slider + number box"] -- "prompt · skills · provider · model<br/>(after each edit)" --> est["POST /api/agents/context-estimate"]
+    est --> parts["estimate_context()<br/>prompt + skills + team + tool schemas<br/>→ min · recommended"]
+    est --> mx["model_context_max()<br/>Ollama /api/show · LM Studio · llama.cpp /props ·<br/>/models lists · Gemini · Anthropic · model library"]
+    parts & mx --> ui
+    ui -- "save: context_length" --> cfg[("config.json<br/>agents.*.context_length")]
+    cfg --> turn["agent turn"]
+    turn --> fit["fit_messages()<br/>drop oldest messages to fit"]
+    turn --> var["CONTEXT_LENGTH contextvar"] --> oll["Ollama: options.num_ctx"]
+```
+
+`myclaw/context_budget.py` holds all of it; token counts are estimated at
+about 3.8 characters per token.
+

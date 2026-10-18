@@ -34,7 +34,7 @@ import os
 import time
 import threading
 from pathlib import Path
-from pydantic import BaseModel, SecretStr, ValidationError, field_validator
+from pydantic import BaseModel, Field, SecretStr, ValidationError, field_validator
 from typing import Optional, Dict, Any, List
 
 from .exceptions import ConfigurationError
@@ -399,6 +399,10 @@ class AgentDefaults(BaseModel):
     skills: list[str] = []
     # v0.7.5: id of the provider key to use ("" = the provider's default key)
     key: str = ""
+    # Context length in tokens (0 = the model's default). Ollama gets it as
+    # num_ctx; for every provider the oldest messages are left out so a turn
+    # fits (myclaw/context_budget.py). Settings → Agents → Context length.
+    context_length: int = Field(0, ge=0, le=10_000_000)
 
 
 class NamedAgentConfig(BaseModel):
@@ -416,6 +420,8 @@ class NamedAgentConfig(BaseModel):
     # v0.7.5: provider key id ("" = default key; with no provider of its own,
     # the agent also uses the default agent's key)
     key: str = ""
+    # Context length in tokens (0 = the model's default) — see AgentDefaults.
+    context_length: int = Field(0, ge=0, le=10_000_000)
 
 
 class ModelChoice(BaseModel):
