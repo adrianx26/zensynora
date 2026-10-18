@@ -50,7 +50,8 @@ def team_section(config: Any, agent_name: str) -> str:
     names = ["default"] + [a.name for a in config.agents.named]
     others = [n for n in names if n != agent_name]
     can_create = bool(getattr(config.agents, "allow_agent_creation", True))
-    if not others and not can_create:
+    tg_on = bool(getattr(getattr(getattr(config, "channels", None), "telegram", None), "enabled", False))
+    if not others and not can_create and not tg_on:
         return ""
     lines = ["## Your team"]
     if others:
@@ -60,6 +61,13 @@ def team_section(config: Any, agent_name: str) -> str:
             "To give one of them a task call delegate(agent_name, task). Write the task so it stands on its "
             "own (they do not see this conversation), wait for the answer, check it, then reply. Delegate "
             "when another agent fits the task better or the work splits into parts; do simple things yourself.")
+    tg = getattr(getattr(config, "channels", None), "telegram", None)
+    if tg is not None and getattr(tg, "enabled", False):
+        # 2026-10-18: agents built their own Telegram tools with placeholder
+        # tokens and asked the user for the bot token.
+        lines.append(
+            "To message the user on Telegram call send_telegram_message(text). ZenSynora's bot already "
+            "has the token and the user's id — never ask for them and never build your own Telegram tool.")
     if can_create:
         lines.append(
             "If a large or recurring kind of task needs a specialist nobody here is, you may call "

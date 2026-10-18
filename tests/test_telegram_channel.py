@@ -390,3 +390,15 @@ def test_web_ui_restart_closes_the_bot_first(home, monkeypatch):  # noqa: F811
     monkeypatch.setattr(sys, "argv", ["zensynora", "webui"])
     asyncio.run(update_api.restart())
     assert stopped == [1]
+
+
+def test_agents_are_told_to_use_the_bot_not_build_their_own(home):  # noqa: F811
+    from myclaw.agent_team import team_section
+    from myclaw.config import load_config
+
+    cfg = load_config()
+    cfg.channels.telegram.enabled = True
+    s = team_section(cfg, "default")
+    assert "send_telegram_message(text)" in s and "never ask for them" in s
+    cfg.channels.telegram.enabled = False
+    assert "send_telegram_message" not in team_section(cfg, "default")

@@ -27,7 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added (2026-10-18)
 - **`send_telegram_message` tool**: agents can write to you through
   ZenSynora's own bot (only to *Allowed Telegram users*). Agents had been
-  building their own Telegram tools with placeholder tokens.
+  building their own Telegram tools with placeholder tokens. Agents are now told
+  in their instructions to use it and never to ask for the bot token or the
+  user's id.
 - Doctor: the Telegram check warns when the `myclaw` service runs next to the
   bot in the Web UI.
 
