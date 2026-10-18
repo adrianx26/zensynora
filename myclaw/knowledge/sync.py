@@ -31,6 +31,10 @@ _note_cache: dict[str, tuple] = {}
 MAX_CONSECUTIVE_FAILURES = 3
 _MAX_TRACKED_FAILURES = 100
 
+# Task handle for start/stop_background_extraction(); must exist before the
+# first call or those functions raise NameError.
+_background_extraction_task: Optional[asyncio.Task] = None
+
 # Module-level failure tracker (used by backwards-compat shims)
 _sync_failures_module: OrderedDict[str, Dict] = OrderedDict()
 

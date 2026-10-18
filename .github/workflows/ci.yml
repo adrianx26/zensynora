@@ -3,10 +3,12 @@
 # =============================================================================
 # Triggers: push to main, pull requests to main, manual dispatch
 #
-# Jobs:
-#   1. test      — Run pytest suite on Python 3.11/3.12
-#   2. lint      — Run ruff + black format check
-#   3. docker    — Build Docker image and verify it starts
+# Jobs (each one can be reproduced locally — see CONTRIBUTING.md, "CI"):
+#   lint       — ruff, real-error rules only (config: pyproject [tool.ruff])
+#   typecheck  — mypy myclaw/ (config: pyproject [tool.mypy])
+#   test       — pytest on Python 3.11 and 3.12 (core deps + [test] extra)
+#   webui      — npm ci + npm run build (tsc -b && vite build)
+#   docker     — build the image, run `zensynora --help` and /health
 #
 # To skip CI for a commit, include "[skip ci]" in the commit message.
 # =============================================================================
@@ -28,134 +30,145 @@ on:
       - '.gitignore'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PIP_DISABLE_PIP_VERSION_CHECK: '1'
+  PYTHONUNBUFFERED: '1'
+
 jobs:
-  # ── Job 1: Lint & Format Check ───────────────────────────────────────────
+  # ── Lint ────────────────────────────────────────────────────────────────
+  # Only rules that catch real bugs (syntax errors, undefined names, …).
+  # The code is not style-clean, so no format checks here — see
+  # CONTRIBUTING.md for running wider rule sets on the files you touch.
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
-      - name: Install lint tools
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff black isort
+      - name: Install ruff
+        run: python -m pip install "ruff>=0.4,<1"
 
-      - name: Run ruff (lint)
-        run: ruff check myclaw/ cli.py onboard.py deploy.py
+      - name: ruff check
+        run: ruff check --output-format=github .
 
-      - name: Run ruff (format check)
-        run: ruff format --check myclaw/ cli.py onboard.py deploy.py
+  # ── Type check ──────────────────────────────────────────────────────────
+  # mypy without the project's dependencies: third-party imports are Any,
+  # so results do not depend on which optional packages are installed.
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
 
-      - name: Run black (format check)
-        run: black --check myclaw/ cli.py onboard.py deploy.py
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
 
-      - name: Run isort (import order check)
-        run: isort --check-only myclaw/ cli.py onboard.py deploy.py
+      - name: Install mypy
+        run: python -m pip install "mypy>=1.9,<2"
 
-  # ── Job 2: Test Suite ────────────────────────────────────────────────────
+      - name: mypy
+        run: mypy myclaw/
+
+  # ── Tests ───────────────────────────────────────────────────────────────
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         python-version: ['3.11', '3.12']
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: |
+            pyproject.toml
+            requirements.txt
 
+      # Same core dependencies the installer gets from requirements.txt
+      # (pyproject mirrors them), plus pytest from the [test] extra. Optional
+      # extras (jinja2, PyJWT, discord.py, …) are not installed: the tests
+      # that need them use pytest.importorskip and are skipped.
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          python -m pip install -e ".[test]"
 
-      - name: Create config directory
-        run: mkdir -p ~/.myclaw
-
-      - name: Run tests with pytest
-        run: pytest tests/ -v --tb=short --cov=myclaw --cov-report=xml
+      - name: Run tests
+        run: python -m pytest -q -p no:cacheprovider
         env:
           MYCLAW_LOG_LEVEL: WARNING
 
-      - name: Upload coverage to Codecov
-        if: matrix.python-version == '3.12'
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage.xml
-          fail_ci_if_error: false
-          verbose: true
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  # ── Web UI build ────────────────────────────────────────────────────────
+  webui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: webui
+    steps:
+      - uses: actions/checkout@v5
 
-  # ── Job 3: Docker Build Test ─────────────────────────────────────────────
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: webui/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Type-check and build (tsc -b && vite build)
+        run: npm run build
+
+  # ── Docker image ────────────────────────────────────────────────────────
+  # Build only (push: false) — no registry secrets needed.
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v3
 
-      - name: Build Docker image
-        uses: docker/build-push-action@v5
+      - name: Build image
+        uses: docker/build-push-action@v6
         with:
           context: .
+          target: runtime
           push: false
           load: true
           tags: zensynora:test
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Test Docker image starts
+      - name: CLI starts
+        run: docker run --rm zensynora:test zensynora --help
+
+      - name: Web UI answers /health
         run: |
-          docker run --rm zensynora:test zensynora --help
-
-      - name: Test Docker image health
-        run: |
-          # Start container in background for health check
-          docker run -d --name zensynora-health -p 8000:8000 zensynora:test zensynora webui --port 8000
-          # Wait for health check (max 90s)
-          sleep 5
-          # Verify the help command works inside the running container too
-          docker exec zensynora-health zensynora --help
-          # Clean up
-          docker stop zensynora-health || true
-          docker rm zensynora-health || true
-
-  # ── Job 4: Type Check (Optional) ─────────────────────────────────────────
-  typecheck:
-    runs-on: ubuntu-latest
-    continue-on-error: true  # mypy may have false positives; don't block CI
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install mypy
-        run: |
-          python -m pip install --upgrade pip
-          pip install mypy
-          pip install -e ".[dev]"
-
-      - name: Run mypy
-        run: mypy myclaw/ --ignore-missing-imports --exclude 'webui/|docs/|tests/' || true
+          docker run -d --name zensynora-health -p 8000:8000 zensynora:test
+          for i in $(seq 1 45); do
+            if curl -fsS http://localhost:8000/health; then
+              echo; echo "healthy after ${i}s"; exit_code=0; break
+            fi
+            exit_code=1; sleep 1
+          done
+          docker logs zensynora-health | tail -n 50
+          docker rm -f zensynora-health >/dev/null
+          exit $exit_code

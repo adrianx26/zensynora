@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **CI workflows fixed.** lint, test, typecheck and docker failed on every PR
+  and on `main`, and the docs deploy failed on `main`. Causes: the `[dev]`
+  extra listed `graphify-tool`, which is not on PyPI (test and typecheck could
+  not install); ruff ran every style rule over a codebase that was never
+  style-clean; the Docker image did not copy `README.md`, which the package
+  metadata needs; the docs deploy had no write permission. CI now runs ruff
+  with real-error rules only, mypy with a realistic config, pytest on 3.11 and
+  3.12 with the core dependencies, a Web UI build and a Docker smoke test
+  (`/health`); the docs workflow also checks that `diagrams/` is up to date.
+  Fixed on the way: undefined names that would have crashed at runtime
+  (`tools/session.py`, `tools/toolbox.py`, `tools/management.py`,
+  `plugin_system.py`, `provider.py`, `knowledge/sync.py`) and a syntax error in
+  `semantic_memory.py`. See CONTRIBUTING.md, "CI (GitHub Actions)".
+
 ### Fixed (2026-10-18)
 - **Telegram: "The bot token is wrong" although Test bot said it works.** A
   space or line break pasted with the token broke every request of the bot;

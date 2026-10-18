@@ -10,6 +10,7 @@ Thank you for your interest in contributing to ZenSynora (MyClaw)! This document
 - [Coding Standards](#coding-standards)
 - [How to Add a New Tool / Skill](#how-to-add-a-new-tool--skill)
 - [Testing](#testing)
+- [CI (GitHub Actions)](#ci-github-actions)
 - [Submitting Changes](#submitting-changes)
 - [Commit Message Guidelines](#commit-message-guidelines)
 - [Getting Help](#getting-help)
@@ -127,22 +128,15 @@ pre-commit install           # Activates git hooks
 pre-commit run --all-files   # Run all checks manually (optional)
 ```
 
-The following checks run on every commit and in CI:
+What CI enforces is listed in [CI (GitHub Actions)](#ci-github-actions):
+ruff with the real-error rules from `pyproject.toml`, mypy, pytest and the
+Web UI build. The codebase is **not** formatted with black/ruff-format yet,
+so do not reformat whole files in a feature PR (it causes merge conflicts
+for everyone else). To tidy only the files you touched:
 
-| Tool | Purpose | Command |
-|------|---------|---------|
-| **ruff** | Fast Python linter (replaces flake8, pydocstyle, pyupgrade) | `ruff check myclaw/ cli.py onboard.py deploy.py` |
-| **ruff-format** | Fast Python formatter | `ruff format myclaw/ cli.py onboard.py deploy.py` |
-| **black** | Uncompromising code formatter | `black --check myclaw/ cli.py onboard.py deploy.py` |
-| **isort** | Import sorting | `isort --check-only myclaw/ cli.py onboard.py deploy.py` |
-| **pytest** | Unit & integration tests | `pytest tests/ -v --tb=short` |
-
-To auto-fix most lint/format issues:
 ```bash
-ruff check . --fix
-ruff format .
-black .
-isort .
+ruff check --select E,W,F,I,UP,B path/to/file.py   # wider report, not enforced
+ruff format path/to/file.py                          # only if you own the file
 ```
 
 ### Key Principles
@@ -237,10 +231,10 @@ def test_my_new_tool():
 
 ### Running Tests
 ```bash
-# Run all tests (addopts="" skips the 60 % coverage gate from pyproject.toml)
-pytest -q -o addopts=""
+# Run all tests (same command as CI)
+python -m pytest -q -p no:cacheprovider
 
-# Run with coverage
+# Run with coverage (needs pytest-cov: pip install -e ".[test]")
 pytest --cov=myclaw --cov-report=html
 
 # Run specific test file
@@ -249,6 +243,11 @@ pytest tests/test_tools.py
 # Run with verbose output
 pytest -v
 ```
+
+Tests must not need internet access or API keys (mock the provider, use the
+fake Telegram server below). Tests that need an optional package start with
+`pytest.importorskip("package")`, so they are skipped where it is not
+installed — CI installs only the core dependencies plus `.[test]`.
 
 ### Test Categories
 - **Unit tests** (`tests/test_*.py`): Test individual functions in isolation
@@ -272,11 +271,38 @@ def test_agent_with_mock_provider():
     assert response == "Test response"
 ```
 
+## CI (GitHub Actions)
+
+Every push to `main` and every pull request runs two workflows. Each job can
+be reproduced locally with the commands below (inside your `.venv`).
+
+**`.github/workflows/ci.yml`**
+
+| Job | What it checks | Run it locally |
+|-----|----------------|----------------|
+| `lint` | ruff, only rules for real bugs: syntax errors, undefined names (`E9,F63,F7,F82`, see `[tool.ruff.lint]`) | `pip install ruff` then `ruff check .` |
+| `typecheck` | mypy on `myclaw/`; noisy error codes are disabled in `[tool.mypy]`, so it catches undefined names and broken imports | `pip install mypy` then `mypy myclaw/` |
+| `test (3.11)`, `test (3.12)` | the pytest suite with the core dependencies (`pip install -e ".[test]"`) | `python -m pytest -q -p no:cacheprovider` |
+| `webui` | `npm ci` and `npm run build` (`tsc -b && vite build`) with Node 22 | `cd webui && npm ci && npm run build` |
+| `docker` | builds the `runtime` image, runs `zensynora --help` and waits for `GET /health` | `docker build --target runtime -t zensynora:test .` then `docker run --rm -p 8000:8000 zensynora:test` |
+
+**`.github/workflows/docs.yml`**
+
+| Step | What it checks | Run it locally |
+|------|----------------|----------------|
+| Diagrams up to date | `diagrams/*.html` match the mermaid blocks in the docs | `python diagrams/generate.py`, then commit any changed files in `diagrams/` |
+| Build site | the mkdocs site builds (new pages need an entry in `mkdocs.yml` `nav`) | `pip install mkdocs-material` then `mkdocs build` |
+| Deploy | on `main` only: publishes `site/` to the `gh-pages` branch | — |
+
+ci.yml skips commits that only change `docs/**` or `*.md`. To make a check
+stricter (more ruff rules, fewer disabled mypy codes), clean up the code it
+would flag in the same PR, so CI stays green.
+
 ## Submitting Changes
 
-1. **Ensure tests pass**:
+1. **Ensure the CI checks pass locally**:
    ```bash
-   pytest
+   ruff check . && mypy myclaw/ && python -m pytest -q -p no:cacheprovider
    ```
 
 2. **Update documentation** if your change affects user-facing behavior

@@ -17,3 +17,14 @@ venv/
 graphify-out/cache/
 graphify-out/manifest.json
 graphify-out/.graphify_*
+
+# Agent worktrees and the empty Scrapling folder were committed by accident
+# as gitlinks without a .gitmodules entry, which made every CI checkout warn
+# ("git failed with exit code 128"). Scrapling comes from PyPI.
+.claude/worktrees/
+/Scrapling/
+
+# mkdocs output and tool caches
+/site/
+.mypy_cache/
+.ruff_cache/
