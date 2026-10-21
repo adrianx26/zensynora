@@ -1470,6 +1470,7 @@ fit together. It complements <a href="../architecture_diagram/"><code>docs/archi
 ├── tenancy/                 # UserContext + scoping helpers [Sprint 6 + 11]
 ├── tools/
 │   ├── browser.py           # Playwright headless browser [Sprint 3]
+│   ├── jobs.py              # job_create / job_list / job_run / job_status / job_update [Unreleased]
 │   ├── shell.py             # Sandboxed allow-list (newline injection blocked)
 │   └── ...
 ├── vector/                  # Pluggable backends: memory / sqlite / qdrant [Sprint 4]
@@ -1520,7 +1521,7 @@ webui/src/
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 673 tests (pytest --collect-only, 2026-10-18)
+tests/                       # 682 tests (pytest --collect-only, 2026-10-18)
 ├── fixtures/fake_telegram_api.py # Local fake Telegram Bot API server [Unreleased]
 ├── test_chat_message_actions.py # Copy/edit/delete/regenerate chat messages [Unreleased]
 ├── test_doctor_report.py    # Doctor checks, report, errors viewer, downloads [Unreleased]
@@ -1896,6 +1897,10 @@ silently fall back to Ollama.</p>
 <td>5</td>
 </tr>
 <tr>
+<td><code>test_agent_jobs.py</code></td>
+<td>9</td>
+</tr>
+<tr>
 <td><code>test_provider_keys.py</code></td>
 <td>18</td>
 </tr>
@@ -1921,7 +1926,7 @@ silently fall back to Ollama.</p>
 </tr>
 <tr>
 <td><strong>Total</strong></td>
-<td><strong>673</strong></td>
+<td><strong>682</strong></td>
 </tr>
 </tbody>
 </table>

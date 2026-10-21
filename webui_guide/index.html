@@ -1602,6 +1602,14 @@ Common failures are recognised even when no model answers. In the job's
 settings, <em>When a run fails</em> can do this automatically (diagnose, or diagnose,
 fix the job and run once more). <strong>Tool steps</strong> sets how many extra tool rounds
 (search, read, retry…) the agent may use per run — raise it for research jobs.</p>
+<p><strong>Agents make jobs too</strong> (2026-10-21). Ask an agent in chat — <em>"check the
+backups every morning at 7 and tell me here"</em>, <em>"remind me in 30 minutes"</em> —
+and it creates the job with <code>job_create</code>; it shows up in this table with
+<em>by agent:<name></em>, and its results are posted in the channel where you asked.
+Agents can also list jobs, start one (<code>job_run</code>), read how the last runs went
+(<code>job_status</code>) and pause / resume jobs; only jobs they made can they change
+further. Turn this off in Settings → Features → <em>Agents may create and change
+jobs</em>. Repeating jobs made by agents run at most every 5 minutes.</p>
 <p><strong>Monitor</strong> in the table: running state, last and next run, success rate,
 average score. <strong>Runs</strong> shows each run's output, model, duration and
 evaluation (<em>Evaluate</em> scores a run on demand). <strong>Benchmark</strong> runs the same

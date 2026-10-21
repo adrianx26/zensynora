@@ -1830,7 +1830,13 @@ apart from real crashes; only the latter start the medic diagnosis.</p>
     ui -- "Benchmark" --&gt; bench["same prompt on up to 8 models&lt;br/&gt;time + score side by side"]
     bench --&gt; store
     judge --&gt; store
-    tick -- "also" --&gt; ab["automatic backups when due"]</code></pre>
+    tick -- "also" --&gt; ab["automatic backups when due"]
+    agent["agents (chat)&lt;br/&gt;job_create · job_update"] --&gt; store
+    agent -- "job_run" --&gt; run
+    store -- "job_list · job_status" --&gt; agent
+    run -- "result in the channel&lt;br/&gt;the job was made in" --&gt; chan</code></pre>
+<p>Since 2026-10-21 agents use the Jobs page through tools (<code>myclaw/tools/jobs.py</code>);
+<code>schedule</code> / <code>nlp_schedule</code> also create jobs there when the Web UI runs.</p>
 <hr />
 <h2 id="14-self-update-proposals">14. Self-update proposals<a class="headerlink" href="#14-self-update-proposals" title="Permanent link">&para;</a></h2>
 <p>Added in 0.7.1 (<code>myclaw/selfupdate.py</code>, <code>myclaw/web/medic_api.py</code>, Doctor page,
