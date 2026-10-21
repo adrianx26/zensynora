@@ -21,6 +21,7 @@
 #    --docker-profile PROF  Docker Compose profile: default, full, redis, ollama
 #    --no-optional          Skip optional components (LLM providers, Ollama, systemd)
 #    --recreate-venv        Force recreation of virtual environment (traditional only)
+#    --no-node              Do not install Node.js 22 / build the Web UI
 #    --dry-run              Show what would be done without doing it
 #    --help, -h             Show this help message
 #
@@ -43,6 +44,7 @@ DRY_RUN=false
 DOCKER_TAG="zensynora:latest"
 DOCKER_BUILD_ARGS=""
 DOCKER_PROFILE="default"
+SKIP_NODE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -83,6 +85,10 @@ while [[ $# -gt 0 ]]; do
             DRY_RUN=true
             shift
             ;;
+        --no-node)
+            SKIP_NODE=true
+            shift
+            ;;
         -h|--help)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -97,6 +103,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --yes, -y              Non-interactive mode"
             echo "  --no-optional          Skip optional components"
             echo "  --recreate-venv        Force recreation of venv (traditional only)"
+            echo "  --no-node              Do not install Node.js 22 / build the Web UI"
             echo "  --dry-run              Show what would be done without doing it"
             echo "  --help, -h             Show this help message"
             echo ""
@@ -730,29 +737,50 @@ if [[ "$SKIP_OPTIONAL" == "false" ]]; then
     fi
 fi
 
-# ── 6.6 WEB UI (Node.js & npm) ──────────────────────────────────────────────
-header "6.6 Web UI frontend"
+# ── 6.6 WEB UI (Node.js 22 & npm) ───────────────────────────────────────────
+# Rewritten 2026-10-21: the Web UI is built with Vite, which needs Node.js
+# 20.19+. A new-enough node/npm on PATH is used; otherwise Node.js 22 LTS is
+# downloaded from nodejs.org (checked against its SHA-256 sums) into
+# ZenSynora's program folder (~/.local/share/zensynora/node) — no sudo, and the
+# updater uses the same copy. Before, a missing npm only printed a warning and
+# every later update reused an old Web UI build.
+header "6.6 Web UI frontend (Node.js 22)"
 
-if command -v npm >/dev/null 2>&1; then
-    info "Node.js/npm found: $(node --version 2>/dev/null || echo 'unknown')"
-    if [[ -d "$SCRIPT_DIR/webui" ]]; then
-        info "Installing WebUI dependencies (this can take a few minutes)..."
-        if [[ "$DRY_RUN" == "false" ]]; then
-            (cd "$SCRIPT_DIR/webui" && npm install --no-fund --no-audit)
-            success "WebUI dependencies installed."
-            # Try to build the UI if a build script exists
-            if grep -q '"build"' "$SCRIPT_DIR/webui/package.json" 2>/dev/null; then
-                info "Building WebUI for production..."
-                (cd "$SCRIPT_DIR/webui" && npm run build --quiet 2>&1) || warn "WebUI build had warnings or errors"
-            fi
-        else
-            dry_run "cd webui && npm install && npm run build"
-        fi
-    else
-        skip "No webui/ directory found"
-    fi
+# Program folder: the parent of releases/ for a managed install, else the default.
+ZS_BASE="${ZENSYNORA_HOME:-$HOME/.local/share/zensynora}"
+if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "releases" ]]; then
+    ZS_BASE="$(dirname "$(dirname "$SCRIPT_DIR")")"
+fi
+
+if [[ "$SKIP_NODE" == "true" ]]; then
+    skip "Web UI build skipped (--no-node)"
+elif [[ ! -f "$SCRIPT_DIR/webui/package.json" ]]; then
+    skip "No webui/ directory found"
+elif [[ "$DRY_RUN" == "true" ]]; then
+    dry_run "find Node.js 20.19+ or download Node.js 22 into $ZS_BASE/node; cd webui && npm ci && npm run build"
 else
-    warn "Node.js/npm NOT found. Skipping Web UI frontend setup."
+    NODE_BIN=""
+    # Prints the folder with node + npm on stdout; progress and errors go to the terminal.
+    if NODE_BIN="$(PYTHONPATH="$SCRIPT_DIR" "$PYTHON_BIN" -m updater.nodejs --base "$ZS_BASE")"; then
+        NODE_BIN="$(tail -n 1 <<< "$NODE_BIN")"
+        success "Node.js $("$NODE_BIN/node" --version) — npm $(PATH="$NODE_BIN:$PATH" "$NODE_BIN/npm" --version 2>/dev/null) ($NODE_BIN)"
+    else
+        NODE_BIN=""
+    fi
+    if [[ -n "$NODE_BIN" ]]; then
+        info "Building the Web UI (npm ci + npm run build, a few minutes)..."
+        if (cd "$SCRIPT_DIR/webui" && export PATH="$NODE_BIN:$PATH" \
+                && { if [[ -f package-lock.json ]]; then npm ci --no-fund --no-audit; else npm install --no-fund --no-audit; fi; } \
+                && npm run build); then
+            success "Web UI built: webui/dist"
+        else
+            warn "Web UI build failed — see the messages above. Run 'cd webui && npm ci && npm run build' later."
+        fi
+    elif [[ -f "$SCRIPT_DIR/webui/dist/index.html" ]]; then
+        warn "Using the Web UI build that came with this copy. Install Node.js 22 (https://nodejs.org) to rebuild it."
+    else
+        warn "No Node.js — the Web UI was not built. Install Node.js 22 (https://nodejs.org) and rerun install.sh."
+    fi
 fi
 
 # ── 7. DATA DIRECTORIES ──────────────────────────────────────────────────────

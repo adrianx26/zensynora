@@ -176,6 +176,25 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
 
 ### Fixed
 
+**Install / update requirements: Node.js 22, Python venv (2026-10-21)**
+- **Updates silently kept an old web UI when `npm` was missing** ("npm not
+  found; reusing the previous web UI build") — e.g. after removing another
+  app that brought its own Node.js. The updater, `install.sh` and the new
+  `update.sh node` now find a Node.js 20.19+ (Vite 8 needs it) or download the
+  latest **Node.js 22 LTS** for the OS/CPU from nodejs.org, verify it against
+  the published SHA-256 sums and keep it in `~/.local/share/zensynora/node`
+  (no sudo; works when the update is started from the Web UI). If that is not
+  possible the reason is shown, and the old web UI is kept as before.
+- **Missing Python venv/pip is found before anything is downloaded**, with
+  the command to install it (`python3.X-venv` on Debian/Ubuntu); before, the
+  build step failed half-way with an ensurepip error.
+- Updater protocol **3**: an older installed updater hands over to the new
+  one, so the first update after this already installs Node.js.
+- `update.sh status` shows the Node.js in use; the Doctor has a *Node.js for
+  Web UI updates* check; `install.sh --no-node` skips the web UI build;
+  `uninstall.sh` offers to remove ZenSynora's own Node.js (never a system one).
+- CI type-checks `updater/` too (its `sh()` helper was typed too narrowly).
+
 **"I needed more tool steps than allowed" in chat (2026-10-21)**
 - Asked to "review all tools one by one", an agent stopped after 5 tool calls
   with *"I needed more tool steps than allowed for one message. Please ask

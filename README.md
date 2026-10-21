@@ -48,7 +48,8 @@ Ollama, or any major cloud provider.
 
 - Linux (or WSL2) or macOS · Python **3.11+** (3.14 tested) · ~2 GB free disk
 - A model: a local server (llama.cpp, Ollama, LM Studio) **or** a cloud API key
-- Node.js is optional (only to rebuild the web UI)
+- Node.js 20.19+ to build the web UI — installed automatically (Node.js 22,
+  no sudo) by the installer and updater when it is missing
 
 ### Install
 
@@ -232,7 +233,7 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 git clone https://github.com/adrianx26/zensynora.git && cd zensynora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q -o addopts=""        # 682 tests
+pytest -q -o addopts=""        # 695 tests
 ruff check .
 ```
 

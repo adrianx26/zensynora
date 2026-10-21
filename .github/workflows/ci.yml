@@ -5,7 +5,7 @@
 #
 # Jobs (each one can be reproduced locally — see CONTRIBUTING.md, "CI"):
 #   lint       — ruff, real-error rules only (config: pyproject [tool.ruff])
-#   typecheck  — mypy myclaw/ (config: pyproject [tool.mypy])
+#   typecheck  — mypy myclaw/ updater/ (config: pyproject [tool.mypy])
 #   test       — pytest on Python 3.11 and 3.12 (core deps + [test] extra)
 #   webui      — npm ci + npm run build (tsc -b && vite build)
 #   docker     — build the image, run `zensynora --help` and /health
@@ -79,7 +79,7 @@ jobs:
         run: python -m pip install "mypy>=1.9,<2" types-requests types-PyYAML types-paramiko
 
       - name: mypy
-        run: mypy myclaw/
+        run: mypy myclaw/ updater/
 
   # ── Tests ───────────────────────────────────────────────────────────────
   test:

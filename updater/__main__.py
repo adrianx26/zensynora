@@ -215,6 +215,7 @@ def cmd_status(args) -> int:
         "backups": sorted(p.name for p in layout.backups.iterdir() if p.is_dir()) if layout.backups.exists() else [],
         "last_actions": state.history[-5:],
         "updater_protocol": UPDATER_PROTOCOL,
+        "node": _node_info(layout.base),
     }
     if args.check:
         latest = _latest_remote_version(args.repo, args.ref)
@@ -227,6 +228,7 @@ def cmd_status(args) -> int:
     print(f"Installed : {info['installed_version']}  ({info['active_release']}, {info['layout']})")
     print(f"Base      : {info['base']}")
     print(f"User data : {info['data_dir']}")
+    print(f"Node.js   : {info['node']}")
     if args.check:
         latest = info["latest_version"] or "unknown (offline?)"
         flag = "  ← update available: run update" if info["update_available"] else ""
@@ -235,6 +237,31 @@ def cmd_status(args) -> int:
     print("Backups   : " + (", ".join(info["backups"]) or "-"))
     for e in info["last_actions"]:
         print(f"  {e.get('at')}  {e.get('action'):8} {e.get('from_version')} → {e.get('version')}")
+    return 0
+
+
+def _node_info(base: Path) -> str:
+    from .nodejs import _version, find_node
+
+    bin_dir = find_node(base)
+    if bin_dir is None:
+        return "not found — the next update downloads Node.js 22 (or run: update.sh node)"
+    v = _version(bin_dir / "node")
+    return f"{'.'.join(map(str, v)) if v else '?'} ({bin_dir})"
+
+
+def cmd_node(args) -> int:
+    """Find or install Node.js 22 for building the Web UI (2026-10-21)."""
+    from .nodejs import _version, ensure_node
+
+    layout = _layout(args)
+    _setup_logging(layout, args.verbose, to_file=False)
+    bin_dir, why = ensure_node(layout.base, allow_download=not args.check)
+    if bin_dir is None:
+        print(f"✘ {why}", file=sys.stderr)
+        return 1
+    v = _version(bin_dir / "node")
+    print(f"✔ Node.js {'.'.join(map(str, v)) if v else '?'} with npm: {bin_dir}")
     return 0
 
 
@@ -348,6 +375,11 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--keep-releases", type=int, default=3)
     pr.add_argument("--keep-backups", type=int, default=5)
     pr.set_defaults(func=cmd_prune)
+
+    n = sub.add_parser("node", parents=[common],
+                       help="find Node.js 20.19+ or install Node.js 22 for the web UI (no sudo)")
+    n.add_argument("--check", action="store_true", help="only look, do not download")
+    n.set_defaults(func=cmd_node)
 
     m = sub.add_parser("migrate", parents=[common], help="apply pending data migrations")
     m.add_argument("--app-version")

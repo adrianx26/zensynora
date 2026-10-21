@@ -511,6 +511,24 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
         skip "No webui/ directory found."
     fi
 
+    # ZenSynora's own Node.js 22 (install.sh / the updater put it in the
+    # program folder when no usable node/npm was found — 2026-10-21). Only
+    # these folders are removed; a system Node.js is never touched.
+    ZS_BASE="${ZENSYNORA_HOME:-$HOME/.local/share/zensynora}"
+    if [[ "$(basename "$(dirname "$SCRIPT_DIR")")" == "releases" ]]; then
+        ZS_BASE="$(dirname "$(dirname "$SCRIPT_DIR")")"
+    fi
+    shopt -s nullglob
+    ZS_NODE=("$ZS_BASE"/node-v*-*)
+    shopt -u nullglob
+    if [[ -L "$ZS_BASE/node" || ${#ZS_NODE[@]} -gt 0 ]]; then
+        info "Found ZenSynora's own Node.js in $ZS_BASE (${ZS_NODE[*]##*/})."
+        if prompt_yes "  Remove it? (Only ZenSynora uses it; a system Node.js stays.)"; then
+            run rm -rf "$ZS_BASE/node" "${ZS_NODE[@]}"
+            success "ZenSynora's Node.js removed."
+        fi
+    fi
+
     # ── 5. SYSTEM CLEANUP ────────────────────────────────────────────────────
     header "5. System cleanup"
 

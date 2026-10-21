@@ -22,7 +22,9 @@ itself, so a failure at any point leaves the previous working release active.
 # take over (an older installed updater hands off to a newer downloaded one).
 # 2 (v0.7.1): full program-folder backup + restore on failure, data put back
 #   in place after the switch, manual backups never pruned.
-UPDATER_PROTOCOL = 2
+# 3 (2026-10-21): installs Node.js 22 into BASE/node when no usable node/npm is
+#   found (the Web UI was silently not rebuilt), checks Python venv/pip first.
+UPDATER_PROTOCOL = 3
 
 DEFAULT_REPO = "adrianx26/zensynora"
 DEFAULT_REF = "main"

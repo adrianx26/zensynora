@@ -7,11 +7,17 @@
 #   bash update.sh status --check     # what's installed / is there an update?
 #   bash update.sh rollback           # go back to the previous version
 #   bash update.sh backup             # back up ~/.myclaw now
+#   bash update.sh node               # install Node.js 22 for the web UI (no sudo)
 #   bash update.sh --help
 #
 # Every update: backs up ~/.myclaw, builds the new version in its own folder
 # next to the running one, checks it against your config, then switches over
 # atomically. Any failure leaves the previous version active.
+#
+# Requirements are checked first: Python 3.11+ with venv/pip (else: the apt /
+# dnf command to run), 1.5 GB free disk, and Node.js 20.19+ for the web UI —
+# when no usable node/npm is found, Node.js 22 is downloaded from nodejs.org
+# into ~/.local/share/zensynora/node (no sudo).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"

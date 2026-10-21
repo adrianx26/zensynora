@@ -66,6 +66,7 @@ Checks that look for trouble a running install collects:
 | Knowledge index (`knowledge_index`) | 3 or more note files (or more than 10 %) are not in the index, or the full-text index of note text is missing | `zensynora knowledge sync` or `zensynora doctor --fix` |
 | Agent skills (`skills`) | an agent lists a skill that does not exist, or a `SKILL.md` of yours is unreadable or empty | Skills page, or Settings → Agents |
 | MCP servers (`mcp_servers`) | a configured server's command is not installed (not on `PATH`) | install it (Node.js for `npx`, uv for `uvx`) or fix the command |
+| Node.js for Web UI updates (`node_runtime`) | no `node`/`npm` 20.19+ on the computer or in `~/.local/share/zensynora/node` (2026-10-21) | nothing — the next update downloads Node.js 22; to do it now: `bash ~/.local/share/zensynora/source/update.sh node` |
 | Chat channels (`chat_db`) | answers left unfinished by a stop, or channel members that are no longer agents | restart the Web UI — it repairs both at start |
 
 All of them read local files only and take well under a second.

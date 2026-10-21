@@ -59,7 +59,8 @@ curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-on
 ## What happens during an update
 
 ```
- 1 preflight        Python ≥ 3.11, ~1.5 GB free, find current version, service running?
+ 1 preflight        Python ≥ 3.11 that can make a venv with pip, ~1.5 GB free,
+                    find current version, service running?
  2 fetch            download/copy new source → releases/<version>-<time>/
  3 handoff          if the new version ships a newer updater, it takes over
  4 backup data      ~/.myclaw + .env + data/ → backups/<time>-<from>-to-<to>/  (mode 700)
@@ -67,6 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-on
                     your own files) → app-folder.tar.gz + an inventory of every file
  6 carry-over       copy .env and data/ into the new release
  7 build            new venv, requirements, `pip install -e`, your extra packages, web UI
+                    (Node.js 20.19+ — downloaded as Node 22 if missing, see below)
  8 verify           imports, load YOUR config with the new code, `zensynora --help`
  9 stop service     systemd `myclaw` (only if it was running)
 10 migrate          versioned data migrations (see below)
@@ -90,6 +92,33 @@ compressed), so they are kept for the last two updates; data backups follow
 `--keep-backups` (default 5). Backups you make yourself (`update.sh backup`,
 `zensynora backup`, the Web UI) are never pruned automatically.
 
+## Requirements checked by the update (2026-10-21)
+
+| Needed | If it is missing |
+|---|---|
+| Python 3.11+ | the update stops before downloading anything and says so |
+| Python `venv` with `pip` | stops at once with the command to run, e.g. `sudo apt install python3.12-venv` (Debian/Ubuntu ship it separately) |
+| ~1.5 GB free disk | stops before downloading |
+| **Node.js 20.19+ with npm** (builds the web UI) | **downloaded automatically**: the latest Node.js 22 LTS for your OS/CPU from nodejs.org, checked against its SHA-256 sums, into `~/.local/share/zensynora/node` — no sudo, nothing else on the computer changes. A new-enough system Node.js is used if there is one. |
+
+Without Node.js (e.g. no access to nodejs.org) the update still finishes but
+keeps the previous web UI build and says why in the log and on the Updates
+page. Before this change updates silently reused the old web UI whenever
+`npm` was missing.
+
+```bash
+bash ~/.local/share/zensynora/source/update.sh node          # install / check Node.js now
+bash ~/.local/share/zensynora/source/update.sh node --check  # only look
+zensynora update status                                      # shows the Node.js in use
+```
+
+`ZENSYNORA_NO_NODE_DOWNLOAD=1` turns the download off (then install Node.js
+22 yourself, e.g. from https://nodejs.org). The Doctor's *Node.js for Web UI
+updates* check warns ahead of time. `uninstall.sh` offers to remove
+ZenSynora's own Node.js; a system Node.js is never touched. Updates run with
+the new updater as soon as it is downloaded (updater protocol 3), so this
+already applies to the first update after this change.
+
 ## Layout
 
 ```
@@ -99,6 +128,8 @@ compressed), so they are kept for the last two updates; data backups follow
   backups/                                   # data snapshots + program archives (contain API keys)
   staging/                                   # temporary copies for approved self-update proposals
   logs/update-*.log                          # full log of every update
+  node -> node-v22.x.y-linux-x64/            # Node.js for building the web UI (only if
+                                             # the computer had no usable node/npm)
   updater-state.json                         # history used by rollback
 ~/.myclaw/                                   # your data, shared by all versions
   .migrations.json                           # which data migrations have run
