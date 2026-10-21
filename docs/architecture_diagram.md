@@ -366,7 +366,7 @@ flowchart LR
         l["llm (network)<br/>server reachable · model exists"]
         d["data<br/>folders · SQLite quick_check · migrations"]
         sec["security<br/>file permissions · Web UI access"]
-        i["install · runtime · integrity<br/>layout · Web UI build · log errors · service · hashes"]
+        i["install · runtime · integrity<br/>layout · Web UI build · Node.js · log errors · service · hashes"]
     end
     run --> checks --> rep["Report<br/>ok / warn / fail + how to fix"]
     rep -- "--fix" --> fx["Safe fixes<br/>folders · permissions · migrations"]

@@ -93,7 +93,9 @@ myclaw/
 
 updater/                     # Safe updates: side-by-side releases, backups,
                              # migrations, rollback (stdlib only) [0.6.0];
-                             # app_backup.py: full program-folder archive [0.7.1]
+                             # app_backup.py: full program-folder archive [0.7.1];
+                             # nodejs.py: finds Node.js 20.19+ or installs Node 22
+                             # into BASE/node for the web UI build [Unreleased]
 
 webui/src/
 ├── App.tsx                  # Shell: channels + agents sidebar, navigation, live health
@@ -122,7 +124,7 @@ webui/src/
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 682 tests (pytest --collect-only, 2026-10-18)
+tests/                       # 695 tests (pytest --collect-only, 2026-10-18)
 ├── fixtures/fake_telegram_api.py # Local fake Telegram Bot API server [Unreleased]
 ├── test_chat_message_actions.py # Copy/edit/delete/regenerate chat messages [Unreleased]
 ├── test_doctor_report.py    # Doctor checks, report, errors viewer, downloads [Unreleased]
@@ -344,13 +346,14 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_context_budget.py` | 8 |
 | `test_tool_step_limit.py` | 5 |
 | `test_agent_jobs.py` | 9 |
+| `test_updater_node.py` | 13 |
 | `test_provider_keys.py` | 18 |
 | `test_telegram_channel.py` | 19 |
 | `test_telegram_webui.py` | 19 |
 | `test_v075_channels_medic_skills.py` | 25 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **682** |
+| **Total** | **695** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

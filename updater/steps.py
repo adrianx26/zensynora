@@ -47,6 +47,22 @@ def build_python() -> str:
     return getattr(sys, "_base_executable", sys.executable)
 
 
+def check_venv_support(py: str, ver: str) -> None:
+    """Fail early (before any download) when Python cannot make a venv with pip.
+
+    Debian/Ubuntu ship venv/ensurepip as a separate package (python3.X-venv);
+    without it the build step failed half-way with a long pip/ensurepip error.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        r = sh([py, "-m", "venv", Path(tmp) / "v"], check=False, timeout=300)
+        pip_ok = r.returncode == 0 and (Path(tmp) / "v" / "bin" / "pip").exists()
+    if not pip_ok:
+        raise UpdateError(
+            f"Python {ver} cannot create virtual environments with pip. Install the venv package "
+            f"first, e.g.  sudo apt install python{ver}-venv  (Debian/Ubuntu)  or  "
+            "sudo dnf install python3-pip  (Fedora), then update again.")
+
+
 def venv_python(release: Path) -> Path:
     return release / "venv" / "bin" / "python"
 
@@ -77,6 +93,7 @@ class Preflight(Step):
         ver = sh([py, "-c", "import sys; print('%d.%d' % sys.version_info[:2])"]).stdout.strip()
         if version_tuple(ver) < version_tuple("3.11"):
             raise UpdateError(f"Python {ver} found; ZenSynora needs 3.11 or newer.")
+        check_venv_support(py, ver)
         ctx.extra["build_python"] = py
 
         free = shutil.disk_usage(lay.base).free
@@ -348,22 +365,31 @@ class BuildRelease(Step):
                     ctx.note(f"Could not re-install optional package '{name}' — install it manually.")
 
     def _build_webui(self, ctx: Context) -> None:
+        from .nodejs import ensure_node, node_env
+
         webui = ctx.new_dir / "webui"
         if not (webui / "package.json").exists():
             return
-        npm = shutil.which("npm")
-        if npm:
-            log.info("  building the web UI…")
+        # 2026-10-21: find a Node.js 20.19+ or download Node 22 into BASE/node
+        # (no sudo) — "npm not found" used to mean the old Web UI was reused.
+        bin_dir, why = ensure_node(ctx.layout.base,
+                                   allow_download=os.environ.get("ZENSYNORA_NO_NODE_DOWNLOAD") != "1")
+        if bin_dir is not None:
+            npm = str(bin_dir / "npm")
+            env = node_env(bin_dir, clean_env())
+            log.info("  building the web UI with Node.js from %s…", bin_dir)
             install = [npm, "ci"] if (webui / "package-lock.json").exists() else [npm, "install"]
-            r = sh(install + ["--no-fund", "--no-audit"], cwd=webui, check=False, timeout=1800)
+            r = sh(install + ["--no-fund", "--no-audit"], cwd=webui, env=env, check=False, timeout=1800)
             if r.returncode == 0:
-                r = sh([npm, "run", "build"], cwd=webui, check=False, timeout=900)
+                r = sh([npm, "run", "build"], cwd=webui, env=env, check=False, timeout=900)
             if r.returncode == 0 and (webui / "dist" / "index.html").exists():
                 shutil.rmtree(webui / "node_modules", ignore_errors=True)  # 100+ MB, not needed at runtime
                 return
-            ctx.note("Web UI build failed; reusing the previous build.")
+            tail = " ".join((r.stdout or "").strip().splitlines()[-3:])[:300]
+            ctx.note(f"Web UI build failed ({tail or 'see the log'}); reusing the previous build.")
         else:
-            ctx.note("npm not found; reusing the previous web UI build.")
+            ctx.note(f"{why}; reusing the previous web UI build. "
+                     "Install Node.js 22 (https://nodejs.org) and update again.")
         old_dist = ctx.current_dir / "webui" / "dist"
         if old_dist.exists() and not (webui / "dist").exists():
             shutil.copytree(old_dist, webui / "dist")

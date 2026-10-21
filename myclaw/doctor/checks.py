@@ -411,8 +411,44 @@ def _install_layout(ctx):
 def _webui_build(ctx):
     dist = install_root() / "webui" / "dist" / "index.html"
     if not dist.exists():
-        return WARN, "not built", "Install Node.js, then: cd webui && npm ci && npm run build"
+        return WARN, "not built", "Run: bash update.sh node  (installs Node.js 22), then update again"
     return OK, "built"
+
+
+@check("node_runtime", "Node.js for Web UI updates", "install")
+def _node_runtime(ctx):
+    """Updates rebuild the Web UI with Node.js 20.19+ (2026-10-21: a removed
+    node/npm made every update reuse the old Web UI silently)."""
+    import os
+    import re
+    import shutil
+    import subprocess
+    from pathlib import Path
+
+    root = install_root()
+    base = root.parent.parent if root.parent.name == "releases" else \
+        Path(os.environ.get("ZENSYNORA_HOME") or Path.home() / ".local" / "share" / "zensynora")
+    cands = [base / "node" / "bin" / "node"]
+    if shutil.which("node"):
+        cands.append(Path(shutil.which("node") or ""))
+    best = None
+    for node in cands:
+        if not node.exists() or not (node.parent / "npm").exists():
+            continue
+        try:
+            out = subprocess.run([str(node), "--version"], capture_output=True, text=True, timeout=10).stdout
+        except (OSError, subprocess.SubprocessError):
+            continue
+        m = re.match(r"v(\d+)\.(\d+)\.(\d+)", out.strip())
+        if m:
+            ver = tuple(int(x) for x in m.groups())
+            if best is None or ver > best[0]:
+                best = (ver, node.parent)
+    if best and best[0] >= (20, 19, 0):
+        return OK, f"{'.'.join(map(str, best[0]))} ({best[1]})"
+    found = f"Node.js {'.'.join(map(str, best[0]))} is too old" if best else "no node/npm found"
+    return WARN, f"{found} — the next update downloads Node.js 22 (needs nodejs.org)", \
+        "To do it now: bash ~/.local/share/zensynora/source/update.sh node"
 
 
 # ── runtime ──────────────────────────────────────────────────────────────────

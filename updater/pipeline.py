@@ -114,7 +114,7 @@ def _safe_rollback(step: Step, ctx: Context) -> None:
 
 
 def sh(
-    cmd: List[str],
+    cmd: "Sequence[object]",  # str / Path items (converted with str())
     *,
     cwd: Optional[Path] = None,
     env: Optional[Dict[str, str]] = None,
