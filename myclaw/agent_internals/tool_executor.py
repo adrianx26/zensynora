@@ -26,11 +26,52 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Follow-up rounds after the first tool call (v0.7.2 text calls, v0.7.3 also native).
-MAX_TEXT_ROUNDS = 4
-# v0.7.5: jobs can allow more rounds (job setting "max tool steps"); chat keeps 4.
+# 2026-10-21: chat uses agents.max_tool_rounds (default 12; it was a fixed 4).
+MAX_TEXT_ROUNDS = 12
+# v0.7.5: jobs set their own limit (job setting "max tool steps"); 0 = use the config.
 from contextvars import ContextVar as _ContextVar  # noqa: E402
 
-MAX_ROUNDS: "_ContextVar[int]" = _ContextVar("max_tool_rounds", default=MAX_TEXT_ROUNDS)
+MAX_ROUNDS: "_ContextVar[int]" = _ContextVar("max_tool_rounds", default=0)
+
+
+def max_rounds() -> int:
+    """Tool rounds allowed for this message: the job's setting, else agents.max_tool_rounds."""
+    if MAX_ROUNDS.get() > 0:
+        return MAX_ROUNDS.get()
+    try:
+        from ..config import load_config
+
+        return int(getattr(load_config().agents, "max_tool_rounds", MAX_TEXT_ROUNDS) or MAX_TEXT_ROUNDS)
+    except Exception:
+        return MAX_TEXT_ROUNDS
+
+
+TOOL_LIMIT_MARK = "I needed more tool steps than this job allows. What I found so far:"
+WRAP_UP = ("You have used all {n} tool steps allowed for this message. Do NOT call any more tools. "
+           "Answer now with what you found so far. If the task is not finished, say plainly what is "
+           "still missing and that the user can reply \"continue\" to go on.")
+
+
+async def _wrap_up(agent: "Agent", followup: list, used: list) -> str:
+    """At the tool-step limit: let the model answer from the results it already has.
+
+    2026-10-21: the run used to end with a fixed "I needed more tool steps"
+    message and everything the tools returned was thrown away.
+    """
+    from .text_tools import parse_text_tool_calls
+
+    n = max_rounds() + 1
+    try:
+        text, calls = await agent._provider_chat(
+            followup + [{"role": "user", "content": WRAP_UP.format(n=n)}], agent.model)
+        if text and text.strip() and not parse_text_tool_calls(text):
+            return text.strip()
+    except Exception as e:
+        logger.warning("Wrap-up after the tool-step limit failed: %s", e)
+    names = ", ".join(dict.fromkeys(used)) or "tools"
+    return (f"I used all {n} tool steps for this message ({names}) before finishing. "
+            "Reply \"continue\" and I will go on from there, or ask for a smaller part. "
+            "(The limit is agents.max_tool_rounds — Settings → Features.)")
 
 
 def _usage_hint(tool_name: str, args: Dict) -> str:
@@ -292,12 +333,17 @@ async def execute_tools(
         from .text_tools import parse_text_tool_calls
 
         more = native_calls or parse_text_tool_calls(final_response)
-        if more and _round < MAX_ROUNDS.get():
+        if more and _round < max_rounds():
             return await execute_tools(agent, more, followup, user_message, user_id, mem,
                                        _depth, had_kb_results, _round=_round + 1)
         if more:
-            final_response = ("I needed more tool steps than allowed for one message. "
-                              "Please ask again with a narrower request.")
+            used = [tc.get("function", {}).get("name", "") for m in followup
+                    for tc in (m.get("tool_calls") or []) if m.get("role") == "assistant"]
+            final_response = await _wrap_up(agent, followup, used)
+            if MAX_ROUNDS.get() > 0:
+                # A job: the answer is partial — mark it so the run counts as
+                # failed and the medic suggests more "max tool steps".
+                final_response = f"{TOOL_LIMIT_MARK}\n\n{final_response}"
 
         # Empty-response recovery after tool-use followup.
         if agent._is_empty_response(final_response):

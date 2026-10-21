@@ -85,6 +85,14 @@ tool calls are not kept in that memory.
 * History lives in `~/.myclaw/chat.db` and is included in backups (*Conversations*).
 * With two-factor authentication on, the chat asks for the code first.
 
+**Tool steps per message.** An agent may call tools several times to answer
+one message (search, then read, then write …). Settings → Features → *Tool
+steps per chat message* (`agents.max_tool_rounds`, default 12) limits the
+rounds. At the limit the agent answers with what it found so far and says
+what is left — reply **continue** to let it go on. To look at the tools
+themselves, an agent can call `list_tools(details=True)` (all tools with
+arguments and purpose) and `get_tool_documentation(name)`.
+
 ## Models: switch, rotate, add providers
 
 ![Models page](images/webui-models.png)

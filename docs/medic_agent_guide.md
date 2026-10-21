@@ -238,6 +238,7 @@ Details: [MEDIC_CHANGE_MGMT.md](MEDIC_CHANGE_MGMT.md).
 | Delegation answers "Agent registry not initialized" | Fixed in 0.7.1. Update with `zensynora update`. |
 | Log: `Medic diagnosis itself failed: cannot import name 'check_system_health'` | Fixed 2026-10-18 (the diagnosis imported the tools from the wrong place). Update. |
 | Log: `cannot import name 'TaskStatus' / 'SwarmOrchestrator' from 'myclaw.tools.swarm'` or `No module named 'myclaw.tools.memory'` | Fixed 2026-10-18 (wrong imports after the tools were split into modules). Update. |
+| Chat: "I needed more tool steps than allowed for one message" | Fixed 2026-10-21: the limit is now `agents.max_tool_rounds` (default 12, Settings → Features → *Tool steps per chat message*) and at the limit the agent answers with what it found — reply "continue". For jobs raise *max tool steps* (the medic suggests it). |
 | Log: `… is temporarily rate-limited upstream` | The (free) model is busy. ZenSynora retries once after 5 s; add models to the rotation list on the **Models** page so another model answers. Since 2026-10-18 this no longer starts a medic diagnosis. |
 | The same configuration warning many times in the log | Fixed 2026-10-18: it is logged once and again only when it changes. Remove `curl`/`wget` from Settings → Security → allowed commands if you don't need them. |
 

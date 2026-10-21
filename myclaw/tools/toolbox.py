@@ -145,9 +145,45 @@ def _validate_tool_ast(code: str) -> Optional[str]:
 # ── Feature 4: Agent Builds Its Own Tools ────────────────────────────────────
 
 
-def list_tools() -> str:
-    """Return the names of all currently registered tools."""
-    return "Available tools: " + ", ".join(sorted(TOOLS.keys()))
+def _tool_schema(name: str) -> dict:
+    try:
+        from . import TOOL_SCHEMAS, ensure_tool_schemas
+
+        ensure_tool_schemas()
+        for s in TOOL_SCHEMAS:
+            fn = s.get("function", s)
+            if fn.get("name") == name:
+                return fn
+    except Exception as e:  # pragma: no cover - schemas are optional here
+        logger.debug("tool schema for %s unavailable: %s", name, e)
+    return {}
+
+
+def _signature(name: str) -> str:
+    props = (_tool_schema(name).get("parameters") or {})
+    req = set(props.get("required") or [])
+    args = [p if p in req else f"{p}?" for p in (props.get("properties") or {})]
+    return f"{name}({', '.join(args)})"
+
+
+def list_tools(details: bool = False) -> str:
+    """List all registered tools.
+
+    details: False = names only; True = one line per tool with its arguments
+             (? = optional) and what it does — use this to review or compare
+             tools in ONE call instead of reading them one by one.
+    """
+    names = sorted(TOOLS.keys())
+    if not details:
+        return (f"Available tools ({len(names)}): " + ", ".join(names)
+                + "\n(Call list_tools(details=True) for what each one does.)")
+    lines = []
+    for n in names:
+        info = TOOLS.get(n) or {}
+        desc = (info.get("desc") if isinstance(info, dict) else "") or _tool_schema(n).get("description", "")
+        desc = " ".join(str(desc).split())[:160]
+        lines.append(f"- {_signature(n)} — {desc}")
+    return f"{len(names)} tools:\n" + "\n".join(lines)
 
 
 def register_mcp_tool(name: str, server_name: str, func, documentation: str = "",
@@ -406,6 +442,33 @@ def list_toolbox() -> str:
         return f"Error listing TOOLBOX: {e}"
 
 
+def _builtin_tool_doc(name: str) -> str:
+    """Documentation of a built-in tool: description, arguments and docstring."""
+    import inspect
+
+    info = TOOLS.get(name) or {}
+    schema = _tool_schema(name)
+    out = [f"# {name}", "", (info.get("desc") if isinstance(info, dict) else "") or schema.get("description", "")]
+    props = (schema.get("parameters") or {}).get("properties") or {}
+    req = set((schema.get("parameters") or {}).get("required") or [])
+    if props:
+        out += ["", "Arguments:"]
+        for p, spec in props.items():
+            kind = spec.get("type", "")
+            d = " ".join(str(spec.get("description", "")).split())
+            out.append(f"- {p} ({kind}{', required' if p in req else ', optional'}){': ' + d if d else ''}")
+    func = info.get("func") if isinstance(info, dict) else None
+    target = getattr(func, "_load", None)  # lazily imported tools (_LazyCallable)
+    try:
+        func = target() if callable(target) else func
+    except Exception:
+        pass
+    doc = inspect.getdoc(func) if func is not None else ""
+    if doc and doc.strip() not in "\n".join(out):
+        out += ["", doc.strip()]
+    return "\n".join(x for x in out if x is not None).strip()
+
+
 def get_tool_documentation(name: str) -> str:
     """Get the full documentation for a specific TOOLBOX tool by name.
 
@@ -423,7 +486,13 @@ def get_tool_documentation(name: str) -> str:
     """
     doc_path = TOOLBOX_DIR / f"{name}_README.md"
     if not doc_path.exists():
-        return f"No documentation found for tool '{name}'. Create documentation when registering the tool."
+        # 2026-10-21: built-in tools have no README; describe them from the
+        # registry instead (agents asked for their docs and got nothing back,
+        # one call per tool, until the tool-step limit stopped them).
+        if name in TOOLS:
+            return _builtin_tool_doc(name)
+        return (f"No tool called '{name}'. "
+                "Use list_tools(details=True) to see every tool with what it does.")
 
     try:
         return doc_path.read_text(encoding="utf-8")
