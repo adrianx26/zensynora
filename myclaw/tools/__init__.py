@@ -62,6 +62,7 @@ from .kb import (
     get_related_knowledge, list_knowledge_tags,
     _extract_search_terms,
 )
+from .jobs import job_create, job_list, job_run, job_status, job_update  # noqa: E402
 from .scheduler import (
     schedule, edit_schedule, split_schedule, suspend_schedule,
     resume_schedule, cancel_schedule, list_schedules,
@@ -187,6 +188,12 @@ TOOLS.update({
     "register_tool":        {"func": register_tool,        "desc": "Build and register a new Python tool in TOOLBOX"},
     "list_toolbox":         {"func": list_toolbox,         "desc": "List all tools stored in TOOLBOX"},
     "get_tool_documentation":{"func": get_tool_documentation,"desc": "Get documentation for a specific TOOLBOX tool"},
+    # Jobs page (2026-10-21): create, list, run, check and change jobs
+    "job_create":           {"func": job_create,           "desc": "Create a job on the Jobs page (manual, once, interval, daily or weekly) run by an agent; results are recorded and posted in this chat"},
+    "job_list":             {"func": job_list,             "desc": "List the jobs on the Jobs page with their last result and next run"},
+    "job_run":              {"func": job_run,              "desc": "Start a job now in the background"},
+    "job_status":           {"func": job_status,           "desc": "How a job's recent runs went: status, duration, model, answer or error"},
+    "job_update":           {"func": job_update,           "desc": "Pause or resume a job, or change one an agent created"},
     # Scheduling
     "schedule":             {"func": schedule,             "desc": "Schedule a future task (delay= or every=)"},
     "edit_schedule":        {"func": edit_schedule,        "desc": "Edit an active scheduled job (new task, delay, or every)"},
@@ -299,6 +306,7 @@ __all__ = [
     "browse", "download_file",
     "delegate",
     "ssh_command", "ssh_put_file", "ssh_get_file", "get_system_diagnostic",
+    "job_create", "job_list", "job_run", "job_status", "job_update",
     "schedule", "edit_schedule", "split_schedule", "suspend_schedule",
     "resume_schedule", "cancel_schedule", "list_schedules", "nlp_schedule",
     "write_to_knowledge", "search_knowledge", "read_knowledge",

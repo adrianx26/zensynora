@@ -465,6 +465,8 @@ class AgentsConfig(BaseModel):
     # calls). Jobs have their own "max tool steps". Settings → Features.
     max_tool_rounds: int = Field(12, ge=1, le=50)
     allow_agent_creation: bool = True
+    # Agents may create / pause / change jobs on the Jobs page (tools job_create …).
+    allow_job_creation: bool = True
 
 
 class ChannelsConfig(BaseModel):

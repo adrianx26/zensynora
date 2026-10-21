@@ -13,6 +13,25 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
 
 ### Added
 
+**Agents can create, run and check jobs (2026-10-21)**
+- Five new tools give agents the **Jobs page**: `job_create` (manual, once —
+  "in 30 minutes", "18:30", "tomorrow 09:00" —, every N minutes, daily,
+  weekly; any agent; success criteria, tool steps, timeout), `job_list`,
+  `job_run` (start now in the background), `job_status` (recent runs: status,
+  duration, model, score, answer or error) and `job_update` (pause / resume
+  any job; change jobs that agents made).
+- A job made in a chat channel **posts every result back to that channel**;
+  every run is recorded on the Jobs page as before (status, answer, model,
+  duration, retries, medic on failure). Jobs made by agents show
+  *by agent:<name>*; runs they start show trigger *agent*.
+- `schedule` and `nlp_schedule` create Jobs-page jobs when the Web UI runs
+  (before: Telegram's in-memory queue — invisible on the Jobs page, lost on
+  restart, always the default agent; without Telegram it failed).
+- Agents are told about the job tools in their instructions. Switch:
+  Settings → Features → *Agents may create and change jobs*
+  (`agents.allow_job_creation`); *Agents may create new agents* is now there
+  too. Limits for agents: repeating jobs at most every 5 minutes, 50 jobs.
+
 **Knowledge base page (2026-10-18)**
 - New **Knowledge** page in the Web UI: a live graph of the notes and their
   links (drag, zoom, pin notes, colour by tag or by number of links, show only

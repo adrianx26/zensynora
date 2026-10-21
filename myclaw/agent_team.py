@@ -51,7 +51,8 @@ def team_section(config: Any, agent_name: str) -> str:
     others = [n for n in names if n != agent_name]
     can_create = bool(getattr(config.agents, "allow_agent_creation", True))
     tg_on = bool(getattr(getattr(getattr(config, "channels", None), "telegram", None), "enabled", False))
-    if not others and not can_create and not tg_on:
+    jobs_on = bool(getattr(config.agents, "allow_job_creation", True))
+    if not others and not can_create and not tg_on and not jobs_on:
         return ""
     lines = ["## Your team"]
     if others:
@@ -72,6 +73,13 @@ def team_section(config: Any, agent_name: str) -> str:
         lines.append(
             "If a large or recurring kind of task needs a specialist nobody here is, you may call "
             "create_agent(name, description, system_prompt) — say in your reply that you did.")
+    if jobs_on:
+        # 2026-10-21: agents can use the Jobs page (before: only Telegram reminders).
+        lines.append(
+            "For work that should run later, repeatedly or in the background, create a job with "
+            "job_create(name, prompt, agent, schedule, …) — it appears on the Jobs page, every run is "
+            "recorded and the result is posted in this chat. job_list, job_run, job_status and "
+            "job_update show, start, check and pause jobs. Tell the user which job you created.")
     return "\n".join(lines)
 
 
