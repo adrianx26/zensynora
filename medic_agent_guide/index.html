@@ -1792,6 +1792,10 @@ disable it, or <code>MYCLAW_LOG_FILE=/path/file.log</code> to move it.</p>
 <td>Fixed 2026-10-18 (wrong imports after the tools were split into modules). Update.</td>
 </tr>
 <tr>
+<td>Chat: "I needed more tool steps than allowed for one message"</td>
+<td>Fixed 2026-10-21: the limit is now <code>agents.max_tool_rounds</code> (default 12, Settings → Features → <em>Tool steps per chat message</em>) and at the limit the agent answers with what it found — reply "continue". For jobs raise <em>max tool steps</em> (the medic suggests it).</td>
+</tr>
+<tr>
 <td>Log: <code>… is temporarily rate-limited upstream</code></td>
 <td>The (free) model is busy. ZenSynora retries once after 5 s; add models to the rotation list on the <strong>Models</strong> page so another model answers. Since 2026-10-18 this no longer starts a medic diagnosis.</td>
 </tr>

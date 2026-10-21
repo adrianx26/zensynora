@@ -1419,6 +1419,13 @@ tool calls are not kept in that memory.</p>
 * Every agent keeps its own memory per channel; the knowledge base is shared.
 * History lives in <code>~/.myclaw/chat.db</code> and is included in backups (<em>Conversations</em>).
 * With two-factor authentication on, the chat asks for the code first.</p>
+<p><strong>Tool steps per message.</strong> An agent may call tools several times to answer
+one message (search, then read, then write …). Settings → Features → <em>Tool
+steps per chat message</em> (<code>agents.max_tool_rounds</code>, default 12) limits the
+rounds. At the limit the agent answers with what it found so far and says
+what is left — reply <strong>continue</strong> to let it go on. To look at the tools
+themselves, an agent can call <code>list_tools(details=True)</code> (all tools with
+arguments and purpose) and <code>get_tool_documentation(name)</code>.</p>
 <h2 id="models-switch-rotate-add-providers">Models: switch, rotate, add providers<a class="headerlink" href="#models-switch-rotate-add-providers" title="Permanent link">&para;</a></h2>
 <p><img alt="Models page" src="../images/webui-models.png" /></p>
 <ul>
