@@ -72,12 +72,36 @@ def _create_job_internal(task: str, delay: int, every: int, user_id: str, job_id
         return f"One-shot job '{job_id}' scheduled — fires in {delay}s."
 
 
+def _use_jobs_page() -> bool:
+    """2026-10-21: in the Web UI (or with no Telegram queue) reminders become
+    jobs on the Jobs page — kept across restarts, run by the asking agent,
+    every run recorded. The Telegram queue is used only by the gateway."""
+    from .jobs import _runner
+
+    return _runner() is not None or _core._job_queue is None
+
+
+def _as_job(task: str, delay: int, every: int) -> str:
+    import math
+
+    from .jobs import MIN_AGENT_INTERVAL, job_create
+
+    name = " ".join(task.split())[:60] or "Scheduled task"
+    if every > 0:
+        minutes = max(MIN_AGENT_INTERVAL, math.ceil(every / 60))
+        return job_create(name, task, schedule="interval", every_minutes=minutes)
+    return job_create(name, task, schedule="once", when=f"in {max(1, math.ceil(delay / 60))} minutes")
+
+
 def schedule(task: str, delay: int = 0, every: int = 0, user_id: str = "default") -> str:
-    """Schedule a task to run in the future, executed by the default agent."""
-    if _core._job_queue is None and _core._notification_callback is None:
-        return "Error: Scheduler not available (no channel gateway running)."
+    """Schedule a task to run in the future (delay = seconds until it runs once, every = repeat in seconds).
+
+    In the Web UI it becomes a job on the Jobs page (see also job_create for daily/weekly jobs).
+    """
     if delay <= 0 and every <= 0:
         return "Error: Specify 'delay' (one-shot) or 'every' (recurring) in seconds."
+    if _use_jobs_page():
+        return _as_job(task, delay, every)
 
     job_id  = f"agent_{user_id}_{int(time.time())}"
     return _create_job_internal(task, delay, every, user_id, job_id)
@@ -466,13 +490,12 @@ def nlp_schedule(task: str, natural_time: str, user_id: str = "default") -> str:
     Returns:
         Success or error message with parsed schedule info.
     """
-    if _core._job_queue is None and _core._notification_callback is None:
-        return "Error: Scheduler not available (no channel gateway running)."
-
     parsed = _parse_natural_schedule(natural_time)
 
     if parsed["delay"] == 0 and parsed["every"] == 0:
         return f"Error: Could not parse time expression '{natural_time}'. Try patterns like 'in 5 minutes', 'at 8 AM daily', 'every 2 hours', etc."
+    if _use_jobs_page():
+        return _as_job(task, parsed["delay"], parsed["every"]) + f" (parsed: {parsed['parsed']})"
 
     job_id = f"nlp_{user_id}_{int(time.time())}"
 

@@ -73,6 +73,8 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
   {
     title: 'Agents & tools',
     fields: [
+      { path: 'agents.allow_agent_creation', label: 'Agents may create new agents', kind: 'bool' },
+      { path: 'agents.allow_job_creation', label: 'Agents may create and change jobs', kind: 'bool', help: 'Tools job_create, job_run, job_status, job_update. Jobs made by agents show "by agent:<name>" on the Jobs page.' },
       { path: 'swarm.enabled', label: 'Agent swarms', kind: 'bool' },
       { path: 'swarm.max_concurrent_swarms', label: 'Max concurrent swarms', kind: 'number' },
       { path: 'mcp.enabled', label: 'MCP client', kind: 'bool' },

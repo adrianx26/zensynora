@@ -471,7 +471,14 @@ flowchart LR
     bench --> store
     judge --> store
     tick -- "also" --> ab["automatic backups when due"]
+    agent["agents (chat)<br/>job_create · job_update"] --> store
+    agent -- "job_run" --> run
+    store -- "job_list · job_status" --> agent
+    run -- "result in the channel<br/>the job was made in" --> chan
 ```
+
+Since 2026-10-21 agents use the Jobs page through tools (`myclaw/tools/jobs.py`);
+`schedule` / `nlp_schedule` also create jobs there when the Web UI runs.
 
 ---
 

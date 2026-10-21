@@ -5,7 +5,7 @@
 **A private, self-hosted AI agent that runs on your own models.**
 
 Chat in the browser, the terminal, Telegram or WhatsApp. ZenSynora remembers
-your conversations, builds a personal knowledge base, uses 95 tools, and can
+your conversations, builds a personal knowledge base, uses 110 tools, and can
 split work across teams of agents — with a local model like llama.cpp or
 Ollama, or any major cloud provider.
 
@@ -29,7 +29,7 @@ Ollama, or any major cloud provider.
 - **Remembers.** Conversation memory per user, plus a Markdown knowledge base
   with full-text search and a knowledge graph the agents read and write —
   and you can explore, edit and search it as a live graph in the Web UI.
-- **Does things.** 95 tools: files, sandboxed shell, web and headless browser,
+- **Does things.** 110 tools: files, sandboxed shell, web and headless browser,
   scheduling, knowledge, delegation, and tools the agent writes for itself.
 - **Works in teams.** Chat channels with several agents at once — see who
   delegates what to whom. 137 ready-made agent profiles and swarms
@@ -37,7 +37,7 @@ Ollama, or any major cloud provider.
 - **Any model, switchable.** Change the default model in one click, rotate
   or fall back across models, add your own local or online providers.
 - **Runs jobs.** Scheduled or on-demand tasks with history, scoring and
-  model benchmarks.
+  model benchmarks — created by you or by the agents themselves.
 - **Safe to run and to change.** Backups of settings, API keys and knowledge;
   updates that back up the whole install and roll back on failure; agents
   can propose fixes to their own code — installed only when you approve.
@@ -192,7 +192,7 @@ Model advice per hardware: [docs/llm_recommendations.md](docs/llm_recommendation
 flowchart LR
     ui["Web UI · terminal · Telegram · WhatsApp · MCP"] --> agent["Agents<br/>router · context · tools"]
     agent --> llm["LLM providers<br/>local or cloud"]
-    agent --> tools["95 tools<br/>sandboxed"]
+    agent --> tools["110 tools<br/>sandboxed"]
     agent <--> state[("~/.myclaw<br/>memory · knowledge · config")]
     agent <--> agent2["other agents<br/>delegation · swarms"]
     jobs["Jobs<br/>schedule · score · bench"] --> agent
@@ -232,7 +232,7 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 git clone https://github.com/adrianx26/zensynora.git && cd zensynora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q -o addopts=""        # 673 tests
+pytest -q -o addopts=""        # 682 tests
 ruff check .
 ```
 

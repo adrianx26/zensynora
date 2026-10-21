@@ -122,10 +122,9 @@
 ### SK-5.1 — `schedule`
 - **Category**: Scheduling
 - **Tool**: `schedule(task, delay, every, user_id)`
-- **Description**: Schedules a one-shot (delay) or recurring (every) job to be executed by the default agent.
+- **Description**: Schedules a one-shot (delay) or recurring (every) task. In the Web UI (2026-10-21) it becomes a job on the Jobs page run by the asking agent (repeats at least every 5 minutes); only `zensynora gateway` without the Web UI uses Telegram's in-memory queue.
 - **Input Contract**: `task` — task string; `delay` or `every` — seconds (at least one must be > 0)
-- **Output Contract**: `"One-shot job '{id}' scheduled — fires in {delay}s."` or recurring equivalent
-- **Dependency**: Requires Telegram gateway JobQueue (`_job_queue must not be None`)
+- **Output Contract**: `"Created job job-… \"…\" for @agent, once at …"` (Web UI) or `"One-shot job '{id}' scheduled — fires in {delay}s."` (gateway)
 - **Baseline Score**: *TBD*
 
 ### SK-5.2 — `edit_schedule`
@@ -155,9 +154,20 @@
 ### SK-5.6 — `nlp_schedule` (NEW)
 - **Category**: Scheduling / NLP
 - **Tool**: `nlp_schedule(task, natural_time, user_id)`
-- **Description**: Schedule a task using natural language time expressions like "in 5 minutes", "at 8 AM daily", "every Monday at 9pm"
+- **Description**: Schedule a task using natural language time expressions like "in 5 minutes", "at 8 AM daily", "every Monday at 9pm". In the Web UI it becomes a job on the Jobs page (like `schedule`).
 - **Input Contract**: `task` — task description; `natural_time` — natural language time expression
 - **Output Contract**: Success message with parsed schedule info
+
+### SK-5.7 — `job_create` / `job_list` / `job_run` / `job_status` / `job_update` (2026-10-21)
+- **Category**: Scheduling / Jobs page
+- **Tools**:
+  - `job_create(name, prompt, agent?, schedule?, when?, every_minutes?, at_time?, days?, run_now?, report_here?, success_criteria?, max_steps?, timeout_s?)` — a job on the Jobs page (`manual` · `once` · `interval` ≥ 5 min · `daily` · `weekly`), run by any agent; results are posted in the chat channel it was created from.
+  - `job_list()` — all jobs with schedule, last result, success rate, next run, who made them.
+  - `job_run(job_id)` — start now in the background (a job cannot start itself).
+  - `job_status(job_id, runs?)` — recent runs: status, duration, model, score, answer or error.
+  - `job_update(job_id, state?, …)` — `state="pause" | "resume"` for any job; other fields only for jobs made by agents.
+- **Runs**: the Web UI job runner executes them with the job's agent, timeout, retries, tool steps and medic-on-failure; every run is recorded in `~/.myclaw/jobs.db` (`trigger` = `schedule`, `manual`, `agent` or `medic`).
+- **Switch**: `agents.allow_job_creation` (Settings → Features). Agents may make at most 50 jobs.
 
 ---
 

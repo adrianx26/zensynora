@@ -375,7 +375,11 @@
     ui -- &quot;Benchmark&quot; --&gt; bench[&quot;same prompt on up to 8 models&lt;br/&gt;time + score side by side&quot;]
     bench --&gt; store
     judge --&gt; store
-    tick -- &quot;also&quot; --&gt; ab[&quot;automatic backups when due&quot;]</div>
+    tick -- &quot;also&quot; --&gt; ab[&quot;automatic backups when due&quot;]
+    agent[&quot;agents (chat)&lt;br/&gt;job_create · job_update&quot;] --&gt; store
+    agent -- &quot;job_run&quot; --&gt; run
+    store -- &quot;job_list · job_status&quot; --&gt; agent
+    run -- &quot;result in the channel&lt;br/&gt;the job was made in&quot; --&gt; chan</div>
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">14. Self-update proposals</h2>
