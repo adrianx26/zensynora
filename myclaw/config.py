@@ -460,6 +460,10 @@ class AgentsConfig(BaseModel):
     # Fallback profiles are loaded from: profiles_dir/{agent_name}.md
     profiles_dir: str = "~/.myclaw/profiles"
     # v0.7.5: agents may create new named agents with the create_agent tool
+    # Tool rounds an agent may use for ONE chat message after its first tool
+    # call (2026-10-21: was a fixed 4 — "review all tools" stopped after 5
+    # calls). Jobs have their own "max tool steps". Settings → Features.
+    max_tool_rounds: int = Field(12, ge=1, le=50)
     allow_agent_creation: bool = True
 
 

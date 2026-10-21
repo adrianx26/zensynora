@@ -109,10 +109,10 @@
 
 ### SK-4.2 — `list_tools`
 - **Category**: Multi-Agent / Discovery
-- **Tool**: `list_tools()`
-- **Description**: Returns a sorted list of all currently registered tool names (core + TOOLBOX tools).
-- **Input Contract**: None
-- **Output Contract**: `"Available tools: {comma-separated names}"`
+- **Tool**: `list_tools(details=False)`
+- **Description**: Returns all currently registered tools (core + TOOLBOX). With `details=True`, one line per tool with its arguments (`?` = optional) and what it does — use it to review or compare tools in one call (2026-10-21).
+- **Input Contract**: `details` (bool, optional)
+- **Output Contract**: `"Available tools (N): {names}"` or `"N tools:\n- name(arg, opt?) — description"` per line
 - **Baseline Score**: *TBD*
 
 ---
@@ -218,7 +218,7 @@
 ### SK-7.3 — `get_tool_documentation`
 - **Category**: TOOLBOX
 - **Tool**: `get_tool_documentation(name)`
-- **Description**: Returns the full `{name}_README.md` content for a given TOOLBOX tool.
+- **Description**: Returns the full `{name}_README.md` content for a TOOLBOX tool; for a built-in tool its description, arguments and docstring (2026-10-21).
 - **Baseline Score**: *TBD*
 
 ---

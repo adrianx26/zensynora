@@ -157,6 +157,24 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
 
 ### Fixed
 
+**"I needed more tool steps than allowed" in chat (2026-10-21)**
+- Asked to "review all tools one by one", an agent stopped after 5 tool calls
+  with *"I needed more tool steps than allowed for one message. Please ask
+  again with a narrower request."* Three causes, all fixed:
+  - a chat message allowed only **4 follow-up tool rounds** (fixed in code).
+    Now **`agents.max_tool_rounds`**, default **12** (1–50), in
+    Settings → Features → *Tool steps per chat message*. Jobs keep their own
+    *max tool steps*.
+  - at the limit **everything the tools had returned was thrown away**. Now
+    the agent is asked to answer from what it found (no more tools) and to
+    say what is missing; you can reply "continue". Jobs still mark such a run
+    as failed, so the medic suggests more steps.
+  - **`get_tool_documentation` only knew TOOLBOX tools** — for every built-in
+    tool it answered "No documentation found", so the agent called it again
+    and again. It now describes built-in tools too (description, arguments,
+    docstring). **`list_tools(details=True)`** lists every tool with its
+    arguments and purpose in one call.
+
 **Errors from a real `zensynora.log` (2026-10-18)**
 - **Broken imports after `tools` became a package.** Several modules still
   imported `from .swarm`, `.memory`, `.config`, `.provider`, `.backends` as
