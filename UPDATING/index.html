@@ -436,6 +436,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#requirements-checked-by-the-update-2026-10-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements checked by the update (2026-10-21)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#layout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1111,6 +1122,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#requirements-checked-by-the-update-2026-10-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Requirements checked by the update (2026-10-21)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#layout" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1286,7 +1308,8 @@ online installer once — it detects the existing install and runs the updater:<
 <div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-fsSL<span class="w"> </span>https://raw.githubusercontent.com/adrianx26/zensynora/main/install-online.sh<span class="w"> </span><span class="p">|</span><span class="w"> </span>bash
 </code></pre></div>
 <h2 id="what-happens-during-an-update">What happens during an update<a class="headerlink" href="#what-happens-during-an-update" title="Permanent link">&para;</a></h2>
-<div class="highlight"><pre><span></span><code> 1 preflight        Python ≥ 3.11, ~1.5 GB free, find current version, service running?
+<div class="highlight"><pre><span></span><code> 1 preflight        Python ≥ 3.11 that can make a venv with pip, ~1.5 GB free,
+                    find current version, service running?
  2 fetch            download/copy new source → releases/&lt;version&gt;-&lt;time&gt;/
  3 handoff          if the new version ships a newer updater, it takes over
  4 backup data      ~/.myclaw + .env + data/ → backups/&lt;time&gt;-&lt;from&gt;-to-&lt;to&gt;/  (mode 700)
@@ -1294,6 +1317,7 @@ online installer once — it detects the existing install and runs the updater:<
                     your own files) → app-folder.tar.gz + an inventory of every file
  6 carry-over       copy .env and data/ into the new release
  7 build            new venv, requirements, `pip install -e`, your extra packages, web UI
+                    (Node.js 20.19+ — downloaded as Node 22 if missing, see below)
  8 verify           imports, load YOUR config with the new code, `zensynora --help`
  9 stop service     systemd `myclaw` (only if it was running)
 10 migrate          versioned data migrations (see below)
@@ -1314,6 +1338,47 @@ restored.</p>
 compressed), so they are kept for the last two updates; data backups follow
 <code>--keep-backups</code> (default 5). Backups you make yourself (<code>update.sh backup</code>,
 <code>zensynora backup</code>, the Web UI) are never pruned automatically.</p>
+<h2 id="requirements-checked-by-the-update-2026-10-21">Requirements checked by the update (2026-10-21)<a class="headerlink" href="#requirements-checked-by-the-update-2026-10-21" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Needed</th>
+<th>If it is missing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Python 3.11+</td>
+<td>the update stops before downloading anything and says so</td>
+</tr>
+<tr>
+<td>Python <code>venv</code> with <code>pip</code></td>
+<td>stops at once with the command to run, e.g. <code>sudo apt install python3.12-venv</code> (Debian/Ubuntu ship it separately)</td>
+</tr>
+<tr>
+<td>~1.5 GB free disk</td>
+<td>stops before downloading</td>
+</tr>
+<tr>
+<td><strong>Node.js 20.19+ with npm</strong> (builds the web UI)</td>
+<td><strong>downloaded automatically</strong>: the latest Node.js 22 LTS for your OS/CPU from nodejs.org, checked against its SHA-256 sums, into <code>~/.local/share/zensynora/node</code> — no sudo, nothing else on the computer changes. A new-enough system Node.js is used if there is one.</td>
+</tr>
+</tbody>
+</table>
+<p>Without Node.js (e.g. no access to nodejs.org) the update still finishes but
+keeps the previous web UI build and says why in the log and on the Updates
+page. Before this change updates silently reused the old web UI whenever
+<code>npm</code> was missing.</p>
+<div class="highlight"><pre><span></span><code>bash<span class="w"> </span>~/.local/share/zensynora/source/update.sh<span class="w"> </span>node<span class="w">          </span><span class="c1"># install / check Node.js now</span>
+bash<span class="w"> </span>~/.local/share/zensynora/source/update.sh<span class="w"> </span>node<span class="w"> </span>--check<span class="w">  </span><span class="c1"># only look</span>
+zensynora<span class="w"> </span>update<span class="w"> </span>status<span class="w">                                      </span><span class="c1"># shows the Node.js in use</span>
+</code></pre></div>
+<p><code>ZENSYNORA_NO_NODE_DOWNLOAD=1</code> turns the download off (then install Node.js
+22 yourself, e.g. from https://nodejs.org). The Doctor's <em>Node.js for Web UI
+updates</em> check warns ahead of time. <code>uninstall.sh</code> offers to remove
+ZenSynora's own Node.js; a system Node.js is never touched. Updates run with
+the new updater as soon as it is downloaded (updater protocol 3), so this
+already applies to the first update after this change.</p>
 <h2 id="layout">Layout<a class="headerlink" href="#layout" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>~/.local/share/zensynora/
   source -&gt; releases/0.6.0-20261013T203000   # what everything runs from
@@ -1321,6 +1386,8 @@ compressed), so they are kept for the last two updates; data backups follow
   backups/                                   # data snapshots + program archives (contain API keys)
   staging/                                   # temporary copies for approved self-update proposals
   logs/update-*.log                          # full log of every update
+  node -&gt; node-v22.x.y-linux-x64/            # Node.js for building the web UI (only if
+                                             # the computer had no usable node/npm)
   updater-state.json                         # history used by rollback
 ~/.myclaw/                                   # your data, shared by all versions
   .migrations.json                           # which data migrations have run
