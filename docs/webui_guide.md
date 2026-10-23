@@ -271,13 +271,14 @@ clean-up, medic self-review.
 ## Knowledge base
 
 All agents share one knowledge base (notes in `~/.myclaw/knowledge/default`,
-Markdown files you can also edit yourself). Before answering, an agent
+Markdown files you can also edit yourself — format, search syntax and CLI in
+the [Knowledge base guide](knowledge_base_guide.md)). Before answering, an agent
 searches it automatically; agents can also use these tools themselves:
 
 | Tool | What it does |
 |---|---|
-| `search_knowledge` | Full-text search over titles, note text, tags and observations |
-| `read_knowledge` / `list_knowledge` | Read one note / list the notes |
+| `search_knowledge` | Full-text search over titles, note text, tags and observations; `AND`/`OR`/`NOT`, `"phrases"`, `tag:name` |
+| `read_knowledge` / `list_knowledge` | Read one note (text, facts, links, *Linked from*) / list the notes |
 | `write_to_knowledge` | Save a note (title, text, tags, observations, relations) |
 | `get_knowledge_context` / `get_related_knowledge` | Follow relations between notes (knowledge graph) |
 | `list_knowledge_tags` / `sync_knowledge_base` | Tags; re-read files you edited by hand |

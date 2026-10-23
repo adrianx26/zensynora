@@ -183,6 +183,7 @@ Fresh installs record all current migrations as applied (`install.sh` runs
 |---|---|
 | `0001_data_layout` | creates the standard `~/.myclaw` folders, makes the config private |
 | `0002_knowledge_note_structure` (2026-10-23) | gives plain-text knowledge notes a title and frontmatter (text kept, `.trash` untouched, idempotent) and re-indexes the knowledge base |
+| `0003_knowledge_reindex_links` (2026-10-23) | rebuilds each knowledge base's index from the note files so links by title/alias, waiting links, aliases and metadata are stored (notes are not changed) |
 
 ### Add or change an update step
 

@@ -8,6 +8,7 @@
 | Guide | What it covers |
 |---|---|
 | [Web UI guide](webui_guide.md) | Chat channels with several agents, agent-to-agent activity, Models (switch, rotate, your own providers), Jobs, Backups, the Telegram bot in Settings → Channels |
+| [Knowledge base](knowledge_base_guide.md) | Note format (tags, aliases, metadata, facts, links), search syntax, what agents see, CLI, `.trash`, `.bmignore` |
 | [Telegram bot](telegram_guide.md) | Set up the Telegram bot, allow users, commands, `@agent` messages, reminders, knowledge, troubleshooting |
 | [Updating](UPDATING.md) | `zensynora update`, rollback, data and program-folder backups, how updates stay safe |
 | [Medic & Doctor](medic_agent_guide.md) | `zensynora doctor`, the Doctor page, medic tools, integrity and recovery, self-update proposals and learning |
