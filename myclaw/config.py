@@ -497,6 +497,9 @@ class TimeoutConfig(BaseModel):
     shell_seconds: int = 30
     llm_seconds: int = 60
     http_seconds: int = 30
+    # Longest an agent may work on one message before it is stopped
+    # (2026-10-21: was a fixed 300 s in task_timer; jobs use their own timeout).
+    task_seconds: int = Field(600, ge=60, le=7200)
 
 
 class MemoryCleanupConfig(BaseModel):

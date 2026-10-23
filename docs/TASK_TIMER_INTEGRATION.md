@@ -3,7 +3,16 @@
 > **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent).
 
 ## Overview
-The deployment orchestrator with 300-second timeout has been integrated into the existing MyClaw/Zensynora application.
+The deployment orchestrator with a configurable maximum (default 600 s since
+2026-10-23; it was a fixed 300 s before) has been integrated into the existing
+MyClaw/Zensynora application.
+
+> **2026-10-23:** the maximum comes from `timeouts.task_seconds` in the settings
+> (default **600**, allowed 60–7200; Web UI → Settings → Features → *Timeouts &
+> memory* → *Longest an agent may work on one message (s)*). It is read each time
+> a task starts. A job sets `TASK_MAX_SECONDS` (its own *Timeout* + 30 s) so the
+> task timer never stops a job before the job's timeout does. The 60/120/180/240 s
+> progress messages are unchanged.
 
 ## Files Added/Modified
 
@@ -35,7 +44,7 @@ The deployment orchestrator with 300-second timeout has been integrated into the
 - **120s**: Progress update with current step name
 - **180s**: Diagnostic analysis with potential bottlenecks
 - **240s**: Timeout warning with user options (wait/cancel/alternative)
-- **300s**: Task marked as FAILED, comprehensive logging
+- **max (`timeouts.task_seconds`, default 600 s; was 300 s)**: Task marked as FAILED, comprehensive logging
 
 ### Step Tracking:
 1. `memory_loading` - Loading conversation history
@@ -75,7 +84,7 @@ response = await agent.think("Your question here")
   Still processing your request... Currently on step: llm_call
 ```
 
-### 300s Failure Output:
+### Failure output at the maximum (example with the old 300 s limit):
 ```
 ======================================================================
 TASK FAILED: Maximum time limit (300s) reached. The task could not be completed.
@@ -110,11 +119,28 @@ config = TaskThresholdConfig(
     threshold_120s=120,
     threshold_180s=180,
     threshold_240s=240,
-    max_timeout=300,
+    max_timeout=600,
     verbose_logging=True
 )
 
 orchestrator = get_task_timer_orchestrator(config)
+```
+
+Since 2026-10-23 `max_timeout` is replaced at every task start by
+`configured_max_timeout()`: the job's `TASK_MAX_SECONDS` when set, otherwise
+`timeouts.task_seconds` from the settings. Change the maximum there, not in code:
+
+```json
+"timeouts": {"task_seconds": 900}
+```
+
+```python
+from myclaw.task_timer import TASK_MAX_SECONDS
+token = TASK_MAX_SECONDS.set(1800)   # this task may run 30 minutes
+try:
+    await agent.think(prompt)
+finally:
+    TASK_MAX_SECONDS.reset(token)
 ```
 
 ## Error Handling
@@ -141,7 +167,7 @@ User Question
      ↓
 Agent.think() called
      ↓
-Task Timer Started (300s max)
+Task Timer Started (timeouts.task_seconds max, default 600s)
      ↓
 Step 1: Memory Loading
      ↓

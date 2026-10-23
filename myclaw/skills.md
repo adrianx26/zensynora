@@ -39,8 +39,8 @@
 - **Description**: Reads a file from within the workspace directory (`~/.myclaw/workspace`). All paths are validated against directory traversal before execution.
 - **Input Contract**: `path` — relative path string within workspace
 - **Output Contract**: File contents as string, or `"Error: ..."` on failure
-- **Edge Cases Handled**: path traversal (`../`), non-existent files, permission errors
-- **Known Limitations**: Returns raw bytes-as-string for binary files; no encoding detection
+- **Edge Cases Handled**: path traversal (`../`), non-existent files, permission errors. Since 2026-10-23: a folder returns a listing of its entries; a missing file returns what is in that folder; a path outside the workspace explains that ZenSynora's settings and logs are not readable by agents (use `check_system_health`, `get_health_report`, `get_recent_problems`); binary files are refused; files over 200 KB are cut with a note. These cases are logged as INFO/WARNING, not ERROR.
+- **Known Limitations**: Text only (UTF-8, invalid bytes replaced); no encoding detection
 - **Baseline Score**: 0.880 → **Improved: 1.000** ✅ KEEP
 
 ### SK-1.2 — `write_file`
@@ -60,13 +60,14 @@
 ### SK-2.1 — `shell`
 - **Category**: Shell
 - **Tool**: `shell(cmd)`
-- **Description**: Executes a shell command from the strict allowlist in the workspace directory. Blocks a hardcoded list of dangerous commands. Enforces 30-second timeout.
-- **Input Contract**: `cmd` — shell command string
+- **Description**: Executes commands from the strict allowlist in the workspace directory, without a shell. Blocks a hardcoded list of dangerous commands. Enforces a 30-second timeout for the whole call. Since 2026-10-23 allowed commands can be chained with `|`, `&&`, `||` and `;` (at most 8 commands; pipes are connected between the processes, no shell interpretation).
+- **Input Contract**: `cmd` — one command (`ls -la`) or a chain of allowed commands (`ps aux | grep zensynora`, `pwd && ls -la`)
 - **Output Contract**: Combined stdout+stderr string, or `"Error: ..."` on rejection/timeout
 - **Allowed Commands**: `ls`, `dir`, `cat`, `type`, `find`, `grep`, `findstr`, `head`, `tail`, `wc`, `sort`, `uniq`, `cut`, `git`, `echo`, `pwd`, `python`, `python3`, `pip`, `curl`, `wget`
 - **Blocked Commands**: `rm`, `del`, `powershell`, `cmd`, `net`, `reg`, `schtasks`, `shutdown`, and others
-- **Edge Cases Handled**: empty command, blocked command, not-in-allowlist command, subprocess timeout
-- **Known Limitations**: No stdin piping support.
+- **Edge Cases Handled**: empty command, blocked command, not-in-allowlist command (checked for every command in a chain; the allowlist is read at each call), subprocess timeout, quoted operators (`grep "a|b"` is an argument, not a pipe)
+- **Refused**: `$`, backticks, `\`, `{ }`, `< >` (redirection), `( )`, background `&`, new lines; `find -delete`, `-exec`, `-execdir`, `-ok`, `-okdir`, `-fprint`, `-fprintf`, `-fls`
+- **Known Limitations**: No redirection to files (use `write_file`); 10 calls per minute — combine steps in one chain.
 - **Baseline Score**: 0.880 → **Improved: 1.000** ✅ KEEP
 
 ---

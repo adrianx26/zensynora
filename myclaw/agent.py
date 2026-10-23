@@ -451,7 +451,7 @@ class Agent:
         print(f"  {update.color}{update.message}{TimerColors.RESET}")
 
         # If it's the max timeout failure, the task is already being terminated
-        if update.threshold == 300 and update.message_type == "fatal":
+        if update.message_type == "fatal":
             logger.critical(f"Task {update.task_id} reached maximum timeout")
 
     def _track_preload(self, task: asyncio.Task) -> None:
@@ -591,7 +591,11 @@ class Agent:
                 '[{"title": "<short title>", "content": "<full detail>", "tags": "tag1,tag2"}]. '
                 "Use specific, searchable titles. "
                 "Return ONLY the JSON array — no explanation, no markdown fences. "
-                "Return [] if nothing is concretely worth saving."
+                "Return [] if nothing is concretely worth saving. "
+                # 2026-10-23: status snapshots were stored and later treated as current.
+                "Do NOT save the current state of this computer or of ZenSynora (health or error "
+                "reports, crash/restart counts, failing checks, recovery progress, file listings, "
+                "timeouts, rate limits) — it is out of date minutes later."
             )
             exchange = f"User: {user_message[:800]}\n\nAssistant: {response[:1200]}"
             messages = [
@@ -1333,12 +1337,14 @@ class Agent:
     # ── Tool-result Knowledge Extraction ────────────────────────────────────
 
     # Tools whose output is worth persisting in the knowledge base
+    # 2026-10-23: "shell" and "write_file" removed — directory listings,
+    # process lists and the agents' own (sometimes invented) status reports
+    # were saved as permanent facts ("system crash loop", "25 files still to
+    # recover" …) and later read back as if they were current.
     _KB_WORTHY_TOOLS: frozenset = frozenset(
         {
-            "shell",
             "browse",
             "read_file",
-            "write_file",
             "download_file",
             "delegate",
         }
@@ -1351,7 +1357,9 @@ class Agent:
         Checks both the tool whitelist and a minimum length threshold so that
         trivial confirmations (e.g. 'File written.') are silently skipped.
         """
-        return tool_name in Agent._KB_WORTHY_TOOLS and len(tool_output.strip()) > 120
+        out = tool_output.strip()
+        return (tool_name in Agent._KB_WORTHY_TOOLS and len(out) > 120
+                and not out.startswith(("Error", "[Error")))
 
     async def _save_tool_result_to_kb(
         self,
@@ -1378,7 +1386,12 @@ class Agent:
                 "Return a JSON array of objects: "
                 '[{"title": "<short searchable title>", "content": "<full detail>", "tags": "tag1,tag2"}]. '
                 "Return ONLY the JSON array — no explanation, no markdown fences. "
-                "Return [] if nothing is concretely worth saving."
+                "Return [] if nothing is concretely worth saving. "
+                # 2026-10-23: snapshots of the system's state go stale at once.
+                "Do NOT save the current state of this computer or of ZenSynora: health or error "
+                "reports, crash/restart counts, failing checks, recovery progress, directory or file "
+                "listings, process lists, log excerpts, timeouts or rate limits — they are out of date "
+                "minutes later and mislead future answers."
             )
             context = (
                 f"Tool: {tool_name}\n"

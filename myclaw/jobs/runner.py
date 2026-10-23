@@ -163,6 +163,10 @@ class JobRunner:
         tokens = (events.CURRENT_CHANNEL.set(channel), events.CURRENT_AGENT.set(agent.name),
                   MEMORY_SCOPE.set(scope))
         steps_token = MAX_ROUNDS.set(int(job.get("max_steps") or 8))  # v0.7.5
+        from ..task_timer import TASK_MAX_SECONDS
+
+        # the agent's task timer must not stop a job before its own timeout (2026-10-21)
+        tmax_token = TASK_MAX_SECONDS.set(int(job.get("timeout_s") or 300) + 30)
         status, output, error = "error", "", ""
         try:
             if job.get("fresh_context", True) or kind != "run":
@@ -199,6 +203,7 @@ class JobRunner:
             for var, tok in zip((events.CURRENT_CHANNEL, events.CURRENT_AGENT, MEMORY_SCOPE), tokens):
                 var.reset(tok)
             MAX_ROUNDS.reset(steps_token)
+            TASK_MAX_SECONDS.reset(tmax_token)
         if channel and status == "ok" and self._chat:
             try:
                 await self._chat().post_as_agent(channel, agent.name, output,

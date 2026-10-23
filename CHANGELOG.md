@@ -176,6 +176,45 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
 
 ### Fixed
 
+**Diagnostics report of 2026-10-23**
+- **"Code integrity: 44 file(s) differ" after every update.** The integrity
+  baseline was only renewed when the version number changed; updates that keep
+  0.7.5 install a new release folder, so the old folder's fingerprints were
+  compared with new code. Agents read the warning and started running
+  `recover_file`. A baseline made for another release folder now counts as
+  stale and the Doctor records a new one by itself.
+- **Shell: `|` and `&&` were always refused** ("Blocked command with
+  dangerous characters"), so agents spent many tool steps on `ps aux | grep …`
+  or `pwd && ls -la`. Chains of allowed commands with `|`, `&&`, `||` and `;`
+  now run — still without a shell: the pipes are connected between the
+  processes, so nothing can be injected. Every command in the chain must be on
+  the allow-list (at most 8). Still refused: `$`, backticks, `\`, `{ }`,
+  `< >` (redirection), `( )`, background `&` and new lines; `find -delete`,
+  `-exec`, `-execdir`, `-ok`, `-fprint…` are now blocked too. The allow-list is
+  read at every call (the tool kept a stale copy from start-up), and the
+  rate-limit message suggests combining steps in one call.
+- **`read_file` errors filled the error list.** A folder now gets a listing
+  instead of "Is a directory"; a missing file shows what is in that folder; a
+  path outside the workspace explains that settings and logs are not readable
+  by agents and points to `check_system_health` / `get_recent_problems`;
+  binary files are refused and files over 200 KB are cut with a note. These
+  agent mistakes are logged as INFO/WARNING, not ERROR.
+- **Tasks were stopped after a fixed 300 s** (the Telegram request "analyze
+  this app … and make a diagram" failed). The limit is now
+  `timeouts.task_seconds` — default **600**, 60–7200 — in Settings → Features
+  → *Timeouts & memory* → *Longest an agent may work on one message (s)*. A job
+  passes its own timeout (+30 s) to the task timer, so a long job is no longer
+  cut off first.
+- **Stale "facts" in the knowledge base.** Agents had saved notes such as
+  "System crash loop analysis", "Files still to recover" or "Code integrity
+  issues" — snapshots of problems that were fixed or never existed — and read
+  them back later as if they were current. Output of `shell` and `write_file`
+  (directory listings, process lists, the agents' own status reports) is no
+  longer auto-saved, error outputs are skipped, and both extraction prompts
+  now exclude the current state of the computer (health, errors, crash
+  counts, recovery progress, listings). Notes saved before stay — remove them
+  on the Knowledge page (search "crash loop", "recover", "integrity").
+
 **Install / update requirements: Node.js 22, Python venv (2026-10-21)**
 - **Updates silently kept an old web UI when `npm` was missing** ("npm not
   found; reusing the previous web UI build") — e.g. after removing another
