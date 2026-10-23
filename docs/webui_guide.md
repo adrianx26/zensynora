@@ -93,6 +93,20 @@ what is left — reply **continue** to let it go on. To look at the tools
 themselves, an agent can call `list_tools(details=True)` (all tools with
 arguments and purpose) and `get_tool_documentation(name)`.
 
+**How long an agent may work.** Settings → Features → *Timeouts & memory* →
+*Longest an agent may work on one message (s)* (`timeouts.task_seconds`,
+default 600, 60–7200; it was a fixed 300 s before 2026-10-23). After that the
+task is stopped and logged as a timeout. Jobs use their own *Timeout* instead.
+
+**What agents may run in the shell.** Commands from the allow-list (Settings
+→ Security → *Shell commands the agent may run*) run in
+`~/.myclaw/workspace`, without a shell. Since 2026-10-23 agents may chain
+allowed commands with `|`, `&&`, `||` and `;` (e.g. `ps aux | grep zensynora`
+once `ps` is allowed, `pwd && ls -la`), at most 8 per call. Refused: `$`,
+backticks, `\`, `{ }`, `< >`, `( )`, background `&`, new lines, and
+`find -delete` / `-exec`. `read_file` lists a folder when given one and says
+what is there when a file is missing.
+
 ## Models: switch, rotate, add providers
 
 ![Models page](images/webui-models.png)

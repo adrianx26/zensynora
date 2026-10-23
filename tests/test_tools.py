@@ -108,7 +108,7 @@ def test_read_file_success(mock_workspace):
 def test_read_file_not_found(mock_workspace):
     result = myclaw.tools.read_file("nonexistent.txt")
     assert result.startswith("Error:")
-    assert "No such file or directory" in result
+    assert "No file 'nonexistent.txt' in the workspace" in result  # lists what is there (2026-10-21)
 
 
 def test_read_file_traversal(mock_workspace):

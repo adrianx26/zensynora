@@ -98,6 +98,7 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
       { path: 'timeouts.llm_seconds', label: 'LLM request timeout (s)', kind: 'number' },
       { path: 'timeouts.shell_seconds', label: 'Shell command timeout (s)', kind: 'number' },
       { path: 'timeouts.http_seconds', label: 'HTTP request timeout (s)', kind: 'number' },
+      { path: 'timeouts.task_seconds', label: 'Longest an agent may work on one message (s)', kind: 'number', help: '60–7200, default 600. Jobs use their own timeout.' },
       { path: 'memory.auto_cleanup_enabled', label: 'Delete old conversation history', kind: 'bool' },
       { path: 'memory.auto_cleanup_days', label: 'Keep history for (days)', kind: 'number' },
       { path: 'agents.summarization_threshold', label: 'Summarize after N messages', kind: 'number' },

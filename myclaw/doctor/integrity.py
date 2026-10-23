@@ -120,10 +120,17 @@ def verify(file_path: str | None = None) -> dict:
     if base is None:
         return {"status": "no-baseline", "modified": [], "missing": [], "checked": 0,
                 "note": "No baseline yet — run scan_files first."}
+    root = install_root()
     if base.get("version") != __version__:
         return {"status": "stale-baseline", "modified": [], "missing": [], "checked": 0,
                 "note": f"Baseline is for {base.get('version')}, installed is {__version__} — run scan_files."}
-    root = install_root()
+    # 2026-10-21: every update installs a new release folder, often with the
+    # same version number (0.7.5 → 0.7.5). The baseline of the previous folder
+    # then reported "44 files differ" after each update, and agents started
+    # "recovering" files. A baseline made for another folder is stale too.
+    if base.get("root") and Path(base["root"]).resolve() != root.resolve():
+        return {"status": "stale-baseline", "modified": [], "missing": [], "checked": 0,
+                "note": f"Baseline was made for {base['root']}, ZenSynora now runs from {root} — run scan_files."}
     items = base["files"].items()
     if file_path:
         rel = str(resolve_in_root(file_path).relative_to(root))

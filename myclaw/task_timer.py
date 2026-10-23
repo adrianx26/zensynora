@@ -65,6 +65,25 @@ class UserChoice(Enum):
     CANCEL = "cancel"
     ALTERNATIVE = "alternative"
 
+# Max seconds for the current task when a caller needs a different limit than
+# timeouts.task_seconds (a job with its own timeout sets it). 0 = use config.
+from contextvars import ContextVar as _ContextVar  # noqa: E402
+
+TASK_MAX_SECONDS: "_ContextVar[int]" = _ContextVar("task_max_seconds", default=0)
+
+
+def configured_max_timeout(default: int = 600) -> int:
+    """timeouts.task_seconds from the settings (2026-10-21; was a fixed 300 s)."""
+    if TASK_MAX_SECONDS.get() > 0:
+        return TASK_MAX_SECONDS.get()
+    try:
+        from .config import load_config
+
+        return int(getattr(load_config().timeouts, "task_seconds", default) or default)
+    except Exception:
+        return default
+
+
 @dataclass
 class TaskThresholdConfig:
     """Configuration for time thresholds and messages."""
@@ -173,7 +192,12 @@ class TaskTimerOrchestrator:
             self._thresholds_reached[task_id] = set()
         
         self._logger.info(f"Task timer started for '{task_id}': {user_question[:60]}...")
-        
+
+        # The maximum comes from the settings (timeouts.task_seconds) or the job.
+        self.config.max_timeout = configured_max_timeout(self.config.max_timeout or 600)
+        self.config.msg_max_timeout = (f"TASK FAILED: Maximum time limit ({self.config.max_timeout}s) reached. "
+                                       "The task could not be completed.")
+
         # Start threshold monitoring
         thresholds = [
             self.config.threshold_60s,

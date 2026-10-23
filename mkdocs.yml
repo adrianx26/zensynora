@@ -23,6 +23,7 @@ nav:
       - Visual guide: architecture_diagram.md
       - Reference: ARCHITECTURE.md
       - Medic change management: MEDIC_CHANGE_MGMT.md
+      - Incidents & lessons: incidents_and_lessons.md
   - History:
       - Archive: archive/README.md
       - Developer notes: dev/README.md
