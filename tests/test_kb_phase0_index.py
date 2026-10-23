@@ -190,6 +190,24 @@ def test_forward_links_end_to_end(kb):
     assert ("a", "runs_on", "home-server") in kb.links()
 
 
+def test_forward_links_with_section_display_text_and_md(kb):
+    with kb.db() as db:
+        db.sync_entity_from_note(Note(
+            name="A", permalink="a", title="A", content="",
+            relations=[Relation("r1", "Home server#Disks"), Relation("r2", "home-server.md"),
+                       Relation("r3", "Home server|the box"), Relation("r4", "C# tips"),
+                       Relation("r5", "Big Box")]))
+        assert len(db.get_unresolved_relations(db.get_entity_by_permalink("a").id)) == 5
+        db.sync_entity_from_note(Note(name="home-server", permalink="home-server",
+                                      title="Home server", content="", aliases=["big box"]))
+        db.sync_entity_from_note(Note(name="C# tips", permalink="c-tips", title="C# tips",
+                                      content=""))
+        assert db.get_unresolved_relations(db.get_entity_by_permalink("a").id) == []
+    assert kb.links() == {("a", "r1", "home-server"), ("a", "r2", "home-server"),
+                          ("a", "r3", "home-server"), ("a", "r4", "c-tips"),
+                          ("a", "r5", "home-server")}
+
+
 def test_resolve_forward_references_creates_no_placeholders(kb):
     with kb.db() as db:
         db.sync_entity_from_note(Note(name="A", permalink="a", title="A", content="",

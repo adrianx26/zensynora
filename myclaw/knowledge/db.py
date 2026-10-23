@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Callable, Tuple, Iterable  # noqa: F401
+from typing import List, Optional, Dict, Any, Callable, Tuple
 
 from .parser import Note, Observation, Relation
 
@@ -305,6 +305,9 @@ class KnowledgeDB:
             # 2026-10-23 (KB phase 0): wait for a writer (sync, web UI, agent)
             # instead of failing at once with "database is locked".
             self._conn.execute("PRAGMA busy_timeout=30000")
+            # WAL + NORMAL: no corruption on power loss, far fewer fsyncs (one
+            # commit per note re-indexed).
+            self._conn.execute("PRAGMA synchronous=NORMAL")
             # Unicode case folding for names/titles/aliases/tags (queries only —
             # never used in triggers or indexes, so other tools can open the file).
             self._conn.create_function("kb_fold", 1, _sql_fold, deterministic=True)
@@ -408,7 +411,8 @@ class KnowledgeDB:
             pass
         # 2026-10-23 (KB phase 0): links whose target note does not exist yet
         # (forward links). Resolved into relations when the target is indexed.
-        # to_key / to_slug are the folded / slugged link text, for lookup.
+        # to_key / to_slug: folded / slugged link text; to_alt: folded text
+        # without ".md" / "#Section" — all indexed, for lookup.
         conn.execute("""
             CREATE TABLE IF NOT EXISTS pending_relations (
                 id INTEGER PRIMARY KEY,
@@ -417,15 +421,23 @@ class KnowledgeDB:
                 to_name TEXT NOT NULL,
                 to_key TEXT NOT NULL DEFAULT '',
                 to_slug TEXT NOT NULL DEFAULT '',
+                to_alt TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 FOREIGN KEY (from_entity_id) REFERENCES entities(id) ON DELETE CASCADE,
                 UNIQUE(from_entity_id, relation_type, to_name)
             )
         """)
+        for col in ("to_key", "to_slug", "to_alt"):  # tables made by earlier drafts
+            try:
+                conn.execute(f"ALTER TABLE pending_relations ADD COLUMN {col} "
+                             "TEXT NOT NULL DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_pending_from ON pending_relations(from_entity_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_pending_key ON pending_relations(to_key)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_pending_slug ON pending_relations(to_slug)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pending_alt ON pending_relations(to_alt)")
 
         # Create indexes for better query performance
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_permalink ON entities(permalink)")
@@ -1098,12 +1110,13 @@ class KnowledgeDB:
         if raw.startswith("[[") and raw.endswith("]]"):
             raw = raw[2:-2]
         key_src = raw.split("|", 1)[0].strip()  # [[Target|label]] → Target
+        alt = _link_candidates(key_src)[-1] if key_src else key_src  # no .md / #Section
         conn.execute(
             "INSERT OR IGNORE INTO pending_relations "
-            "(from_entity_id, relation_type, to_name, to_key, to_slug, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "(from_entity_id, relation_type, to_name, to_key, to_slug, to_alt, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             (from_entity_id, relation_type, to_name, _fold(key_src), _slug(key_src),
-             datetime.now().isoformat()),
+             _fold(alt), datetime.now().isoformat()),
         )
 
     def _resolve_pending_for(self, conn: sqlite3.Connection, entity_id: int) -> int:
@@ -1121,10 +1134,12 @@ class KnowledgeDB:
         ph = ",".join("?" * len(keys))
         rows = conn.execute(
             f"SELECT id, from_entity_id, relation_type, to_name FROM pending_relations "
-            f"WHERE to_key IN ({ph}) OR to_slug = ? "
-            # [[Note#Section]] / [[note.md]]: rare, checked by _resolve_target_row
-            f"OR instr(to_name, '#') > 0 OR lower(to_name) LIKE '%.md%'",
-            (*keys, ent["permalink"]),
+            f"WHERE to_key IN ({ph}) "
+            f"UNION SELECT id, from_entity_id, relation_type, to_name FROM pending_relations "
+            f"WHERE to_alt IN ({ph}) "
+            f"UNION SELECT id, from_entity_id, relation_type, to_name FROM pending_relations "
+            f"WHERE to_slug = ?",
+            (*keys, *keys, ent["permalink"]),
         ).fetchall()
         resolved = 0
         now = datetime.now().isoformat()
