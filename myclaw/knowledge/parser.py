@@ -11,7 +11,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 
 
 @dataclass
@@ -44,6 +44,11 @@ class Note:
     observations: List[Observation] = field(default_factory=list)
     relations: List[Relation] = field(default_factory=list)
     file_path: Optional[Path] = None
+    # 2026-10-23 (KB phase 0): frontmatter ``aliases:`` and every other
+    # frontmatter key (``type`` included) — stored in entity_aliases /
+    # entities.entity_metadata so alias and metadata search work.
+    aliases: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 # Regex patterns

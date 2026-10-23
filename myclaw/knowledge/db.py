@@ -38,7 +38,7 @@ _FTS_RESERVED = {"NOT", "NEAR", "AND", "OR"}
 _FTS_RESERVED_RE = re.compile(r"\b(NOT|NEAR|AND|OR)\b", re.IGNORECASE)
 
 
-def sanitize_fts_query(query: str, any_term: bool = False) -> str:
+def sanitize_fts_query(query: str, any_term: bool = False, boolean: bool = False) -> str:
     """Turn free text into a safe FTS5 MATCH expression.
 
     Fixed 2026-10-13 (v0.7.1): the old version only removed quotes and the
@@ -893,7 +893,7 @@ class KnowledgeDB:
             )
         return results
 
-    def search_fts(self, query: str, limit: int = 10) -> List[Entity]:
+    def search_fts(self, query: str, limit: int = 10, boolean: bool = False) -> List[Entity]:
         """
         Full-text search using FTS5 with BM25 ranking.
 

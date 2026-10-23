@@ -38,6 +38,23 @@ def get_file_metadata(file_path: Path) -> Dict[str, Any]:
     }
 
 
+# 2026-10-23 (KB phase 0): ``knowledge.knowledge_dir`` from the config is
+# honoured. None = the default ``~/.myclaw/knowledge`` (computed on every call,
+# so tests that change HOME keep working).
+_KNOWLEDGE_ROOT: Optional[Path] = None
+
+
+def set_knowledge_root(path: Optional[Any]) -> None:
+    """Use another folder for the knowledge bases (None = ~/.myclaw/knowledge)."""
+    global _KNOWLEDGE_ROOT
+    _KNOWLEDGE_ROOT = Path(str(path)).expanduser() if path else None
+
+
+def knowledge_root() -> Path:
+    """The folder that holds one sub-folder per knowledge base."""
+    return _KNOWLEDGE_ROOT or (Path.home() / ".myclaw" / "knowledge")
+
+
 def get_knowledge_dir(user_id: str = "default") -> Path:
     """Get the knowledge directory for a user (internal ids share 'default', v0.7.5)."""
     from .scope import kb_user, migrate_internal_scopes
@@ -46,7 +63,7 @@ def get_knowledge_dir(user_id: str = "default") -> Path:
         migrate_internal_scopes()
     except Exception as e:  # never block reading notes
         logger.warning("Knowledge: could not move old notes: %s", e)
-    knowledge_dir = Path.home() / ".myclaw" / "knowledge" / kb_user(user_id)
+    knowledge_dir = knowledge_root() / kb_user(user_id)
     knowledge_dir.mkdir(parents=True, exist_ok=True)
     return knowledge_dir
 
@@ -351,7 +368,8 @@ def search_notes(
     query: str,
     user_id: str = "default",
     limit: int = 10,
-    db_path: Optional[Path] = None
+    db_path: Optional[Path] = None,
+    boolean: bool = False,
 ) -> List[Note]:
     """
     Search notes using FTS5.
@@ -365,7 +383,7 @@ def search_notes(
         List of matching Note objects
     """
     with KnowledgeDB(user_id, db_path=db_path) as db:
-        entities = db.search_fts(query, limit)
+        entities = db.search_fts(query, limit, boolean=boolean)
 
     # Batch-read all matched notes in parallel. The previous N+1 loop
     # serialized stat()+open()+parse() per result; this overlaps them.
