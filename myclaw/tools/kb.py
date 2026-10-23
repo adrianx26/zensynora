@@ -38,13 +38,14 @@ def write_to_knowledge(
     user_id: str = "default"
 ) -> str:
     """
-    Write a new note to the knowledge base.
+    Write a note to the knowledge base (it appears in the Knowledge graph).
 
-    title: The title/name of the note (becomes permalink)
-    content: Main content/description
-    tags: Comma-separated list of tags (optional)
-    observations: One observation per line, format: "category | content" (optional)
-    relations: One relation per line, format: "relation_type | target_entity" (optional)
+    title: short specific title (becomes the note's name; writing the same title again replaces the note)
+    content: the text of the note (plain text or markdown)
+    tags: 1-4 comma-separated topic words, e.g. "homelab, linux" — always add some
+    observations: facts, one per line as "category | text", e.g. "spec | 32 GB RAM"
+    relations: links to other notes, one per line as "relation | Other note title",
+               e.g. "runs_on | Home server" — link to notes that already exist (search_knowledge first)
     user_id: User ID for multi-user isolation
     """
     try:

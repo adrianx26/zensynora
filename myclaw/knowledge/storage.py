@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from .parser import Note, Observation, Relation, parse_note, generate_markdown
+from .parser import Note, Observation, Relation, parse_note, generate_markdown, parse_observations, parse_relations
 from .db import KnowledgeDB
 
 logger = logging.getLogger(__name__)
@@ -79,6 +79,23 @@ def validate_permalink(permalink: str) -> str:
     return cleaned
 
 
+def normalize_text(text: str) -> str:
+    """Models sometimes send JSON-escaped text: literal '\\n' instead of new lines."""
+    if "\\n" in text and "\n" not in text:
+        text = text.replace("\\r\\n", "\n").replace("\\n", "\n").replace("\\t", "\t")
+    return text.strip()
+
+
+def _merge_obs(a: List[Observation], b: List[Observation]) -> List[Observation]:
+    seen = {(o.category, o.content) for o in a}
+    return list(a) + [o for o in b if (o.category, o.content) not in seen]
+
+
+def _merge_rel(a: List[Relation], b: List[Relation]) -> List[Relation]:
+    seen = {(r.relation_type, r.target) for r in a}
+    return list(a) + [r for r in b if (r.relation_type, r.target) not in seen]
+
+
 def write_note(
     name: str,
     title: Optional[str] = None,
@@ -123,10 +140,24 @@ def write_note(
         file_path=file_path
     )
     
-    # Generate or use provided content
-    if content:
+    # 2026-10-23: a whole note file (starts with frontmatter) is kept as given;
+    # otherwise ``content`` is the free text and the file gets frontmatter,
+    # title, text, Observations and Relations. Before, any ``content`` replaced
+    # the generated file, so tags, facts and links passed with it were lost
+    # (on mindy01: 266 notes, 0 tags, 0 facts, 0 links).
+    if content and content.lstrip().startswith("---"):
         markdown_content = content
     else:
+        body = normalize_text(content or "")
+        note.content = body
+        note.observations = _merge_obs(note.observations, parse_observations(body))
+        note.relations = _merge_rel(note.relations, parse_relations(body))
+        if file_path.exists():  # keep when the note was first made
+            try:
+                old = parse_note(file_path)
+                note.created_at = old.created_at or note.created_at
+            except Exception:
+                pass
         markdown_content = generate_markdown(note)
     
     # Write file

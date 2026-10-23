@@ -26,6 +26,7 @@ rules when changing ZenSynora:
 - Security checks validate structure (each command in a chain, each path) and read allow-lists at call time.
 - Model-server problems (rate limit, timeout, bad key, unknown model) are not crashes: no traceback, no medic run.
 - Agents must verify with live diagnostics before acting on a report file or knowledge note.
+- A write/save function must store every argument it accepts; test the round trip (write → read → compare). Knowledge notes always keep text, tags, facts and links (`write_note`).
 - Never auto-save snapshots of system state (health, errors, listings, recovery progress) to the knowledge base — they go stale and get repeated as facts.
 - When agents build their own tool for something, add it as a built-in.
 - After fixing an error, run the feature end to end — the next bug often hides behind it.

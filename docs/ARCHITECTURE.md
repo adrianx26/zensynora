@@ -54,7 +54,8 @@ myclaw/
 ├── knowledge/               # scope.py: one shared knowledge base for internal ids [0.7.5]
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
 │   ├── path_reasoning.py    # find_paths / shortest_path [Sprint 7]
-│   ├── storage.py           # Batched parallel note reads [Sprint 1 + 8]
+│   ├── storage.py           # Batched parallel note reads [Sprint 1 + 8]; write_note keeps text + tags + facts + links [Unreleased]
+│   ├── extract.py           # Model output → notes with tags, facts, links; ✨ enrich [Unreleased]
 │   └── ...
 ├── logging_config.py        # Structured logger + PII scrubber [Sprint 2]
 ├── marketplace/             # Multi-source plugin discovery + HMAC manifests [Sprint 9]
@@ -124,7 +125,7 @@ webui/src/
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 721 tests (pytest --collect-only, 2026-10-18)
+tests/                       # 730 tests (pytest --collect-only, 2026-10-18)
 ├── fixtures/fake_telegram_api.py # Local fake Telegram Bot API server [Unreleased]
 ├── test_chat_message_actions.py # Copy/edit/delete/regenerate chat messages [Unreleased]
 ├── test_doctor_report.py    # Doctor checks, report, errors viewer, downloads [Unreleased]
@@ -348,13 +349,14 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_agent_jobs.py` | 9 |
 | `test_updater_node.py` | 13 |
 | `test_report_fixes_20261023.py` | 26 |
+| `test_knowledge_structure.py` | 9 |
 | `test_provider_keys.py` | 18 |
 | `test_telegram_channel.py` | 19 |
 | `test_telegram_webui.py` | 19 |
 | `test_v075_channels_medic_skills.py` | 25 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **721** |
+| **Total** | **730** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

@@ -176,6 +176,30 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
 
 ### Fixed
 
+**Knowledge notes had no tags, facts or links (2026-10-23)**
+- The Knowledge page showed 266 notes with **0 tags, 0 facts, 0 links** —
+  every note an island. Two bugs in `knowledge/storage.py` /
+  `knowledge/parser.py`: `write_note(content=…)` saved only the raw text and
+  **dropped the tags, facts and links passed with it** (also the title and
+  frontmatter), and `generate_markdown()` never wrote the note's text — so
+  callers had to choose, and every agent tool lost the structure.
+  `update_note` also dropped the text. Now a note always gets frontmatter
+  (title, tags, dates), `# Title`, its text, *Observations* and *Relations*;
+  `- [category] fact` / `- relation [[Note]]` lines in the text are kept as
+  facts and links; literal `\n` from models become line breaks; a whole note
+  file (starting with frontmatter) is kept as given.
+- The automatic extractors (after a conversation / a tool result) now ask the
+  model for **facts and links** too, and offer it the titles of related
+  existing notes as link targets (`myclaw/knowledge/extract.py`).
+  `write_to_knowledge` tells agents to always add tags, facts and links.
+- Data migration **0002**: existing plain-text notes get a title and
+  frontmatter on the next update (the text is kept; run once).
+- Knowledge page: **✨ Add tags & links** — the default model adds tags,
+  facts and links to notes that have none, 10 per click (the text is not
+  changed; stops politely at a rate limit). API `POST /api/knowledge/enrich`.
+- `zensynora knowledge write` passed its arguments in the wrong order (the
+  text became "observations").
+
 **Diagnostics report of 2026-10-23**
 - **"Code integrity: 44 file(s) differ" after every update.** The integrity
   baseline was only renewed when the version number changed; updates that keep

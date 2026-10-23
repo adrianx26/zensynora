@@ -48,6 +48,10 @@ from .provider import get_provider, SUPPORTED_PROVIDERS
 from .exceptions import ProviderUnavailableError
 from .tools import TOOLS, trigger_hook, _HOOKS, get_parallel_executor, is_tool_independent
 from .knowledge import search_notes, build_context, write_note
+from .knowledge.extract import (  # noqa: E402  (2026-10-23)
+    FORMAT as KB_FORMAT, existing_titles as kb_existing_titles, known_notes_hint as kb_known_hint,
+    parse_json_array as kb_parse_json_array, save_items as kb_save_items,
+)
 from .semantic_cache import get_semantic_cache
 from .skill_preloader import get_skill_preloader, start_preloader, stop_preloader
 from .task_timer import get_task_timer_orchestrator, TaskStatus, Colors as TimerColors
@@ -587,8 +591,7 @@ class Agent:
                 "factual information worth storing permanently "
                 "(IP addresses, hostnames, credentials placeholders, configurations, "
                 "file paths, user preferences, decisions, important facts). "
-                "Return a JSON array of objects: "
-                '[{"title": "<short title>", "content": "<full detail>", "tags": "tag1,tag2"}]. '
+                + KB_FORMAT +
                 "Use specific, searchable titles. "
                 "Return ONLY the JSON array — no explanation, no markdown fences. "
                 "Return [] if nothing is concretely worth saving. "
@@ -598,45 +601,18 @@ class Agent:
                 "timeouts, rate limits) — it is out of date minutes later."
             )
             exchange = f"User: {user_message[:800]}\n\nAssistant: {response[:1200]}"
+            known = await asyncio.to_thread(kb_existing_titles, user_message, user_id)
             messages = [
                 {"role": "system", "content": extraction_system},
-                {"role": "user", "content": exchange},
+                {"role": "user", "content": f"{exchange}\n\n{kb_known_hint(known)}".strip()},
             ]
 
             raw, _ = await self._provider_chat(messages, self.model)
-
-            # Strip optional markdown code fences
-            raw = raw.strip()
-            raw = re.sub(r"^```[a-z]*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-
-            facts = json.loads(raw)
-            if not isinstance(facts, list):
+            facts = kb_parse_json_array(raw)
+            if not facts:
                 return
-
-            saved = 0
-            for fact in facts[:5]:  # Hard cap: max 5 entries per turn
-                if not isinstance(fact, dict):
-                    continue
-                title = str(fact.get("title", "")).strip()
-                content = str(fact.get("content", "")).strip()
-                tags_raw = str(fact.get("tags", "")).strip()
-                if not title or not content:
-                    continue
-                tag_list = [t.strip() for t in tags_raw.split(",") if t.strip()]
-                tag_list.append("auto-extracted")
-                try:
-                    write_note(
-                        name=title,
-                        title=title,
-                        content=content,
-                        tags=tag_list,
-                        user_id=user_id,
-                    )
-                    saved += 1
-                    logger.info(f"[KB-AUTO] Saved: '{title}' for user '{user_id}'")
-                except Exception as write_err:
-                    logger.debug(f"[KB-AUTO] Could not save '{title}': {write_err}")
+            # max 5 notes per turn, each with tags, facts and links (2026-10-23)
+            saved = await asyncio.to_thread(kb_save_items, facts, user_id, ["auto-extracted"], 5, "[KB-AUTO]")
 
             if saved:
                 logger.info(
@@ -1383,8 +1359,7 @@ class Agent:
                 "factual information worth storing permanently "
                 "(file contents, configuration values, command output facts, research results, "
                 "server details, hostnames, paths, versions, credentials placeholders). "
-                "Return a JSON array of objects: "
-                '[{"title": "<short searchable title>", "content": "<full detail>", "tags": "tag1,tag2"}]. '
+                + KB_FORMAT +
                 "Return ONLY the JSON array — no explanation, no markdown fences. "
                 "Return [] if nothing is concretely worth saving. "
                 # 2026-10-23: snapshots of the system's state go stale at once.
@@ -1399,43 +1374,19 @@ class Agent:
                 f"User task context: {user_message[:200]}\n\n"
                 f"Tool output:\n{tool_output[:1500]}"
             )
+            known = await asyncio.to_thread(kb_existing_titles, f"{user_message} {tool_output[:300]}", user_id)
             messages = [
                 {"role": "system", "content": extraction_system},
-                {"role": "user", "content": context},
+                {"role": "user", "content": f"{context}\n\n{kb_known_hint(known)}".strip()},
             ]
 
             raw, _ = await self._provider_chat(messages, self.model)
-            raw = raw.strip()
-            raw = re.sub(r"^```[a-z]*\n?", "", raw)
-            raw = re.sub(r"\n?```$", "", raw)
-
-            facts = json.loads(raw)
-            if not isinstance(facts, list):
+            facts = kb_parse_json_array(raw)
+            if not facts:
                 return
-
-            saved = 0
-            for fact in facts[:3]:  # Hard cap: max 3 entries per tool call
-                if not isinstance(fact, dict):
-                    continue
-                title = str(fact.get("title", "")).strip()
-                content = str(fact.get("content", "")).strip()
-                tags_raw = str(fact.get("tags", "")).strip()
-                if not title or not content:
-                    continue
-                tag_list = [t.strip() for t in tags_raw.split(",") if t.strip()]
-                tag_list.extend(["auto-extracted", f"tool-{tool_name}"])
-                try:
-                    write_note(
-                        name=title,
-                        title=title,
-                        content=content,
-                        tags=tag_list,
-                        user_id=user_id,
-                    )
-                    saved += 1
-                    logger.info(f"[KB-TOOL] Saved from {tool_name}: '{title}'")
-                except Exception as we:
-                    logger.debug(f"[KB-TOOL] Could not save '{title}': {we}")
+            # max 3 notes per tool call, each with tags, facts and links (2026-10-23)
+            saved = await asyncio.to_thread(kb_save_items, facts, user_id,
+                                            ["auto-extracted", f"tool-{tool_name}"], 3, "[KB-TOOL]")
 
             if saved:
                 logger.info(

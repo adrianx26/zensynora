@@ -99,6 +99,18 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 
 ---
 
+### 2.3 266 notes, but no tags, facts or links (2026-10-23)
+
+| | |
+|---|---|
+| **Symptom** | The Knowledge page showed every note as an island: 0 tags, 0 facts, 0 links. Note files were bare text (no title, no frontmatter; some with literal `\n`). |
+| **Root cause** | `write_note(content=…)` stored only the raw text and dropped the tags/facts/links passed with it; `generate_markdown()` never wrote the text. Every caller (agent tool, both auto-extractors, researcher) passed `content`, so the structure was always lost. The extractors also never asked the model for facts or links. `update_note` lost the text; the CLI passed arguments in the wrong order. |
+| **Fix** | `write_note` always writes frontmatter + title + text + Observations + Relations; facts/links in the text are kept; extractors ask for facts and links and offer existing note titles as targets; migration 0002 structures old notes; **✨ Add tags & links** on the Knowledge page enriches them with the model. |
+| **Detected by** | `tests/test_knowledge_structure.py` (round trip of text + tags + facts + links, update keeps text, migration, enrich). |
+| **Rule** | A write function must store every argument it accepts — test the round trip (write → read → compare). Never let one optional argument silently replace the others. |
+
+---
+
 ## 3. Code structure
 
 ### 3.1 Broken relative imports after `myclaw/tools` became a package (2026-10-18, PR #31)

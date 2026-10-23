@@ -244,7 +244,7 @@ def write():
     content = "\n".join(lines)
     tags_input = click.prompt("Tags (comma-separated)", default="", show_default=False)
     tags = [t.strip() for t in tags_input.split(",") if t.strip()]
-    permalink = write_note(title, title, content, tags, "default")
+    permalink = write_note(title, title=title, content=content, tags=tags, user_id="default")
     click.echo(f"\n✅ Created: {permalink}")
 
 @knowledge.command()

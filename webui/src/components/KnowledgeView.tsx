@@ -254,6 +254,26 @@ const KnowledgeView: React.FC = () => {
     }
   };
 
+  // 2026-10-23: add tags, facts and links to plain notes with the default model.
+  const [enriching, setEnriching] = useState(false);
+  const enrich = async () => {
+    setEnriching(true);
+    setNotice(null);
+    try {
+      const r = await api<{ enriched: unknown[]; failed: unknown[]; remaining: number; stopped: string; facts: number; links: number }>(
+        `/api/knowledge/enrich?base=${encodeURIComponent(base)}`, { method: 'POST', body: JSON.stringify({ limit: 10 }) });
+      const parts = [`Added tags/facts/links to ${r.enriched.length} note(s) (${r.facts} facts, ${r.links} links).`];
+      if (r.remaining > 0) parts.push(`${r.remaining} plain note(s) left — click again for the next batch.`);
+      if (r.stopped) parts.push(`Stopped: ${r.stopped}`);
+      setNotice({ ok: !r.stopped, text: parts.join(' ') });
+      await load();
+    } catch (e) {
+      setNotice({ ok: false, text: (e as Error).message });
+    } finally {
+      setEnriching(false);
+    }
+  };
+
   const sync = async () => {
     setLoading(true);
     try {
@@ -305,6 +325,11 @@ const KnowledgeView: React.FC = () => {
         <div className="kb-actions">
           <button type="button" className="ghost-btn" onClick={() => setCreating({ name: '', tags: '', content: '' })}>+ New note</button>
           <button type="button" className="ghost-btn" disabled={loading} onClick={sync} title="Re-read every markdown file into the search index">↻ Re-index</button>
+          {data && data.stats.notes > 0 && (
+            <button type="button" className="ghost-btn" disabled={enriching}
+              title="Ask the default model to add tags, facts and links to notes that have none (10 per click; the text is not changed)"
+              onClick={enrich}>{enriching ? 'Working…' : '✨ Add tags & links'}</button>
+          )}
         </div>
       </div>
 
