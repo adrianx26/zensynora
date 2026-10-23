@@ -316,3 +316,21 @@ def test_config_knowledge_dir_never_breaks_loading(cfg_env, monkeypatch):
     monkeypatch.setattr(storage, "set_knowledge_root", boom)
     cfg = cfg_env.write(str(cfg_env.tmp / "x"))
     assert cfg.knowledge.knowledge_dir.endswith("x")
+
+
+def test_mcp_server_console_logs_go_to_stderr(monkeypatch):
+    """2026-10-23 (KB phase 0): stdout is the MCP protocol channel."""
+    import logging
+    import sys
+
+    from myclaw.logging_config import configure_logging
+
+    monkeypatch.setattr(sys, "argv", ["zensynora", "mcp-server"])
+    try:
+        configure_logging(level=logging.INFO, log_file=None)
+        streams = [h.stream for h in logging.getLogger("myclaw").handlers
+                   if isinstance(h, logging.StreamHandler)]
+        assert sys.stderr in streams and sys.stdout not in streams
+    finally:
+        monkeypatch.setattr(sys, "argv", ["pytest"])
+        configure_logging(level=logging.INFO, log_file=None)
