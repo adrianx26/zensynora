@@ -486,7 +486,7 @@ def test_sanitize_boolean_never_a_syntax_error():
     alphabet = ['"', "*", " ", "AND", "OR", "NOT", "NEAR", "a", "b", "(", ")", ":", "-",
                 "^", "+", "é", "#", "'", "\\"]
     for _ in range(500):
-        odd.append(" ".join(rnd.choice(alphabet) for _ in range(rnd.randint(1, 12)))
+        odd.append(" ".join(rnd.choice(alphabet) for _ in range(rnd.randint(1, 12))))
         odd.append("".join(rnd.choice(alphabet) for _ in range(rnd.randint(1, 12))))
     for text in odd:
         for boolean in (True, False):
