@@ -1039,6 +1039,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../incidents_and_lessons/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Incidents & lessons
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1471,7 +1499,7 @@ fit together. It complements <a href="../architecture_diagram/"><code>docs/archi
 ├── tools/
 │   ├── browser.py           # Playwright headless browser [Sprint 3]
 │   ├── jobs.py              # job_create / job_list / job_run / job_status / job_update [Unreleased]
-│   ├── shell.py             # Sandboxed allow-list (newline injection blocked)
+│   ├── shell.py             # Allow-list, no shell; chains with | &amp;&amp; || ; of allowed commands [Unreleased]
 │   └── ...
 ├── vector/                  # Pluggable backends: memory / sqlite / qdrant [Sprint 4]
 ├── web/
@@ -1523,7 +1551,7 @@ webui/src/
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 695 tests (pytest --collect-only, 2026-10-18)
+tests/                       # 721 tests (pytest --collect-only, 2026-10-18)
 ├── fixtures/fake_telegram_api.py # Local fake Telegram Bot API server [Unreleased]
 ├── test_chat_message_actions.py # Copy/edit/delete/regenerate chat messages [Unreleased]
 ├── test_doctor_report.py    # Doctor checks, report, errors viewer, downloads [Unreleased]
@@ -1907,6 +1935,10 @@ silently fall back to Ollama.</p>
 <td>13</td>
 </tr>
 <tr>
+<td><code>test_report_fixes_20261023.py</code></td>
+<td>26</td>
+</tr>
+<tr>
 <td><code>test_provider_keys.py</code></td>
 <td>18</td>
 </tr>
@@ -1932,7 +1964,7 @@ silently fall back to Ollama.</p>
 </tr>
 <tr>
 <td><strong>Total</strong></td>
-<td><strong>695</strong></td>
+<td><strong>721</strong></td>
 </tr>
 </tbody>
 </table>

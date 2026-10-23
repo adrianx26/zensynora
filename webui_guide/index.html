@@ -984,6 +984,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../incidents_and_lessons/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Incidents & lessons
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1426,6 +1454,18 @@ rounds. At the limit the agent answers with what it found so far and says
 what is left — reply <strong>continue</strong> to let it go on. To look at the tools
 themselves, an agent can call <code>list_tools(details=True)</code> (all tools with
 arguments and purpose) and <code>get_tool_documentation(name)</code>.</p>
+<p><strong>How long an agent may work.</strong> Settings → Features → <em>Timeouts &amp; memory</em> →
+<em>Longest an agent may work on one message (s)</em> (<code>timeouts.task_seconds</code>,
+default 600, 60–7200; it was a fixed 300 s before 2026-10-23). After that the
+task is stopped and logged as a timeout. Jobs use their own <em>Timeout</em> instead.</p>
+<p><strong>What agents may run in the shell.</strong> Commands from the allow-list (Settings
+→ Security → <em>Shell commands the agent may run</em>) run in
+<code>~/.myclaw/workspace</code>, without a shell. Since 2026-10-23 agents may chain
+allowed commands with <code>|</code>, <code>&amp;&amp;</code>, <code>||</code> and <code>;</code> (e.g. <code>ps aux | grep zensynora</code>
+once <code>ps</code> is allowed, <code>pwd &amp;&amp; ls -la</code>), at most 8 per call. Refused: <code>$</code>,
+backticks, <code>\</code>, <code>{ }</code>, <code>&lt; &gt;</code>, <code>( )</code>, background <code>&amp;</code>, new lines, and
+<code>find -delete</code> / <code>-exec</code>. <code>read_file</code> lists a folder when given one and says
+what is there when a file is missing.</p>
 <h2 id="models-switch-rotate-add-providers">Models: switch, rotate, add providers<a class="headerlink" href="#models-switch-rotate-add-providers" title="Permanent link">&para;</a></h2>
 <p><img alt="Models page" src="../images/webui-models.png" /></p>
 <ul>

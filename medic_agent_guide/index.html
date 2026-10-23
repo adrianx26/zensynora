@@ -1012,6 +1012,34 @@
 
               
             
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../incidents_and_lessons/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Incidents & lessons
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
           </ul>
         </nav>
       
@@ -1799,6 +1827,22 @@ disable it, or <code>MYCLAW_LOG_FILE=/path/file.log</code> to move it.</p>
 <tr>
 <td>Chat: "I needed more tool steps than allowed for one message"</td>
 <td>Fixed 2026-10-21: the limit is now <code>agents.max_tool_rounds</code> (default 12, Settings → Features → <em>Tool steps per chat message</em>) and at the limit the agent answers with what it found — reply "continue". For jobs raise <em>max tool steps</em> (the medic suggests it).</td>
+</tr>
+<tr>
+<td>Doctor: <code>Code integrity: N file(s) differ</code> right after an update</td>
+<td>Fixed 2026-10-23: the baseline was kept from the previous release folder when the version number stayed the same. The Doctor now records a new baseline for the new folder by itself — don't run <code>recover_file</code> because of this warning.</td>
+</tr>
+<tr>
+<td>Log: <code>Blocked command with dangerous characters: … \| …</code> or <code>… &amp;&amp; …</code></td>
+<td>Fixed 2026-10-23: chains of allowed commands with <code>\|</code>, <code>&amp;&amp;</code>, <code>\|\|</code> and <code>;</code> run (without a shell, at most 8). Still refused: <code>$</code>, backticks, <code>\</code>, <code>{ }</code>, <code>&lt; &gt;</code>, <code>( )</code>, background <code>&amp;</code>, new lines, <code>find -delete</code>/<code>-exec</code>. A command that is not on the allow-list (e.g. <code>ps</code>) must be added in Settings → Security.</td>
+</tr>
+<tr>
+<td>Log: <code>Task '…' FAILED - exceeded 300s timeout</code></td>
+<td>Fixed 2026-10-23: the limit is <code>timeouts.task_seconds</code> (default 600, 60–7200), Settings → Features → <em>Timeouts &amp; memory</em>. Jobs use their own timeout.</td>
+</tr>
+<tr>
+<td>Log: <code>File read error: [Errno 21] Is a directory</code> / <code>[Errno 2] No such file or directory</code></td>
+<td>Fixed 2026-10-23: <code>read_file</code> lists a folder, says what is in the folder when a file is missing, and explains that settings and logs outside the workspace are not readable by agents. These are no longer logged as errors.</td>
 </tr>
 <tr>
 <td>Log: <code>… is temporarily rate-limited upstream</code></td>

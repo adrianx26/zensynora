@@ -1,0 +1,2549 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/incidents_and_lessons/">
+      
+      
+        <link rel="prev" href="../MEDIC_CHANGE_MGMT/">
+      
+      
+        <link rel="next" href="../archive/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Incidents & lessons - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#incidents-and-lessons-learned" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Incidents & lessons
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Incidents & lessons
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Incidents & lessons
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-telegram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Telegram
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Telegram">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-the-bot-never-answered-2026-10-18-pr-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 The bot never answered (2026-10-18, PR #26)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-token-is-wrong-whitespace-in-the-token-2026-10-18-pr-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 "Token is wrong" — whitespace in the token (2026-10-18, PR #27)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-gateway-crash-loop-under-systemd-2026-10-18-pr-2829" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Gateway crash loop under systemd (2026-10-18, PR #28/#29)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-false-conflict-right-after-a-restart-2026-10-18-pr-2829" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 False "conflict" right after a restart (2026-10-18, PR #28/#29)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-persistent-conflict-hermes-used-the-same-bot-token-2026-10-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5 Persistent conflict: Hermes used the same bot token (2026-10-18)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-agents-built-their-own-telegram-tool-with-placeholder-tokens-2026-10-18-pr-2829" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6 Agents built their own Telegram tool with placeholder tokens (2026-10-18, PR #28/#29)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-knowledge-base" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Knowledge base
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Knowledge base">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-background-extraction-nameerror-2026-10-18-pr-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Background extraction NameError (2026-10-18, PR #26)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-stale-or-invented-crash-loop-notes-written-by-agents-2026-10-23-branch-fixreport-20261023" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Stale or invented "crash loop" notes written by agents (2026-10-23, branch fix/report-20261023)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-code-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Code structure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Code structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-broken-relative-imports-after-myclawtools-became-a-package-2026-10-18-pr-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Broken relative imports after myclaw/tools became a package (2026-10-18, PR #31)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-sqlitepool_get_lock-missing-2026-10-18-pr-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 SQLitePool._get_lock missing (2026-10-18, PR #31)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-models-and-agent-turns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Models and agent turns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Models and agent turns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-rate-limits-and-timeouts-treated-as-crashes-2026-10-18-pr-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Rate limits and timeouts treated as crashes (2026-10-18, PR #31)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-log-noise-hid-real-problems-2026-10-18-pr-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Log noise hid real problems (2026-10-18, PR #31)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-i-needed-more-tool-steps-than-allowed-for-one-message-2026-10-21-pr-33" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 "I needed more tool steps than allowed for one message" (2026-10-21, PR #33)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-fixed-300-second-task-limit-2026-10-23-branch-fixreport-20261023" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 Fixed 300-second task limit (2026-10-23, branch fix/report-20261023)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-agent-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Agent tools
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Agent tools">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-agents-could-not-create-or-run-jobs-2026-10-21-pr-34" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Agents could not create or run jobs (2026-10-21, PR #34)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-shell-refused-every-and-2026-10-23-branch-fixreport-20261023" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Shell refused every | and &amp;&amp; (2026-10-23, branch fix/report-20261023)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-read_file-errors-flooded-the-error-list-2026-10-23-branch-fixreport-20261023" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 read_file errors flooded the error list (2026-10-23, branch fix/report-20261023)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-doctor-medic-and-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Doctor, medic and integrity
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Doctor, medic and integrity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-44-files-differ-after-every-update-2026-10-23-branch-fixreport-20261023" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 "44 files differ" after every update (2026-10-23, branch fix/report-20261023)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-install-update-and-ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Install, update and CI
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Install, update and CI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-removing-another-app-removed-nodejs-updates-reused-the-old-web-ui-2026-10-21-pr-35" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 Removing another app removed Node.js; updates reused the old web UI (2026-10-21, PR #35)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-an-update-was-killed-when-the-desktop-session-restarted-2026-10-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 An update was killed when the desktop session restarted (2026-10-21)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-docs-ci-failed-after-adding-diagrams-2026-10-18-pr-32" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.3 Docs CI failed after adding diagrams (2026-10-18, PR #32)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#74-ci-checks-that-were-missing-or-wrong-2026-10-18-pr-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.4 CI checks that were missing or wrong (2026-10-18, PR #29)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rules-for-future-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rules for future changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../dev/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-telegram" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Telegram
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Telegram">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#11-the-bot-never-answered-2026-10-18-pr-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.1 The bot never answered (2026-10-18, PR #26)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-token-is-wrong-whitespace-in-the-token-2026-10-18-pr-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.2 "Token is wrong" — whitespace in the token (2026-10-18, PR #27)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#13-gateway-crash-loop-under-systemd-2026-10-18-pr-2829" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.3 Gateway crash loop under systemd (2026-10-18, PR #28/#29)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#14-false-conflict-right-after-a-restart-2026-10-18-pr-2829" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.4 False "conflict" right after a restart (2026-10-18, PR #28/#29)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#15-persistent-conflict-hermes-used-the-same-bot-token-2026-10-18" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.5 Persistent conflict: Hermes used the same bot token (2026-10-18)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#16-agents-built-their-own-telegram-tool-with-placeholder-tokens-2026-10-18-pr-2829" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1.6 Agents built their own Telegram tool with placeholder tokens (2026-10-18, PR #28/#29)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-knowledge-base" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Knowledge base
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Knowledge base">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-background-extraction-nameerror-2026-10-18-pr-26" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 Background extraction NameError (2026-10-18, PR #26)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-stale-or-invented-crash-loop-notes-written-by-agents-2026-10-23-branch-fixreport-20261023" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 Stale or invented "crash loop" notes written by agents (2026-10-23, branch fix/report-20261023)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-code-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Code structure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Code structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#31-broken-relative-imports-after-myclawtools-became-a-package-2026-10-18-pr-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.1 Broken relative imports after myclaw/tools became a package (2026-10-18, PR #31)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#32-sqlitepool_get_lock-missing-2026-10-18-pr-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3.2 SQLitePool._get_lock missing (2026-10-18, PR #31)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-models-and-agent-turns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Models and agent turns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Models and agent turns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-rate-limits-and-timeouts-treated-as-crashes-2026-10-18-pr-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 Rate limits and timeouts treated as crashes (2026-10-18, PR #31)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#42-log-noise-hid-real-problems-2026-10-18-pr-31" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.2 Log noise hid real problems (2026-10-18, PR #31)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#43-i-needed-more-tool-steps-than-allowed-for-one-message-2026-10-21-pr-33" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.3 "I needed more tool steps than allowed for one message" (2026-10-21, PR #33)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#44-fixed-300-second-task-limit-2026-10-23-branch-fixreport-20261023" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.4 Fixed 300-second task limit (2026-10-23, branch fix/report-20261023)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-agent-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Agent tools
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Agent tools">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#51-agents-could-not-create-or-run-jobs-2026-10-21-pr-34" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.1 Agents could not create or run jobs (2026-10-21, PR #34)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#52-shell-refused-every-and-2026-10-23-branch-fixreport-20261023" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.2 Shell refused every | and &amp;&amp; (2026-10-23, branch fix/report-20261023)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#53-read_file-errors-flooded-the-error-list-2026-10-23-branch-fixreport-20261023" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5.3 read_file errors flooded the error list (2026-10-23, branch fix/report-20261023)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-doctor-medic-and-integrity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Doctor, medic and integrity
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="6. Doctor, medic and integrity">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#61-44-files-differ-after-every-update-2026-10-23-branch-fixreport-20261023" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6.1 "44 files differ" after every update (2026-10-23, branch fix/report-20261023)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-install-update-and-ci" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Install, update and CI
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="7. Install, update and CI">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#71-removing-another-app-removed-nodejs-updates-reused-the-old-web-ui-2026-10-21-pr-35" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.1 Removing another app removed Node.js; updates reused the old web UI (2026-10-21, PR #35)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#72-an-update-was-killed-when-the-desktop-session-restarted-2026-10-21" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.2 An update was killed when the desktop session restarted (2026-10-21)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#73-docs-ci-failed-after-adding-diagrams-2026-10-18-pr-32" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.3 Docs CI failed after adding diagrams (2026-10-18, PR #32)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#74-ci-checks-that-were-missing-or-wrong-2026-10-18-pr-29" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.4 CI checks that were missing or wrong (2026-10-18, PR #29)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rules-for-future-changes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rules for future changes
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="incidents-and-lessons-learned">Incidents and lessons learned<a class="headerlink" href="#incidents-and-lessons-learned" title="Permanent link">&para;</a></h1>
+<p>Real problems found on a running installation (Linux, <code>~/.local/share/zensynora</code>,
+Web UI + Telegram, OpenRouter free models), October 2026. For each one: what
+was seen, why it happened, how it was fixed, how it is caught now, and the
+rule that keeps it from coming back. The rules are collected at the end and,
+in short form, in <code>AGENTS.md</code>.</p>
+<p>PR numbers refer to <a href="https://github.com/adrianx26/zensynora/pulls">https://github.com/adrianx26/zensynora/pulls</a>.
+"Unreleased" fixes are listed in <code>CHANGELOG.md</code> under <em>[Unreleased]</em>.</p>
+<hr />
+<h2 id="1-telegram">1. Telegram<a class="headerlink" href="#1-telegram" title="Permanent link">&para;</a></h2>
+<h3 id="11-the-bot-never-answered-2026-10-18-pr-26">1.1 The bot never answered (2026-10-18, PR #26)<a class="headerlink" href="#11-the-bot-never-answered-2026-10-18-pr-26" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>Messages to the bot got no answer; no error in the log.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>The Telegram worker was created but never started when the bot ran inside the Web UI.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>TelegramChannel.start()/stop()/status()</code>; the Web UI starts the bot when <code>channels.telegram.run_in_webui</code> is on.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_telegram_channel.py</code>, <code>tests/test_telegram_webui.py</code>; Doctor check <em>Telegram bot</em>; Settings → Channels shows the bot status.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>A background worker that is created must have a test that it actually runs, and its state must be visible in the UI.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="12-token-is-wrong-whitespace-in-the-token-2026-10-18-pr-27">1.2 "Token is wrong" — whitespace in the token (2026-10-18, PR #27)<a class="headerlink" href="#12-token-is-wrong-whitespace-in-the-token-2026-10-18-pr-27" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>A correct bot token was refused.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>The token was pasted with a trailing space/new line.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Tokens are trimmed on save and on use; <strong>Send test message</strong> button checks the whole path.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_telegram_webui.py</code>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Trim every secret the user pastes; offer a one-click end-to-end test.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13-gateway-crash-loop-under-systemd-2026-10-18-pr-2829">1.3 Gateway crash loop under systemd (2026-10-18, PR #28/#29)<a class="headerlink" href="#13-gateway-crash-loop-under-systemd-2026-10-18-pr-2829" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td><code>zensynora gateway</code> (service <code>myclaw</code>) restarted every ~7 s: <em>"There is no current event loop"</em>; 217 starts in 24 h. Each start also stole the Telegram connection from the Web UI.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>The gateway used <code>get_event_loop()</code> in a thread without a loop; it also started Telegram even when the bot was set to run in the Web UI.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>asyncio.run(_serve())</code>; the gateway skips Telegram when <code>run_in_webui</code> is on (<code>--telegram</code> forces it).</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td>Doctor check <em>Restarts (crash loop)</em> (<code>restart_loop</code>), Doctor <em>Telegram bot</em> warns when <code>myclaw.service</code> runs next to the Web UI bot.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Never call <code>asyncio.get_event_loop()</code> outside a running loop; use <code>asyncio.run</code>. Only one component may own a channel.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="14-false-conflict-right-after-a-restart-2026-10-18-pr-2829">1.4 False "conflict" right after a restart (2026-10-18, PR #28/#29)<a class="headerlink" href="#14-false-conflict-right-after-a-restart-2026-10-18-pr-2829" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>After <em>Restart</em>, the status said another program was running the bot.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>Telegram still held the old long-poll for a short time (409 Conflict).</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>The bot is stopped before the process restarts; a 409 within <code>CONFLICT_GRACE</code> (90 s) is retried, not reported.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_telegram_channel.py</code>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Treat a 409 shortly after a restart as transient; stop pollers before <code>execve</code>.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="15-persistent-conflict-hermes-used-the-same-bot-token-2026-10-18">1.5 Persistent conflict: Hermes used the same bot token (2026-10-18)<a class="headerlink" href="#15-persistent-conflict-hermes-used-the-same-bot-token-2026-10-18" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td><em>"Telegram: Another program is already running this bot … Stopping this copy"</em>, again and again.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>A second app on the same computer (Hermes Agent, <code>hermes-gateway.service</code>, <code>Restart=always</code>) polled Telegram with the <strong>same</strong> bot token. Telegram allows one poller per token.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Hermes was stopped and removed by the user.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td>The conflict text in the log / Doctor <em>Errors in the last 24 h</em>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>One process per Telegram token. When a conflict persists beyond the grace period, look for other programs (systemd units, other bots) using the token; give each app its own bot.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="16-agents-built-their-own-telegram-tool-with-placeholder-tokens-2026-10-18-pr-2829">1.6 Agents built their own Telegram tool with placeholder tokens (2026-10-18, PR #28/#29)<a class="headerlink" href="#16-agents-built-their-own-telegram-tool-with-placeholder-tokens-2026-10-18-pr-2829" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>An agent asked the user for the bot token and chat id; a TOOLBOX tool <code>telegram_integration</code> contained <code>YOUR_BOT_TOKEN_HERE</code>.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>Agents had no built-in way to message the user.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Built-in <code>send_telegram_message</code>; agents are told never to ask for the token; the home-made tool was disabled.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td>Doctor <em>Custom tools (TOOLBOX)</em> (<code>custom_tools</code>) flags placeholder credentials and hard-coded secrets.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>If agents keep building a tool, the product is missing it — add it as a built-in and say so in their instructions.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-knowledge-base">2. Knowledge base<a class="headerlink" href="#2-knowledge-base" title="Permanent link">&para;</a></h2>
+<h3 id="21-background-extraction-nameerror-2026-10-18-pr-26">2.1 Background extraction NameError (2026-10-18, PR #26)<a class="headerlink" href="#21-background-extraction-nameerror-2026-10-18-pr-26" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td><em>"Could not start background knowledge extraction: name '_background_extraction_task' is not defined"</em> (201× in one log).</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>A module global was used before it was ever defined.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Defined in <code>myclaw/knowledge/sync.py</code>.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>ruff</code> (undefined names) in CI.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>CI must run ruff with real-error rules (F821 etc.); globals are declared at module level.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="22-stale-or-invented-crash-loop-notes-written-by-agents-2026-10-23-branch-fixreport-20261023">2.2 Stale or invented "crash loop" notes written by agents (2026-10-23, branch fix/report-20261023)<a class="headerlink" href="#22-stale-or-invented-crash-loop-notes-written-by-agents-2026-10-23-branch-fixreport-20261023" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>Agents reported a "crash loop every 8 seconds, 217 restarts" and "25 files to recover" when the Doctor showed 0 restarts. Notes such as <em>System Crash Loop Analysis</em> appeared in the knowledge base.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>Auto-extraction saves facts from tool output (<code>shell</code>, <code>read_file</code>) and conversations. Agents read an <strong>old</strong> report file in the workspace (<code>system_problems.md</code>, from the 18 Oct crash loop) and saved it as current knowledge; later turns repeated it.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>shell</code> and <code>write_file</code> output is no longer auto-saved (listings, process lists and the agents' own reports were becoming "facts"); error outputs are skipped; both extraction prompts now exclude the current state of the computer (health, errors, crash counts, recovery progress, listings). Notes saved before stay — clean them on the <strong>Knowledge</strong> page (search "crash loop", "recover", "integrity", <em>Move to trash</em>). The integrity fix (6.1) removes the false "files differ" input.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>test_transient_tool_output_is_not_saved_as_knowledge</code> in <code>tests/test_report_fixes_20261023.py</code>; compare agent claims with the Doctor report (Restarts, Code integrity).</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Agents must check live diagnostics (<code>check_system_health</code>, <code>get_recent_problems</code>) before acting on a report file; knowledge from reports needs a date.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3-code-structure">3. Code structure<a class="headerlink" href="#3-code-structure" title="Permanent link">&para;</a></h2>
+<h3 id="31-broken-relative-imports-after-myclawtools-became-a-package-2026-10-18-pr-31">3.1 Broken relative imports after <code>myclaw/tools</code> became a package (2026-10-18, PR #31)<a class="headerlink" href="#31-broken-relative-imports-after-myclawtools-became-a-package-2026-10-18-pr-31" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td><em>"cannot import name 'TaskStatus' / 'SwarmOrchestrator' from 'myclaw.tools.swarm'"</em>, <em>"No module named 'myclaw.tools.memory'"</em>, <em>"Medic diagnosis itself failed: cannot import name 'check_system_health' from 'myclaw.tools'"</em>.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>After the split into <code>myclaw/tools/*.py</code>, <code>from .swarm</code>, <code>.memory</code>, <code>.config</code>, <code>.provider</code>, <code>.backends</code> pointed inside <code>myclaw/tools/</code> (or at the module itself); <code>admin_dashboard.py</code> used <code>..</code> above the package; <code>cli memory</code> used a removed <code>get_db</code>; the medic diagnosis imported names that <code>myclaw.tools</code> only registers lazily. 26 broken imports in total.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>..</code> imports, medic tools imported from <code>myclaw.agents.medic_agent</code>, memory CLI rewritten.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_log_fixes_20261018.py::test_every_relative_import_points_at_a_real_module_and_name</code> (static check of every relative import).</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Inside <code>myclaw/tools/</code>, imports of other <code>myclaw</code> modules use <code>..</code>. Never <code>from .tools import &lt;lazy tool&gt;</code> — import from the module that defines it.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-sqlitepool_get_lock-missing-2026-10-18-pr-31">3.2 <code>SQLitePool._get_lock</code> missing (2026-10-18, PR #31)<a class="headerlink" href="#32-sqlitepool_get_lock-missing-2026-10-18-pr-31" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>Swarm storage failed after the import fix: <em>"type object 'SQLitePool' has no attribute '_get_lock'"</em>.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>The sync pool used a helper that only the async pool has.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Uses its own <code>_pool_lock</code>.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_log_fixes_20261018.py::test_sqlite_pool_get_and_release</code>, swarm tool tests.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>When an import error is fixed, run the feature end to end — the next bug hides behind it.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="4-models-and-agent-turns">4. Models and agent turns<a class="headerlink" href="#4-models-and-agent-turns" title="Permanent link">&para;</a></h2>
+<h3 id="41-rate-limits-and-timeouts-treated-as-crashes-2026-10-18-pr-31">4.1 Rate limits and timeouts treated as crashes (2026-10-18, PR #31)<a class="headerlink" href="#41-rate-limits-and-timeouts-treated-as-crashes-2026-10-18-pr-31" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td><em>"Unexpected error in think loop"</em> with traceback and a medic diagnosis for <em>"temporarily rate-limited upstream"</em> or <em>"Request timed out"</em>.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>Every exception took the "unexpected" path.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>llm_errors.is_provider_error()</code>: one warning with a readable reason, no medic run; a rate-limited model is retried once after 5 s when no rotation is set.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_log_fixes_20261018.py</code>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Classify errors: outside problems (rate limit, timeout, bad key, unknown model) are warnings with advice; only real crashes get tracebacks and diagnostics.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-log-noise-hid-real-problems-2026-10-18-pr-31">4.2 Log noise hid real problems (2026-10-18, PR #31)<a class="headerlink" href="#42-log-noise-hid-real-problems-2026-10-18-pr-31" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>1,861 warnings in a day: configuration warnings written 7 lines × 232 times, <em>"pyotp not installed"</em> 31×, a missing file of a disabled TOOLBOX tool.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>Warnings logged on every config re-read / every object creation.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Config warnings logged once and again only when they change; pyotp notice once (info); disabled tools skipped before the file check.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_log_fixes_20261018.py</code>; Doctor <em>Errors in the last 24 h</em> groups repeats.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>A warning that can repeat must be de-duplicated at the source.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="43-i-needed-more-tool-steps-than-allowed-for-one-message-2026-10-21-pr-33">4.3 "I needed more tool steps than allowed for one message" (2026-10-21, PR #33)<a class="headerlink" href="#43-i-needed-more-tool-steps-than-allowed-for-one-message-2026-10-21-pr-33" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td><em>"review all tools one by one"</em> stopped after 5 tool calls with a canned message.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>Chat allowed a fixed 4 follow-up rounds; at the limit all tool results were thrown away; <code>get_tool_documentation</code> answered "No documentation found" for every built-in tool, so the agent kept calling it.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>agents.max_tool_rounds</code> (default 12); at the limit the agent answers from what it found and the user can say "continue"; built-in tool docs and <code>list_tools(details=True)</code>.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_tool_step_limit.py</code>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Limits are settings, never silent constants; at a limit, return the work done so far. A tool must give useful output for every input it accepts.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="44-fixed-300-second-task-limit-2026-10-23-branch-fixreport-20261023">4.4 Fixed 300-second task limit (2026-10-23, branch fix/report-20261023)<a class="headerlink" href="#44-fixed-300-second-task-limit-2026-10-23-branch-fixreport-20261023" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td><em>"Task … FAILED - exceeded 300s timeout"</em> (CRITICAL) for "analyze this GitHub app and make a diagram".</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>The task timer had a hard-coded 300 s maximum; with 12 tool rounds and free models it is too short, and it could also stop a job before the job's own timeout.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>timeouts.task_seconds</code> (default 600, 60–7200; Settings → Features → <em>Timeouts &amp; memory</em>); jobs pass their own timeout via <code>TASK_MAX_SECONDS</code>.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_report_fixes_20261023.py::test_task_limit_comes_from_settings_and_jobs</code>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Two limits on the same work must agree (job timeout vs task timer); the outer one wins.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5-agent-tools">5. Agent tools<a class="headerlink" href="#5-agent-tools" title="Permanent link">&para;</a></h2>
+<h3 id="51-agents-could-not-create-or-run-jobs-2026-10-21-pr-34">5.1 Agents could not create or run jobs (2026-10-21, PR #34)<a class="headerlink" href="#51-agents-could-not-create-or-run-jobs-2026-10-21-pr-34" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>Agents' "scheduled tasks" never appeared on the Jobs page and disappeared on restart; without Telegram <code>schedule</code> crashed (<code>None.run_once</code>).</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td><code>schedule</code>/<code>nlp_schedule</code> used Telegram's in-memory JobQueue; there were no tools for the Jobs system.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>job_create</code>, <code>job_list</code>, <code>job_run</code>, <code>job_status</code>, <code>job_update</code>; <code>schedule</code>/<code>nlp_schedule</code> create Jobs-page jobs when the Web UI runs.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_agent_jobs.py</code>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>One scheduling system: anything an agent schedules must be visible, persistent and reported.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-shell-refused-every-and-2026-10-23-branch-fixreport-20261023">5.2 Shell refused every <code>|</code> and <code>&amp;&amp;</code> (2026-10-23, branch fix/report-20261023)<a class="headerlink" href="#52-shell-refused-every-and-2026-10-23-branch-fixreport-20261023" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td><em>"Blocked command with dangerous characters"</em> for a pipe (<code>ps aux</code> piped into <code>grep zensynora</code>) or <code>pwd &amp;&amp; ls -la</code> — agents spent many tool steps working around it.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>A character blacklist rejected all operators. Also: <code>shell.py</code> imported <code>ALLOWED_COMMANDS</code> once, so allow-list changes were not seen; <code>find -delete</code> / <code>-exec</code> were allowed.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>A parser allows pipe, <code>&amp;&amp;</code>, or-chains and <code>;</code> between <strong>allowed</strong> commands and runs them without a shell (pipes are wired between the processes). Still refused: dollar sign, backtick, backslash, braces, redirection, parentheses, background <code>&amp;</code>, new lines. <code>find -delete</code> / <code>-exec</code> / <code>-ok</code> / <code>-fprint</code> are blocked; the allow-list is read at call time.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_report_fixes_20261023.py</code> (parse, refuse, run).</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Security checks must validate structure (each command in a chain), not ban harmless syntax; read mutable settings at call time, not at import.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="53-read_file-errors-flooded-the-error-list-2026-10-23-branch-fixreport-20261023">5.3 <code>read_file</code> errors flooded the error list (2026-10-23, branch fix/report-20261023)<a class="headerlink" href="#53-read_file-errors-flooded-the-error-list-2026-10-23-branch-fixreport-20261023" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>ERROR <em>"Is a directory: …/workspace"</em>, <em>"No such file or directory: …/workspace/config.json"</em>; a 64 MB zip could be read as text.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>Agent mistakes were logged as ERROR and answered with a bare OS error.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Folders are listed; a missing file shows what is there; paths outside the workspace explain what agents may read and which diagnostic tools to use; binary files are refused and large files are cut at 200 KB; logged as info/warning.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_report_fixes_20261023.py</code>, <code>tests/test_tools.py</code>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Errors caused by agent input are INFO/WARNING and say what to do next; ERROR is for faults in ZenSynora.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="6-doctor-medic-and-integrity">6. Doctor, medic and integrity<a class="headerlink" href="#6-doctor-medic-and-integrity" title="Permanent link">&para;</a></h2>
+<h3 id="61-44-files-differ-after-every-update-2026-10-23-branch-fixreport-20261023">6.1 "44 files differ" after every update (2026-10-23, branch fix/report-20261023)<a class="headerlink" href="#61-44-files-differ-after-every-update-2026-10-23-branch-fixreport-20261023" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>Doctor <em>Code integrity</em>: <em>"44 file(s) differ: install.sh, myclaw/<strong>init</strong>.py …"</em>; agents then "restored" files with <code>recover_file</code>.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>The integrity baseline was stale only when the <strong>version</strong> changed. Updates install a new release folder with the same version (0.7.5 → 0.7.5), so the baseline of an older release (14 Oct) was compared with new code.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>A baseline made for another install folder is stale and is re-recorded automatically.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_report_fixes_20261023.py::test_baseline_from_another_release_folder_is_stale</code>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Anything keyed on the version must also key on the install root / release id.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="7-install-update-and-ci">7. Install, update and CI<a class="headerlink" href="#7-install-update-and-ci" title="Permanent link">&para;</a></h2>
+<h3 id="71-removing-another-app-removed-nodejs-updates-reused-the-old-web-ui-2026-10-21-pr-35">7.1 Removing another app removed Node.js; updates reused the old web UI (2026-10-21, PR #35)<a class="headerlink" href="#71-removing-another-app-removed-nodejs-updates-reused-the-old-web-ui-2026-10-21-pr-35" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>Every update said <em>"npm not found; reusing the previous web UI build"</em>; new pages never appeared.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td><code>~/.local/bin/node</code>, <code>npm</code>, <code>npx</code> were symlinks into <code>~/.hermes</code>; removing Hermes removed them. Nothing installed Node.js; the updater only noted it.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>updater/nodejs.py</code>: find Node.js 20.19+ or download Node.js 22 LTS (SHA-256 verified) into <code>~/.local/share/zensynora/node</code>; <code>update.sh node</code>; preflight checks Python venv/pip; <code>UPDATER_PROTOCOL = 3</code> so old updaters hand over.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_updater_node.py</code>; Doctor <em>Node.js for Web UI updates</em> (<code>node_runtime</code>).</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Every build requirement is checked and installed by the installer/updater — never assumed. Before removing software, check what links into it.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="72-an-update-was-killed-when-the-desktop-session-restarted-2026-10-21">7.2 An update was killed when the desktop session restarted (2026-10-21)<a class="headerlink" href="#72-an-update-was-killed-when-the-desktop-session-restarted-2026-10-21" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>The update log stopped mid <code>pip install</code>; ZenSynora was stopped.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>ZenSynora ran from the desktop session, not as a service; the session restart ended it and the update it had started. The previous release stayed active (nothing was broken).</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Run the update again (<code>update.sh --force</code>); it completed and installed Node.js 22.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td>Update log ends without <em>✔ Updated</em>; Doctor <em>Background service</em> shows <em>inactive</em>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Long operations (updates, jobs) need ZenSynora running as a service (systemd user unit) — not in a terminal or desktop session.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="73-docs-ci-failed-after-adding-diagrams-2026-10-18-pr-32">7.3 Docs CI failed after adding diagrams (2026-10-18, PR #32)<a class="headerlink" href="#73-docs-ci-failed-after-adding-diagrams-2026-10-18-pr-32" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>GitHub check <em>Docs / build</em> failed: <em>"diagrams/ is out of date"</em>.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>New mermaid blocks were added to the docs without regenerating <code>diagrams/*.html</code>.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>python diagrams/generate.py</code> and commit the result.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>.github/workflows/docs.yml</code>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Every new or changed mermaid block → run <code>python diagrams/generate.py</code> before committing.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="74-ci-checks-that-were-missing-or-wrong-2026-10-18-pr-29">7.4 CI checks that were missing or wrong (2026-10-18, PR #29)<a class="headerlink" href="#74-ci-checks-that-were-missing-or-wrong-2026-10-18-pr-29" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>CI failed on unrelated things (graphify extra, ruff running all rules, Docker build missing README, mypy without stubs); later the updater was not type-checked at all.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>ruff with real-error rules, mypy with stub packages, Docker smoke test, <code>mypy myclaw/ updater/</code> (PR #35).</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>CI checks every shipped Python package; a red check must mean a real problem.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="rules-for-future-changes">Rules for future changes<a class="headerlink" href="#rules-for-future-changes" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Imports:</strong> inside <code>myclaw/tools/</code>, imports of other <code>myclaw</code> modules use <code>..</code>. Never import lazily registered tools from <code>myclaw.tools</code> — import from the defining module. The static import test must stay green.</li>
+<li><strong>Version-keyed state:</strong> baselines, caches and markers keyed on the version must also key on the install root / release folder.</li>
+<li><strong>Telegram:</strong> one process per bot token; only one ZenSynora component owns the bot (<code>run_in_webui</code>).</li>
+<li><strong>Diagrams:</strong> after adding or changing a mermaid block, run <code>python diagrams/generate.py</code>.</li>
+<li><strong>Updater:</strong> any change in update behaviour bumps <code>UPDATER_PROTOCOL</code> so installed updaters hand over.</li>
+<li><strong>Requirements:</strong> installer and updater check and install every requirement (Python venv/pip, Node.js); nothing is assumed to be on PATH.</li>
+<li><strong>Log levels:</strong> errors caused by agent or user input are INFO/WARNING; ERROR/CRITICAL only for faults in ZenSynora. Repeating warnings are de-duplicated at the source.</li>
+<li><strong>Tool results:</strong> a tool returns an actionable message for every input (what is wrong, what to do next); never a bare exception text.</li>
+<li><strong>Limits:</strong> limits are settings with sane defaults (<code>agents.max_tool_rounds</code>, <code>timeouts.task_seconds</code>, job timeout), and nested limits agree. At a limit, return the partial result.</li>
+<li><strong>Security checks:</strong> validate structure (each command in a chain, each path) instead of banning harmless syntax; read allow-lists at call time.</li>
+<li><strong>Error classes:</strong> model-server problems (rate limit, timeout, bad key, unknown model) are not crashes — no traceback, no medic run.</li>
+<li><strong>Stale information:</strong> agents verify with live diagnostics before acting on a report or a knowledge note; reports carry a date.</li>
+<li><strong>Missing features show up as agent workarounds:</strong> when agents build their own tool for something, add it as a built-in.</li>
+<li><strong>Long operations:</strong> run ZenSynora as a service for updates and scheduled jobs.</li>
+<li><strong>After fixing an error, run the feature end to end</strong> — the next bug is often hidden behind the first.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
