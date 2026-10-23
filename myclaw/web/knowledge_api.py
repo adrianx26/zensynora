@@ -348,6 +348,38 @@ async def search(q: str, base: str | None = None, limit: int = 30):
     return {"results": hits[:limit]}
 
 
+class EnrichRequest(BaseModel):
+    limit: int = 10
+
+
+@router.post("/api/knowledge/enrich", dependencies=guard)
+async def enrich(req: EnrichRequest, base: str | None = None):
+    """Add tags, facts and links to notes that have none (default model; text unchanged).
+
+    Works in small batches (rate limits of free models); stops at the first
+    model error. Returns what was done and how many notes are still plain.
+    """
+    from myclaw.config import load_config
+    from myclaw.knowledge.extract import enrich_note, needs_structure
+    from myclaw.llm_errors import describe_llm_error
+
+    b = _base(base)
+    notes = [n for n in await asyncio.to_thread(_parse_all, b) if needs_structure(n)]
+    limit = max(1, min(int(req.limit or 10), 25))
+    cfg = load_config()
+    done, failed, stopped = [], [], ""
+    for n in notes[:limit]:
+        try:
+            r = await enrich_note(cfg, b, n.permalink)
+        except Exception as e:
+            stopped = describe_llm_error(e)
+            break
+        (done if r.get("ok") else failed).append(r)
+    left = len(notes) - len(done)
+    return {"enriched": done, "failed": failed, "remaining": left, "stopped": stopped,
+            "facts": sum(r.get("facts", 0) for r in done), "links": sum(r.get("links", 0) for r in done)}
+
+
 @router.post("/api/knowledge/sync", dependencies=guard)
 async def sync(base: str | None = None):
     from myclaw.knowledge.sync import sync_knowledge

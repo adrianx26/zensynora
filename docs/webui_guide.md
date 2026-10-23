@@ -313,7 +313,10 @@ The **Knowledge** page (sidebar) shows the knowledge base visually:
   to `.trash` in the same folder, not deleted).
 * **Search** filters by full text; **+ New note** creates one; **↻
   Re-index** re-reads all files into the search index (after editing files by
-  hand). The picker at the top switches between the shared base and the
+  hand). **✨ Add tags & links** asks the default model to add tags, facts
+  and links to notes that have none (10 per click; the note text is not
+  changed) — useful for notes saved before 2026-10-23, which were stored as
+  plain text. The picker at the top switches between the shared base and the
   separate bases of Telegram/WhatsApp users.
 
 **MCP memory servers.** Any MCP server (a memo/notes server, a database, a

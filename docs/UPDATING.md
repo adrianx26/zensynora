@@ -179,6 +179,11 @@ switch. A failing migration aborts the update and the backup is restored.
 Fresh installs record all current migrations as applied (`install.sh` runs
 `python -m updater migrate`).
 
+| Migration | What it does |
+|---|---|
+| `0001_data_layout` | creates the standard `~/.myclaw` folders, makes the config private |
+| `0002_knowledge_note_structure` (2026-10-23) | gives plain-text knowledge notes a title and frontmatter (text kept, `.trash` untouched, idempotent) and re-indexes the knowledge base |
+
 ### Add or change an update step
 
 Steps live in `updater/steps.py`; each is a class with `run(ctx)` and

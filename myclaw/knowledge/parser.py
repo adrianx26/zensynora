@@ -226,10 +226,33 @@ def parse_note(file_path: Path) -> Note:
     return note
 
 
+_SECTION_HEADING = re.compile(r'^##?\s*(?:Observations?|Facts?|Relations?|Links?|Connections?)\s*$',
+                              re.IGNORECASE | re.MULTILINE)
+
+
+def extract_body(content: str) -> str:
+    """The free text of a note: without frontmatter, the top '# Title' line,
+    the Observations/Relations headings and the fact/link lines.
+
+    Works on a whole note file and on plain text alike (2026-10-23).
+    """
+    text = FRONTMATTER_PATTERN.sub('', content or '', count=1)
+    text = re.sub(r'^\s*# [^\n]*\n', '', text, count=1)  # the generated title heading
+    text = OBSERVATION_PATTERN.sub('', text)
+    text = RELATION_PATTERN.sub('', text)
+    text = _SECTION_HEADING.sub('', text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
+
 def generate_markdown(note: Note) -> str:
     """
     Generate markdown content from a Note object.
-    
+
+    2026-10-23: the note's free text (``note.content`` — plain text or a whole
+    note file) is written too. Before, the body was dropped, so callers passed
+    raw content instead and every tag, fact and link was lost.
+
     Args:
         note: Note object to serialize
         
@@ -240,7 +263,8 @@ def generate_markdown(note: Note) -> str:
     
     # Frontmatter
     lines.append('---')
-    lines.append(f'title: "{note.title}"')
+    title = (note.title or note.name).replace('"', "'").replace("\n", " ")
+    lines.append(f'title: "{title}"')
     lines.append(f'permalink: {note.permalink}')
     if note.tags:
         tags_str = ', '.join(f'"{tag}"' for tag in note.tags)
@@ -253,8 +277,13 @@ def generate_markdown(note: Note) -> str:
     lines.append('')
     
     # Title
-    lines.append(f'# {note.title}')
+    lines.append(f'# {title}')
     lines.append('')
+
+    body = extract_body(note.content)
+    if body:
+        lines.append(body)
+        lines.append('')
     
     # Observations section
     if note.observations:
