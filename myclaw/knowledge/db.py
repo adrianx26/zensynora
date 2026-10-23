@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Callable
+from typing import List, Optional, Dict, Any, Callable, Tuple, Iterable  # noqa: F401
 
 from .parser import Note, Observation, Relation
 
@@ -61,6 +61,8 @@ def sanitize_fts_query(query: str, any_term: bool = False, boolean: bool = False
     """
     if not query or not query.strip():
         return "*"
+    if boolean:
+        return _sanitize_boolean_query(query)
     terms = []
     for m in _FTS_TERM_RE.finditer(query):
         word, star = m.group(1), m.group(2)
@@ -74,6 +76,136 @@ def sanitize_fts_query(query: str, any_term: bool = False, boolean: bool = False
 # Words = runs of letters/digits/underscore in any script; optional trailing *.
 _FTS_TERM_RE = re.compile(r"(\w+)(\*)?", re.UNICODE)
 _FTS_MAX_TERMS = 32
+
+# 2026-10-23 (KB phase 0): boolean search syntax. A token is a "quoted phrase"
+# (an unbalanced quote runs to the end of the text) or a word; both may end in *.
+_FTS_BOOL_TOKEN_RE = re.compile(r'"([^"]*)(?:"|$)(\*)?|(\w+)(\*)?', re.UNICODE)
+_FTS_WORD_RE = re.compile(r"\w+", re.UNICODE)
+_FTS_BOOL_OPS = ("AND", "OR", "NOT")
+
+
+def _sanitize_boolean_query(query: str) -> str:
+    """``sanitize_fts_query(..., boolean=True)``: keep AND / OR / NOT and phrases.
+
+    Only UPPERCASE ``AND``/``OR``/``NOT`` between two terms are operators
+    (lowercase ones are dropped like in free text). Every word and phrase is
+    re-quoted from its word characters only, so nothing else can be read as
+    FTS5 syntax. Operators with no term on one side are dropped; a run of
+    operators keeps the first one (``AND NOT`` becomes ``NOT``, the FTS5 form).
+    A leading ``NOT x`` drops ``x`` too — FTS5 has no unary NOT, and searching
+    for the excluded word would return the opposite of what was asked.
+    """
+    items: List[Tuple[str, str]] = []  # ("op", "AND") or ("term", '"word"*')
+    for m in _FTS_BOOL_TOKEN_RE.finditer(query):
+        phrase, phrase_star, word, word_star = m.group(1), m.group(2), m.group(3), m.group(4)
+        if word is not None:
+            if word in _FTS_BOOL_OPS:
+                items.append(("op", word))
+            elif not _FTS_RESERVED_RE.fullmatch(word):
+                items.append(("term", f'"{word}"' + ("*" if word_star else "")))
+            continue
+        words = _FTS_WORD_RE.findall(phrase or "")
+        if words:
+            items.append(("term", '"' + " ".join(words) + '"' + ("*" if phrase_star else "")))
+
+    out: List[str] = []
+    pending_op: Optional[str] = None
+    skip_term = False
+    n_terms = 0
+    for kind, value in items:
+        if kind == "op":
+            if not out:  # leading operator
+                if value == "NOT":
+                    skip_term = True
+                continue
+            if pending_op is None:
+                pending_op = value
+            elif pending_op == "AND" and value == "NOT":
+                pending_op = "NOT"
+            continue
+        if skip_term:
+            skip_term = False
+            pending_op = None
+            continue
+        if n_terms >= _FTS_MAX_TERMS:
+            break
+        if out and pending_op:
+            out.append(pending_op)
+        out.append(value)
+        n_terms += 1
+        pending_op = None  # a trailing operator is never emitted
+    return " ".join(out) if out else "*"
+
+
+# ── Link-target helpers (2026-10-23, KB phase 0) ─────────────────────────────
+
+def _fold(text: Any) -> str:
+    """Case-insensitive key for names, titles, aliases and link targets."""
+    return str(text).strip().casefold() if text is not None else ""
+
+
+def _slug(text: Any) -> str:
+    """Same rules as ``storage.validate_permalink`` (re-implemented: no circular import)."""
+    cleaned = str(text or "").lower().strip()
+    cleaned = re.sub(r"[^\w\-]", "-", cleaned)
+    cleaned = re.sub(r"-+", "-", cleaned)
+    return cleaned.strip("-")
+
+
+def _link_candidates(name: Any) -> List[str]:
+    """The texts a link target may mean, most literal first.
+
+    ``[[Target|label]]`` (Obsidian display text), ``[[note.md]]`` and
+    ``[[Note#Section]]`` point at ``Target`` / ``note`` / ``Note``.
+    """
+    raw = str(name or "").strip()
+    if raw.startswith("[[") and raw.endswith("]]"):
+        raw = raw[2:-2].strip()
+    out: List[str] = []
+
+    def add(text: str) -> None:
+        text = text.strip()
+        if text and text not in out:
+            out.append(text)
+
+    add(raw)
+    base = raw.split("|", 1)[0].strip()
+    add(base)
+    if base.lower().endswith(".md"):
+        base = base[:-3]
+        add(base)
+    if "#" in base:
+        add(base.split("#", 1)[0])
+    return out
+
+
+def _as_str_list(value: Any, strip_hash: bool = True) -> List[str]:
+    """Frontmatter lists may be a list or a single "a, b" string."""
+    if value is None:
+        return []
+    if isinstance(value, str):
+        value = value.split(",")
+    out: List[str] = []
+    try:
+        for v in value:
+            text = str(v).strip() if v is not None else ""
+            if strip_hash:
+                text = text.lstrip("#").strip()
+            if text and text not in out:
+                out.append(text)
+    except TypeError:
+        text = str(value).strip()
+        if text:
+            out.append(text)
+    return out
+
+
+def _sql_fold(value: Any) -> Optional[str]:
+    return value.strip().casefold() if isinstance(value, str) else value
+
+
+# search_by_metadata keys: names, dotted paths allowed (2026-10-23, KB phase 0)
+_METADATA_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$")
 
 
 @dataclass
@@ -99,6 +231,34 @@ class Entity:
     mtime: Optional[float] = None
     size: Optional[int] = None
     entity_metadata: Optional[Dict[str, Any]] = None  # Phase 3: frontmatter metadata for search_by_metadata
+    # 2026-10-23 (KB phase 0): the note title, so links by title ("[[Home server]]") resolve.
+    # None = indexed by an older version (the next sync re-indexes the note).
+    title: Optional[str] = None
+
+
+def _row_to_entity(row) -> Entity:
+    """One sqlite3.Row of ``entities`` → Entity (2026-10-23: shared by every query)."""
+    raw_meta = _row_get(row, "entity_metadata")
+    meta: Optional[Dict[str, Any]] = None
+    if raw_meta:
+        try:
+            loaded = json.loads(raw_meta)
+            meta = loaded if isinstance(loaded, dict) else None
+        except (TypeError, ValueError):
+            meta = None  # hand-edited/broken JSON must not break listing notes
+    return Entity(
+        id=row["id"],
+        name=row["name"],
+        permalink=row["permalink"],
+        file_path=row["file_path"],
+        created_at=datetime.fromisoformat(row["created_at"]),
+        updated_at=datetime.fromisoformat(row["updated_at"]),
+        checksum=_row_get(row, "checksum"),
+        mtime=_row_get(row, "mtime"),
+        size=_row_get(row, "size"),
+        entity_metadata=meta,
+        title=_row_get(row, "title"),
+    )
 
 
 @dataclass
@@ -140,8 +300,14 @@ class KnowledgeDB:
     def _get_connection(self) -> sqlite3.Connection:
         """Get or create database connection."""
         if self._conn is None:
-            self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
+            self._conn = sqlite3.connect(self.db_path, check_same_thread=False, timeout=30)
             self._conn.row_factory = sqlite3.Row
+            # 2026-10-23 (KB phase 0): wait for a writer (sync, web UI, agent)
+            # instead of failing at once with "database is locked".
+            self._conn.execute("PRAGMA busy_timeout=30000")
+            # Unicode case folding for names/titles/aliases/tags (queries only —
+            # never used in triggers or indexes, so other tools can open the file).
+            self._conn.create_function("kb_fold", 1, _sql_fold, deterministic=True)
             # Enable WAL mode for better concurrent access
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
@@ -230,6 +396,36 @@ class KnowledgeDB:
             conn.execute("ALTER TABLE entities ADD COLUMN entity_metadata TEXT")
         except sqlite3.OperationalError:
             pass
+        # 2026-10-23 (KB phase 0): the note title (links by title resolve) and
+        # the link text of each relation (kept when the target note is deleted).
+        try:
+            conn.execute("ALTER TABLE entities ADD COLUMN title TEXT")
+        except sqlite3.OperationalError:
+            pass
+        try:
+            conn.execute("ALTER TABLE relations ADD COLUMN to_name TEXT")
+        except sqlite3.OperationalError:
+            pass
+        # 2026-10-23 (KB phase 0): links whose target note does not exist yet
+        # (forward links). Resolved into relations when the target is indexed.
+        # to_key / to_slug are the folded / slugged link text, for lookup.
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS pending_relations (
+                id INTEGER PRIMARY KEY,
+                from_entity_id INTEGER NOT NULL,
+                relation_type TEXT NOT NULL,
+                to_name TEXT NOT NULL,
+                to_key TEXT NOT NULL DEFAULT '',
+                to_slug TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (from_entity_id) REFERENCES entities(id) ON DELETE CASCADE,
+                UNIQUE(from_entity_id, relation_type, to_name)
+            )
+        """)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_pending_from ON pending_relations(from_entity_id)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pending_key ON pending_relations(to_key)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_pending_slug ON pending_relations(to_slug)")
 
         # Create indexes for better query performance
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_permalink ON entities(permalink)")
@@ -359,6 +555,15 @@ class KnowledgeDB:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_aliases_entity_id ON entity_aliases(entity_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_aliases_alias ON entity_aliases(alias)")
+        # 2026-10-23 (KB phase 0): case-insensitive link resolution uses these.
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_aliases_alias_nc "
+                     "ON entity_aliases(alias COLLATE NOCASE)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_permalink_nc "
+                     "ON entities(permalink COLLATE NOCASE)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_name_nc "
+                     "ON entities(name COLLATE NOCASE)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_title_nc "
+                     "ON entities(title COLLATE NOCASE)")
 
         # Phase 2 (MemoPad import): add context and provenance_path to observations
         try:
@@ -519,7 +724,8 @@ class KnowledgeDB:
             conn.commit()
             return cursor.lastrowid
         except sqlite3.IntegrityError as e:
-            logger.error(f"Entity already exists: {permalink}")
+            # 2026-10-23 (KB phase 0): caused by the caller's input → WARNING
+            logger.warning(f"Entity already exists: {permalink}")
             raise ValueError(f"Entity with permalink '{permalink}' already exists") from e
 
     def get_entity_by_permalink(self, permalink: str) -> Optional[Entity]:
@@ -528,18 +734,7 @@ class KnowledgeDB:
         row = conn.execute("SELECT * FROM entities WHERE permalink = ?", (permalink,)).fetchone()
 
         if row:
-            return Entity(
-                id=row["id"],
-                name=row["name"],
-                permalink=row["permalink"],
-                file_path=row["file_path"],
-                created_at=datetime.fromisoformat(row["created_at"]),
-                updated_at=datetime.fromisoformat(row["updated_at"]),
-                checksum=_row_get(row, "checksum"),
-                mtime=_row_get(row, "mtime"),
-                size=_row_get(row, "size"),
-                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
-            )
+            return _row_to_entity(row)
         return None
 
     def get_entities_by_permalinks(self, permalinks: List[str]) -> Dict[str, Entity]:
@@ -565,18 +760,7 @@ class KnowledgeDB:
         ).fetchall()
 
         return {
-            row["permalink"]: Entity(
-                id=row["id"],
-                name=row["name"],
-                permalink=row["permalink"],
-                file_path=row["file_path"],
-                created_at=datetime.fromisoformat(row["created_at"]),
-                updated_at=datetime.fromisoformat(row["updated_at"]),
-                checksum=_row_get(row, "checksum"),
-                mtime=_row_get(row, "mtime"),
-                size=_row_get(row, "size"),
-                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
-            )
+            row["permalink"]: _row_to_entity(row)
             for row in rows
         }
 
@@ -586,18 +770,7 @@ class KnowledgeDB:
         row = conn.execute("SELECT * FROM entities WHERE id = ?", (entity_id,)).fetchone()
 
         if row:
-            return Entity(
-                id=row["id"],
-                name=row["name"],
-                permalink=row["permalink"],
-                file_path=row["file_path"],
-                created_at=datetime.fromisoformat(row["created_at"]),
-                updated_at=datetime.fromisoformat(row["updated_at"]),
-                checksum=_row_get(row, "checksum"),
-                mtime=_row_get(row, "mtime"),
-                size=_row_get(row, "size"),
-                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
-            )
+            return _row_to_entity(row)
         return None
 
     def get_entity_by_file_path(self, file_path: str) -> Optional[Entity]:
@@ -606,18 +779,7 @@ class KnowledgeDB:
         row = conn.execute("SELECT * FROM entities WHERE file_path = ?", (file_path,)).fetchone()
 
         if row:
-            return Entity(
-                id=row["id"],
-                name=row["name"],
-                permalink=row["permalink"],
-                file_path=row["file_path"],
-                created_at=datetime.fromisoformat(row["created_at"]),
-                updated_at=datetime.fromisoformat(row["updated_at"]),
-                checksum=_row_get(row, "checksum"),
-                mtime=_row_get(row, "mtime"),
-                size=_row_get(row, "size"),
-                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
-            )
+            return _row_to_entity(row)
         return None
 
     def get_entities_by_checksum(self, checksum: str) -> List[Entity]:
@@ -628,18 +790,7 @@ class KnowledgeDB:
         ).fetchall()
 
         return [
-            Entity(
-                id=row["id"],
-                name=row["name"],
-                permalink=row["permalink"],
-                file_path=row["file_path"],
-                created_at=datetime.fromisoformat(row["created_at"]),
-                updated_at=datetime.fromisoformat(row["updated_at"]),
-                checksum=_row_get(row, "checksum"),
-                mtime=_row_get(row, "mtime"),
-                size=_row_get(row, "size"),
-                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
-            )
+            _row_to_entity(row)
             for row in rows
         ]
 
@@ -685,10 +836,27 @@ class KnowledgeDB:
         conn.commit()
 
     def delete_entity(self, permalink: str) -> bool:
-        """Delete entity and all related data (cascades)."""
+        """Delete entity and all related data (cascades).
+
+        2026-10-23 (KB phase 0): links from other notes to the deleted note are
+        kept as unresolved links (``get_unresolved_relations``), so they come
+        back when the note is restored or re-created — the same state a full
+        re-index from the files gives.
+        """
         conn = self._get_connection()
-        cursor = conn.execute("DELETE FROM entities WHERE permalink = ?", (permalink,))
-        conn.commit()
+        with conn:
+            row = conn.execute(
+                "SELECT id FROM entities WHERE permalink = ?", (permalink,)).fetchone()
+            if row is None:
+                return False
+            eid = row["id"]
+            incoming = conn.execute(
+                "SELECT from_entity_id, relation_type, to_name FROM relations "
+                "WHERE to_entity_id = ? AND from_entity_id != ?", (eid, eid)).fetchall()
+            for rel in incoming:
+                self._add_pending(conn, rel["from_entity_id"], rel["relation_type"],
+                                  rel["to_name"] or permalink)
+            cursor = conn.execute("DELETE FROM entities WHERE id = ?", (eid,))
         return cursor.rowcount > 0
 
     def clear_all_data(self) -> None:
@@ -702,6 +870,7 @@ class KnowledgeDB:
         conn = self._get_connection()
         with conn:
             conn.execute("DELETE FROM relations")
+            conn.execute("DELETE FROM pending_relations")  # 2026-10-23 (KB phase 0)
             conn.execute("DELETE FROM observations")
             conn.execute("DELETE FROM entity_aliases")
             conn.execute("DELETE FROM entities")
@@ -773,27 +942,25 @@ class KnowledgeDB:
         return [row["alias"] for row in rows]
 
     def get_entity_by_alias(self, alias: str) -> Optional[Entity]:
-        """Find entity by alias."""
+        """Find entity by alias (2026-10-23, KB phase 0: case-insensitive)."""
         conn = self._get_connection()
         row = conn.execute(
             """SELECT e.* FROM entities e
                JOIN entity_aliases ea ON e.id = ea.entity_id
-               WHERE ea.alias = ?""",
+               WHERE ea.alias = ?
+               ORDER BY e.id LIMIT 1""",
             (alias,),
         ).fetchone()
+        if row is None and alias:
+            row = conn.execute(
+                """SELECT e.* FROM entities e
+                   JOIN entity_aliases ea ON e.id = ea.entity_id
+                   WHERE kb_fold(ea.alias) = ?
+                   ORDER BY e.id LIMIT 1""",
+                (_fold(alias),),
+            ).fetchone()
         if row:
-            return Entity(
-                id=row["id"],
-                name=row["name"],
-                permalink=row["permalink"],
-                file_path=row["file_path"],
-                created_at=datetime.fromisoformat(row["created_at"]),
-                updated_at=datetime.fromisoformat(row["updated_at"]),
-                checksum=_row_get(row, "checksum"),
-                mtime=_row_get(row, "mtime"),
-                size=_row_get(row, "size"),
-                entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
-            )
+            return _row_to_entity(row)
         return None
 
     def add_relation(self, from_entity_id: int, relation_type: str, to_entity_id: int):
@@ -855,13 +1022,163 @@ class KnowledgeDB:
         return [(row["relation_type"], row["permalink"], row["name"]) for row in rows]
 
     def clear_relations(self, entity_id: int):
-        """Clear all relations for an entity (both directions)."""
+        """Clear all relations for an entity (both directions).
+
+        Do not use this to re-index a note: it also deletes the links of other
+        notes to this one. Use ``clear_outgoing_relations``.
+        """
         conn = self._get_connection()
         conn.execute(
             "DELETE FROM relations WHERE from_entity_id = ? OR to_entity_id = ?",
             (entity_id, entity_id),
         )
         conn.commit()
+
+    def clear_outgoing_relations(self, entity_id: int) -> None:
+        """Remove the links *from* this note (resolved and unresolved).
+
+        2026-10-23 (KB phase 0): re-indexing a note used ``clear_relations``,
+        which also deleted every link from other notes to it (lost backlinks).
+        """
+        conn = self._get_connection()
+        with conn:
+            conn.execute("DELETE FROM relations WHERE from_entity_id = ?", (entity_id,))
+            conn.execute("DELETE FROM pending_relations WHERE from_entity_id = ?", (entity_id,))
+
+    # ── Link resolution (2026-10-23, KB phase 0) ─────────────────────────────
+    def resolve_target(self, name: str) -> Optional[Entity]:
+        """The note a link target points to, or None.
+
+        Tried in order, each case-insensitive: exact permalink, the slug of the
+        target (``"Home server"`` → ``home-server``), note name, note title,
+        alias. ``[[Target|label]]``, ``[[note.md]]`` and ``[[Note#Section]]``
+        are understood. No fuzzy matching: a wrong link is worse than none.
+        """
+        row = self._resolve_target_row(self._get_connection(), name)
+        return _row_to_entity(row) if row is not None else None
+
+    @staticmethod
+    def _resolve_target_row(conn: sqlite3.Connection, name: Any):
+        for cand in _link_candidates(name):
+            folded = _fold(cand)
+            slug = _slug(cand)
+            ascii_only = cand.isascii()
+            steps: List[Tuple[str, Any]] = [
+                ("SELECT * FROM entities WHERE permalink = ? LIMIT 1", cand),
+                ("SELECT * FROM entities WHERE permalink = ? COLLATE NOCASE "
+                 "ORDER BY id LIMIT 1", cand),
+            ]
+            if slug and slug != cand:
+                steps.append(("SELECT * FROM entities WHERE permalink = ? LIMIT 1", slug))
+            steps += [
+                ("SELECT * FROM entities WHERE name = ? COLLATE NOCASE ORDER BY id LIMIT 1", cand),
+                ("SELECT * FROM entities WHERE title = ? COLLATE NOCASE ORDER BY id LIMIT 1", cand),
+                ("SELECT e.* FROM entities e JOIN entity_aliases a ON a.entity_id = e.id "
+                 "WHERE a.alias = ? COLLATE NOCASE ORDER BY e.id LIMIT 1", cand),
+            ]
+            if not ascii_only:  # NOCASE folds ASCII only: Unicode-aware pass
+                steps += [
+                    ("SELECT * FROM entities WHERE kb_fold(permalink) = ? ORDER BY id LIMIT 1",
+                     folded),
+                    ("SELECT * FROM entities WHERE kb_fold(name) = ? ORDER BY id LIMIT 1", folded),
+                    ("SELECT * FROM entities WHERE kb_fold(title) = ? ORDER BY id LIMIT 1", folded),
+                    ("SELECT e.* FROM entities e JOIN entity_aliases a ON a.entity_id = e.id "
+                     "WHERE kb_fold(a.alias) = ? ORDER BY e.id LIMIT 1", folded),
+                ]
+            for sql, param in steps:
+                row = conn.execute(sql, (param,)).fetchone()
+                if row is not None:
+                    return row
+        return None
+
+    @staticmethod
+    def _add_pending(conn: sqlite3.Connection, from_entity_id: int, relation_type: str,
+                     to_name: str) -> None:
+        raw = str(to_name or "").strip()
+        if raw.startswith("[[") and raw.endswith("]]"):
+            raw = raw[2:-2]
+        key_src = raw.split("|", 1)[0].strip()  # [[Target|label]] → Target
+        conn.execute(
+            "INSERT OR IGNORE INTO pending_relations "
+            "(from_entity_id, relation_type, to_name, to_key, to_slug, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?)",
+            (from_entity_id, relation_type, to_name, _fold(key_src), _slug(key_src),
+             datetime.now().isoformat()),
+        )
+
+    def _resolve_pending_for(self, conn: sqlite3.Connection, entity_id: int) -> int:
+        """Turn unresolved links that now point at ``entity_id`` into relations."""
+        ent = conn.execute(
+            "SELECT permalink, name, title FROM entities WHERE id = ?", (entity_id,)).fetchone()
+        if ent is None:
+            return 0
+        keys = {_fold(ent["permalink"]), _fold(ent["name"]), _fold(ent["title"])}
+        keys |= {_fold(r["alias"]) for r in conn.execute(
+            "SELECT alias FROM entity_aliases WHERE entity_id = ?", (entity_id,))}
+        keys.discard("")
+        if not keys:
+            return 0
+        ph = ",".join("?" * len(keys))
+        rows = conn.execute(
+            f"SELECT id, from_entity_id, relation_type, to_name FROM pending_relations "
+            f"WHERE to_key IN ({ph}) OR to_slug = ? "
+            # [[Note#Section]] / [[note.md]]: rare, checked by _resolve_target_row
+            f"OR instr(to_name, '#') > 0 OR lower(to_name) LIKE '%.md%'",
+            (*keys, ent["permalink"]),
+        ).fetchall()
+        resolved = 0
+        now = datetime.now().isoformat()
+        for p in rows:
+            # Re-check with the normal rules, so priorities stay the same as
+            # when the source note is re-indexed (e.g. a permalink beats an alias).
+            target = self._resolve_target_row(conn, p["to_name"])
+            if target is None:
+                continue
+            conn.execute(
+                "INSERT OR IGNORE INTO relations "
+                "(from_entity_id, relation_type, to_entity_id, created_at, to_name) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (p["from_entity_id"], p["relation_type"], target["id"], now, p["to_name"]),
+            )
+            conn.execute("DELETE FROM pending_relations WHERE id = ?", (p["id"],))
+            resolved += 1
+        return resolved
+
+    def resolve_pending_relations(self) -> Dict[str, int]:
+        """Resolve every unresolved link whose target note exists now.
+
+        Returns ``{"resolved": n, "unresolved": m}``.
+        """
+        conn = self._get_connection()
+        resolved = 0
+        with conn:
+            rows = conn.execute(
+                "SELECT id, from_entity_id, relation_type, to_name FROM pending_relations"
+            ).fetchall()
+            now = datetime.now().isoformat()
+            for p in rows:
+                target = self._resolve_target_row(conn, p["to_name"])
+                if target is None:
+                    continue
+                conn.execute(
+                    "INSERT OR IGNORE INTO relations "
+                    "(from_entity_id, relation_type, to_entity_id, created_at, to_name) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (p["from_entity_id"], p["relation_type"], target["id"], now, p["to_name"]),
+                )
+                conn.execute("DELETE FROM pending_relations WHERE id = ?", (p["id"],))
+                resolved += 1
+        left = conn.execute("SELECT COUNT(*) FROM pending_relations").fetchone()[0]
+        return {"resolved": resolved, "unresolved": left}
+
+    def get_unresolved_relations(self, entity_id: int) -> List[Tuple[str, str]]:
+        """``(relation_type, target_name)`` of this note's links whose target
+        note does not exist yet (2026-10-23, KB phase 0)."""
+        conn = self._get_connection()
+        rows = conn.execute(
+            "SELECT relation_type, to_name FROM pending_relations "
+            "WHERE from_entity_id = ? ORDER BY id", (entity_id,)).fetchall()
+        return [(row["relation_type"], row["to_name"]) for row in rows]
 
     def get_relations_from_many(self, entity_ids: List[int]) -> Dict[int, List[tuple]]:
         """
@@ -903,6 +1220,10 @@ class KnowledgeDB:
         Args:
             query: Search query (will be sanitized for FTS5 safety)
             limit: Maximum results
+            boolean: 2026-10-23 (KB phase 0) — keep AND / OR / NOT and
+                "quoted phrases" as search syntax (see ``sanitize_fts_query``).
+                The whole note (title, text, tags) is matched as one document,
+                so ``a NOT b`` excludes notes that mention b anywhere.
 
         Returns:
             List of matching entities sorted by BM25 relevance
@@ -910,15 +1231,16 @@ class KnowledgeDB:
         conn = self._get_connection()
 
         # Phase 1.5: Sanitize user input to prevent FTS5 injection
-        safe_query = sanitize_fts_query(query)
+        safe_query = sanitize_fts_query(query, boolean=boolean)
         if safe_query == "*":
             return []  # no searchable words (MATCH "*" is an FTS5 error)
 
-        rows = self._match_entities(conn, safe_query, limit)
+        rows = self._match_entities(conn, safe_query, limit, boolean=boolean)
         # v0.7.1: a whole sentence (the agent searches with the user's
         # message) rarely has every word in one note. If the strict search
         # finds nothing, accept notes with any of the words, best match first.
-        if not rows and safe_query.count(" ") >= 3:
+        # Not for boolean queries: there the user chose AND/OR on purpose.
+        if not boolean and not rows and safe_query.count(" ") >= 3:
             rows = self._match_entities(conn, sanitize_fts_query(query, any_term=True), limit)
 
         entities = []
@@ -926,24 +1248,48 @@ class KnowledgeDB:
         for row in rows:
             if row["id"] not in seen_ids:
                 seen_ids.add(row["id"])
-                entities.append(
-                    Entity(
-                        id=row["id"],
-                        name=row["name"],
-                        permalink=row["permalink"],
-                        file_path=row["file_path"],
-                        created_at=datetime.fromisoformat(row["created_at"]),
-                        updated_at=datetime.fromisoformat(row["updated_at"]),
-                    )
-                )
+                entities.append(_row_to_entity(row))
         return entities
 
     @staticmethod
-    def _match_entities(conn, q: str, limit: int):
-        """Run the FTS5 entity search for an already-sanitized expression."""
+    def _match_entities(conn, q: str, limit: int, boolean: bool = False):
+        """Run the FTS5 entity search for an already-sanitized expression.
+
+        ``boolean=True``: match the note text index (title + text + tags as one
+        document) so NOT/AND apply to the whole note; notes without a text
+        index row (created directly with ``create_entity``) are matched on
+        their name/path instead.
+        """
+        if boolean:
+            try:
+                return conn.execute(
+                    """
+                    SELECT e.*, fts.rank AS match_rank
+                    FROM entities e
+                    JOIN notes_text_fts fts ON e.id = fts.rowid
+                    WHERE notes_text_fts MATCH ?
+
+                    UNION
+
+                    SELECT e.*, fts.rank AS match_rank
+                    FROM entities e
+                    JOIN entities_fts fts ON e.id = fts.rowid
+                    WHERE entities_fts MATCH ?
+                      AND e.id NOT IN (SELECT rowid FROM notes_text_fts)
+
+                    ORDER BY match_rank
+                    LIMIT ?
+                    """,
+                    (q, q, limit),
+                ).fetchall()
+            except sqlite3.OperationalError as e:
+                logger.debug("boolean note-text search unavailable: %s", e)
+                # fall through to the entities-only search below
         # Try enhanced search with observations (optimization 3.1)
         # Fall back to entities-only search for backward compatibility
         try:
+            if boolean:
+                raise sqlite3.OperationalError("boolean: entities only")
             # PERF FIX (2026-04-23): Use UNION of two independent FTS5 subqueries
             # instead of LEFT JOINs. The old query produced a Cartesian product
             # when entities had many observations, causing exponential slowdown.
@@ -1015,64 +1361,79 @@ class KnowledgeDB:
         return 0.0
 
     def search_by_tag(self, tag: str) -> List[Entity]:
-        """Search entities by tag in observations."""
-        conn = self._get_connection()
-        rows = conn.execute(
-            """
-            SELECT DISTINCT e.* FROM entities e
-            JOIN observations o ON e.id = o.entity_id
-            WHERE json_extract(o.tags, '$') LIKE ?
-            """,
-            (f'%"{tag}"%',),
-        ).fetchall()
+        """Notes with this tag: frontmatter ``tags:`` or an observation ``#tag``.
 
-        entities = []
-        for row in rows:
-            entities.append(
-                Entity(
-                    id=row["id"],
-                    name=row["name"],
-                    permalink=row["permalink"],
-                    file_path=row["file_path"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                    updated_at=datetime.fromisoformat(row["updated_at"]),
-                    checksum=_row_get(row, "checksum"),
-                    mtime=_row_get(row, "mtime"),
-                    size=_row_get(row, "size"),
-                    entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
-                )
-            )
-        return entities
+        2026-10-23 (KB phase 0): frontmatter tags were not searched, and the
+        match was a substring of the JSON (``py`` found ``python``). Now the
+        whole tag must match, case-insensitively; a leading ``#`` is ignored.
+        """
+        key = _fold(str(tag or "").strip().lstrip("#"))
+        if not key:
+            return []
+        conn = self._get_connection()
+        ids: set = set()
+        ids.update(r[0] for r in conn.execute(
+            """
+            SELECT DISTINCT o.entity_id FROM observations o,
+                   json_each(CASE WHEN json_valid(o.tags) THEN o.tags ELSE '[]' END) j
+            WHERE j.type = 'text' AND kb_fold(ltrim(j.value, '#')) = ?
+            """, (key,)))
+        ids.update(r[0] for r in conn.execute(
+            """
+            SELECT DISTINCT e.id FROM entities e,
+                   json_each(CASE WHEN json_valid(e.entity_metadata)
+                             THEN e.entity_metadata ELSE '{}' END, '$.tags') j
+            WHERE j.type = 'text' AND kb_fold(ltrim(j.value, '#')) = ?
+            """, (key,)))
+        # Notes indexed before their tags were stored in entity_metadata: use
+        # the tags column of the note text index (space-separated tags).
+        try:
+            for r in conn.execute(
+                """
+                SELECT f.rowid, f.tags FROM notes_text_fts f
+                JOIN entities e ON e.id = f.rowid
+                WHERE e.entity_metadata IS NULL OR NOT json_valid(e.entity_metadata)
+                   OR json_type(e.entity_metadata, '$.tags') IS NULL
+                """):
+                if key in {_fold(t.lstrip("#")) for t in (r["tags"] or "").split()}:
+                    ids.add(r["rowid"])
+        except sqlite3.OperationalError:
+            pass  # FTS5 not available
+        if not ids:
+            return []
+        ph = ",".join("?" * len(ids))
+        rows = conn.execute(
+            f"SELECT * FROM entities WHERE id IN ({ph}) ORDER BY updated_at DESC",
+            tuple(ids)).fetchall()
+        return [_row_to_entity(row) for row in rows]
 
     def search_by_metadata(self, filters: Dict[str, Any]) -> List[Entity]:
-        """Search entities by frontmatter metadata fields."""
+        """Search entities by frontmatter metadata fields.
+
+        Keys are field names or dotted paths (``status``, ``project.owner``).
+        2026-10-23 (KB phase 0): the key was pasted into the SQL JSON path; now
+        it is checked and passed as a parameter. Raises ``ValueError`` for a
+        key that is not letters/digits/``_``/``-`` separated by dots.
+        """
         conn = self._get_connection()
         where_clauses = []
-        params = []
+        params: List[Any] = []
         for key, value in filters.items():
-            where_clauses.append(f"json_extract(entity_metadata, '$.{key}') = ?")
-            params.append(value)
+            key = str(key)
+            if not _METADATA_KEY_RE.match(key):
+                raise ValueError(
+                    f"Invalid metadata key {key!r}: use letters, digits, '_' or '-', "
+                    "with '.' between nested fields (e.g. 'status' or 'project.owner')")
+            path = "$." + ".".join(f'"{part}"' for part in key.split("."))
+            where_clauses.append(
+                "(CASE WHEN json_valid(entity_metadata) "
+                "THEN json_extract(entity_metadata, ?) END) = ?")
+            params.extend([path, value])
         if not where_clauses:
             return self.list_all_entities()
         sql = f"SELECT * FROM entities WHERE {' AND '.join(where_clauses)}"
         rows = conn.execute(sql, tuple(params)).fetchall()
-        entities = []
-        for row in rows:
-            entities.append(
-                Entity(
-                    id=row["id"],
-                    name=row["name"],
-                    permalink=row["permalink"],
-                    file_path=row["file_path"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                    updated_at=datetime.fromisoformat(row["updated_at"]),
-                    checksum=_row_get(row, "checksum"),
-                    mtime=_row_get(row, "mtime"),
-                    size=_row_get(row, "size"),
-                    entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
-                )
-            )
-        return entities
+        return [_row_to_entity(row) for row in rows]
 
     def get_backlinks(self, entity_id: int) -> List[Entity]:
         """Find all entities that link TO the given entity."""
@@ -1088,18 +1449,7 @@ class KnowledgeDB:
         entities = []
         for row in rows:
             entities.append(
-                Entity(
-                    id=row["id"],
-                    name=row["name"],
-                    permalink=row["permalink"],
-                    file_path=row["file_path"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                    updated_at=datetime.fromisoformat(row["updated_at"]),
-                    checksum=_row_get(row, "checksum"),
-                    mtime=_row_get(row, "mtime"),
-                    size=_row_get(row, "size"),
-                    entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
-                )
+                _row_to_entity(row)
             )
         return entities
 
@@ -1111,18 +1461,7 @@ class KnowledgeDB:
         entities = []
         for row in rows:
             entities.append(
-                Entity(
-                    id=row["id"],
-                    name=row["name"],
-                    permalink=row["permalink"],
-                    file_path=row["file_path"],
-                    created_at=datetime.fromisoformat(row["created_at"]),
-                    updated_at=datetime.fromisoformat(row["updated_at"]),
-                    checksum=_row_get(row, "checksum"),
-                    mtime=_row_get(row, "mtime"),
-                    size=_row_get(row, "size"),
-                    entity_metadata=json.loads(row["entity_metadata"]) if _row_get(row, "entity_metadata") else None,
-                )
+                _row_to_entity(row)
             )
         return entities
 
@@ -1133,65 +1472,160 @@ class KnowledgeDB:
         entity_count = conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0]
         observation_count = conn.execute("SELECT COUNT(*) FROM observations").fetchone()[0]
         relation_count = conn.execute("SELECT COUNT(*) FROM relations").fetchone()[0]
+        # 2026-10-23 (KB phase 0): links whose target note does not exist (yet)
+        unresolved = conn.execute("SELECT COUNT(*) FROM pending_relations").fetchone()[0]
 
         return {
             "entities": entity_count,
             "observations": observation_count,
             "relations": relation_count,
+            "unresolved_relations": unresolved,
         }
 
     def sync_entity_from_note(self, note: Note,
                               checksum: Optional[str] = None,
                               mtime: Optional[float] = None,
-                              size: Optional[int] = None) -> int:
+                              size: Optional[int] = None,
+                              entity_id: Optional[int] = None) -> int:
         """
         Sync a Note object to the database.
+
+        2026-10-23 (KB phase 0): everything is replaced in ONE transaction
+        (all or nothing). Only the note's own (outgoing) links are replaced —
+        links from other notes to it stay. Link targets are resolved by
+        permalink, slug, name, title or alias (``resolve_target``); a target
+        that does not exist yet is kept as an unresolved link and becomes a
+        relation as soon as that note is indexed. Title, aliases and
+        frontmatter metadata (with ``tags``) are stored; for an existing note
+        file path, name, title, checksum, mtime and size are updated too.
 
         Args:
             note: Parsed Note object
             checksum: File checksum for change detection (Phase 1 import)
             mtime: File modification time (Phase 1 import)
             size: File size in bytes (Phase 1 import)
+            entity_id: update this entity (keeps its id and backlinks) even
+                when the permalink changed — used for moved/renamed files.
 
         Returns:
             Entity ID
         """
-        # Check if entity exists
-        existing = self.get_entity_by_permalink(note.permalink)
+        conn = self._get_connection()
+        now = datetime.now().isoformat()
+        title = note.title or note.name or note.permalink
+        tags = _as_str_list(note.tags)
+        aliases = _as_str_list(getattr(note, "aliases", None), strip_hash=False)
+        raw_meta = getattr(note, "metadata", None)
+        metadata: Dict[str, Any] = dict(raw_meta) if isinstance(raw_meta, dict) else {}
+        metadata["tags"] = tags
+        metadata_json = json.dumps(metadata, default=str, ensure_ascii=False)
+        file_path = str(note.file_path) if note.file_path else None
 
-        if existing:
-            entity_id = existing.id
-            # Clear old data
-            self.clear_observations(entity_id)
-            self.clear_relations(entity_id)
-            # Update timestamp
-            self.update_entity_timestamp(entity_id)
-        else:
-            # Create new entity (Phase 1 import: include checksum/mtime/size)
-            entity_id = self.create_entity(
-                name=note.name,
-                permalink=note.permalink,
-                file_path=str(note.file_path) if note.file_path else f"{note.permalink}.md",
-                checksum=checksum,
-                mtime=mtime,
-                size=size,
-            )
+        with conn:
+            existing = None
+            if entity_id is not None:
+                existing = conn.execute(
+                    "SELECT * FROM entities WHERE id = ?", (entity_id,)).fetchone()
+                if existing is not None and existing["permalink"] != note.permalink:
+                    holder = conn.execute("SELECT id FROM entities WHERE permalink = ?",
+                                          (note.permalink,)).fetchone()
+                    if holder is not None:  # the new permalink is taken: update that one
+                        existing = None
+            if existing is None:
+                existing = conn.execute(
+                    "SELECT * FROM entities WHERE permalink = ?", (note.permalink,)).fetchone()
 
-        # Add observations
-        for obs in note.observations:
-            self.add_observation(entity_id, obs.category, obs.content, obs.tags)
-
-        # Add relations (resolve permalinks to IDs)
-        for rel in note.relations:
-            target = self.get_entity_by_permalink(rel.target)
-            if target:
-                self.add_relation(entity_id, rel.relation_type, target.id)
+            if existing is not None:
+                eid = existing["id"]
+                name = note.name or existing["name"]
+                if name != existing["name"] and conn.execute(
+                        "SELECT 1 FROM entities WHERE name = ? AND id != ?",
+                        (name, eid)).fetchone():
+                    name = existing["name"]  # name is UNIQUE: keep the old one
+                sets: Dict[str, Any] = {
+                    "name": name, "permalink": note.permalink, "title": title,
+                    "entity_metadata": metadata_json, "updated_at": now,
+                }
+                if file_path:
+                    sets["file_path"] = file_path
+                if checksum is not None:
+                    sets["checksum"] = checksum
+                if mtime is not None:
+                    sets["mtime"] = mtime
+                if size is not None:
+                    sets["size"] = size
+                conn.execute(
+                    f"UPDATE entities SET {', '.join(f'{k} = ?' for k in sets)} WHERE id = ?",
+                    (*sets.values(), eid))
             else:
-                # Create placeholder for missing target
-                logger.warning(f"Relation target not found: {rel.target}")
+                name = note.name or note.permalink
+                if conn.execute("SELECT 1 FROM entities WHERE name = ?", (name,)).fetchone():
+                    # Another note already uses this name (UNIQUE): fall back to
+                    # the permalink, so the note is indexed instead of failing.
+                    alt = note.permalink
+                    if conn.execute("SELECT 1 FROM entities WHERE name = ?", (alt,)).fetchone():
+                        alt = f"{name} ({note.permalink})"
+                    name = alt
+                cursor = conn.execute(
+                    """
+                    INSERT INTO entities (name, permalink, file_path, created_at, updated_at,
+                                          checksum, mtime, size, entity_metadata, title)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (name, note.permalink, file_path or f"{note.permalink}.md", now, now,
+                     checksum, mtime, size, metadata_json, title),
+                )
+                eid = int(cursor.lastrowid or 0)
 
-        self.index_note_text(entity_id, note.title or note.name, note.content or "", note.tags or [])
-        return entity_id
+            # Observations: replace
+            conn.execute("DELETE FROM observations WHERE entity_id = ?", (eid,))
+            for obs in note.observations:
+                conn.execute(
+                    """
+                    INSERT INTO observations
+                        (entity_id, category, content, tags, created_at, context, provenance_path)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (eid, obs.category, obs.content, json.dumps(obs.tags or []), now,
+                     getattr(obs, "context", None), getattr(obs, "provenance_path", None)),
+                )
+
+            # Aliases: replace the set (before links, so a self-link by alias resolves)
+            conn.execute("DELETE FROM entity_aliases WHERE entity_id = ?", (eid,))
+            seen_alias: set = set()
+            for alias in aliases:
+                if _fold(alias) in seen_alias:
+                    continue
+                seen_alias.add(_fold(alias))
+                conn.execute(
+                    "INSERT OR IGNORE INTO entity_aliases (entity_id, alias, created_at) "
+                    "VALUES (?, ?, ?)", (eid, alias, now))
+
+            # Outgoing links only: replace (resolved and unresolved)
+            conn.execute("DELETE FROM relations WHERE from_entity_id = ?", (eid,))
+            conn.execute("DELETE FROM pending_relations WHERE from_entity_id = ?", (eid,))
+            for rel in note.relations:
+                target_name = (rel.target or "").strip()
+                if not target_name or not rel.relation_type:
+                    continue
+                target = self._resolve_target_row(conn, target_name)
+                if target is not None:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO relations "
+                        "(from_entity_id, relation_type, to_entity_id, created_at, to_name) "
+                        "VALUES (?, ?, ?, ?, ?)",
+                        (eid, rel.relation_type, target["id"], now, target_name))
+                else:
+                    logger.debug("Link target not found yet (kept as unresolved): %s",
+                                 target_name)
+                    self._add_pending(conn, eid, rel.relation_type, target_name)
+
+            # Note text index
+            self._index_note_text_conn(conn, eid, title, note.content or "", tags)
+
+            # Links from other notes that were waiting for this note
+            self._resolve_pending_for(conn, eid)
+        return eid
 
     # ── v0.7.5: full-text index of the note text ─────────────────────────────
     @staticmethod
@@ -1204,12 +1638,17 @@ class KnowledgeDB:
 
     def index_note_text(self, entity_id: int, title: str, body: str, tags: List[str]) -> None:
         conn = self._get_connection()
+        self._index_note_text_conn(conn, entity_id, title, body, tags)
+        conn.commit()
+
+    def _index_note_text_conn(self, conn: sqlite3.Connection, entity_id: int, title: str,
+                              body: str, tags: List[str]) -> None:
+        """index_note_text without commit (2026-10-23: part of the sync transaction)."""
         try:
             conn.execute("DELETE FROM notes_text_fts WHERE rowid = ?", (entity_id,))
             conn.execute("INSERT INTO notes_text_fts(rowid, title, body, tags) VALUES (?, ?, ?, ?)",
                          (entity_id, title or "", self._strip_frontmatter(body or "")[:200_000],
                           " ".join(tags or [])))
-            conn.commit()
         except sqlite3.OperationalError as e:  # FTS5 missing: names/observations still work
             logger.debug("note text not indexed: %s", e)
 

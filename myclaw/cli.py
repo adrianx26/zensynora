@@ -213,13 +213,32 @@ def knowledge():
     """Manage the Knowledge Base"""
     pass
 
+# 2026-10-23 (KB phase 0): every knowledge command was hard-coded to the
+# "default" base; --base/-b picks another one (a folder in the knowledge dir).
+def _check_base(ctx, param, value):
+    import re
+
+    value = (value or "default").strip() or "default"
+    # Same rule as the Web UI: a plain folder name, no path, no hidden folder.
+    if not re.match(r"^[\w.@-]{1,64}$", value) or value.startswith("."):
+        raise click.BadParameter(
+            f"'{value}' is not a knowledge base name (letters, digits, '.', '@', '-', '_').")
+    return value
+
+
+_BASE_OPTION = click.option("--base", "-b", default="default", show_default=True,
+                            callback=_check_base, help="Knowledge base to use")
+
+
 @knowledge.command()
 @click.argument('query', required=False)
-def search(query):
-    """Search knowledge base"""
+@_BASE_OPTION
+def search(query, base):
+    """Search knowledge base (supports AND / OR / NOT and "quoted phrases")"""
     if not query:
         query = click.prompt("Search query")
-    notes = search_notes(query, "default")
+    # 2026-10-23 (KB phase 0): boolean=True keeps AND/OR/NOT as search syntax.
+    notes = search_notes(query, base, boolean=True)
     if notes:
         click.echo(f"\n🔍 Found {len(notes)} results for '{query}':\n")
         for i, note in enumerate(notes, 1):
@@ -231,7 +250,8 @@ def search(query):
         click.echo(f"No results found for: {query}")
 
 @knowledge.command()
-def write():
+@_BASE_OPTION
+def write(base):
     """Create a new note (interactive)"""
     title = click.prompt("Title")
     click.echo("Content (press Enter twice to finish):")
@@ -244,20 +264,27 @@ def write():
     content = "\n".join(lines)
     tags_input = click.prompt("Tags (comma-separated)", default="", show_default=False)
     tags = [t.strip() for t in tags_input.split(",") if t.strip()]
-    permalink = write_note(title, title=title, content=content, tags=tags, user_id="default")
+    permalink = write_note(title, title=title, content=content, tags=tags, user_id=base)
     click.echo(f"\n✅ Created: {permalink}")
 
 @knowledge.command()
 @click.argument('permalink', required=False)
-def read(permalink):
+@_BASE_OPTION
+def read(permalink, base):
     """Read a specific note"""
+    from .knowledge.parser import extract_body
+
     if not permalink:
         permalink = click.prompt("Permalink")
-    note = read_note(permalink, "default")
+    note = read_note(permalink, base)
     if note:
         click.echo(f"\n# {note.title}\nPermalink: {note.permalink}")
         if note.tags:
             click.echo(f"Tags: {', '.join(f'#{t}' for t in note.tags)}")
+        # 2026-10-23 (KB phase 0): show the note's text, not only facts and links.
+        body = extract_body(note.content or "")
+        if body:
+            click.echo(f"\n{body}")
         if note.observations:
             click.echo("\n## Observations")
             for obs in note.observations:
@@ -273,9 +300,10 @@ def read(permalink):
 # `agent` calls list(registry.keys()) and crashed with
 # "Got unexpected extra argument (default)".
 @knowledge.command(name="list")
-def list_cmd():
+@_BASE_OPTION
+def list_cmd(base):
     """List all notes"""
-    notes = list_notes("default")
+    notes = list_notes(base)
     if notes:
         click.echo(f"\n📚 {len(notes)} notes:\n")
         for note in notes:
@@ -285,16 +313,19 @@ def list_cmd():
         click.echo("Knowledge base is empty.")
 
 @knowledge.command()
-def sync():
+@_BASE_OPTION
+@click.option("--force", is_flag=True, help="Re-index every note, not only changed files")
+def sync(base, force):
     """Sync database with files"""
     click.echo("Syncing knowledge base...")
-    stats = sync_knowledge("default")
+    stats = sync_knowledge(base, force=force)
     click.echo(f"✅ Sync complete: {stats['added'] + stats['updated'] + stats['deleted']} changes")
 
 @knowledge.command()
-def tags():
+@_BASE_OPTION
+def tags(base):
     """List all tags"""
-    tags = get_all_tags("default")
+    tags = get_all_tags(base)
     if tags:
         click.echo("\n🏷️ Tags: " + " ".join(f"#{t}" for t in tags))
     else:

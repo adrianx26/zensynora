@@ -274,29 +274,60 @@ SYSTEM_PROMPT = (
     "Scheduling: schedule(task, delay, every, user_id), edit_schedule(job_id, new_task, delay, every), "
     "split_schedule(job_id, sub_tasks_json), suspend_schedule(job_id), resume_schedule(job_id), "
     "cancel_schedule(job_id), list_schedules(). "
-    "Knowledge: write_to_knowledge(title, content), search_knowledge(query), read_knowledge(permalink), "
-    "get_knowledge_context(permalink, depth), list_knowledge(), get_related_knowledge(permalink), "
-    "sync_knowledge_base(), list_knowledge_tags(). "
+    "Knowledge: write_to_knowledge(title, content, tags, observations, relations), search_knowledge(query), "
+    "read_knowledge(permalink), get_knowledge_context(permalink, depth), list_knowledge(), "
+    "get_related_knowledge(permalink), sync_knowledge_base(), list_knowledge_tags(). "
+    # 2026-10-23 (KB phase 0): how notes link to each other.
+    "A line `- relation [[Other note]]` in a note's text links it to another note. "
     "Agent Swarms: swarm_create(name, strategy, workers, coordinator, aggregation), "
     "swarm_assign(swarm_id, task), swarm_status(swarm_id), swarm_result(swarm_id), "
     "swarm_terminate(swarm_id), swarm_list(status), swarm_stats(). "
     "IMPORTANT: When creating tools with register_tool(), first use list_toolbox() to check if a similar tool exists. "
     "You can reference knowledge with memory://permalink. "
+    # 2026-10-23 (KB phase 0): "credentials" removed — the knowledge-keeper
+    # skill (and common sense) says secrets never go into the knowledge base.
     "KNOWLEDGE GROWTH MANDATE: After EVERY interaction where the user shares factual information, "
-    "preferences, configurations, server details, hostnames, ports, credentials, file paths, "
+    "preferences, configurations, server details, hostnames, ports, file paths, "
     "important decisions, or any data worth remembering — you MUST proactively call "
     "write_to_knowledge() to persist it permanently. Do NOT wait to be asked. "
     "Every meaningful exchange must grow the knowledge base. "
+    "Never store passwords, API keys, tokens or other secrets in the knowledge base. "
     "For all other responses, reply in plain text."
 )
+
+
+# 2026-10-23 (KB phase 0): size of the automatic "## Relevant Knowledge" block.
+KB_CONTEXT_BUDGET = 2000       # characters for the whole block
+KB_CONTEXT_NOTE_TEXT = 500     # characters of text per note
+KB_CONTEXT_FACTS = 3           # facts per note
+# One session-summary note per day; its text keeps the newest characters.
+SESSION_SUMMARY_MAX_CHARS = 20000
+_SESSION_SUMMARY_LOCK = threading.Lock()
 
 
 class Agent:
     """Personal AI agent with per-user memory, native tool calling, multi-agent delegation."""
 
     @property
+    def _kb_enabled(self) -> bool:
+        """Is the knowledge base switched on (``config.knowledge.enabled``)?
+
+        2026-10-23 (KB phase 0): the setting was ignored. When it is off, the
+        automatic parts (context search, extraction, tool-result saving,
+        session summaries, gap hints) stay off; the explicit tools still work.
+        Unreadable config → True (the default).
+        """
+        try:
+            value = getattr(self.config.knowledge, "enabled", True)
+        except Exception:
+            return True
+        return True if value is None else bool(value)
+
+    @property
     def _kb_auto_extract(self) -> bool:
         """Read-once helper: is automatic KB extraction enabled in config?"""
+        if not self._kb_enabled:  # 2026-10-23 (KB phase 0)
+            return False
         try:
             return bool(self.config.knowledge.auto_extract)
         except Exception as e:
@@ -502,7 +533,67 @@ class Agent:
         if user_id not in self._kb_gaps:
             self._kb_gaps[user_id] = set()
         self._kb_gaps[user_id].add(topic[:120])  # cap length
+        # 2026-10-23 (KB phase 0): remember the newest gap — the hint used an
+        # arbitrary (often old) entry of the set.
+        self.__dict__.setdefault("_last_kb_gap", {})[user_id] = topic[:120]
         logger.debug(f"KB gap recorded for user '{user_id}': {topic[:60]}")
+        return True
+
+    def _latest_kb_gap(self, user_id: str) -> str:
+        """The gap recorded last for this user ("" when none)."""
+        last = self.__dict__.get("_last_kb_gap", {}).get(user_id)
+        if last:
+            return last
+        gaps = self._kb_gaps.get(user_id)
+        return next(iter(gaps)) if gaps else ""
+
+    def _kb_gap_hint(self, user_id: str, had_kb_results: bool) -> str:
+        """One-line hint for the prompt when the knowledge base had nothing.
+
+        2026-10-23 (KB phase 0): shared by think() and stream_think(); also
+        writes the gap to GAP_FILE for the gap researcher (once per topic
+        and 5 minutes). That write used to be skipped almost always: it was
+        de-duplicated with the same cache _record_kb_gap had just filled.
+        Off when knowledge.enabled is False.
+        """
+        if had_kb_results or not getattr(self, "_kb_enabled", True):
+            return ""
+        last_gap = self._latest_kb_gap(user_id)
+        if not last_gap:
+            return ""
+        self._log_kb_gap(user_id, last_gap)
+        return (
+            f"\n\n[Note: The knowledge base has no entries related to '{last_gap[:60]}'. "
+            "Consider using write_to_knowledge() to store useful information for future queries.]"
+        )
+
+    def _log_kb_gap(self, user_id: str, topic: str) -> bool:
+        """Structured log event + one GAP_FILE line for a gap (de-duplicated)."""
+        cache = self.__dict__.get("_gap_log_cache")
+        if cache is None:
+            cache = KnowledgeGapCache(timeout_seconds=300.0)
+            self.__dict__["_gap_log_cache"] = cache
+        if cache.is_duplicate(topic, user_id):
+            return False
+        gap_data = {
+            "event": "knowledge_gap_detected",
+            "query": topic,
+            "description": "No knowledge base entries found for query",
+            "user_id": user_id,
+            "session_context": (
+                "System will preserve context to avoid redundant empty "
+                "searches in this session"
+            ),
+            "timestamp": datetime.utcnow().isoformat(),
+            "recommendation": "Use write_to_knowledge() to create a new entry for future queries",
+        }
+        kb_gap_logger.info(gap_data)
+        try:
+            GAP_FILE.parent.mkdir(parents=True, exist_ok=True)
+            with open(GAP_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(gap_data) + "\n")
+        except Exception as e:
+            logger.warning(f"Failed to record gap to file: {e}")
         return True
 
     def get_kb_gaps(self, user_id: str) -> List[str]:
@@ -584,6 +675,8 @@ class Agent:
         knowledge base automatically.  Runs fire-and-forget via asyncio.create_task();
         errors are silently logged so they never disrupt the main pipeline.
         """
+        if not self._kb_enabled:  # 2026-10-23 (KB phase 0): knowledge.enabled = false
+            return
         try:
             extraction_system = (
                 "You are a knowledge extraction assistant. "
@@ -1031,6 +1124,8 @@ class Agent:
             user_id: User identifier
             mem: Memory instance for this user
         """
+        if not getattr(self, "_kb_enabled", True):  # 2026-10-23 (KB phase 0)
+            return
         try:
             # Exclude the most recent 5 messages from summarization
             to_summarize = history[:-5] if len(history) > 5 else history
@@ -1075,18 +1170,55 @@ class Agent:
             )
 
             # Store summary in knowledge base for future retrieval
-            from .knowledge import write_note
-
-            await asyncio.to_thread(
-                write_note,
-                name=f"session-summary-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}",
-                title=f"Session Summary ({datetime.utcnow().strftime('%Y-%m-%d %H:%M')})",
-                content=summary_text,
-                user_id=user_id,
-                tags=["session_summary", "auto-generated"],
-            )
+            await asyncio.to_thread(self._store_session_summary, summary_text, user_id)
         except Exception as e:
             logger.error(f"Background summarization error: {e}")
+
+    @staticmethod
+    def _store_session_summary(summary_text: str, user_id: str,
+                               now: Optional[datetime] = None) -> str:
+        """Append a summary to today's session-summary note; returns its permalink.
+
+        2026-10-23 (KB phase 0): every turn past the summarization threshold
+        wrote a new ``session-summary-YYYYMMDD-HHMMSS`` note — hundreds of
+        notes. Now there is ONE note per day and knowledge base
+        (``session-summary-YYYYMMDD``, UTC), each summary a ``### HH:MM UTC``
+        section; the text keeps the newest SESSION_SUMMARY_MAX_CHARS characters.
+        """
+        from .knowledge import read_note, write_note
+        from .knowledge.parser import extract_body
+
+        now = now or datetime.utcnow()
+        name = f"session-summary-{now.strftime('%Y%m%d')}"
+        section = f"### {now.strftime('%H:%M')} UTC\n\n{summary_text.strip()}"
+        tags = ["session_summary", "auto-generated"]
+        with _SESSION_SUMMARY_LOCK:  # two summaries at once must not lose one
+            old = None
+            try:
+                old = read_note(name, user_id)
+            except Exception as e:
+                logger.debug("Session summary note %s unreadable: %s", name, e)
+            observations, relations = [], []
+            text = section
+            if old is not None:
+                old_body = extract_body(old.content if isinstance(old.content, str) else "")
+                if old_body:
+                    text = f"{old_body}\n\n{section}"
+                tags = list(dict.fromkeys(list(old.tags or []) + tags))
+                observations, relations = list(old.observations), list(old.relations)
+            if len(text) > SESSION_SUMMARY_MAX_CHARS:
+                text = text[-SESSION_SUMMARY_MAX_CHARS:]
+                cut = text.find("\n### ")
+                text = text[cut + 1:] if cut != -1 else text
+            return write_note(
+                name=name,
+                title=f"Session summaries {now.strftime('%Y-%m-%d')}",
+                content=text,
+                user_id=user_id,
+                tags=tags,
+                observations=observations,
+                relations=relations,
+            )
 
     def _search_knowledge_context_sync(
         self, message: str, user_id: str, max_results: int = 3, return_structured: bool = False
@@ -1120,6 +1252,14 @@ class Agent:
             "max_results": max_results,
         }
 
+        # 2026-10-23 (KB phase 0): knowledge.enabled = false → no automatic search.
+        if not getattr(self, "_kb_enabled", True):
+            result = KnowledgeSearchResult(
+                context="", has_results=False, suggested_topics=[], gap_logged=False,
+                metadata={**metadata, "disabled": True},
+            )
+            return result if return_structured else ""
+
         try:
             # Resolve explicit memory:// references
             memory_refs = re.findall(r"memory://([\w\-]+)", message)
@@ -1138,11 +1278,35 @@ class Agent:
                     bigrams = [f"{words[i]} {words[i + 1]}" for i in range(len(words) - 1)]
                     candidates = bigrams[:3] + words[:5]
                     query = " OR ".join(f'"{t}"' if " " in t else t for t in candidates)
-                    notes = search_notes(query, user_id, limit=max_results)
+                    # 2026-10-23 (KB phase 0): boolean=True so OR means OR
+                    # (as free text every word had to match).
+                    notes = search_notes(query, user_id, limit=max_results, boolean=True)
 
-            if not notes and not memory_refs:
-                # Record gap so the agent can suggest KB creation
-                gap_logged = self._record_kb_gap(user_id, message[:120])
+            # 2026-10-23 (KB phase 0): memory://permalink references were
+            # only used when the search happened to find that note.
+            if memory_refs:
+                found = {getattr(n, "permalink", None) for n in notes}
+                from .knowledge import read_note as _read_note
+
+                for ref in dict.fromkeys(memory_refs):
+                    if ref in found:
+                        continue
+                    try:
+                        ref_note = _read_note(ref, user_id)
+                    except Exception:
+                        ref_note = None
+                    if ref_note is not None:
+                        notes = [ref_note] + list(notes)
+                        found.add(ref)
+
+            if not notes:
+                # Record gap so the agent can suggest KB creation.
+                # 2026-10-23 (KB phase 0): not for messages without searchable
+                # words ("hi", "ok") — they are no knowledge gap; and an empty
+                # "## Relevant Knowledge" block is no longer sent when only an
+                # unknown memory:// reference was given.
+                gap_logged = (self._record_kb_gap(user_id, message[:120])
+                              if words and not memory_refs else False)
                 suggested_topics = self._extract_suggested_topics(message)
 
                 # Build contextual guidance for empty results
@@ -1176,22 +1340,47 @@ class Agent:
 
                 return result if return_structured else ""
 
-            # Build context from found notes
+            # Build context from found notes.
+            # 2026-10-23 (KB phase 0): each note with its (shortened) text and
+            # up to 3 facts, within KB_CONTEXT_BUDGET characters for the block —
+            # agents only saw titles and facts, and most notes are plain text.
+            from .knowledge.graph import note_text, shorten_text
+
             context_lines = ["## Relevant Knowledge"]
+            used = len(context_lines[0])
+            budget = KB_CONTEXT_BUDGET
 
-            for note in notes:
-                context_lines.append(f"\n**{note.title}** ({note.permalink}):")
+            def _add(line: str) -> bool:
+                nonlocal used
+                if used + len(line) + 1 > budget:
+                    return False
+                context_lines.append(line)
+                used += len(line) + 1
+                return True
 
-                if note.observations:
-                    for obs in note.observations[:3]:
-                        context_lines.append(f"- [{obs.category}] {obs.content}")
+            for i, note in enumerate(notes):
+                header = f"\n**{note.title}** ({note.permalink}):"
+                if not _add(header):
+                    if i == 0:  # always show the best match
+                        context_lines.append(header)
+                        used += len(header) + 1
+                    else:
+                        break
+                room = budget - used - 1
+                text = shorten_text(note_text(note), min(KB_CONTEXT_NOTE_TEXT, room))
+                if text and len(text) > 20:
+                    _add(text)
+
+                for obs in (note.observations or [])[:KB_CONTEXT_FACTS]:
+                    if not _add(f"- [{obs.category}] {shorten_text(str(obs.content), 200)}"):
+                        break
 
                 if note.permalink in memory_refs:
-                    full_context = build_context(note.permalink, user_id, depth=1)
-                    context_lines.append("\nRelated context:")
-                    context_lines.append(
-                        full_context[:500] + "..." if len(full_context) > 500 else full_context
-                    )
+                    room = budget - used - len("\nRelated context:") - 2
+                    if room > 100:
+                        full_context = build_context(note.permalink, user_id, depth=1)
+                        _add("\nRelated context:")
+                        _add(shorten_text(full_context, min(500, room), collapse=False))
 
             context_lines.append("\n---\n")
             context = "\n".join(context_lines)
@@ -1352,6 +1541,8 @@ class Agent:
         and writes each fact to the KB via write_note().  Runs fire-and-forget;
         errors are silently logged so the main pipeline is never disrupted.
         """
+        if not self._kb_enabled:  # 2026-10-23 (KB phase 0): knowledge.enabled = false
+            return
         try:
             extraction_system = (
                 "You are a knowledge extraction assistant. "
@@ -1787,14 +1978,9 @@ class Agent:
         knowledge_context = await self._search_knowledge_context(user_message, user_id)
         had_kb_results = bool(knowledge_context)
 
-        # KB gap hint for streaming mode
-        kb_gap_hint = ""
-        if not had_kb_results and self._kb_gaps.get(user_id):
-            last_gap = next(iter(self._kb_gaps[user_id]))
-            kb_gap_hint = (
-                f"\n\n[Note: The knowledge base has no entries related to '{last_gap[:60]}'. "
-                "Consider using write_to_knowledge() to store useful information for future queries.]"
-            )
+        # KB gap hint for streaming mode (2026-10-23 (KB phase 0): shared with
+        # think(); also logs the gap for the researcher, off when the KB is off)
+        kb_gap_hint = self._kb_gap_hint(user_id, had_kb_results)
 
         # Build system prompt with knowledge context (async load to avoid blocking)
         system_prompt = await self._load_system_prompt()
@@ -1943,7 +2129,7 @@ class Agent:
             self._track_preload(_kb_task)
 
         # Background context summarization (fire-and-forget, off hot path)
-        if _full_history_for_bg_stream:
+        if _full_history_for_bg_stream and self._kb_enabled:
             _summarize_task = asyncio.create_task(
                 self._background_summarize_context(_full_history_for_bg_stream, user_id, mem)
             )
