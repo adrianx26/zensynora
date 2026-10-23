@@ -398,6 +398,7 @@ def build_context(
         # neighbours' text snippet is shown in every case.
         depth1_notes_by_permalink: Dict[str, "Note"] = {}
         if 1 in by_depth:
+            from .storage import _batch_read_notes  # lazy: tests patch the storage function
             depth1_perms = [r['permalink'] for r in by_depth[1]]
             depth1_notes = _batch_read_notes(depth1_perms, user_id, db_path=db_path)
             depth1_notes_by_permalink = {n.permalink: n for n in depth1_notes}

@@ -12,7 +12,7 @@ Phase 1 (MemoPad import) additions:
 
 import asyncio
 import fnmatch
-import hashlib  # noqa: F401
+import hashlib
 import logging
 import os
 from pathlib import Path

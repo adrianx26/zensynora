@@ -199,6 +199,10 @@ def gateway(webhook_url, port, force_telegram):
 @cli.command(name="mcp-server")
 def mcp_server():
     """Start ZenSynora exposed as an MCP Server"""
+    # 2026-10-23 (KB phase 0): stdout is the MCP protocol channel — log to stderr.
+    from .mcp.server import _logs_to_stderr
+
+    _logs_to_stderr()
     config = load_config()
     _build_registry(config)
     from .mcp import start_mcp_server

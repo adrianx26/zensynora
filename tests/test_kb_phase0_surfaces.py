@@ -67,6 +67,22 @@ def test_mcp_coerces_string_arguments(monkeypatch):
     assert "query" in missing and "Invalid arguments" in missing
 
 
+def test_mcp_server_logs_go_to_stderr():
+    import logging
+    import sys
+
+    from myclaw.mcp.server import _logs_to_stderr
+
+    h = logging.StreamHandler(sys.stdout)
+    lg = logging.getLogger("phase0.mcp.test")
+    lg.addHandler(h)
+    try:
+        _logs_to_stderr()
+        assert h.stream is sys.stderr
+    finally:
+        lg.removeHandler(h)
+
+
 def test_mcp_search_knowledge_with_string_limit(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     from myclaw.knowledge.storage import write_note

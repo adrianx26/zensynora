@@ -301,15 +301,39 @@ async def call_registered_tool(name: str, arguments: Optional[Mapping[str, Any]]
         ]
 
 
+def _logs_to_stderr() -> None:
+    """2026-10-23 (KB phase 0): stdout carries the MCP protocol; log lines printed
+    there (e.g. "Knowledge DB connection closed") broke the client's JSON-RPC
+    parsing. Every console log handler on stdout is moved to stderr."""
+    import sys
+
+    loggers: List[Any] = [logging.getLogger()]
+    loggers += [lg for lg in logging.Logger.manager.loggerDict.values() if isinstance(lg, logging.Logger)]
+    for lg in loggers:
+        for h in lg.handlers:
+            if isinstance(h, logging.StreamHandler) and getattr(h, "stream", None) in (
+                    sys.stdout, sys.__stdout__):
+                h.setStream(sys.stderr)
+
+
 async def start_mcp_server():
     """Starts the MCP server over stdio, exposing MyClaw's native tools."""
+    _logs_to_stderr()
     server = Server("zensynora")
 
     @server.list_tools()
     async def list_tools() -> list[Tool]:
         return list_tool_definitions()
 
-    @server.call_tool()
+    # 2026-10-23 (KB phase 0): newer MCP SDKs validate the arguments against the
+    # (now typed) schema and reject "5" for an integer before we can convert it;
+    # call_registered_tool converts and reports bad values itself.
+    try:
+        register_call = server.call_tool(validate_input=False)
+    except TypeError:  # older mcp versions: no validation, no keyword
+        register_call = server.call_tool()
+
+    @register_call
     async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         return await call_registered_tool(name, arguments)
 
