@@ -1453,6 +1453,24 @@ environment (so they may <code>import myclaw</code>), after the backup and befor
 switch. A failing migration aborts the update and the backup is restored.
 Fresh installs record all current migrations as applied (<code>install.sh</code> runs
 <code>python -m updater migrate</code>).</p>
+<table>
+<thead>
+<tr>
+<th>Migration</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0001_data_layout</code></td>
+<td>creates the standard <code>~/.myclaw</code> folders, makes the config private</td>
+</tr>
+<tr>
+<td><code>0002_knowledge_note_structure</code> (2026-10-23)</td>
+<td>gives plain-text knowledge notes a title and frontmatter (text kept, <code>.trash</code> untouched, idempotent) and re-indexes the knowledge base</td>
+</tr>
+</tbody>
+</table>
 <h3 id="add-or-change-an-update-step">Add or change an update step<a class="headerlink" href="#add-or-change-an-update-step" title="Permanent link">&para;</a></h3>
 <p>Steps live in <code>updater/steps.py</code>; each is a class with <code>run(ctx)</code> and
 <code>rollback(ctx)</code>, and the order is <code>default_pipeline()</code>. To add behaviour

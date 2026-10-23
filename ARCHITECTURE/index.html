@@ -1481,7 +1481,8 @@ fit together. It complements <a href="../architecture_diagram/"><code>docs/archi
 ├── knowledge/               # scope.py: one shared knowledge base for internal ids [0.7.5]
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
 │   ├── path_reasoning.py    # find_paths / shortest_path [Sprint 7]
-│   ├── storage.py           # Batched parallel note reads [Sprint 1 + 8]
+│   ├── storage.py           # Batched parallel note reads [Sprint 1 + 8]; write_note keeps text + tags + facts + links [Unreleased]
+│   ├── extract.py           # Model output → notes with tags, facts, links; ✨ enrich [Unreleased]
 │   └── ...
 ├── logging_config.py        # Structured logger + PII scrubber [Sprint 2]
 ├── marketplace/             # Multi-source plugin discovery + HMAC manifests [Sprint 9]
@@ -1551,7 +1552,7 @@ webui/src/
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
-tests/                       # 721 tests (pytest --collect-only, 2026-10-18)
+tests/                       # 730 tests (pytest --collect-only, 2026-10-18)
 ├── fixtures/fake_telegram_api.py # Local fake Telegram Bot API server [Unreleased]
 ├── test_chat_message_actions.py # Copy/edit/delete/regenerate chat messages [Unreleased]
 ├── test_doctor_report.py    # Doctor checks, report, errors viewer, downloads [Unreleased]
@@ -1939,6 +1940,10 @@ silently fall back to Ollama.</p>
 <td>26</td>
 </tr>
 <tr>
+<td><code>test_knowledge_structure.py</code></td>
+<td>9</td>
+</tr>
+<tr>
 <td><code>test_provider_keys.py</code></td>
 <td>18</td>
 </tr>
@@ -1964,7 +1969,7 @@ silently fall back to Ollama.</p>
 </tr>
 <tr>
 <td><strong>Total</strong></td>
-<td><strong>721</strong></td>
+<td><strong>730</strong></td>
 </tr>
 </tbody>
 </table>

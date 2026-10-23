@@ -976,6 +976,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#23-266-notes-but-no-tags-facts-or-links-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 266 notes, but no tags, facts or links (2026-10-23)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1494,6 +1505,17 @@
     <span class="md-ellipsis">
       
         2.2 Stale or invented "crash loop" notes written by agents (2026-10-23, branch fix/report-20261023)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-266-notes-but-no-tags-facts-or-links-2026-10-23" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 266 notes, but no tags, facts or links (2026-10-23)
       
     </span>
   </a>
@@ -2032,6 +2054,38 @@ in short form, in <code>AGENTS.md</code>.</p>
 <tr>
 <td><strong>Rule</strong></td>
 <td>Agents must check live diagnostics (<code>check_system_health</code>, <code>get_recent_problems</code>) before acting on a report file; knowledge from reports needs a date.</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="23-266-notes-but-no-tags-facts-or-links-2026-10-23">2.3 266 notes, but no tags, facts or links (2026-10-23)<a class="headerlink" href="#23-266-notes-but-no-tags-facts-or-links-2026-10-23" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>The Knowledge page showed every note as an island: 0 tags, 0 facts, 0 links. Note files were bare text (no title, no frontmatter; some with literal <code>\n</code>).</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td><code>write_note(content=…)</code> stored only the raw text and dropped the tags/facts/links passed with it; <code>generate_markdown()</code> never wrote the text. Every caller (agent tool, both auto-extractors, researcher) passed <code>content</code>, so the structure was always lost. The extractors also never asked the model for facts or links. <code>update_note</code> lost the text; the CLI passed arguments in the wrong order.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>write_note</code> always writes frontmatter + title + text + Observations + Relations; facts/links in the text are kept; extractors ask for facts and links and offer existing note titles as targets; migration 0002 structures old notes; <strong>✨ Add tags &amp; links</strong> on the Knowledge page enriches them with the model.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_knowledge_structure.py</code> (round trip of text + tags + facts + links, update keeps text, migration, enrich).</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>A write function must store every argument it accepts — test the round trip (write → read → compare). Never let one optional argument silently replace the others.</td>
 </tr>
 </tbody>
 </table>
