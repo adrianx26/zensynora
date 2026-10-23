@@ -11,8 +11,10 @@ Phase 1 (MemoPad import) additions:
 """
 
 import asyncio
-import hashlib
+import fnmatch
+import hashlib  # noqa: F401
 import logging
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple, Optional
 from datetime import datetime
@@ -498,16 +500,37 @@ def _load_bmignore_patterns(knowledge_dir: Path) -> List[str]:
     if not bmignore.exists():
         return []
     patterns = []
-    for line in bmignore.read_text(encoding="utf-8").splitlines():
+    try:
+        text = bmignore.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:  # 2026-10-23: never abort the sync
+        logger.warning(f"Could not read {bmignore}: {e}")
+        return []
+    for line in text.splitlines():
         line = line.strip()
         if line and not line.startswith("#"):
             patterns.append(line)
     return patterns
 
 
+_GLOB_CHARS = ("*", "?", "[")
+
+
 def _should_ignore_path(path: Path, knowledge_dir: Path, patterns: List[str]) -> bool:
-    """Check if path matches any ignore pattern."""
-    rel = path.relative_to(knowledge_dir).as_posix()
+    """Check if path matches any ignore pattern.
+
+    Prefix patterns work as before (``drafts/``, ``notes/old.md``).
+    2026-10-23 (KB phase 0): glob patterns too (fnmatch): ``*.tmp``,
+    ``archive/**``, ``draft-*/``. A pattern without ``/`` is matched against
+    every file/folder name; a pattern with ``/`` against the path from the
+    knowledge folder (and each parent folder of it); ``name/`` matches folders
+    only; a leading ``/`` is ignored.
+    """
+    try:
+        rel = path.relative_to(knowledge_dir).as_posix()
+    except ValueError:
+        return False
+    parts = rel.split("/")
+    dir_prefixes = ["/".join(parts[:i]) for i in range(1, len(parts))]
     for pattern in patterns:
         if pattern.endswith("/"):
             if rel.startswith(pattern.rstrip("/")):
@@ -515,7 +538,67 @@ def _should_ignore_path(path: Path, knowledge_dir: Path, patterns: List[str]) ->
         else:
             if rel == pattern or rel.startswith(pattern + "/"):
                 return True
+        if not any(ch in pattern for ch in _GLOB_CHARS):
+            continue
+        dir_only = pattern.endswith("/")
+        pat = pattern.strip("/")
+        if not pat:
+            continue
+        if pat.endswith("/**"):  # everything below a folder
+            base = pat[:-3]
+            if any(fnmatch.fnmatchcase(d, base) for d in dir_prefixes):
+                return True
+            continue
+        if "/" in pat:
+            targets = dir_prefixes if dir_only else dir_prefixes + [rel]
+        else:
+            targets = parts[:-1] if dir_only else parts
+        if any(fnmatch.fnmatchcase(t, pat) for t in targets):
+            return True
     return False
+
+
+def _list_markdown_files(knowledge_dir: Path, patterns: List[str]) -> Set[Path]:
+    """Every indexable ``.md`` file below ``knowledge_dir``.
+
+    2026-10-23 (KB phase 0): folders and files whose name starts with "."
+    are never indexed (``.trash`` holds deleted notes; ``.git``,
+    ``.obsidian``); unreadable folders are skipped instead of aborting.
+    """
+    files: Set[Path] = set()
+    seen_dirs: Set[str] = set()
+    for root, dirs, names in os.walk(knowledge_dir, followlinks=True):
+        try:
+            real = os.path.realpath(root)
+        except OSError:
+            real = root
+        if real in seen_dirs:  # a symlink loop
+            dirs[:] = []
+            continue
+        seen_dirs.add(real)
+        dirs[:] = sorted(d for d in dirs if not d.startswith("."))
+        for name in names:
+            if name.startswith(".") or not name.endswith(".md"):
+                continue
+            file_path = Path(root) / name
+            if not _should_ignore_path(file_path, knowledge_dir, patterns):
+                files.add(file_path)
+    return files
+
+
+def _filter_since(files: Set[Path], since_timestamp: Optional[float]) -> Set[Path]:
+    """The files modified after ``since_timestamp`` (all of them for None)."""
+    if since_timestamp is None:
+        return set(files)
+    out: Set[Path] = set()
+    for file_path in files:
+        try:
+            if file_path.stat().st_mtime <= since_timestamp:
+                continue
+        except OSError:
+            pass  # cannot stat: let the caller try (and count the error)
+        out.add(file_path)
+    return out
 
 
 def scan_markdown_files(user_id: str = "default", since_timestamp: Optional[float] = None) -> Set[Path]:
@@ -524,6 +607,7 @@ def scan_markdown_files(user_id: str = "default", since_timestamp: Optional[floa
 
     Phase 1 (MemoPad import): respects .bmignore patterns.
     Phase 4 (MemoPad import): supports incremental scanning with since_timestamp.
+    2026-10-23 (KB phase 0): skips folders/files whose name starts with ".".
 
     Args:
         user_id: User ID for isolation
@@ -534,50 +618,35 @@ def scan_markdown_files(user_id: str = "default", since_timestamp: Optional[floa
     """
     knowledge_dir = _storage_module.get_knowledge_dir(user_id)
     patterns = _load_bmignore_patterns(knowledge_dir)
-    files = set()
-    for file_path in knowledge_dir.rglob("*.md"):
-        if not _should_ignore_path(file_path, knowledge_dir, patterns):
-            if since_timestamp is not None:
-                if file_path.stat().st_mtime <= since_timestamp:
-                    continue
-            files.add(file_path)
-    return files
+    return _filter_since(_list_markdown_files(knowledge_dir, patterns), since_timestamp)
 
 
 def resolve_forward_references(user_id: str = "default", db_path: Optional[Path] = None) -> Dict[str, int]:
     """
     Resolve forward references in relations.
 
-    Phase 2 (MemoPad import): when a relation targets an entity that doesn't exist,
-    try to find it by alias or create a placeholder entity.
+    2026-10-23 (KB phase 0): links to a note that does not exist yet are kept
+    as unresolved links by ``KnowledgeDB.sync_entity_from_note`` and resolved
+    automatically when that note is indexed. This resolves every unresolved
+    link whose target exists now (by permalink, slug, name, title or alias).
+    It no longer creates placeholder entities: they pointed at files that do
+    not exist, so the next sync deleted them (and their links) again.
 
     Args:
         user_id: User ID for isolation
         db_path: Optional custom DB path
 
     Returns:
-        Stats dict with counts of resolved and created
+        Stats dict: "resolved" (links resolved), "created" (always 0),
+        "errors"
     """
     stats = {"resolved": 0, "created": 0, "errors": 0}
-    with KnowledgeDB(user_id, db_path=db_path) as db:
-        entities = db.list_all_entities()
-        for entity in entities:
-            relations = db.get_relations_from(entity.id)
-            for rel_type, target_permalink, target_name in relations:
-                target = db.get_entity_by_permalink(target_permalink)
-                if target is None:
-                    alias_match = db.get_entity_by_alias(target_permalink)
-                    if alias_match:
-                        db.add_relation(entity.id, rel_type, alias_match.id)
-                        stats["resolved"] += 1
-                    else:
-                        placeholder_id = db.create_entity(
-                            name=target_name or target_permalink,
-                            permalink=target_permalink,
-                            file_path=f"{target_permalink}.md",
-                        )
-                        db.add_relation(entity.id, rel_type, placeholder_id)
-                        stats["created"] += 1
+    try:
+        with KnowledgeDB(user_id, db_path=db_path) as db:
+            stats["resolved"] = db.resolve_pending_relations()["resolved"]
+    except Exception as e:
+        stats["errors"] += 1
+        logger.warning(f"Could not resolve links: {e}")
     return stats
 
 
@@ -685,7 +754,10 @@ def detect_changes(
             file_permalinks.add(note.permalink)
         except Exception:
             pass
-    to_delete = [p for p in db_by_permalink if p not in file_permalinks]
+    # 2026-10-23 (KB phase 0): a file that cannot be parsed keeps its entry
+    file_paths = {str(f) for f in files}
+    to_delete = [p for p, e in db_by_permalink.items()
+                 if p not in file_permalinks and e.file_path not in file_paths]
 
     return ChangeSet(to_add=to_add, to_update=to_update, to_delete=to_delete, checksums=checksums)
 
