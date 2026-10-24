@@ -28,7 +28,7 @@ import json
 import logging
 import math
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,9 @@ _OPTIONS: Dict[str, Any] = {
     "hub_penalty": True,
     "hub_degree": 25,
 }
+
+
+MAX_ID = 2 ** 63 - 1  # largest SQLite integer (ids from users/agents are checked against it)
 
 
 def set_options(detect_conflicts: Optional[bool] = None, hub_penalty: Optional[bool] = None,
@@ -76,13 +79,50 @@ def chat_source(when: Optional[datetime] = None) -> str:
     return f"chat {(when or datetime.now()).strftime('%Y-%m-%d')}"
 
 
-# The argument that says where a tool's output came from.
-_TOOL_SOURCE_ARGS = ("url", "path", "file_path", "filename", "agent_name", "host", "query", "cmd")
+# The argument that says where a tool's output came from. 2026-10-24 (KB
+# phase 2 review): never a shell command (it may hold passwords/tokens).
+_TOOL_SOURCE_ARGS = ("url", "path", "file_path", "filename", "agent_name", "host", "query")
+_SHELL_TOOLS = frozenset({"shell", "shell_async", "ssh_command", "run_command", "exec"})
+_LONG_TOKEN = re.compile(r"\b[A-Za-z0-9_\-+/=]{32,}\b")
+
+
+def _redact(text: str) -> str:
+    """Hide tokens, keys and passwords (the doctor's log scrubber + long random runs)."""
+    try:
+        from ..doctor.logscan import redact
+
+        text = redact(text)
+    except Exception:  # pragma: no cover - the scrubber is optional here
+        pass
+    return _LONG_TOKEN.sub("[redacted]", text)
+
+
+def _clean_url(value: str) -> str:
+    """A URL without user:password@, ?query and #fragment."""
+    from urllib.parse import urlsplit, urlunsplit
+
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return value.split("?", 1)[0].split("#", 1)[0]
+    if not parts.scheme or not parts.netloc:
+        return value.split("?", 1)[0].split("#", 1)[0]
+    host = parts.hostname or ""
+    if parts.port:
+        host = f"{host}:{parts.port}"
+    return urlunsplit((parts.scheme, host, parts.path, "", ""))
 
 
 def tool_source(tool_name: str, args: Any = None) -> str:
     """Source of facts extracted from a tool result, e.g. ``tool browse https://…``
-    or ``tool read_file /etc/hosts``. ``args`` may be a dict or a JSON string."""
+    or ``tool read_file /etc/hosts``. ``args`` may be a dict or a JSON string.
+
+    Shell commands are never written (``tool shell``); URLs lose their
+    credentials, query and fragment; token-like strings are redacted.
+    """
+    name = _one_line(tool_name, 40) or "tool"
+    if name in _SHELL_TOOLS:
+        return f"tool {name}"
     if isinstance(args, str):
         try:
             args = json.loads(args)
@@ -93,9 +133,11 @@ def tool_source(tool_name: str, args: Any = None) -> str:
         for key in _TOOL_SOURCE_ARGS:
             value = args.get(key)
             if isinstance(value, (str, int, float)) and str(value).strip():
-                what = _one_line(value, 160)
+                what = _one_line(value, 400)
+                if "://" in what:
+                    what = _clean_url(what)
+                what = _one_line(_redact(what), 160)
                 break
-    name = _one_line(tool_name, 40) or "tool"
     return f"tool {name} {what}".strip()
 
 
@@ -344,12 +386,23 @@ def merge_category(user_id: str, from_category: str, to_category: str, dry_run: 
         raise ValueError("Give both categories: the one to merge and the one to keep.")
     if "]" in dst or "\n" in dst:
         raise ValueError("A category cannot contain ']' or a line break.")
+    if len(dst) > 60:
+        raise ValueError("A category name can have at most 60 characters.")
     if _same_spelling(src, dst) and src == dst:
         raise ValueError("The two categories are the same.")
+    # 2026-10-24 (KB phase 2 review): spellings matched in Python (Unicode
+    # case folding, inner spaces), exactly as the fact lines are matched below
     with KnowledgeDB(user_id, db_path=db_path) as db:
-        rows = db._get_connection().execute(
-            "SELECT DISTINCT e.permalink FROM observations o JOIN entities e ON e.id = o.entity_id "
-            "WHERE lower(trim(o.category)) = lower(?) ORDER BY e.permalink", (src,)).fetchall()
+        conn = db._get_connection()
+        spellings = [r[0] for r in conn.execute(
+            "SELECT DISTINCT category FROM observations WHERE category IS NOT NULL")
+            if _same_spelling(r[0], src)]
+        rows = []
+        if spellings:
+            ph = ",".join("?" * len(spellings))
+            rows = conn.execute(
+                f"SELECT DISTINCT e.permalink FROM observations o JOIN entities e ON e.id = o.entity_id "
+                f"WHERE o.category IN ({ph}) ORDER BY e.permalink", spellings).fetchall()
     permalinks = [r["permalink"] for r in rows]
     notes_out = []
     changed_facts = 0
@@ -364,7 +417,7 @@ def merge_category(user_id: str, from_category: str, to_category: str, dry_run: 
             cat = dst if _same_spelling(o.category, src) else o.category
             if cat != o.category:
                 changes.append({"before": f"[{o.category}] {o.content}", "after": f"[{cat}] {o.content}"})
-            key = (cat, o.content)
+            key = (cat, o.content, o.provenance_path)
             if key in seen:
                 continue
             seen.add(key)
@@ -383,38 +436,76 @@ def merge_category(user_id: str, from_category: str, to_category: str, dry_run: 
 # ── Conflicts (detection only) ───────────────────────────────────────────────
 #
 # memopad flagged every pair of differently-worded facts in a category, which
-# its own review called far too aggressive. Here a pair is flagged only when
-# it clearly contradicts:
-#   * "number": the same words with different numbers ("32 GB RAM" / "64 GB
-#     RAM", "listens on port 11434" / "… port 8080"); dates and times are
-#     history, not contradictions, and "Server 1 …" / "Server 2 …" are two
-#     subjects;
-#   * "value": the same "key: value" / "key = value" key with another value,
-#     or "X is Y" with two value-like Ys ("default model is llama3" /
-#     "… is qwen2.5").
-# Identical facts, one fact containing the other, and facts about different
-# things are never flagged.
+# its own review called far too aggressive; the first version here still
+# flagged readings over time, counters, hostnames and lists (review of
+# 2026-10-24). Now a pair is flagged only when ALL of this holds:
+#   * the category is one that holds a single current value: setting / spec /
+#     preference (normalised; ``config`` is ``setting``) — never fact, how-to,
+#     url, person, error, version, todo …;
+#   * "number": the facts are word for word the same except for plain
+#     numbers ("mindy01 has 32 GB RAM" / "… 64 GB RAM"). Numbers glued to
+#     letters (mindy01, A1, sda1, eth0, qwen2.5) are names, not values;
+#     dates/times/years are history;
+#   * "value": the same "subject key: value" / "key = value" / "X is Y" with
+#     a key of at least two words ("Ollama port: 11434" / "Ollama port: 8080");
+#   * no word says it is a measurement, counter, status, version, error,
+#     person/relation or a list (temperature, usage, count, tests, status,
+#     version, error, exit, sister, owner, gpu, disk …).
+# Identical facts and one fact containing the other are never flagged.
 
-_NUM = re.compile(r"\d+(?:[.,:/\-]\d+)*")
-_DATE_TIME = re.compile(
-    r"^(?:\d{4}-\d{1,2}(?:-\d{1,2})?|\d{1,2}[./]\d{1,2}[./]\d{2,4}|\d{1,2}:\d{2}(?::\d{2})?)$")
-_YEAR = re.compile(r"^(?:19|20)\d\d$")  # a year in a sentence; "port: 2000" is a value
-# Words before a number that make it an ordinal/identifier, not a value.
-_ORDINAL_WORDS = frozenset({
-    "step", "phase", "part", "item", "no", "nr", "number", "chapter", "section", "line", "page",
-    "day", "week", "round", "attempt", "level", "stage", "option", "case", "example", "rule",
-    "point", "task", "issue", "pr", "ticket", "#",
+CONFLICT_CATEGORIES = frozenset({"setting", "spec", "preference"})
+
+_SKIP_WORDS = frozenset({
+    # measurements / readings over time
+    "temperature", "temp", "wind", "humidity", "pressure", "usage", "used", "free", "load",
+    "uptime", "latency", "ping", "speed", "rate", "timeout", "duration", "elapsed", "took",
+    "age", "aged", "old", "price", "cost", "score", "weight", "height", "distance", "battery",
+    "progress", "percent", "level", "reading", "measured", "average", "avg", "min", "max",
+    "context", "window", "tokens", "forecast", "weather",
+    # counters
+    "count", "counts", "total", "number", "tests", "test", "passing", "passed", "failed",
+    "failing", "warnings", "commits", "retries", "retry", "attempts", "attempt", "visits",
+    "downloads", "stars", "files", "lines", "notes", "items", "requests", "calls",
+    "users", "messages", "sessions",
+    # status / versions / changes over time
+    "status", "state", "stage", "phase", "result", "outcome", "health", "version", "versions",
+    "release", "released", "build", "commit", "revision", "rev", "updated", "last", "latest",
+    "previous", "next", "since", "until", "today", "yesterday", "now", "currently", "was",
+    # errors
+    "error", "errors", "exception", "exit", "code", "http", "warning", "failure", "crash",
+    # people / relations
+    "brother", "sister", "mother", "father", "mom", "dad", "son", "daughter", "kid", "kids",
+    "child", "children", "wife", "husband", "partner", "friend", "owner", "author", "assignee",
+    "contact", "colleague", "boss", "manager", "uncle", "aunt", "cousin", "grandma", "grandpa",
+    "parent", "parents", "member", "members",
+    # things there are usually several of
+    "gpu", "gpus", "disk", "disks", "drive", "drives", "slot", "interface", "ip", "address",
+    "alias", "tag", "tags",
+    "example", "e.g", "step", "option", "item", "case", "rule", "line", "page", "day", "week",
 })
 _GENERIC_KEYS = frozenset({
-    "note", "notes", "tip", "tips", "todo", "warning", "info", "example", "see", "update", "idea",
-    "question", "important", "fyi", "ps", "reminder", "also", "nb", "source", "why", "how",
-    "what", "when", "result", "summary", "status update",
+    "note", "notes", "tip", "tips", "todo", "info", "see", "update", "idea", "question",
+    "important", "fyi", "ps", "reminder", "also", "nb", "source", "why", "how", "what", "when",
+    "summary",
 })
+_UNITS = frozenset({
+    "b", "kb", "mb", "gb", "tb", "pb", "kib", "mib", "gib", "tib", "bit", "kbps", "mbps", "gbps",
+    "hz", "khz", "mhz", "ghz", "ms", "s", "sec", "min", "h", "w", "kw", "v", "a", "mah",
+    "c", "f", "k", "m", "cm", "mm", "km", "g", "kg", "l", "ml", "x", "%", "°", "°c", "°f",
+})
+# A token: a number (with an optional unit glued to it), a word or name
+# (letters first; may contain digits, '.', '-' or '_': mindy01, qwen2.5,
+# node.js, gpt-4o), or one punctuation character.
+_TOKEN = re.compile(r"\d+(?:[.,:/\-]\d+)*(?:[^\W\d_]+\w*|%|°[cf]?)?|[^\W\d_][\w.\-]*\w|[^\W\d_]|[^\w\s]")
+_PLAIN_NUM = re.compile(r"(\d+(?:[.,:/\-]\d+)*)(.*)")
+_DATE_TIME = re.compile(
+    r"^(?:\d{4}-\d{1,2}(?:-\d{1,2})?|\d{1,2}[./]\d{1,2}[./]\d{2,4}|\d{1,2}:\d{2}(?::\d{2})?)$")
+_YEAR = re.compile(r"^(?:19|20)\d\d$")
 _KV = re.compile(r"^\s*([^:=]{1,60}?)\s*(?::\s+|\s*=\s*)(.+?)\s*$")
-_IS = re.compile(r"^\s*(.{2,80}?)\s+(?:is|are|was set to|is set to|=)\s+(.+?)\s*\.?\s*$",
-                 re.IGNORECASE)
+_IS = re.compile(r"^\s*(.{2,80}?)\s+(?:is|are|is set to|=)\s+(.+?)\s*\.?\s*$", re.IGNORECASE)
 _ARTICLES = re.compile(r"^(?:the|a|an|my|our|its|his|her|their)\s+", re.IGNORECASE)
 _NEGATION = re.compile(r"\b(?:not|no|never|n't)\b", re.IGNORECASE)
+_NUMBER_MARK = "\x01"
 
 
 @functools.lru_cache(maxsize=8192)
@@ -423,9 +514,38 @@ def _norm_text(text: str) -> str:
 
 
 @functools.lru_cache(maxsize=8192)
-def _split_units(text: str) -> str:
-    """``32GB`` → ``32 gb`` so "32 GB RAM" and "32GB RAM" read the same."""
-    return re.sub(r"(?<=\d)(?=[^\W\d_])", " ", _norm_text(text))
+def _shape(text: str) -> tuple:
+    """``(template tokens, numbers)`` of a fact: plain numbers (with their unit
+    split off) are replaced by a marker; names with digits stay text."""
+    tmpl: list = []
+    nums: list = []
+    for tok in _TOKEN.findall(_norm_text(text)):
+        m = _PLAIN_NUM.fullmatch(tok) if tok[:1].isdigit() else None
+        if m and not m.group(2) and len(tmpl) == 1 and tmpl[0][:1].isalpha() and len(tok) <= 2:
+            m = None  # "Server 1 has …": a small number right after the first word names it
+        if m:
+            unit = m.group(2)
+            if not unit or unit in _UNITS:
+                tmpl.append(_NUMBER_MARK)
+                nums.append(m.group(1))
+                if unit:
+                    tmpl.append(unit)
+                continue
+        tmpl.append(tok)  # a name such as 5800x, mindy01, sda1
+    return tuple(tmpl), tuple(nums)
+
+
+def _words(tokens: Any) -> set:
+    return {t for t in tokens if t != _NUMBER_MARK and t[:1].isalpha()}
+
+
+def _has_skip_word(tokens: Any) -> bool:
+    for t in tokens:
+        if t in _SKIP_WORDS:
+            return True
+        if "-" in t and any(p in _SKIP_WORDS for p in t.split("-")):
+            return True
+    return False
 
 
 def _contains(a: str, b: str) -> bool:
@@ -443,44 +563,23 @@ def _contains(a: str, b: str) -> bool:
     return False
 
 
-@functools.lru_cache(maxsize=8192)
-def _number_shape(text: str) -> tuple:
-    """``(spelled text, numbers, template, words before each number)`` of a fact."""
-    t = _split_units(text)
-    nums = tuple(_NUM.findall(t))
-    tmpl = _NUM.sub("\x01", t)
-    words = re.findall(r"\x01|[^\W\d_]+|[^\w\s\x01]", tmpl)
-    positions = [i for i, w in enumerate(words) if w == "\x01"]
-    before = tuple((p, words[p - 1] if p > 0 else "") for p in positions)
-    return t, nums, tmpl, before
-
-
-_SMALL_INT = re.compile(r"\d{1,2}")
-_HAS_WORD = re.compile(r"[^\W\d_]{2,}")
-
-
 def _number_conflict(a: str, b: str) -> bool:
-    ta, na, tmpl_a, before_a = _number_shape(a)
-    tb, nb, tmpl_b, _ = _number_shape(b)
-    if ta == tb or not na or len(na) != len(nb):
+    ta, na = _shape(a)
+    tb, nb = _shape(b)
+    if ta != tb or not na or na == nb:
         return False
-    if tmpl_a != tmpl_b or not _HAS_WORD.search(tmpl_a):
+    words = _words(ta)
+    if len(words) < 2 or _has_skip_word(ta):
         return False
-    diffs = [k for k, (x, y) in enumerate(zip(na, nb)) if x != y]
-    if not diffs:
-        return False
-    for k in diffs:
-        x, y = na[k], nb[k]
-        pos, before = before_a[k] if k < len(before_a) else (-1, "")
+    marks = [i for i, t in enumerate(ta) if t == _NUMBER_MARK]
+    for k, (x, y) in enumerate(zip(na, nb)):
+        if x == y:
+            continue
         if _DATE_TIME.match(x) and _DATE_TIME.match(y):
             return False  # history ("backup ran on 2026-10-01" / "… 10-02")
+        before = ta[marks[k] - 1] if k < len(marks) and marks[k] > 0 else ""
         if _YEAR.match(x) and _YEAR.match(y) and before not in (":", "="):
-            return False  # "released in 2019" / "… 2021"
-        if before in _ORDINAL_WORDS:
-            return False  # "step 1" / "step 2"
-        if pos == 1 and before and _SMALL_INT.fullmatch(x) and _SMALL_INT.fullmatch(y):
-            # "Server 1 has …" / "Server 2 has …": the number names the subject
-            return False
+            return False  # "released in 2019" / "… 2021"; "web port: 2000" is a value
     return True
 
 
@@ -493,19 +592,22 @@ def _value_like(v: str) -> bool:
 
 @functools.lru_cache(maxsize=8192)
 def _key_value(text: str):
-    """``(kind, key, value)`` of a "key: value" / "X is Y" fact, or None."""
+    """``(kind, key, value)`` of a "subject key: value" / "X is Y" fact, or None.
+
+    The key needs two or more words ("Ollama port", "default model"): a bare
+    "Port:" or "Model:" line is usually one item of a list.
+    """
     t = " ".join(str(text or "").split()).rstrip(".")
-    m = _KV.match(t)
-    if m and re.search(r"[^\W\d_]", m.group(1)):
+    for kind, rx in (("kv", _KV), ("is", _IS)):
+        m = rx.match(t)
+        if not m or not re.search(r"[^\W\d_]", m.group(1)):
+            continue
         key = _ARTICLES.sub("", m.group(1).strip()).casefold()
-        if key and key not in _GENERIC_KEYS and len(key.split()) <= 6:
-            return ("kv", key, m.group(2).strip())
-    m = _IS.match(t)
-    if m:
-        key = _ARTICLES.sub("", m.group(1).strip()).casefold()
-        value = m.group(2).strip()
-        if key and key not in _GENERIC_KEYS and len(key.split()) <= 6 and not _NEGATION.search(t):
-            return ("is", key, value)
+        key_tokens = [k for k in _TOKEN.findall(key) if k[:1].isalnum()]
+        if (len(key_tokens) < 2 or len(key_tokens) > 6 or key in _GENERIC_KEYS
+                or _has_skip_word(key_tokens) or _NEGATION.search(t)):
+            return None
+        return (kind, " ".join(key_tokens), m.group(2).strip())
     return None
 
 
@@ -516,18 +618,28 @@ def _value_conflict(a: str, b: str) -> bool:
     va, vb = _norm_text(ka[2]), _norm_text(kb[2])
     if not va or not vb or va == vb or _contains(va, vb) or _contains(vb, va):
         return False
-    if _NUM.sub("#", _split_units(va)) == _NUM.sub("#", _split_units(vb)):
-        return _number_conflict(a, b)  # only numbers differ: dates/ids are not conflicts
+    if _has_skip_word(_shape(va)[0]) or _has_skip_word(_shape(vb)[0]):
+        return False
+    if _shape(va)[0] == _shape(vb)[0]:
+        return _number_conflict(a, b)  # only numbers differ: same rules as above
     if "is" in (ka[0], kb[0]):
         return _value_like(ka[2]) and _value_like(kb[2])
     return len(va) <= 120 and len(vb) <= 120
 
 
-def conflict_kind(a: str, b: str) -> Optional[str]:
-    """"number" / "value" when the two facts clearly contradict each other, else None."""
+def conflict_kind(a: str, b: str, category: Optional[str] = None) -> Optional[str]:
+    """"number" / "value" when the two facts clearly contradict each other, else None.
+
+    With ``category``, only the single-value categories (setting, spec,
+    preference) are compared at all.
+    """
+    if category is not None and normalize_category(category) not in CONFLICT_CATEGORIES:
+        return None
     na, nb = _norm_text(a), _norm_text(b)
     if not na or not nb or na == nb or _contains(na, nb) or _contains(nb, na):
         return None
+    if _shape(a) == _shape(b):
+        return None  # "32 GB RAM" / "32gb ram"
     if _value_conflict(a, b):
         return "value"
     if _number_conflict(a, b):
@@ -542,19 +654,21 @@ def find_conflicts(observations: Any) -> list:
         content = getattr(o, "content", None)
         if not isinstance(content, str) or not content.strip():
             continue
-        by_cat.setdefault(normalize_category(getattr(o, "category", "")), []).append(i)
+        cat = normalize_category(getattr(o, "category", ""))
+        if cat in CONFLICT_CATEGORIES:
+            by_cat.setdefault(cat, []).append(i)
     out = []
     for idx in by_cat.values():
         if len(idx) < 2 or len(idx) > 200:  # 200+ facts in one category: a list, not settings
             continue
-        # Only facts with the same words around their numbers, or the same
-        # "key", can contradict: compare within those groups (fast for big notes).
+        # Only facts with the same template, or the same key, can contradict:
+        # compare within those groups (fast for big notes).
         groups: Dict[tuple, list] = {}
         for i in idx:
             text = observations[i].content
-            su = _split_units(text)
-            if _NUM.search(su):
-                groups.setdefault(("n", _NUM.sub("#", su)), []).append(i)
+            tmpl, nums = _shape(text)
+            if nums:
+                groups.setdefault(("n", tmpl), []).append(i)
             kv = _key_value(text)
             if kv:
                 groups.setdefault(("k", kv[1]), []).append(i)
@@ -606,7 +720,7 @@ def on_note_indexed(conn: Any, entity_id: int, permalink: str, observations: Any
                 "INSERT OR IGNORE INTO conflicts (entity_id, permalink, category, obs_a, obs_b, kind, "
                 "status, created_at, updated_at, pair_hash) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?)",
                 (entity_id, permalink, cat, a, b, kind, now, now, h))
-        elif r["status"] == "dismissed":
+        elif r["status"] in ("dismissed", "resolving"):
             conn.execute("UPDATE conflicts SET entity_id = ? WHERE id = ?", (entity_id, r["id"]))
         else:
             conn.execute(
@@ -630,8 +744,15 @@ def _conflict_dict(r: Any) -> Dict[str, Any]:
 
 def list_conflicts(user_id: str = "default", permalink: str = "", status: str = "open",
                    db_path: Any = None) -> list:
-    """Conflicts (default: the open ones) of existing notes, newest first."""
+    """Conflicts (default: the open ones) of existing notes, newest first.
+
+    With ``knowledge.detect_conflicts`` off nothing is listed (the rows are
+    kept and shown again when it is turned back on).
+    """
     from .db import KnowledgeDB
+
+    if not _OPTIONS.get("detect_conflicts", True):
+        return []
 
     sql = ("SELECT c.*, COALESCE(e.title, e.name) AS title FROM conflicts c "
            "JOIN entities e ON e.permalink = c.permalink WHERE 1 = 1")
@@ -649,8 +770,11 @@ def list_conflicts(user_id: str = "default", permalink: str = "", status: str = 
 
 
 def conflict_counts(user_id: str = "default", db_path: Any = None) -> Dict[str, int]:
-    """``{permalink: open conflicts}`` (for the graph marker)."""
+    """``{permalink: open conflicts}`` (for the graph marker); empty when detection is off."""
     from .db import KnowledgeDB
+
+    if not _OPTIONS.get("detect_conflicts", True):
+        return {}
 
     try:
         with KnowledgeDB(user_id, db_path=db_path) as db:
@@ -681,44 +805,71 @@ def resolve_conflict(user_id: str, conflict_id: Any, keep: str, db_path: Any = N
         cid = int(conflict_id)
     except (TypeError, ValueError):
         raise ValueError(f"Conflict id must be a number, not {conflict_id!r}.") from None
+    if not 1 <= cid <= MAX_ID:
+        raise LookupError(f"No conflict with id {cid}.")
     with KnowledgeDB(user_id, db_path=db_path) as db:
         row = db._get_connection().execute("SELECT * FROM conflicts WHERE id = ?", (cid,)).fetchone()
     if row is None:
         raise LookupError(f"No conflict with id {cid}.")
     c = _conflict_dict(row)
-    if c["status"] != "open":
+
+    def _now() -> str:
+        return datetime.now().isoformat(timespec="seconds")
+
+    # 2026-10-24 (KB phase 2 review): claim the conflict atomically — two
+    # callers resolving it at once (keep a / keep b) removed both facts.
+    # A claim older than 5 minutes (a crashed caller) may be taken over.
+    stale = (datetime.now() - timedelta(minutes=5)).isoformat(timespec="seconds")
+    with KnowledgeDB(user_id, db_path=db_path) as db:
+        with db._write_txn() as conn:
+            claimed = conn.execute(
+                "UPDATE conflicts SET status = 'resolving', updated_at = ? WHERE id = ? "
+                "AND (status = 'open' OR (status = 'resolving' AND updated_at < ?))",
+                (_now(), cid, stale)).rowcount
+            current = conn.execute("SELECT status FROM conflicts WHERE id = ?", (cid,)).fetchone()
+    if not claimed:
+        status = current["status"] if current else "gone"
+        if status == "resolving":
+            return {"ok": False, "conflict": c, "changed": False,
+                    "message": f"Conflict {cid} is already being resolved; look again in a moment."}
+        c["status"] = status
         return {"ok": True, "conflict": c, "changed": False,
-                "message": f"Conflict {cid} is already {c['status']}."}
-    now = datetime.now().isoformat(timespec="seconds")
+                "message": f"Conflict {cid} is already {status}."}
 
     def _set(status: str) -> None:
         with KnowledgeDB(user_id, db_path=db_path) as db2:
-            with db2._write_txn() as conn:
-                conn.execute("UPDATE conflicts SET status = ?, updated_at = ? WHERE id = ?",
-                             (status, now, cid))
+            with db2._write_txn() as conn2:
+                conn2.execute("UPDATE conflicts SET status = ?, updated_at = ? WHERE id = ?",
+                              (status, _now(), cid))
+        c["status"] = status
 
-    if keep == "both":
-        _set("dismissed")
-        c["status"] = "dismissed"
-        return {"ok": True, "conflict": c, "changed": False,
-                "message": "Both facts kept; this pair will not be flagged again."}
-    drop_text = c["b"] if keep == "a" else c["a"]
-    note = read_note(c["permalink"], user_id, db_path=db_path)
-    if note is None:
+    try:
+        if keep == "both":
+            _set("dismissed")
+            return {"ok": True, "conflict": c, "changed": False,
+                    "message": "Both facts kept; this pair will not be flagged again."}
+        drop_text = c["b"] if keep == "a" else c["a"]
+        note = read_note(c["permalink"], user_id, db_path=db_path)
+        if note is None:
+            _set("resolved")
+            return {"ok": True, "conflict": c, "changed": False,
+                    "message": f"The note {c['permalink']} no longer exists; conflict closed."}
+        target = _norm_text(drop_text)
+        kept = [o for o in note.observations
+                if not (_norm_text(o.content) == target
+                        and normalize_category(o.category) == (c["category"] or normalize_category(o.category)))]
+        if len(kept) == len(note.observations):
+            _set("resolved")
+            return {"ok": True, "conflict": c, "changed": False,
+                    "message": "That fact is no longer in the note; conflict closed."}
+        update_note(note.permalink, user_id, db_path=db_path, observations=kept)
         _set("resolved")
-        return {"ok": True, "conflict": c, "changed": False,
-                "message": f"The note {c['permalink']} no longer exists; conflict closed."}
-    target = _norm_text(drop_text)
-    kept = [o for o in note.observations
-            if not (_norm_text(o.content) == target
-                    and normalize_category(o.category) == (c["category"] or normalize_category(o.category)))]
-    if len(kept) == len(note.observations):
-        _set("resolved")
-        return {"ok": True, "conflict": c, "changed": False,
-                "message": "That fact is no longer in the note; conflict closed."}
-    update_note(note.permalink, user_id, db_path=db_path, observations=kept)
-    _set("resolved")
-    c["status"] = "resolved"
+    except BaseException:
+        try:  # give the conflict back, so it can be resolved again
+            _set("open")
+        except Exception as e:  # pragma: no cover
+            logger.warning("conflict %s could not be reopened: %s", cid, e)
+        raise
     return {"ok": True, "conflict": c, "changed": True,
             "message": f"Kept \"{c[keep]}\"; removed \"{drop_text}\" from {note.title} "
                        "(the previous version is in .trash/)."}
@@ -821,7 +972,11 @@ def rank_with_hub_penalty(notes: Any, user_id: str = "default", db_path: Any = N
 
 _SHORT_NOTE = 1500          # "very similar text" is only checked for short notes
 _SIMILAR = 0.92
-_MAX_COMPARISONS = 200_000
+_MAX_CANDIDATES = 50_000    # similarity checks per run (reported as partial when hit)
+_RARE_TOKENS = 8            # tokens per note used to find candidate pairs
+_TITLE_JACCARD = 0.5        # titles must share this much for the similarity rule
+_NUMBER_RX = re.compile(r"\d+(?:[.,:/\-]\d+)*")
+_WORD_RX = re.compile(r"\w{3,}")
 
 
 def _title_key(text: Any) -> str:
@@ -865,23 +1020,52 @@ def _older_key(note: Any) -> tuple:
     return (ts, note.permalink)
 
 
-def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 100) -> list:
+def _token_set(text: str) -> frozenset:
+    return frozenset(_WORD_RX.findall(text.casefold()))
+
+
+def _jaccard(a: frozenset, b: frozenset) -> float:
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 100,
+                    report: bool = False, time_budget: Optional[float] = None) -> Any:
     """Candidate pairs of duplicate notes, best evidence first. Changes nothing.
 
     A pair is listed when the titles are the same after normalising (case,
     punctuation, spaces), one note's title is an alias of the other, the text
-    is identical, or two short notes (≤ 1500 characters) are ≥ 92 % similar.
-    Each pair says which note would be kept: more links, then more facts,
-    then the older one.
+    is identical, or two short notes (≤ 1500 characters) with similar titles
+    have ≥ 92 % similar text and the same numbers. Notes made from one
+    template (weather reports: same words, other numbers or dates) are not
+    duplicates. Each pair says which note would be kept: more links, then
+    more facts, then the older one.
+
+    Candidates for the similarity check come from an index of each note's
+    rarest words, so large bases stay fast. ``report=True`` returns
+    ``{"pairs", "partial", "message"}``; ``partial`` is true when the check
+    stopped at its limit (``time_budget`` seconds or the number of checks).
     """
     import difflib
+    import time as _time
 
     from .db import KnowledgeDB
     from .storage import list_notes
 
+    started = _time.monotonic()
+
+    def _over_budget() -> bool:
+        return time_budget is not None and _time.monotonic() - started > time_budget
+
+    def _result(pairs: list, partial: bool, message: str) -> Any:
+        if report:
+            return {"pairs": pairs, "partial": partial, "message": message}
+        return pairs
+
     notes = [n for n in list_notes(user_id) if getattr(n, "permalink", None)]
     if len(notes) < 2:
-        return []
+        return _result([], False, "")
     try:
         with KnowledgeDB(user_id, db_path=db_path) as db:
             degrees = degrees_by_permalink(db._get_connection(), [n.permalink for n in notes])
@@ -894,23 +1078,32 @@ def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 
     def add(a: str, b: str, why: str) -> None:
         if a == b:
             return
-        key = tuple(sorted((a, b)))
+        key = (a, b) if a < b else (b, a)
         lst = reasons.setdefault(key, [])
         if why not in lst:
             lst.append(why)
 
+    def add_groups(groups: Dict[str, list], why: str) -> None:
+        for perms in groups.values():
+            if len(perms) > 50:  # 50 notes with one title: a series, not duplicates
+                continue
+            # one pair per extra copy (to the first), not every combination
+            for other in perms[1:]:
+                add(perms[0], other, why)
+
     by_title: Dict[str, list] = {}
+    title_tokens: Dict[str, frozenset] = {}
+    titles: Dict[str, str] = {}
     for n in notes:
         k = _title_key(n.title or n.name)
+        titles[n.permalink] = k
+        title_tokens[n.permalink] = _token_set(k)
         if k:
             by_title.setdefault(k, []).append(n.permalink)
-    for perms in by_title.values():
-        for i in range(len(perms)):
-            for j in range(i + 1, len(perms)):
-                add(perms[i], perms[j], "same title")
+    add_groups(by_title, "same title")
     for n in notes:
         for alias in n.aliases or []:
-            for other in by_title.get(_title_key(alias), []):
+            for other in by_title.get(_title_key(alias), [])[:50]:
                 add(n.permalink, other, "title is an alias of the other note")
     bodies: Dict[str, str] = {}
     by_hash: Dict[str, list] = {}
@@ -920,28 +1113,68 @@ def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 
         if len(body) >= 20:
             h = hashlib.md5(body.casefold().encode("utf-8")).hexdigest()
             by_hash.setdefault(h, []).append(n.permalink)
-    for perms in by_hash.values():
-        for i in range(len(perms)):
-            for j in range(i + 1, len(perms)):
-                add(perms[i], perms[j], "identical text")
-    short = sorted(((len(b), p) for p, b in bodies.items() if 40 <= len(b) <= _SHORT_NOTE))
-    comparisons = 0
-    for i, (la, pa) in enumerate(short):
-        for lb, pb in short[i + 1:]:
-            if lb > la / _SIMILAR:  # sorted by length: the rest are too long
+    add_groups(by_hash, "identical text")
+
+    # Similar short notes: candidates share one of their rarest words.
+    short = {p: b for p, b in bodies.items() if 40 <= len(b) <= _SHORT_NOTE}
+    tokens = {p: _token_set(b) for p, b in short.items()}
+    df: Dict[str, int] = {}
+    for toks in tokens.values():
+        for t in toks:
+            df[t] = df.get(t, 0) + 1
+    index: Dict[str, list] = {}
+    for p, toks in tokens.items():
+        rare = sorted((t for t in toks if df[t] > 1), key=lambda t: (df[t], t))[:_RARE_TOKENS]
+        for t in rare:
+            index.setdefault(t, []).append(p)
+    partial = False
+    message = ""
+    checked = 0
+    seen_pairs: set = set()
+    for t in sorted(index, key=lambda x: df[x]):
+        members = index[t]
+        if len(members) > 200:  # a common word: pairs come from rarer ones
+            continue
+        for i in range(len(members)):
+            for j in range(i + 1, len(members)):
+                pa, pb = members[i], members[j]
+                key = (pa, pb) if pa < pb else (pb, pa)
+                if key in seen_pairs or key in reasons:
+                    continue
+                seen_pairs.add(key)
+                if _jaccard(title_tokens.get(pa, frozenset()), title_tokens.get(pb, frozenset())) < _TITLE_JACCARD:
+                    continue
+                ta, tb = titles[pa], titles[pb]
+                if ta != tb and _NUMBER_RX.sub("#", ta) == _NUMBER_RX.sub("#", tb):
+                    continue  # "Session summary 12" / "… 16": a series
+                ba, bb = short[pa], short[pb]
+                la, lb = len(ba), len(bb)
+                if min(la, lb) / max(la, lb) < _SIMILAR:
+                    continue
+                if _jaccard(tokens[pa], tokens[pb]) < 0.6:
+                    continue
+                # a template filled with other numbers/dates is not a duplicate
+                if _NUMBER_RX.findall(ba) != _NUMBER_RX.findall(bb):
+                    continue
+                checked += 1
+                if checked > _MAX_CANDIDATES or _over_budget():
+                    partial = True
+                    break
+                # word-level comparison: as strict, far faster than per character
+                sm = difflib.SequenceMatcher(None, ba.casefold().split(), bb.casefold().split(),
+                                             autojunk=False)
+                if sm.quick_ratio() < _SIMILAR:
+                    continue
+                ratio = sm.ratio()
+                if ratio >= _SIMILAR:
+                    add(pa, pb, f"very similar text ({int(ratio * 100)} %)")
+            if partial:
                 break
-            comparisons += 1
-            if comparisons > _MAX_COMPARISONS:
-                break
-            if tuple(sorted((pa, pb))) in reasons:
-                continue
-            sm = difflib.SequenceMatcher(None, bodies[pa].casefold(), bodies[pb].casefold(),
-                                         autojunk=False)
-            if sm.real_quick_ratio() >= _SIMILAR and sm.quick_ratio() >= _SIMILAR \
-                    and sm.ratio() >= _SIMILAR:
-                add(pa, pb, f"very similar text ({int(sm.ratio() * 100)} %)")
-        if comparisons > _MAX_COMPARISONS:
+        if partial:
             break
+    if partial:
+        message = ("Stopped early (too many notes to compare in one go); the list is not "
+                   "complete — merge some of these and look again.")
 
     out = []
     for (a, b), why in reasons.items():
@@ -957,7 +1190,10 @@ def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 
     strength = {"same title": 0, "identical text": 0, "title is an alias of the other note": 1}
     out.sort(key=lambda d: (min(strength.get(r, 2) for r in d["reasons"]), -len(d["reasons"]),
                             d["keep"]["permalink"], d["drop"]["permalink"]))
-    return out[:max(1, int(limit))]
+    limit = max(1, int(limit))
+    if len(out) > limit and not message:
+        message = f"Showing {limit} of {len(out)} pairs."
+    return _result(out[:limit], partial, message)
 
 
 def _fold_names(note: Any) -> set:
@@ -1012,7 +1248,7 @@ def merge_notes(user_id: str, keep: str, drop: str, dry_run: bool = True,
     facts: list = []
     seen_f = set()
     for o in list(k.observations or []) + list(d.observations or []):
-        key = (normalize_category(o.category), _norm_text(o.content))
+        key = (normalize_category(o.category), _norm_text(o.content), o.provenance_path)
         if key in seen_f:
             continue
         seen_f.add(key)

@@ -50,9 +50,9 @@ export const ConflictsSection: React.FC<{
           <div><b>A</b> {c.a}</div>
           <div><b>B</b> {c.b}</div>
           <div className="kb-buttons" style={{ marginTop: 6 }}>
-            <button type="button" className="ghost-btn" disabled={busy === c.id} onClick={() => resolve(c, 'a')} title="Keep A, remove B from the note">Keep A</button>
-            <button type="button" className="ghost-btn" disabled={busy === c.id} onClick={() => resolve(c, 'b')} title="Keep B, remove A from the note">Keep B</button>
-            <button type="button" className="ghost-btn" disabled={busy === c.id} onClick={() => resolve(c, 'both')} title="Both are right — do not flag this pair again">Both are fine</button>
+            <button type="button" className="ghost-btn" disabled={busy !== null} onClick={() => resolve(c, 'a')} title="Keep A, remove B from the note">Keep A</button>
+            <button type="button" className="ghost-btn" disabled={busy !== null} onClick={() => resolve(c, 'b')} title="Keep B, remove A from the note">Keep B</button>
+            <button type="button" className="ghost-btn" disabled={busy !== null} onClick={() => resolve(c, 'both')} title="Both are right — do not flag this pair again">Both are fine</button>
           </div>
         </div>
       ))}
@@ -67,7 +67,7 @@ export interface Suggestion { from: string; to: string; from_count: number; to_c
 
 export const CategoriesCard: React.FC<{
   base: string;
-  reloadKey: number;
+  reloadKey: unknown; // changes whenever the graph data was reloaded (save, re-index, enrich, merge)
   active: string[];
   onToggle: (name: string) => void;
   onMerge: (s: Suggestion) => void;
@@ -124,6 +124,7 @@ export const CategoryMergePanel: React.FC<{
 }> = ({ base, from, to, onDone, onCancel }) => {
   const [target, setTarget] = useState(to);
   const [preview, setPreview] = useState<CategoryPreview | null>(null);
+  const [previewed, setPreviewed] = useState<string | null>(null); // the target the preview is for
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const run = useCallback(async (dry: boolean) => {
@@ -133,7 +134,7 @@ export const CategoryMergePanel: React.FC<{
       const r = await api<CategoryPreview>(`/api/knowledge/categories/merge?${q(base)}`, {
         method: 'POST', body: JSON.stringify({ from, to: target, dry_run: dry }),
       });
-      if (dry) setPreview(r);
+      if (dry) { setPreview(r); setPreviewed(target); }
       else onDone(`Renamed ${r.facts} fact(s) in ${r.notes.length} note(s) from “${from}” to “${r.to}”. Previous versions are in the trash folder.`, true);
     } catch (e) {
       setErr((e as Error).message);
@@ -149,6 +150,7 @@ export const CategoryMergePanel: React.FC<{
       <p className="muted small">Facts written as <code>[{from}]</code> are rewritten in their notes. Nothing changes until you click Apply.</p>
       <div className="field"><label className="field-label">Into</label>
         <input className="field-input" value={target} onChange={e => setTarget(e.target.value)} onBlur={() => run(true)} /></div>
+      {previewed !== null && previewed !== target && <p className="muted small">Click outside the field to preview this name before applying.</p>}
       {err && <div className="notice error">{err}</div>}
       {preview && (
         <section>
@@ -162,7 +164,7 @@ export const CategoryMergePanel: React.FC<{
         </section>
       )}
       <div className="kb-buttons">
-        <button type="button" className="primary-btn" disabled={busy || !preview || preview.facts === 0 || !target.trim()} onClick={() => run(false)}>{busy ? 'Working…' : 'Apply'}</button>
+        <button type="button" className="primary-btn" disabled={busy || !preview || preview.facts === 0 || !target.trim() || previewed !== target} onClick={() => run(false)}>{busy ? 'Working…' : 'Apply'}</button>
         <button type="button" className="ghost-btn" onClick={onCancel}>Cancel</button>
       </div>
     </div>

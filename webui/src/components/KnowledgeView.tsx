@@ -73,7 +73,6 @@ const KnowledgeView: React.FC = () => {
   // 2026-10-24 (KB phase 2): quality tools in the side panel
   const [side, setSide] = useState<{ type: 'dups' } | { type: 'catmerge'; from: string; to: string } | null>(null);
   const [catFilter, setCatFilter] = useState<string[]>([]);
-  const [catReload, setCatReload] = useState(0);
   // filters
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<Set<string> | null>(null);
@@ -298,8 +297,7 @@ const KnowledgeView: React.FC = () => {
   const qualityDone = (text: string, ok: boolean) => {
     setNotice({ ok, text });
     if (!ok) return;
-    load();
-    setCatReload(x => x + 1);
+    load(); // new graph data also reloads the category card
     if (selected && !selected.startsWith('missing:')) loadDetail(selected);
   };
 
@@ -462,7 +460,7 @@ const KnowledgeView: React.FC = () => {
                   {data.tags.length === 0 && <span className="muted">No tags yet.</span>}
                 </div>
               </section>
-              <CategoriesCard base={base} reloadKey={catReload} active={catFilter}
+              <CategoriesCard base={base} reloadKey={data} active={catFilter}
                 onToggle={c => toggle(catFilter, c, setCatFilter)}
                 onMerge={sg => { setCreating(null); setSelected(null); setSide({ type: 'catmerge', from: sg.from, to: sg.to }); }} />
               <section className="settings-card">

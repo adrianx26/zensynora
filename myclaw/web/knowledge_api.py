@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
+from fastapi import Path as PathParam, Query
 from pydantic import BaseModel, Field
 
 from myclaw.web.settings_api import guard
@@ -489,7 +490,8 @@ class ConflictResolution(BaseModel):
 
 
 @router.post("/api/knowledge/conflicts/{conflict_id}", dependencies=guard)
-async def resolve_conflict(conflict_id: int, req: ConflictResolution, base: str | None = None):
+async def resolve_conflict(req: ConflictResolution, base: str | None = None,
+                           conflict_id: int = PathParam(..., ge=1, le=2 ** 63 - 1)):
     from myclaw.knowledge.quality import resolve_conflict as _resolve
 
     try:
@@ -526,11 +528,11 @@ async def merge_categories(req: CategoryMerge, base: str | None = None):
 
 
 @router.get("/api/knowledge/duplicates", dependencies=guard)
-async def duplicates(base: str | None = None, limit: int = 100):
+async def duplicates(base: str | None = None, limit: int = Query(100, ge=1, le=500)):
     from myclaw.knowledge.quality import find_duplicates
 
-    pairs = await asyncio.to_thread(find_duplicates, _base(base), None, max(1, min(limit, 500)))
-    return {"pairs": pairs}
+    # 2026-10-24 (KB phase 2 review): {"pairs", "partial", "message"}; at most ~20 s
+    return await asyncio.to_thread(find_duplicates, _base(base), None, limit, True, 20.0)
 
 
 class NoteMerge(BaseModel):

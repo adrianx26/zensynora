@@ -51,8 +51,9 @@ def write_to_knowledge(
     content: the text of the note (plain text or markdown)
     tags: 1-4 comma-separated topic words, e.g. "homelab, linux" — always add some
     observations: facts, one per line as "category | text", e.g. "spec | 32 GB RAM";
-                  optionally "category | text | source" (where the fact comes from,
-                  e.g. "spec | 32 GB RAM | tool shell free -g" or a URL)
+                  optionally "category | text | source: where it comes from", e.g.
+                  "spec | 32 GB RAM | source: output of free -g" (a URL, "tool …" or
+                  "chat …" works without "source:"); other "|" stay part of the text
     relations: links to other notes, one per line as "relation | Other note title",
                e.g. "runs_on | Home server" — link to notes that already exist (search_knowledge first)
     user_id: User ID for multi-user isolation
@@ -67,11 +68,19 @@ def write_to_knowledge(
             for line in observations.strip().split("\n"):
                 if "|" in line:
                     category, obs_content = line.split("|", 1)
-                    # 2026-10-24 (KB phase 2): optional third field = source
+                    # 2026-10-24 (KB phase 2): optional third field = source, only
+                    # when marked ("source: …", a URL, "tool …", "chat …") — a fact
+                    # may contain pipes ("ps aux | grep python").
                     source = None
                     if "|" in obs_content:
-                        obs_content, source = obs_content.rsplit("|", 1)
-                        source = " ".join(source.split()) or None
+                        head, tail = obs_content.rsplit("|", 1)
+                        mark = " ".join(tail.split())
+                        if mark.lower().startswith("source:"):
+                            source = mark[len("source:"):].strip() or None
+                        elif mark.lower().startswith(("http://", "https://", "tool ", "chat ")):
+                            source = mark
+                        if source:
+                            obs_content = head
                     obs_list.append(Observation(
                         category=category.strip(),
                         content=obs_content.strip(),
@@ -622,16 +631,29 @@ def find_duplicate_notes(user_id: str = "default") -> str:
 
     user_id: User ID for multi-user isolation
     """
+    import concurrent.futures
+
     from ..knowledge.quality import find_duplicates
 
+    # 2026-10-24 (KB phase 2 review): never hold up the agent's turn for long —
+    # an 8 s budget inside, and at most ~10 s of waiting here.
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="kb-dups")
     try:
-        pairs = find_duplicates(user_id, limit=30)
+        future = pool.submit(find_duplicates, user_id, None, 30, True, 8.0)
+        result = future.result(timeout=10)
+    except concurrent.futures.TimeoutError:
+        return ("Looking for duplicates takes too long for this knowledge base right now. "
+                "Ask the user to use the Knowledge page (⧉ Find duplicates).")
     except Exception as e:
         logger.warning("find_duplicate_notes failed: %s", e)
         return f"Could not look for duplicates: {e}. Try sync_knowledge_base() and ask again."
+    finally:
+        pool.shutdown(wait=False)
+    pairs = result.get("pairs") or []
+    note = f"\n({result['message']})" if result.get("message") else ""
     if not pairs:
-        return "No duplicate notes found."
-    lines = [f"{len(pairs)} possible duplicate pair(s):", ""]
+        return "No duplicate notes found." + note
+    lines = [f"{len(pairs)} possible duplicate pair(s):{note}", ""]
     for d in pairs:
         k, x = d["keep"], d["drop"]
         lines.append(f"- keep {k['title']} ({k['permalink']}), merge {x['title']} ({x['permalink']}) "

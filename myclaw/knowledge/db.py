@@ -314,7 +314,8 @@ class EntityWithData:
     relations: List[Relation] = field(default_factory=list)
 
 
-_TEXT_BACKFILLED: set = set()  # db files whose old notes were indexed (v0.7.5)
+_TEXT_BACKFILLED: set = set()
+REPARSE_ALL_KEY = "reparse_all_notes"  # sync_meta flag: the next sync re-reads every note  # db files whose old notes were indexed (v0.7.5)
 
 
 class KnowledgeDB:
@@ -659,8 +660,10 @@ class KnowledgeDB:
 
         # 2026-10-24 (KB phase 2): normalised fact category (indexed; the file
         # keeps the category as written), the category registry and conflicts.
+        phase2_added = False
         try:
             conn.execute("ALTER TABLE observations ADD COLUMN category_norm TEXT")
+            phase2_added = True
         except sqlite3.OperationalError:
             pass
         conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_category_norm "
@@ -676,6 +679,12 @@ class KnowledgeDB:
                 value TEXT
             )
         """)
+        # 2026-10-24 (KB phase 2 review): an index made before phase 2 has no
+        # fact sources and no conflict check: the next sync (incremental too)
+        # re-reads every note once, so it gives what `sync --force` gives.
+        if phase2_added and conn.execute("SELECT 1 FROM observations LIMIT 1").fetchone():
+            conn.execute("INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, '1')",
+                         (REPARSE_ALL_KEY,))
 
         conn.commit()
         # v0.7.5: index the text of notes written before the text index existed

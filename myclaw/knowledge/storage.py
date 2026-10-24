@@ -298,8 +298,10 @@ def _what_is_lost(old: Note, new: Note) -> List[str]:
     old_body = _squash(extract_body(old.content, old.title))
     if old_body and old_body not in _squash(extract_body(new.content, new.title)):
         lost.append("text")
-    new_obs = {(o.category, o.content) for o in new.observations}
-    if any((o.category, o.content) not in new_obs for o in old.observations):
+    # 2026-10-24 (KB phase 2 review): a fact's source counts too
+    new_obs = {(o.category, o.content, getattr(o, "provenance_path", None)) for o in new.observations}
+    if any((o.category, o.content, getattr(o, "provenance_path", None)) not in new_obs
+           for o in old.observations):
         lost.append("facts")
     new_rel = {(r.relation_type, r.target) for r in new.relations}
     if any((r.relation_type, r.target) not in new_rel for r in old.relations):

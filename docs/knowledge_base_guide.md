@@ -145,11 +145,15 @@ resolving one conflict) choose so, and the previous version is kept in
 - [preference] Answers in English (source: chat 2026-10-24)
 ```
 
-Only this exact `(source: …)` form is special; any other `(…)` at the end
-of a fact stays part of the fact. Facts saved automatically get their source
+Only a `(source: …)` that closes at the very end of the line (only `#tags`
+may follow) is special; any other `(…)` stays part of the fact. The same fact
+from two sources is kept twice. Facts saved automatically get their source
 (`chat <date>` from a conversation, `tool <name> <URL or path>` from a tool
-result). Agents can give one as a third field: `spec | 32 GB RAM | tool shell
-free -g`. `read_knowledge` and the note panel on the Knowledge page show it.
+result; shell commands are not written, and URLs lose passwords, `?query`
+and `#fragment`). Agents can give one as a third field marked as a source:
+`spec | 32 GB RAM | source: output of free -g` (a URL, `tool …` or `chat …`
+needs no `source:`; any other `|` stays part of the fact, e.g. `tip | ps aux
+| grep python`). `read_knowledge` and the note panel show it.
 
 **Categories.** `[Specs]`, `[spec]` and `[specification]` are counted as one
 category, `spec`: lower case, singular, and common synonyms (`config` /
@@ -160,17 +164,22 @@ rare spelling (used 1–2 times) into a common one (3+), e.g. `Specs → spec`
 or the typo `preferance → preference`. *Preview…* shows every fact that
 would change; *Apply* rewrites those notes.
 
-**Conflicts.** When a note is saved or re-indexed, facts of the same category
-on that note are compared. Only clear contradictions are flagged ⚠:
+**Conflicts.** When a note is saved or re-indexed, facts of the categories
+that hold one current value — `setting` (also `config`), `spec`,
+`preference` — on that note are compared. Only clear contradictions are
+flagged ⚠: the same words with another number, or the same "subject key" (two
+words or more) with another value.
 
 | Flagged | Not flagged |
 |---|---|
-| `32 GB RAM` / `64 GB RAM` | the same fact twice, `32GB RAM` / `32 GB RAM` |
-| `listens on port 11434` / `listens on port 8080` | `32 GB RAM` / `32 GB RAM DDR4` (one contains the other) |
-| `port: 80` / `port: 8080`, `OS = Debian` / `OS = Ubuntu` | `Server 1 has …` / `Server 2 has …` (two things) |
-| `Default model is llama3` / `Default model is qwen2.5` | dates and times (`backup ran on 2026-10-01` / `… 10-02`), `Step 1` / `Step 2` |
-|  | differently worded or unrelated facts, `Python is installed` / `Python is fast` |
+| `mindy01 has 32 GB RAM` / `mindy01 has 64 GB RAM` | the same fact twice, `32GB RAM` / `32 GB RAM`, one fact containing the other |
+| `Ollama listens on port 11434` / `… port 8080` | names with digits: `mindy01` / `mindy02`, `slot A1` / `A2`, `sda1`, `eth0`; `Server 1` / `Server 2` |
+| `Ollama port: 11434` / `Ollama port: 8080` | a one-word key (`Port: 80` / `Port: 8080`, `Model: …`, `Sister: …`): usually a list |
+| `Default model is llama3` / `Default model is qwen2.5` | readings, counters, statuses, versions, errors, people: temperature, usage, tests, status, version, error, exit code, owner … |
+|  | dates, times, years; other categories (`fact`, `how-to`, `url`, `person` …) |
 
+With `knowledge.detect_conflicts` off, nothing new is flagged and existing
+flags are hidden (they come back when it is turned on again).
 Open the note (notes with conflicts have an amber dot in the graph):
 **Keep A** or **Keep B** removes the other fact from the note file; **Both
 are fine** dismisses the pair for good. A conflict closes by itself when you
@@ -178,7 +187,10 @@ edit one of the two facts away.
 
 **Duplicate notes.** *⧉ Find duplicates* lists pairs with the same title, a
 title that is the other note's alias, the same text, or nearly the same
-short text. Nothing is merged automatically: pick a pair, check the preview
+short text with similar titles and the same numbers (notes made from one
+template — daily weather, session summaries — are not duplicates). On very
+large bases the check stops after a while and says the list is not
+complete. Nothing is merged automatically: pick a pair, check the preview
 (tags, aliases, facts and links of both; the other note's text under
 `## Merged from <title>`), then *Merge*. The merged note's title, aliases and
 file name become aliases of the kept note, so `[[links]]` to it keep working;

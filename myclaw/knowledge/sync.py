@@ -356,6 +356,9 @@ class SyncEngine:
         # sync. Each note is a savepoint: one failing note is only skipped.
         with db.batch():
             db.clear_all_data(keep_file_paths=unreadable)
+            from .db import REPARSE_ALL_KEY  # 2026-10-24: a full rebuild re-reads everything
+            db._get_connection().execute(
+                "INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, '0')", (REPARSE_ALL_KEY,))
             stats["deleted"] = -1  # Indicate a full clear, not individual deletes.
             for file_path, note, file_meta in parsed:
                 try:
@@ -389,8 +392,12 @@ class SyncEngine:
         entities = db.list_all_entities()
         by_permalink = {e.permalink: e for e in entities}
         by_path = {e.file_path: e for e in entities if e.file_path}
+        # 2026-10-24 (KB phase 2 review): set when the index was upgraded —
+        # every note is re-read once (fact sources, categories, conflicts)
+        from .db import REPARSE_ALL_KEY
+        reparse_all = db.get_sync_meta(REPARSE_ALL_KEY) == "1"
 
-        if since is None:
+        if since is None or reparse_all:
             candidates = sorted(all_files)
         else:
             recent = _filter_since(all_files, since)
@@ -408,7 +415,8 @@ class SyncEngine:
                 continue
             checksum = file_meta["checksum"]
             known = by_path.get(path_str)
-            if known is not None and known.checksum == checksum and known.title is not None:
+            if (known is not None and known.checksum == checksum and known.title is not None
+                    and not reparse_all):
                 continue  # unchanged
             if self._should_skip(path_str, checksum):
                 logger.debug(f"Skipping {file_path} due to repeated failures")
@@ -537,6 +545,8 @@ class SyncEngine:
             except Exception as ex:
                 stats["errors"] += 1
                 logger.error(f"Failed to delete {e.permalink}: {ex}")
+        if reparse_all and not stats["errors"]:
+            db.set_sync_meta(REPARSE_ALL_KEY, "0")
 
 
 def clear_note_cache() -> None:

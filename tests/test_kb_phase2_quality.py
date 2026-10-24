@@ -212,11 +212,12 @@ def test_merge_category_preview_then_apply(home):
 CONFLICTS = [
     ("32 GB RAM", "64 GB RAM"),
     ("Ollama listens on port 11434", "Ollama listens on port 8080"),
-    ("port: 11434", "port: 8080"),
+    ("Ollama port: 11434", "Ollama port: 8080"),
     ("RAM = 32GB", "RAM = 64GB"),
     ("Default model is llama3", "Default model is qwen2.5"),
     ("Runs Ubuntu 22.04", "Runs Ubuntu 24.04"),
-    ("OS: Debian", "OS: Ubuntu"),
+    ("Home server OS: Debian", "Home server OS: Ubuntu"),
+    ("mindy01 has 32 GB RAM", "mindy01 has 64 GB RAM"),
 ]
 
 NOT_CONFLICTS = [
@@ -288,7 +289,7 @@ def test_dismissed_stays_dismissed_also_after_full_rebuild(home):
     from myclaw.knowledge.quality import list_conflicts, resolve_conflict
     from myclaw.knowledge.sync import sync_knowledge
 
-    write_note("Box", content="x", observations=_facts(("setting", "port: 80"), ("setting", "port: 443")))
+    write_note("Box", content="x", observations=_facts(("setting", "web port: 80"), ("setting", "web port: 443")))
     cid = list_conflicts("default")[0]["id"]
     before = (_kdir(home) / "box.md").read_text()
     r = resolve_conflict("default", cid, "both")
@@ -296,7 +297,7 @@ def test_dismissed_stays_dismissed_also_after_full_rebuild(home):
     assert (_kdir(home) / "box.md").read_text() == before
     assert list_conflicts("default") == []
     sync_knowledge("default", force=True)
-    write_note("Box", content="x again", observations=_facts(("setting", "port: 80"), ("setting", "port: 443")))
+    write_note("Box", content="x again", observations=_facts(("setting", "web port: 80"), ("setting", "web port: 443")))
     assert list_conflicts("default") == []
     assert [c["id"] for c in list_conflicts("default", status="dismissed")] == [cid]
 
@@ -542,7 +543,7 @@ def api(home):
 def test_api_conflicts_routes(api, home):
     from myclaw.knowledge import write_note
 
-    write_note("Box", content="x", observations=_facts(("setting", "port: 80"), ("setting", "port: 8080")))
+    write_note("Box", content="x", observations=_facts(("setting", "web port: 80"), ("setting", "web port: 8080")))
     r = api.get("/api/knowledge/conflicts", params={"permalink": "box"})
     assert r.status_code == 200 and len(r.json()["conflicts"]) == 1
     c = r.json()["conflicts"][0]
@@ -594,7 +595,7 @@ def test_api_duplicates_and_merge_routes(api, home):
 def test_year_like_values_after_a_key_are_values():
     from myclaw.knowledge.quality import conflict_kind
 
-    assert conflict_kind("port: 1999", "port: 2000") == "value"
+    assert conflict_kind("web port: 1999", "web port: 2000") == "value"
     assert conflict_kind("Released in 2019", "Released in 2021") is None
 
 
@@ -607,3 +608,265 @@ def test_many_facts_are_checked_quickly():
     t = time.time()
     find_conflicts(obs)
     assert time.time() - t < 3
+
+
+# ── Review fixes (2026-10-24) ───────────────────────────────────────────────
+
+def test_r1_pipes_in_a_fact_stay_text(home):
+    from myclaw.knowledge import read_note
+    from myclaw.tools.kb import write_to_knowledge
+
+    write_to_knowledge("Shell tips", "Tips.", "linux",
+                       "tip | ps aux | grep python\nsetting | ports: 80 | 443\n"
+                       "fact | from docs | source: the manual\nurl | docs | https://x.org/a")
+    n = read_note("shell-tips")
+    assert [(o.content, o.provenance_path) for o in n.observations] == [
+        ("ps aux | grep python", None), ("ports: 80 | 443", None),
+        ("from docs", "the manual"), ("docs", "https://x.org/a")]
+
+
+def test_r2_same_fact_from_two_sources_is_kept(home):
+    from myclaw.knowledge import read_note, update_note
+
+    f = _kdir(home) / "box.md"
+    f.write_text("---\ntitle: Box\n---\n\n# Box\n\n- [fact] A (source: chat 1)\n- [fact] A (source: chat 2)\n")
+    from myclaw.knowledge.sync import sync_knowledge
+    sync_knowledge("default")
+    assert [o.provenance_path for o in read_note("box").observations] == ["chat 1", "chat 2"]
+    update_note("box", tags=["new"])
+    text = f.read_text()
+    assert "(source: chat 1)" in text and "(source: chat 2)" in text
+    # dropping one of them is a loss: the old version goes to .trash
+    from myclaw.knowledge.parser import Observation
+    update_note("box", observations=[Observation("fact", "A", [], provenance_path="chat 1")])
+    assert len(_trash(home)) == 1
+
+
+@pytest.mark.parametrize("line,content,source", [
+    ("- [fact] cost (source: invoice) (approx)", "cost (source: invoice) (approx)", None),
+    ("- [fact] see the docs (source: x) for details", "see the docs (source: x) for details", None),
+    ("- [fact] a (source: b) c (source: d)", "a (source: b) c", "d"),
+    ("- [fact] nested (source: a (b (c)))", "nested", "a (b (c))"),
+    ("- [fact] note (source:)", "note (source:)", None),
+])
+def test_r7_last_source_running_to_the_end(line, content, source):
+    from myclaw.knowledge.parser import Note, generate_markdown, parse_observations
+
+    o = parse_observations(line)[0]
+    assert (o.content, o.provenance_path) == (content, source)
+    md = generate_markdown(Note(name="n", permalink="n", title="N", content="", observations=[o]))
+    back = parse_observations(md)[0]
+    assert (back.content, back.provenance_path) == (content, source)
+
+
+def test_r7_unbalanced_source_is_written_safely():
+    from myclaw.knowledge.parser import Note, generate_markdown, parse_observations
+    from myclaw.knowledge.parser import Observation
+
+    o = Observation("fact", "x", [], provenance_path="odd ) source (source: y")
+    md = generate_markdown(Note(name="n", permalink="n", title="N", content="", observations=[o]))
+    back = parse_observations(md)[0]
+    assert back.content == "x" and back.provenance_path and "(source:" not in back.provenance_path
+
+
+REVIEW_CORPUS = {
+"weather": [("weather","Temperature in Bucharest: 12°C"),("weather","Temperature in Bucharest: 18°C"),
+            ("weather","Wind: 10 km/h NW"),("weather","Wind: 25 km/h S"),("weather","Humidity 60%"),("weather","Humidity 85%"),
+            ("forecast","Monday: sunny, 20°C"),("forecast","Tuesday: rain, 14°C"),("weather","Morning: 8°C"),("weather","Afternoon: 16°C")],
+"servers": [("spec","Server mindy01 has 32 GB RAM"),("spec","Server mindy02 has 64 GB RAM"),
+            ("spec","CPU: Ryzen 7 5800X"),("spec","GPU: RTX 3060 12 GB"),("spec","GPU: RTX 4090 24 GB"),
+            ("spec","Disk /dev/sda: 1 TB"),("spec","Disk /dev/sdb: 4 TB"),("spec","RAM slot A1: 16 GB"),("spec","RAM slot A2: 16 GB"),
+            ("spec","nvme0n1 512 GB"),("spec","nvme1n1 2 TB"),("spec","eth0 1 Gbps"),("spec","eth1 10 Gbps")],
+"ports": [("setting","Ollama listens on port 11434"),("setting","Open WebUI listens on port 8080"),
+          ("setting","ZenSynora web UI port: 8000"),("setting","Grafana port: 3000"),
+          ("port","ssh: 22"),("port","http: 80"),("port","https: 443"),
+          ("setting","port: 8080"),("setting","port: 9090")],
+"llm providers": [("provider","OpenAI: gpt-4o"),("provider","Anthropic: claude-3.5-sonnet"),
+                  ("model","default model is llama3"),("model","fallback model is qwen2.5"),
+                  ("provider","Groq rate limit: 30 requests/min"),("provider","Cerebras rate limit: 60 requests/min"),
+                  ("model","Context window: 8192 tokens"),("model","Context window: 128000 tokens"),
+                  ("model","llama3 is 8B"),("model","qwen2.5 is 14B"),("model","Model: llama3"),("model","Model: qwen2.5")],
+"versions": [("version","Python 3.11 on server"),("version","Python 3.13 on laptop"),("version","Node.js 20.19"),("version","Node.js 22.1"),
+             ("version","ZenSynora version: 0.7.5"),("version","ZenSynora version: 0.7.6"),
+             ("version","Docker 24.0.7"),("version","Docker Compose 2.23")],
+"errors": [("error","Error 500 on /api/chat"),("error","Error 502 on /api/chat"),("error","Timeout after 30 s"),("error","Timeout after 120 s"),
+           ("error","Exit code: 1"),("error","Exit code: 137"),("error","Retry 3 failed"),("error","Retry 5 failed"),
+           ("error","HTTP 429: Too Many Requests"),("error","HTTP 401: Unauthorized")],
+"session": [("summary","Session 2026-10-01: fixed sync"),("summary","Session 2026-10-02: added tests"),
+            ("decision","Use SQLite for the index"),("decision","Use Postgres for metrics"),
+            ("fact","Tests: 844 passing"),("fact","Tests: 921 passing"),("fact","Commit count 120"),("fact","Commit count 135"),
+            ("fact","Status: done"),("fact","Status: in progress"),("todo","Owner: Adrian"),("todo","Owner: Claude")],
+"dates": [("fact","Backup ran at 03:00"),("fact","Backup ran at 04:00"),("fact","Last backup: 2026-10-01"),("fact","Last backup: 2026-10-02"),
+          ("fact","Uptime 12 days"),("fact","Uptime 30 days"),("fact","Disk usage 45%"),("fact","Disk usage 80%")],
+"family": [("person","Brother: Mihai"),("person","Sister: Ana"),("person","Sister: Maria"),("person","Kid age 5"),("person","Kid age 8")],
+"recipes": [("ingredient","Flour: 500 g"),("ingredient","Sugar: 200 g"),("step","Bake 20 min at 180°C"),("step","Bake 10 min at 200°C"),
+            ("ingredient","Eggs: 2"),("ingredient","Milk: 250 ml")],
+}
+
+
+def test_r3_review_corpus_has_no_false_conflicts():
+    from myclaw.knowledge.parser import Observation
+    from myclaw.knowledge.quality import find_conflicts
+
+    for name, facts in REVIEW_CORPUS.items():
+        obs = [Observation(c, t, []) for c, t in facts]
+        assert find_conflicts(obs) == [], name
+
+
+def test_r3_real_conflicts_still_flagged_and_only_in_value_categories():
+    from myclaw.knowledge.quality import find_conflicts
+
+    obs = _facts(("setting", "Ollama port: 11434"), ("setting", "Ollama port: 8080"),
+                 ("spec", "mindy01 has 32 GB RAM"), ("spec", "mindy01 has 64 GB RAM"),
+                 ("fact", "mindy01 has 16 GB RAM"), ("fact", "mindy01 has 8 GB RAM"),
+                 ("config", "Grafana port = 3000"), ("Settings", "Grafana port = 3001"))
+    assert sorted((i, j) for i, j, _ in find_conflicts(obs)) == [(0, 1), (2, 3), (6, 7)]
+
+
+def test_r4_templated_notes_are_not_duplicates(home):
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.quality import find_duplicates
+
+    for i in range(30):
+        write_note(f"Weather Bucharest 2026-10-{i + 1:02d}",
+                   content=f"Weather report for Bucharest on 2026-10-{i + 1:02d}. Temperature {i % 20}°C, "
+                           f"wind {i % 7 + 3} km/h, humidity {50 + i}%. Sky: cloudy.")
+    write_note("Router setup", content="Configure the router: open the admin page, set the WiFi name and the password, then reboot it.")
+    write_note("Router setup notes", content="Configure the router: open the admin page, set the WiFi name and the password, and then reboot it.")
+    r = find_duplicates("default", report=True)
+    assert [(p["keep"]["permalink"], p["drop"]["permalink"]) for p in r["pairs"]] in (
+        [("router-setup", "router-setup-notes")], [("router-setup-notes", "router-setup")])
+    assert r["partial"] is False
+
+
+def test_r5_duplicates_report_partial_when_capped(home, monkeypatch):
+    from myclaw.knowledge import quality, write_note
+
+    text = "Configure the router: open the admin page, set the WiFi name and the password, then reboot it."
+    for i in range(4):
+        write_note(f"Router setup {'abcd'[i]}", content=text + " " + "xyzw"[i])
+    monkeypatch.setattr(quality, "_MAX_CANDIDATES", 1)
+    r = quality.find_duplicates("default", report=True)
+    assert r["partial"] is True and "not complete" in r["message"]
+    assert isinstance(quality.find_duplicates("default"), list)  # default shape unchanged
+
+
+def test_r5_duplicates_are_fast_on_a_big_base(home):
+    import time
+
+    from myclaw.knowledge.quality import find_duplicates
+
+    kd = _kdir(home)
+    for i in range(1500):
+        kd.joinpath(f"n{i}.md").write_text(
+            f"---\ntitle: Session summary {i}\n---\n\n# Session summary {i}\n\nWorked on the knowledge base "
+            f"and fixed sync number {i}. Added tests. Reviewed merge.\n")
+    t = time.time()
+    r = find_duplicates("default", report=True)
+    assert time.time() - t < 5 and r["pairs"] == []
+
+
+def test_r6_concurrent_resolve_removes_only_one_fact(home):
+    import threading
+
+    from myclaw.knowledge import read_note, write_note
+    from myclaw.knowledge.quality import list_conflicts, resolve_conflict
+
+    write_note("Box", content="x", observations=_facts(("setting", "web port: 80"), ("setting", "web port: 8080")))
+    cid = list_conflicts("default")[0]["id"]
+    out = []
+    ts = [threading.Thread(target=lambda k=k: out.append(resolve_conflict("default", cid, k))) for k in "ab"]
+    [t.start() for t in ts]
+    [t.join() for t in ts]
+    assert sum(1 for r in out if r["changed"]) == 1
+    assert len(read_note("box").observations) == 1
+
+
+def test_r6_failed_resolve_gives_the_conflict_back(home, monkeypatch):
+    from myclaw.knowledge import storage, write_note
+    from myclaw.knowledge.quality import list_conflicts, resolve_conflict
+
+    write_note("Box", content="x", observations=_facts(("setting", "web port: 80"), ("setting", "web port: 8080")))
+    cid = list_conflicts("default")[0]["id"]
+
+    def boom(*a, **k):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(storage, "update_note", boom)
+    with pytest.raises(OSError):
+        resolve_conflict("default", cid, "a")
+    assert [c["id"] for c in list_conflicts("default")] == [cid]
+
+
+def test_r8_old_index_is_reread_once_by_incremental_sync(home):
+    import sqlite3
+
+    from myclaw.knowledge.quality import list_conflicts
+    from myclaw.knowledge.sync import sync_knowledge
+
+    f = _kdir(home) / "box.md"
+    f.write_text("# Box\n\n- [spec] mindy01 has 32 GB RAM\n- [spec] mindy01 has 64 GB RAM (source: chat 1)\n")
+    sync_knowledge("default")
+    db = home / ".myclaw" / "knowledge_default.db"
+    conn = sqlite3.connect(db)  # make it look like an index from before phase 2
+    conn.execute("DROP INDEX idx_observations_category_norm")
+    conn.execute("ALTER TABLE observations DROP COLUMN category_norm")
+    conn.execute("UPDATE observations SET provenance_path = NULL")
+    conn.execute("DELETE FROM conflicts")
+    conn.commit()
+    conn.close()
+    stats = sync_knowledge("default")             # incremental, file unchanged
+    assert stats["updated"] == 1
+    assert len(list_conflicts("default")) == 1
+    from myclaw.knowledge.db import KnowledgeDB
+    with KnowledgeDB("default") as kdb:
+        assert kdb.get_sync_meta("reparse_all_notes") == "0"
+        assert kdb._get_connection().execute(
+            "SELECT provenance_path FROM observations WHERE provenance_path IS NOT NULL").fetchone()[0] == "chat 1"
+    assert sync_knowledge("default")["updated"] == 0  # only once
+
+
+def test_r9_category_merge_matches_unicode_and_spaces(home):
+    from myclaw.knowledge.quality import merge_category
+    from myclaw.knowledge.sync import sync_knowledge
+
+    kd = _kdir(home)
+    (kd / "a.md").write_text("# A\n\n- [Настройки] x 1\n")
+    (kd / "b.md").write_text("# B\n\n- [настройки] y 2\n")
+    (kd / "c.md").write_text("# C\n\n- [my  cat] z\n")
+    sync_knowledge("default")
+    assert [n["permalink"] for n in merge_category("default", "настройки", "setting")["notes"]] == ["a", "b"]
+    assert [n["permalink"] for n in merge_category("default", "my cat", "cat")["notes"]] == ["c"]
+
+
+def test_r10_huge_ids_are_404_not_500(api):
+    for cid in ("99999999999999999999", "0", "-1"):
+        r = api.post(f"/api/knowledge/conflicts/{cid}", json={"keep": "a"})
+        assert r.status_code == 422, (cid, r.status_code)
+    assert api.get("/api/knowledge/duplicates", params={"limit": -5}).status_code == 422
+    from myclaw.tools.kb import resolve_knowledge_conflict
+    assert "knowledge_conflicts()" in resolve_knowledge_conflict(10 ** 20, "a")
+
+
+def test_r11_sources_hold_no_secrets():
+    from myclaw.knowledge.quality import tool_source
+
+    assert tool_source("shell", {"cmd": "mysql -p hunter2"}) == "tool shell"
+    assert tool_source("ssh_command", {"host": "h", "cmd": "x"}) == "tool ssh_command"
+    s = tool_source("browse", {"url": "https://user:pw@api.x.org/v1/a?token=abc123#frag"})
+    assert s == "tool browse https://api.x.org/v1/a"
+    s = tool_source("read_file", {"path": "/srv/keys/sk-abcdefghijklmnopqrstuvwxyz0123"})
+    assert "abcdefghijklmnop" not in s and "redacted" in s
+
+
+def test_r12_conflicts_hidden_while_detection_is_off(api, home, monkeypatch):
+    from myclaw.knowledge import quality, write_note
+
+    write_note("Box", content="x", observations=_facts(("spec", "32 GB RAM"), ("spec", "64 GB RAM")))
+    assert len(api.get("/api/knowledge/conflicts").json()["conflicts"]) == 1
+    monkeypatch.setitem(quality._OPTIONS, "detect_conflicts", False)
+    assert api.get("/api/knowledge/conflicts").json()["conflicts"] == []
+    assert api.get("/api/knowledge/note/box").json()["conflicts"] == []
+    assert {n["id"]: n["conflicts"] for n in api.get("/api/knowledge/graph").json()["nodes"]}["box"] == 0
+    monkeypatch.setitem(quality._OPTIONS, "detect_conflicts", True)
+    assert len(api.get("/api/knowledge/conflicts").json()["conflicts"]) == 1  # kept, not deleted
