@@ -18,7 +18,7 @@ import os
 import sqlite3
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple, Optional
+from typing import Any, Dict, Iterable, List, Set, Tuple, Optional
 from datetime import datetime
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -291,9 +291,9 @@ class SyncEngine:
                     size=file_meta["size"], entity_id=entity_id,
                 )
             except (sqlite3.IntegrityError, sqlite3.OperationalError) as e:
-                text = str(e).lower()
-                if isinstance(e, sqlite3.OperationalError) and \
-                        "locked" not in text and "busy" not in text:
+                from .budget import is_locked_error  # 2026-10-25 (KB phase 6): one rule
+
+                if isinstance(e, sqlite3.OperationalError) and not is_locked_error(e):
                     raise
                 if attempt == 2:
                     raise _TransientSyncError(str(e)) from e
@@ -308,13 +308,18 @@ class SyncEngine:
         else:
             self._record_failure(str(file_path), str(error), checksum)
 
-    def sync(self, force: bool = False, since: Optional[float] = None) -> Dict[str, int]:
+    def sync(self, force: bool = False, since: Optional[float] = None,
+             paths: Optional[Iterable[Any]] = None) -> Dict[str, int]:
+        """Index the files. ``force``: rebuild everything. ``paths`` (KB phase 6,
+        2026-10-25 — the file watcher): read only these files (plus files at a
+        path the index does not know yet); deletions and moves are found as in
+        every incremental sync, from the full listing."""
         stats = {"added": 0, "updated": 0, "deleted": 0, "errors": 0}
         with KnowledgeDB(self.user_id, db_path=self.db_path) as db:
             if force:
                 self._sync_full(db, stats)
             else:
-                self._sync_incremental(db, stats, since)
+                self._sync_incremental(db, stats, since, paths=paths)
             # 2026-10-24 (KB phase 2): recount the fact-category registry
             if force or stats["added"] or stats["updated"] or stats["deleted"]:
                 try:
@@ -371,7 +376,7 @@ class SyncEngine:
                     logger.warning(f"Failed to sync {file_path}: {e}")
 
     def _sync_incremental(self, db: KnowledgeDB, stats: Dict[str, int],
-                          since: Optional[float]) -> None:
+                          since: Optional[float], paths: Optional[Iterable[Any]] = None) -> None:
         """Index new/changed/moved files, drop entries whose file is gone.
 
         2026-10-23 (KB phase 0):
@@ -397,7 +402,11 @@ class SyncEngine:
         from .db import REPARSE_ALL_KEY
         reparse_all = db.get_sync_meta(REPARSE_ALL_KEY) == "1"
 
-        if since is None or reparse_all:
+        if paths is not None and not reparse_all:
+            wanted = {os.path.normpath(str(x)) for x in paths}
+            candidates = sorted(f for f in all_files if os.path.normpath(str(f)) in wanted
+                                or str(f) not in by_path or by_path[str(f)].title is None)
+        elif since is None or reparse_all:
             candidates = sorted(all_files)
         else:
             recent = _filter_since(all_files, since)
@@ -529,6 +538,10 @@ class SyncEngine:
         for snap in entities:
             if snap.id in claimed_ids:
                 continue
+            # 2026-10-25 (KB phase 6): its file is still there and nobody took
+            # it — keep it without a query per note (the watcher syncs often)
+            if snap.file_path in all_paths and path_owner.get(snap.file_path) in (None, snap.id):
+                continue
             e = db.get_entity_by_id(snap.id)
             if e is None:
                 continue
@@ -637,8 +650,12 @@ def _list_markdown_files(knowledge_dir: Path, patterns: List[str]) -> Set[Path]:
             if name.startswith(".") or not name.endswith(".md"):
                 continue
             file_path = Path(root) / name
-            if _is_indexable(file_path, knowledge_dir, patterns):
-                files.add(file_path)
+            # 2026-10-25 (KB phase 6): the walk already skips dot-folders and
+            # non-.md files; the full check only for symlinks and .bmignore
+            if (patterns or os.path.islink(os.path.join(root, name))) and \
+                    not _is_indexable(file_path, knowledge_dir, patterns):
+                continue
+            files.add(file_path)
     return files
 
 
@@ -837,7 +854,8 @@ def detect_changes(
 
 
 def sync_knowledge(user_id: str = "default", force: bool = False, db_path: Optional[Path] = None,
-                   since: Optional[float] = None) -> Dict[str, int]:
+                   since: Optional[float] = None,
+                   paths: Optional[Iterable[Any]] = None) -> Dict[str, int]:
     """
     Synchronize filesystem with database.
 
@@ -850,12 +868,26 @@ def sync_knowledge(user_id: str = "default", force: bool = False, db_path: Optio
         force: If True, re-sync all files regardless of timestamps
         db_path: Optional custom DB path
         since: Optional Unix timestamp; only scan files modified after this
+        paths: Optional files to re-read (KB phase 6: the file watcher)
 
     Returns:
         Stats dict with counts of added, updated, deleted, errors
     """
     engine = SyncEngine(user_id=user_id, db_path=db_path)
-    return engine.sync(force=force, since=since)
+    return engine.sync(force=force, since=since, paths=paths)
+
+
+def background_sync(user_id: str = "default", who: str = "background sync",
+                    paths: Optional[Iterable[Any]] = None,
+                    db_path: Optional[Path] = None) -> Dict[str, int]:
+    """An incremental sync made by a background writer (the 60 s loop, the file
+    watcher, an import): under the base's slot of the shared write budget
+    (2026-10-25, KB phase 6), so it never runs at the same time as embeddings,
+    a distillation or an import writing the same base."""
+    from . import budget
+
+    with budget.background(db_path or user_id, who, budget.PRIO_SYNC):
+        return sync_knowledge(user_id, db_path=db_path, paths=paths)
 
 
 def verify_sync(user_id: str = "default") -> bool:
@@ -927,7 +959,8 @@ async def _background_extraction_loop(user_id: str, interval_seconds: int = 60):
     while True:
         try:
             # Run sync in thread to avoid blocking the event loop
-            stats = await asyncio.to_thread(sync_knowledge, user_id)
+            # 2026-10-25 (KB phase 6): under the shared write budget
+            stats = await asyncio.to_thread(background_sync, user_id)
             
             total_changes = stats['added'] + stats['updated'] + stats['deleted']
             if total_changes > 0:

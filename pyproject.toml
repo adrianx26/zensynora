@@ -90,6 +90,10 @@ ingest = ["pypdf>=4.0,<7.0", "python-docx>=1.1,<2.0", "openpyxl>=3.1,<4.0", "ijs
 # embeddings (ONNX Runtime, CPU). fastembed: Apache-2.0; default model
 # BAAI/bge-small-en-v1.5 (MIT, 67 MB, downloaded on first use to ~/.myclaw/models).
 semantic = ["fastembed>=0.5,<1.0"]
+# KB phase 6 (2026-10-25) — live re-index of note files edited by hand (the
+# Web UI's file watcher, knowledge.watch_files). watchfiles: MIT. Without it the
+# watcher polls modification times every 5 s. (uvicorn[standard] usually brings it.)
+watch = ["watchfiles>=0.21,<2.0"]
 
 # Sprint 2 — distributed tracing
 tracing = [
@@ -142,6 +146,7 @@ all = [
     "python-docx>=1.1,<2.0",
     "openpyxl>=3.1,<4.0",
     "fastembed>=0.5,<1.0",
+    "watchfiles>=0.21,<2.0",
 ]
 
 # Test runner only — what CI installs for the test jobs.

@@ -84,6 +84,10 @@ def _write_atomic(file_path: Path, text: str) -> None:
     """
     file_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = file_path.with_name(f".{file_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    # 2026-10-25 (KB phase 6): our own write — the file watcher ignores it
+    from .watch import remember_self_write
+
+    remember_self_write(file_path, text)
     try:
         with open(tmp, "w", encoding="utf-8") as f:
             f.write(text)
@@ -539,6 +543,9 @@ def delete_note(permalink: str, user_id: str = "default", db_path: Optional[Path
 def _move_to_trash(file_path: Path, knowledge_dir: Path) -> Path:
     """Move a note to ``<base>/.trash/<name>-<YYYYmmdd-HHMMSS>.md`` (Web UI scheme)."""
     dest = _trash_path(knowledge_dir, file_path.stem)
+    from .watch import remember_self_write  # 2026-10-25 (KB phase 6)
+
+    remember_self_write(file_path, None)
     shutil.move(str(file_path), str(dest))
     return dest
 

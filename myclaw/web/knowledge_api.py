@@ -416,6 +416,9 @@ async def save_note(permalink: str, req: NoteContent, base: str | None = None):
         raise HTTPException(status_code=400, detail="The note is empty — use Delete to remove it.")
     if len(req.content) > 1_000_000:
         raise HTTPException(status_code=413, detail="The note is too large (1 MB max).")
+    from myclaw.knowledge.watch import remember_self_write
+
+    remember_self_write(f, req.content)  # 2026-10-25 (KB phase 6): not a change by hand
     f.write_text(req.content, encoding="utf-8")
     await asyncio.to_thread(_resync, b, f)
     return await asyncio.to_thread(_note_detail, b, permalink)
@@ -431,6 +434,9 @@ async def remove_note(permalink: str, base: str | None = None):
     trash = f.parent / ".trash"
     trash.mkdir(exist_ok=True)
     dest = trash / f"{f.stem}-{time.strftime('%Y%m%d-%H%M%S')}.md"
+    from myclaw.knowledge.watch import remember_self_write
+
+    remember_self_write(f, None)  # 2026-10-25 (KB phase 6)
     shutil.move(str(f), dest)
     with KnowledgeDB(b) as db:
         db.delete_entity(permalink)

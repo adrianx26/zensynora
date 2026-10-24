@@ -157,6 +157,8 @@ from myclaw.web import knowledge_semantic_api as _knowledge_semantic_api  # noqa
 app.include_router(_knowledge_semantic_api.router)  # 2026-10-24 (KB phase 3): semantic search status / backfill / install
 from myclaw.web import knowledge_distill_api as _knowledge_distill_api  # noqa: E402
 app.include_router(_knowledge_distill_api.router)  # 2026-10-24 (KB phase 4): facts / scenarios / persona / drill-down
+from myclaw.web import knowledge_health_api as _knowledge_health_api  # noqa: E402
+app.include_router(_knowledge_health_api.router)  # 2026-10-25 (KB phase 6): index health, file watcher status
 
 
 _mcp_manager = None
@@ -228,6 +230,31 @@ async def _start_distill_scans() -> None:
 
 
 app.router.add_event_handler("startup", _start_distill_scans)
+
+
+async def _start_file_watcher() -> None:
+    """2026-10-25 (KB phase 6): the Web UI re-indexes note files changed by hand
+    (editor, Obsidian, git pull) — only while knowledge.watch_files is on; the
+    thread starts and stops with the switch."""
+    try:
+        from myclaw.knowledge import watch
+
+        watch.start_background()
+    except Exception as exc:  # pragma: no cover - never block the start
+        logger.warning("Knowledge file watcher not started: %s", exc)
+
+
+async def _stop_file_watcher() -> None:
+    try:
+        from myclaw.knowledge import watch
+
+        await asyncio.to_thread(watch.stop_background)
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.debug("Knowledge file watcher not stopped: %s", exc)
+
+
+app.router.add_event_handler("startup", _start_file_watcher)
+app.router.add_event_handler("shutdown", _stop_file_watcher)
 app.router.add_event_handler("shutdown", _stop_background_runner)
 
 # Metrics middleware (must be first to capture all requests)

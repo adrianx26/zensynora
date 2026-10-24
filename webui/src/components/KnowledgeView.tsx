@@ -6,6 +6,7 @@ import { api } from '../api';
 import KnowledgeGraph, { type GEdge, type GNode, type GraphHandle } from './KnowledgeGraph';
 import KnowledgeImport from './KnowledgeImport';
 import KnowledgeDistilled from './KnowledgeDistilled';
+import KnowledgeHealth from './KnowledgeHealth';
 import { CategoriesCard, CategoryMergePanel, ConflictsSection, DuplicatesPanel, type Conflict } from './KnowledgeQuality';
 import { SearchModePicker, SemanticCard } from './KnowledgeSemantic';
 import { useSemanticStatus, type SearchMode } from '../knowledgeSemantic';
@@ -395,6 +396,7 @@ const KnowledgeView: React.FC = () => {
           )}
         </div>
       )}
+      <KnowledgeHealth base={base} reloadKey={data} onReindexed={load} />
       {notice && <div className={`notice ${notice.ok ? '' : 'error'}`} onClick={() => setNotice(null)}>{notice.text}</div>}
       {error && <div className="notice error">Could not load the knowledge base: {error} <button className="ghost-btn" onClick={load}>Retry</button></div>}
 

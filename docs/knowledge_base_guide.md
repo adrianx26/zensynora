@@ -121,7 +121,8 @@ zensynora knowledge search "my car" --mode hybrid   # fts (default) | semantic |
 ## Editing by hand, folders, `.bmignore`
 
 Edit the files with any editor (Obsidian works). Run *↻ Re-index* on the
-Knowledge page or `zensynora knowledge sync` afterwards. Moving or renaming a
+Knowledge page or `zensynora knowledge sync` afterwards — or turn on *Live
+sync* (below) and the Web UI does it by itself. Moving or renaming a
 file keeps its links. Folders whose name starts with `.` (`.trash`, `.git`,
 `.obsidian`) are never indexed. A `.bmignore` file in the base folder can
 exclude more, one pattern per line: `drafts/`, `*.tmp`, `archive/**`.
@@ -410,9 +411,10 @@ notes (level 0), by rules — no model is called:
 **Turn it on:** *Settings → Features → Distil facts, scenarios and a persona*
 (`knowledge.distill`, default off). Then the Web UI distils in the background
 after `knowledge.distill_every` (20) changed notes, or `knowledge.distill_idle_minutes`
-(10) after the last change — one run at a time, never while semantic search is
-embedding, at most about two minutes per run (the next run continues); a run
-that crashed is taken over at once. Command-line commands never start a
+(10) after the last change — one run at a time, never while another background
+job is writing the same knowledge base (see *Background work* below), at most
+about two minutes per run (the next run continues); a run that crashed is taken
+over at once. Command-line commands never start a
 background run; nothing runs in the background while the switch is off. And the
 agent's automatic *Relevant Knowledge* starts with a short **What I know about
 you** (the persona, about 400 characters, only when the message is about you:
@@ -427,6 +429,61 @@ characters. Off: the agent's context is exactly as before.
 | Agent | `list_facts(query, limit)`, `list_scenarios(query)`, `get_persona()`, `drill_down(id)` (`f12`, `s3` or `persona`), `distill_knowledge()` (works with the switch off too) |
 | Command line | `zensynora knowledge distill [--base NAME] [--full]` |
 | API | `GET /api/knowledge/facts`, `/scenarios`, `/persona`, `/drill/{fact\|scenario\|persona}/{id}`, `/distill/status`; `POST /api/knowledge/distill` (`DELETE` stops it) |
+
+## Live sync, background work and health checks
+
+Added 2026-10-25 (KB phase 6).
+
+**Live sync.** *Settings → Features → Watch note files* (`knowledge.watch_files`,
+default off). While the Web UI runs, a note file you create, edit, move or
+delete by hand (an editor, Obsidian, `git pull`) is re-indexed within about a
+second — only that file, through the normal re-index: a moved or renamed note
+keeps its links, links to a deleted note wait for it again, and semantic search
+and distillation pick the change up as usual. A few changes in a row are
+collected into one re-index (at most ~2 s after the first).
+
+* Uses the optional package `watchfiles` (MIT; usually already installed with
+  the Web UI — otherwise `pip install 'zensynora[watch]'`). Without it the
+  folder is checked every 5 seconds instead.
+* **Ignored:** anything that is not a `.md` note inside a knowledge base
+  folder; `.trash`, `.git`, `.obsidian` and every other folder or file whose name
+  starts with `.`; temporary and swap files (`*.tmp`, `*~`, `.#*`, `*.swp`, `*.bak`);
+  the index databases, logs and status files (memopad's watcher re-indexed its
+  own log forever); and ZenSynora's own writes (a note saved by an agent, the
+  Web UI or an import is not re-indexed a second time). Changing `.bmignore`
+  or moving a whole folder re-indexes that base.
+* Works with another notes folder (`knowledge.knowledge_dir`) and follows it
+  when it changes; nothing is watched while `knowledge.enabled` is off. A base
+  folder created by hand is picked up after its first `zensynora knowledge sync`.
+* Command-line commands never watch; the switch only affects the Web UI.
+
+**Background work.** Everything that writes the index in the background — the
+watcher, imports, semantic-search embeddings, distillation, the gateway's
+periodic sync — shares one budget: **one background writer per knowledge base at
+a time**, in this order (watcher/sync → imports → embeddings → distillation).
+What you and the agents write (a note saved in the Web UI, `write_to_knowledge`)
+never waits for it: a background job lets it go first between two of its
+writes. When the database is busy anyway (another program), a write is retried
+a few times ("database is locked" only).
+
+**Health.** The Knowledge page shows one status line: live sync on/off and its
+last re-index, whether the index matches the files, notes waiting for
+embeddings or distillation — and the warnings with what to do. The same checks
+are on the **Doctor** page and in `zensynora doctor` (all bases; each takes well
+under a second):
+
+| Check | Warns when | What to do |
+|---|---|---|
+| Knowledge index | notes not indexed, index entries without a file, notes changed since indexing (checksums of a sample) | `zensynora knowledge sync` (`--force` rebuilds); `zensynora doctor --fix` re-indexes |
+| Waiting links | 25 or more links to notes that do not exist (the most wanted are named) | create those notes or correct the link text |
+| Conflicts | open ⚠ conflicts | open the note, keep one fact |
+| Semantic search (when on) | fastembed missing, the model cannot load, notes waiting for vectors | *Install* / *Backfill* on the Knowledge page, `zensynora knowledge embed` |
+| Distillation (when on) | the last run failed, notes not distilled for a day (shows the lease) | *Distil now*, `zensynora knowledge distill` |
+| File watcher (when on) | on but not running in the Web UI, or it reported an error | switch it off and on, restart the Web UI |
+| Imports | an import had errors in the last 24 h (`~/.myclaw/logs/knowledge_ingest.jsonl`) | fix the source, import again |
+| .trash | more than 10 000 files or 500 MB | delete old versions by hand (ZenSynora never empties it) |
+
+API: `GET /api/knowledge/health?base=`.
 
 ## Plans
 

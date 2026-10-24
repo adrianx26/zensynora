@@ -495,6 +495,9 @@ class KnowledgeConfig(BaseModel):
     distill: bool = False
     distill_every: int = Field(20, ge=1, le=100000)          # changed notes per background run
     distill_idle_minutes: float = Field(10.0, ge=0.0, le=10080.0)  # … or this long after the last change
+    # 2026-10-25 (KB phase 6): the Web UI re-indexes note files changed by hand
+    # (editor, Obsidian, git pull) within about a second. Off by default.
+    watch_files: bool = False
 
 
 class SwarmConfig(BaseModel):
@@ -966,6 +969,19 @@ def _apply_knowledge_distill(config: AppConfig) -> None:
         logger.warning("distillation settings could not be applied (%s); it stays off", e)
 
 
+def _apply_knowledge_watch(config: AppConfig) -> None:
+    """Apply ``knowledge.watch_files`` (2026-10-25, KB phase 6): starts / stops the
+    file watcher in the Web UI process. Never makes loading the config fail."""
+    try:
+        kc = getattr(config, "knowledge", None)
+        from .knowledge.watch import set_options
+
+        set_options(watch_files=getattr(kc, "watch_files", False),
+                    kb_enabled=getattr(kc, "enabled", True))
+    except Exception as e:
+        logger.warning("file watcher settings could not be applied (%s); it stays off", e)
+
+
 def load_config(force_reload: bool = False) -> AppConfig:
     """Load and validate config. Exits with clear message on schema errors.
 
@@ -1001,6 +1017,7 @@ def load_config(force_reload: bool = False) -> AppConfig:
             _apply_knowledge_quality(_cached_config)
             _apply_knowledge_semantic(_cached_config)
             _apply_knowledge_distill(_cached_config)
+            _apply_knowledge_watch(_cached_config)
 
             # Validate critical configuration
             _validate_config(_cached_config)

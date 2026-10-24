@@ -19,6 +19,7 @@ from .parser import Note, Observation, Relation
 from . import quality as _quality
 from . import semantic as _semantic
 from . import distill as _distill
+from . import budget as _budget
 
 logger = logging.getLogger(__name__)
 
@@ -871,14 +872,17 @@ class KnowledgeDB:
             return
         if conn.in_transaction:
             conn.commit()
-        conn.execute("BEGIN IMMEDIATE")
-        try:
-            yield conn
-        except BaseException:
-            conn.rollback()
-            raise
-        else:
-            conn.commit()
+        # 2026-10-25 (KB phase 6): a write outside a background slot is a
+        # foreground write — background writers yield to it (budget.py)
+        with _budget.foreground(self.db_path):
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                yield conn
+            except BaseException:
+                conn.rollback()
+                raise
+            else:
+                conn.commit()
 
     @staticmethod
     @contextmanager
@@ -910,7 +914,13 @@ class KnowledgeDB:
             return
         if conn.in_transaction:
             conn.commit()
-        conn.execute("BEGIN IMMEDIATE")
+        fg = _budget.foreground(self.db_path)  # 2026-10-25 (KB phase 6), see _write_txn
+        fg.__enter__()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+        except BaseException:
+            fg.__exit__(None, None, None)
+            raise
         self._batch_depth = 1
         self._indexed_in_batch = []
         try:
@@ -927,6 +937,7 @@ class KnowledgeDB:
             _distill.note_changed(self.db_path, len(indexed))
         finally:
             self._batch_depth = 0
+            fg.__exit__(None, None, None)
 
     def get_entity_by_permalink(self, permalink: str) -> Optional[Entity]:
         """Get entity by permalink."""

@@ -809,22 +809,26 @@ class _Stopped(Exception):
 
 
 def _write_retry(conn: sqlite3.Connection, fn: Callable[[], None]) -> None:
-    """One write transaction; retried only on "database is locked"/busy."""
-    for attempt in range(4):
+    """One write transaction; retried only on "database is locked"/busy.
+
+    2026-10-25 (KB phase 6): the shared retry of ``budget.py``; before the
+    transaction a background writer that holds the base's write slot lets
+    foreground writes and higher-priority writers go first (``checkpoint``).
+    """
+    from . import budget
+
+    budget.checkpoint()
+
+    def once() -> None:
+        conn.execute("BEGIN IMMEDIATE")
         try:
-            conn.execute("BEGIN IMMEDIATE")
-            try:
-                fn()
-            except BaseException:
-                conn.rollback()
-                raise
-            conn.commit()
-            return
-        except sqlite3.OperationalError as e:
-            text = str(e).lower()
-            if ("locked" not in text and "busy" not in text) or attempt == 3:
-                raise
-            time.sleep(0.5 * (attempt + 1))
+            fn()
+        except BaseException:
+            conn.rollback()
+            raise
+        conn.commit()
+
+    budget.retry_locked(once, "a background write")
 
 
 def embed_notes(db_path: Path, ids: Sequence[int], emb: Embedder,
@@ -932,7 +936,12 @@ def embed_notes(db_path: Path, ids: Sequence[int], emb: Embedder,
                     conn.execute(f"DELETE FROM note_vectors_carry WHERE model = ? "
                                  f"AND checksum IN ({_ph(len(part))})", [model, *part])
 
-            _write_retry(conn, write)
+            # 2026-10-25 (KB phase 6): one background writer per base (budget.py);
+            # only the write holds the slot, never the model
+            from . import budget
+
+            with budget.background(db_path, "embeddings", budget.PRIO_SEMANTIC):
+                _write_retry(conn, write)
             for k, v in done.items():
                 stats[k] += v
             if progress:
@@ -957,7 +966,10 @@ def prune_carry(db_path: Path) -> None:
                              "note_vectors_carry ORDER BY added_at DESC LIMIT -1 OFFSET ?)",
                              (CARRY_MAX_ROWS,))
 
-            _write_retry(conn, work)
+            from . import budget
+
+            with budget.background(db_path, "embeddings", budget.PRIO_SEMANTIC):
+                _write_retry(conn, work)
         finally:
             conn.close()
     except sqlite3.Error as e:

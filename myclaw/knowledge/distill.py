@@ -35,11 +35,13 @@ notes at any time (``zensynora knowledge distill --full``); nothing here ever
 changes a note. Only notes whose checksum changed are read again, and only
 the facts they touch are recomputed.
 
-Background writers: one distillation runs at a time per process
-(``_RUN_LOCK``) and per database (a lease row in ``distill_state`` with host,
-pid and time; a dead owner on this host or an old lease is taken over). The
-scheduler waits while the semantic-search worker is embedding and runs only
-in the Web UI process. # Phase 6: replace both with the shared write limit.
+Background writers (2026-10-25, KB phase 6): a run holds the base's slot of
+the shared write budget (``budget.py``: one background writer per base, foreground
+writes and higher-priority writers — watcher, imports, embeddings — go first
+between two write transactions) and, across processes, a lease row in
+``distill_state`` (host, pid and time; a dead owner on this host or an old lease
+is taken over). The scheduler runs only in the Web UI process and waits while
+another background writer is working on the base.
 """
 from __future__ import annotations
 
@@ -1608,7 +1610,8 @@ def _build_persona(conn: sqlite3.Connection, now: datetime) -> Dict[str, Any]:
 
 # ── A run ───────────────────────────────────────────────────────────────────
 
-_RUN_LOCK = threading.Lock()      # one distillation at a time in this process
+# 2026-10-25 (KB phase 6): the process-wide _RUN_LOCK is replaced by the
+# base's slot of the shared write budget (budget.py)
 _LAST: Dict[str, Dict[str, Any]] = {}
 _RUNNING: Set[str] = set()
 _HOST = socket.gethostname()
@@ -1694,9 +1697,13 @@ def distill(base: str = "default", db_path: Optional[Path] = None, full: bool = 
     path = db_path_for(base, db_path, create=True)
     assert path is not None
     key = str(path)
-    if not _RUN_LOCK.acquire(timeout=max(0.0, wait_lock)):
+    from . import budget
+
+    if not budget.acquire(budget.key_for(path), "distillation", budget.PRIO_DISTILL,
+                          timeout=max(0.0, wait_lock)):
         return {"ok": False, "busy": True,
-                "message": "Another distillation is running — try again in a minute."}
+                "message": "Another background job is writing this knowledge base (a distillation, "
+                           "an import or embeddings) — try again in a minute."}
     _RUNNING.add(key)
     conn = _connect(path)
     try:
@@ -1719,7 +1726,7 @@ def distill(base: str = "default", db_path: Optional[Path] = None, full: bool = 
     finally:
         conn.close()
         _RUNNING.discard(key)
-        _RUN_LOCK.release()
+        budget.release(budget.key_for(path))
 
 
 def _distill_locked(conn: sqlite3.Connection, key: str, full: bool, budget: Optional[float],
@@ -2289,7 +2296,7 @@ def context_block(base: str, message: str, budget: int = CONTEXT_BUDGET,
 # ── Background scheduler ────────────────────────────────────────────────────
 
 SCAN_INTERVAL = 600.0             # the Web UI looks for changed notes every 10 minutes
-SEMANTIC_WAIT = 15.0              # the semantic worker is busy: try again after this
+SEMANTIC_WAIT = 15.0              # another background writer is busy: try again after this
 RETRY_AFTER_ERROR = 300.0
 
 
@@ -2315,7 +2322,9 @@ class _Scheduler:
     """One daemon thread, only in a process that asked for it (the Web UI:
     ``start_background``) and only while distillation is on; never on the
     event loop. ``clock`` / ``runner`` / ``busy`` are replaceable (tests run
-    ``tick`` directly, no sleeping)."""
+    ``tick`` directly, no sleeping). ``busy`` (no argument) replaces the
+    default check — another background writer holds or waits for the base's
+    slot of the write budget (2026-10-25, KB phase 6)."""
 
     def __init__(self, clock: Callable[[], float] = time.monotonic,
                  runner: Optional[Callable[[str], Dict[str, Any]]] = None,
@@ -2326,7 +2335,7 @@ class _Scheduler:
         self.runner = runner or (lambda path: distill(db_path=Path(path),
                                                       budget_seconds=BACKGROUND_SECONDS,
                                                       wait_lock=0.0, stop=self._stopping))
-        self.busy = busy or _semantic_busy
+        self.busy = busy
         self.thread: Optional[threading.Thread] = None
         self.wanted = False       # start_background() was called (the Web UI)
         self.next_scan = 0.0
@@ -2414,7 +2423,7 @@ class _Scheduler:
             ready = [p for p, st in self.bases.items() if due(st, now, every, idle)]
         ran: List[str] = []
         for path in ready:
-            if self.busy():
+            if self.busy() if self.busy is not None else _writers_busy(path):
                 with self.cv:
                     self.bases[path].not_before = now + SEMANTIC_WAIT
                 continue
@@ -2472,14 +2481,23 @@ class _Scheduler:
                 self.cv.wait(min(self._next_wake(self.clock()), 60.0))
 
 
-def _semantic_busy() -> bool:
-    """The semantic-search worker is embedding (one background writer at a time)."""
+def _writers_busy(path: Any) -> bool:
+    """Another background writer holds or waits for this base's write slot
+    (2026-10-25, KB phase 6: replaces "the semantic worker is embedding")."""
     try:
-        from . import semantic
+        from . import budget
 
-        w = semantic._WORKER
-        with w.cv:
-            return bool(w.busy or w.pending)
+        return budget.busy(Path(str(path)))
+    except Exception:
+        return False
+
+
+def _semantic_busy() -> bool:
+    """Kept for callers of the phase-4 name: is any background writer busy?"""
+    try:
+        from . import budget
+
+        return budget.busy()
     except Exception:
         return False
 

@@ -776,6 +776,11 @@ def _write_file(path: Path, data: bytes, replace: bool = False) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(f".{path.name}.{os.getpid()}.import.tmp")
     tmp.write_bytes(data)
+    # 2026-10-25 (KB phase 6): our own write — the file watcher leaves it to
+    # the import's sync
+    from myclaw.knowledge.watch import remember_self_write
+
+    remember_self_write(path, data)
     try:
         if replace:
             os.replace(tmp, path)
@@ -976,7 +981,10 @@ def import_markdown(source: Path, base: str, budget: Budget, result: IngestResul
     if may_write(budget):
         budget.report("indexing the imported notes")
         try:
-            stats = sync_knowledge(base)
+            from myclaw.knowledge import budget  # 2026-10-25 (KB phase 6): shared write budget
+
+            with budget.background(base, "import", budget.PRIO_INGEST):
+                stats = sync_knowledge(base)
             if stats.get("errors"):
                 result.errors.append(f"{stats['errors']} notes could not be indexed — see the doctor "
                                      "/ the log for the file names")

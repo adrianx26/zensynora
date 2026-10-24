@@ -144,9 +144,9 @@
     "semantic_hash": ""
   },
   "myclaw/agent.py": {
-    "mtime": 1792860224.985966,
-    "seen": 1792861090.206935,
-    "ast_hash": "832758674ffd1fc750f0fd2b280a9bef",
+    "mtime": 1792861799.9155216,
+    "seen": 1792877051.4939294,
+    "ast_hash": "fe3fb41d0aeb20b11744163e20e0e399",
     "semantic_hash": ""
   },
   "myclaw/agent_internals/__init__.py": {
@@ -552,9 +552,9 @@
     "semantic_hash": ""
   },
   "myclaw/knowledge/storage.py": {
-    "mtime": 1792841985.7500973,
-    "seen": 1792861090.2071235,
-    "ast_hash": "edbea8f2305f586642ebf3709e771566",
+    "mtime": 1792861799.9126089,
+    "seen": 1792877051.49416,
+    "ast_hash": "27133303ba9cf5838b9df1fec67b3557",
     "semantic_hash": ""
   },
   "myclaw/knowledge/sync.py": {
@@ -900,9 +900,9 @@
     "semantic_hash": ""
   },
   "myclaw/tools/kb.py": {
-    "mtime": 1792860259.7913241,
-    "seen": 1792861090.2072227,
-    "ast_hash": "7d51c16f08e43579757bbdbe31fce457",
+    "mtime": 1792876538.9705648,
+    "seen": 1792877051.494325,
+    "ast_hash": "341c7ec05a9a17ce49b4330b521e3b58",
     "semantic_hash": ""
   },
   "myclaw/tools/management.py": {
@@ -2634,9 +2634,9 @@
     "semantic_hash": ""
   },
   "myclaw/knowledge/extract.py": {
-    "mtime": 1792824366.8464553,
-    "seen": 1792861090.2070925,
-    "ast_hash": "f8fba3340356e82d63a8814591f9f565",
+    "mtime": 1792861799.9145598,
+    "seen": 1792877051.4941223,
+    "ast_hash": "6306562b40242d80625d59a0cd4376a9",
     "semantic_hash": ""
   },
   "myclaw/tools/jobs.py": {
@@ -2802,9 +2802,9 @@
     "semantic_hash": ""
   },
   "docs/knowledge_base_guide.md": {
-    "mtime": 1792861021.3990903,
-    "seen": 1792861090.207668,
-    "ast_hash": "03e7cc5d4750d79c8ec432e4160a9012",
+    "mtime": 1792877025.3051636,
+    "seen": 1792877051.494801,
+    "ast_hash": "56f82164f8de6f7d8645c3b8213f53c5",
     "semantic_hash": ""
   },
   "docs/images/webui-agent-context.png": {
@@ -2826,9 +2826,9 @@
     "semantic_hash": ""
   },
   "myclaw/knowledge/distill.py": {
-    "mtime": 1792860586.9596343,
-    "seen": 1792861090.2070897,
-    "ast_hash": "69ed4d0e8bfddf0531ff7bdf1bd53964",
+    "mtime": 1792876732.4695199,
+    "seen": 1792877051.4941196,
+    "ast_hash": "27ecc85c95ffd852b8d485b267f20b0e",
     "semantic_hash": ""
   },
   "myclaw/knowledge/ingest/__init__.py": {
@@ -2904,9 +2904,9 @@
     "semantic_hash": ""
   },
   "myclaw/knowledge/semantic.py": {
-    "mtime": 1792859483.035327,
-    "seen": 1792861090.2071218,
-    "ast_hash": "f88ca79a15c221bbb3937c4d92795545",
+    "mtime": 1792876483.931106,
+    "seen": 1792877051.494158,
+    "ast_hash": "0f57b5fd3fee9d1b85cbdf5e2fc49620",
     "semantic_hash": ""
   },
   "myclaw/tools/ingest.py": {
@@ -2916,9 +2916,9 @@
     "semantic_hash": ""
   },
   "myclaw/web/knowledge_distill_api.py": {
-    "mtime": 1792860278.335244,
-    "seen": 1792861090.2072625,
-    "ast_hash": "b8bf7b3d07bce902836a8840f3d79ef8",
+    "mtime": 1792876494.0745063,
+    "seen": 1792877051.494365,
+    "ast_hash": "6a871d81dfdc7615ab7ce33e29d1bf90",
     "semantic_hash": ""
   },
   "myclaw/web/knowledge_import_api.py": {
@@ -2946,9 +2946,9 @@
     "semantic_hash": ""
   },
   "tests/test_kb_phase4_distill.py": {
-    "mtime": 1792860691.229463,
-    "seen": 1792861090.2073581,
-    "ast_hash": "3b141844742eaf7c9b832cb38d381a0f",
+    "mtime": 1792876687.5677884,
+    "seen": 1792877051.4944777,
+    "ast_hash": "9aca9e0744c5a49285ec7e378300dc2c",
     "semantic_hash": ""
   },
   "tests/test_kb_phase5_ingest.py": {
@@ -2964,9 +2964,9 @@
     "semantic_hash": ""
   },
   "webui/src/components/KnowledgeDistilled.tsx": {
-    "mtime": 1792860395.257004,
-    "seen": 1792861090.2074695,
-    "ast_hash": "b1ce90e82337cffe4317311d356d9917",
+    "mtime": 1792876505.532797,
+    "seen": 1792877051.4945974,
+    "ast_hash": "0d24ac9280e12de6934db6914032d265",
     "semantic_hash": ""
   },
   "webui/src/components/KnowledgeImport.tsx": {
