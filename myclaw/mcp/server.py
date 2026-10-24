@@ -5,8 +5,8 @@ MCP clients sent ``limit="5"`` to ``search_knowledge`` and the tool failed when
 slicing with it. The input schema is now built from the type annotations
 (integer, number, boolean, array, object, string), defaults are included, and
 incoming arguments are converted to the annotated type before the call.
-``user_id`` (and other internal parameters) are not offered to clients: the
-knowledge tools pick their knowledge base themselves
+``user_id`` of the knowledge tools is not offered to clients (other tools keep
+it): the knowledge tools pick their knowledge base themselves
 (``myclaw.knowledge.scope.for_tool`` — outside an agent turn that is the
 shared ``default`` base).
 """
@@ -29,9 +29,13 @@ import myclaw.tools as m_tools
 logger = logging.getLogger(__name__)
 
 # 2026-10-23 (KB phase 0): parameters MCP clients never see (and cannot set).
-# ``user_id``: the tools choose the knowledge base / owner themselves; a client
-# could otherwise pick another (empty) knowledge base with a made-up id.
-HIDDEN_PARAMS = frozenset({"user_id", "_depth", "context", "self"})
+HIDDEN_PARAMS = frozenset({"_depth", "context", "self"})
+# ``user_id`` is hidden only for the knowledge tools (myclaw/tools/kb.py): they
+# choose their knowledge base themselves (scope.for_tool), and a made-up id
+# would pick another (empty) knowledge base. Every other tool (schedule,
+# swarm_*, user profile…) keeps ``user_id`` so a client can target a user.
+KB_HIDDEN_PARAMS = frozenset({"user_id"})
+_KB_TOOL_MODULE = "myclaw.tools.kb"
 
 _TRUE = {"true", "1", "yes", "y", "on"}
 _FALSE = {"false", "0", "no", "n", "off", ""}
@@ -121,14 +125,27 @@ def _json_default(value: Any) -> Any:
         return None
 
 
+def _is_knowledge_tool(func: Any) -> bool:
+    """A knowledge tool from myclaw/tools/kb.py (they scope ``user_id`` themselves)."""
+    for f in (func, _target(func)):
+        if getattr(f, "__module__", None) == _KB_TOOL_MODULE:
+            return True
+    return False
+
+
+def _hidden_params(func: Any) -> frozenset:
+    return HIDDEN_PARAMS | KB_HIDDEN_PARAMS if _is_knowledge_tool(func) else HIDDEN_PARAMS
+
+
 def _visible_params(func: Any) -> List[inspect.Parameter]:
     try:
         sig = inspect.signature(func)
     except (TypeError, ValueError):
         return []
+    hidden = _hidden_params(func)
     return [
         p for name, p in sig.parameters.items()
-        if name not in HIDDEN_PARAMS
+        if name not in hidden
         and p.kind not in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
     ]
 
@@ -220,14 +237,15 @@ def _coerce(name: str, value: Any, kind: str) -> Any:
 def coerce_arguments(func: Callable[..., Any], arguments: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     """Convert the client's arguments to the types the tool's annotations ask for.
 
-    Hidden parameters (``user_id``…) are dropped; arguments the tool does not
+    Hidden parameters (``_depth``, and ``user_id`` of the knowledge tools) are dropped; arguments the tool does not
     know are passed on unchanged (the tool may take ``**kwargs``).
     """
     hints = _type_hints(func)
     params = {p.name: p for p in _visible_params(func)}
+    hidden = _hidden_params(func)
     out: Dict[str, Any] = {}
     for key, value in dict(arguments or {}).items():
-        if key in HIDDEN_PARAMS:
+        if key in hidden:
             continue
         p = params.get(key)
         if p is None:

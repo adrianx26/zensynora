@@ -90,7 +90,7 @@ def test_once_parses_relative_and_clock_times(env):
 
     now = time.time()
     assert 29 * 60 < _when("in 30 minutes") - now < 31 * 60
-    assert 0 < _when("08:30") - now <= 86400
+    assert 0 < _when("08:30") - now <= 86400 + 3600  # +1 h: a daylight-saving change may lie between (2026-10-25)
     assert _when("tomorrow 09:00") - now > 0
     assert _when("2030-01-02 03:04") > now
     assert _when("whenever") is None
