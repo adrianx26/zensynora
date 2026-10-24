@@ -883,6 +883,28 @@ def _validate_config(config: AppConfig) -> None:
 # ── Loaders ───────────────────────────────────────────────────────────────────
 
 
+_DEFAULT_KNOWLEDGE_DIR = "~/.myclaw/knowledge"
+
+
+def _apply_knowledge_dir(config: AppConfig) -> None:
+    """Point the knowledge storage at ``knowledge.knowledge_dir``.
+
+    2026-10-23 (KB phase 0): the setting was ignored everywhere. The default
+    value resets to ``None`` (= ``~/.myclaw/knowledge`` of the current HOME), so
+    tests that change HOME keep working. The index databases stay at
+    ``~/.myclaw/knowledge_<base>.db``. Never makes loading the config fail.
+    """
+    try:
+        value = str(getattr(getattr(config, "knowledge", None), "knowledge_dir", "") or "").strip()
+        default = os.path.abspath(os.path.expanduser(_DEFAULT_KNOWLEDGE_DIR))
+        target = os.path.abspath(os.path.expanduser(value)) if value else default
+        from .knowledge.storage import set_knowledge_root
+
+        set_knowledge_root(None if target == default else target)
+    except Exception as e:  # a bad value must not stop ZenSynora from starting
+        logger.warning("knowledge.knowledge_dir could not be applied (%s); using ~/.myclaw/knowledge", e)
+
+
 def load_config(force_reload: bool = False) -> AppConfig:
     """Load and validate config. Exits with clear message on schema errors.
 
@@ -914,6 +936,7 @@ def load_config(force_reload: bool = False) -> AppConfig:
 
             _cached_config = AppConfig(**raw)
             _config_mtime = current_mtime
+            _apply_knowledge_dir(_cached_config)
 
             # Validate critical configuration
             _validate_config(_cached_config)

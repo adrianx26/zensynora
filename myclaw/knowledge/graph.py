@@ -10,10 +10,48 @@ from typing import List, Dict, Set, Optional, Tuple, Any
 from collections import deque
 
 from .db import KnowledgeDB, EntityAlias
-from .parser import Note
+from .parser import Note, extract_body
 from .storage import read_note, _batch_read_notes
 
 logger = logging.getLogger(__name__)
+
+
+# 2026-10-23 (KB phase 0): agents only ever saw titles and facts, never the
+# text of a note — most notes are plain text, so the knowledge base looked
+# empty to them. These helpers give a note's text, shortened for prompts.
+def note_text(note: Any) -> str:
+    """The free text of a note (without frontmatter, title, facts and links)."""
+    content = getattr(note, "content", "")
+    if not isinstance(content, str) or not content:
+        return ""
+    try:
+        return extract_body(content)
+    except Exception:  # an odd file must never break a search or a prompt
+        return ""
+
+
+def shorten_text(text: str, limit: int, collapse: bool = True) -> str:
+    """``text`` cut to at most ``limit`` characters at a word boundary, with "…".
+
+    ``collapse`` turns every run of whitespace (newlines too) into one space.
+    """
+    if not isinstance(text, str):
+        return ""
+    text = " ".join(text.split()) if collapse else text.strip()
+    if limit <= 0:
+        return ""
+    if len(text) <= limit:
+        return text
+    cut = text[: max(limit - 1, 1)]
+    space = max(cut.rfind(" "), cut.rfind("\n"))
+    if space > limit * 0.6:
+        cut = cut[:space]
+    return cut.rstrip(" ,;:.-\n") + "…"
+
+
+def note_snippet(note: Any, limit: int) -> str:
+    """The note's text on one line, at most ``limit`` characters."""
+    return shorten_text(note_text(note), limit)
 
 
 def get_related_entities(
@@ -290,6 +328,11 @@ def get_central_entities(user_id: str = "default", limit: int = 10, db_path: Opt
         ]
 
 
+# 2026-10-23 (KB phase 0): how much text build_context shows.
+BUILD_CONTEXT_TEXT_CHARS = 1500
+NEIGHBOUR_SNIPPET_CHARS = 200
+
+
 def build_context(
     permalink: str,
     user_id: str = "default",
@@ -320,6 +363,12 @@ def build_context(
     lines.append(f"# {note.title}")
     lines.append("")
 
+    # 2026-10-23 (KB phase 0): the note's own text (it was never shown).
+    text = shorten_text(note_text(note), BUILD_CONTEXT_TEXT_CHARS, collapse=False)
+    if text:
+        lines.append(text)
+        lines.append("")
+
     if include_observations and note.observations:
         lines.append("## Key Facts")
         for obs in note.observations:
@@ -334,7 +383,7 @@ def build_context(
         lines.append("")
 
         # Group by depth
-        by_depth = {}
+        by_depth: Dict[int, List[Dict]] = {}
         for r in related:
             d = r['depth']
             if d not in by_depth:
@@ -345,9 +394,11 @@ def build_context(
         # called read_note() once per neighbor (1 + N + N²-shaped I/O on
         # dense graphs); we collect the permalinks first and parallel-read
         # them through the same helper used by storage.search_notes.
+        # 2026-10-23 (KB phase 0): read them also without observations — the
+        # neighbours' text snippet is shown in every case.
         depth1_notes_by_permalink: Dict[str, "Note"] = {}
-        if include_observations and 1 in by_depth:
-            from .storage import _batch_read_notes
+        if 1 in by_depth:
+            from .storage import _batch_read_notes  # lazy: tests patch the storage function
             depth1_perms = [r['permalink'] for r in by_depth[1]]
             depth1_notes = _batch_read_notes(depth1_perms, user_id, db_path=db_path)
             depth1_notes_by_permalink = {n.permalink: n for n in depth1_notes}
@@ -357,12 +408,29 @@ def build_context(
             for r in by_depth[d]:
                 lines.append(f"- {r['relation_type']} → **{r['name']}** ({r['permalink']})")
 
-                # Observations for depth-1 neighbors only.
-                if include_observations and d == 1:
+                if d == 1:
                     rel_note = depth1_notes_by_permalink.get(r['permalink'])
-                    if rel_note and rel_note.observations:
+                    snippet = note_snippet(rel_note, NEIGHBOUR_SNIPPET_CHARS) if rel_note else ""
+                    if snippet:
+                        lines.append(f"  {snippet}")
+                    # Observations for depth-1 neighbors only.
+                    if include_observations and rel_note and rel_note.observations:
                         for obs in rel_note.observations[:2]:  # Limit to 2
                             lines.append(f"  - [{obs.category}] {obs.content}")
+            lines.append("")
+
+    # 2026-10-23 (KB phase 0): notes that link TO this one ("Linked from"),
+    # so an agent also sees the other direction of the graph.
+    if depth >= 1:
+        try:
+            backlinks = get_backlinks(permalink, user_id, db_path=db_path)
+        except Exception as e:
+            logger.debug("build_context: backlinks of %s unavailable: %s", permalink, e)
+            backlinks = []
+        if backlinks:
+            lines.append("## Linked from")
+            for b in backlinks:
+                lines.append(f"- **{b['name']}** ({b['permalink']}) {b['relation_type']} → this note")
             lines.append("")
 
     return "\n".join(lines)

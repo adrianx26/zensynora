@@ -8,13 +8,11 @@ Key Components:
     - Memory: Async conversation memory with batching and cleanup
     - AsyncSQLitePool: Connection pool for async SQLite operations
     - SQLitePool: Synchronous connection pool with idle timeout
-    - Knowledge Extraction: Automatic entity/relation extraction from messages
 
 Features:
     - Per-user database isolation (memory_{user_id}.db)
     - FTS5 full-text search with BM25 ranking
     - Automatic message cleanup (configurable retention)
-    - Knowledge extraction to knowledge base
     - WAL mode for better concurrency
 
 Usage:
@@ -37,45 +35,16 @@ import sqlite3
 import aiosqlite
 import json
 import logging
-import re
 import threading
 import asyncio
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from contextlib import contextmanager
-from typing import List, Dict, Optional
+from typing import List, Optional
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
-
-# Import knowledge storage for extraction
-from .knowledge.parser import Observation
-from .knowledge.storage import write_note
-
-# Patterns for knowledge extraction
-ENTITY_PATTERNS = [
-    r"\b([A-Z][a-z]+ (?:Project|System|API|Tool|Framework|Library|Database|Server))\b",
-    r"\b([A-Z][a-zA-Z]+(?:\d+)?)\b",  # Capitalized words (potential proper nouns)
-]
-
-RELATION_KEYWORDS = [
-    "uses",
-    "depends on",
-    "requires",
-    "integrates with",
-    "connects to",
-    "implements",
-    "extends",
-    "inherits from",
-    "calls",
-    "triggers",
-    "leads to",
-    "results in",
-    "causes",
-    "enables",
-    "blocks",
-]
 
 # ── Configuration Constants ────────────────────────────────────────────────────
 DEFAULT_BATCH_SIZE = 10
@@ -549,99 +518,10 @@ class Memory:
             logger.error(f"Error getting stats: {e}")
             return {"error": str(e)}
 
-    async def extract_knowledge_candidates(self, limit: int = 50) -> List[Dict]:
-        """Extract potential knowledge entities from recent conversation history."""
-        if not self._initialized:
-            await self.initialize()
-
-        try:
-            cur = await self.conn.execute(
-                "SELECT content FROM messages ORDER BY id DESC LIMIT ?", (limit,)
-            )
-            messages = [row[0] async for row in cur.fetchall()]
-
-            text = " ".join(messages)
-
-            candidates = []
-
-            for pattern in ENTITY_PATTERNS:
-                matches = re.findall(pattern, text)
-                for match in matches:
-                    if len(match) > 3:
-                        count = text.count(match)
-                        if count >= 2:
-                            candidates.append(
-                                {
-                                    "type": "entity",
-                                    "name": match,
-                                    "mentions": count,
-                                    "confidence": min(count / 5, 1.0),
-                                    "source": "pattern_match",
-                                }
-                            )
-
-            definition_pattern = r"([A-Z][\w\s]+)\s+is\s+(?:a|an|the)\s+([\w\s]+)"
-            definitions = re.findall(definition_pattern, text)
-            for entity, definition in definitions:
-                entity_clean = entity.strip()
-                if len(entity_clean) > 3:
-                    candidates.append(
-                        {
-                            "type": "definition",
-                            "name": entity_clean,
-                            "definition": definition.strip(),
-                            "confidence": 0.7,
-                            "source": "definition_pattern",
-                        }
-                    )
-
-            seen = set()
-            unique_candidates = []
-            for c in candidates:
-                name = c["name"].lower()
-                if name not in seen:
-                    seen.add(name)
-                    unique_candidates.append(c)
-
-            unique_candidates.sort(key=lambda x: x["confidence"], reverse=True)
-
-            return unique_candidates[:20]
-
-        except Exception as e:
-            logger.error(f"Error extracting knowledge: {e}")
-            return []
-
-    async def save_extracted_knowledge(
-        self,
-        entity_name: str,
-        observations: Optional[List[str]] = None,
-        tags: Optional[List[str]] = None,
-        user_id: str = "default",
-    ) -> Optional[str]:
-        """Save an extracted knowledge entity to the knowledge base."""
-        if not self._initialized:
-            await self.initialize()
-
-        try:
-            obs_objects = []
-            if observations:
-                for obs in observations:
-                    obs_objects.append(Observation(category="extracted", content=obs, tags=[]))
-
-            permalink = write_note(
-                name=entity_name,
-                title=entity_name,
-                observations=obs_objects,
-                tags=tags or ["auto-extracted"],
-                user_id=user_id,
-            )
-
-            logger.info(f"Saved extracted knowledge: {entity_name} ({permalink})")
-            return permalink
-
-        except Exception as e:
-            logger.error(f"Error saving extracted knowledge: {e}")
-            return None
+    # 2026-10-23 (KB phase 0): removed extract_knowledge_candidates() and
+    # save_extracted_knowledge() — never called anywhere, and broken
+    # (``async for`` over ``fetchall()`` always failed). Knowledge is extracted
+    # by myclaw.knowledge.extract / the agent's auto-extraction instead.
 
     async def search(self, query: str, limit: int = 20, boost_recent: bool = True) -> list:
         """Search messages using full-text search with intelligent query processing."""

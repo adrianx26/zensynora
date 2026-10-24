@@ -218,7 +218,8 @@ class ResponseHandler:
         # Background context summarization. Captured snapshot is None when
         # the history was below the threshold at request start — skipping
         # avoids a wasted summarization pass.
-        if full_history_for_bg:
+        # 2026-10-23 (KB phase 0): no summary note when knowledge.enabled is False.
+        if full_history_for_bg and getattr(agent, "_kb_enabled", True):
             _summarize_task = asyncio.create_task(
                 agent._background_summarize_context(full_history_for_bg, user_id, mem)
             )

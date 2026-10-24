@@ -22,7 +22,6 @@ import logging
 import shutil
 import threading
 from contextvars import ContextVar
-from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +73,11 @@ def for_tool(user_id: str | None = None) -> str:
 
 def migrate_internal_scopes() -> dict[str, int]:
     """Move notes saved under old internal ids into the shared knowledge base."""
-    base = Path.home() / ".myclaw" / "knowledge"
+    # 2026-10-23 (KB phase 0): the configured knowledge folder, not always
+    # ~/.myclaw/knowledge (imported here: storage imports this module lazily)
+    from .storage import knowledge_root
+
+    base = knowledge_root()
     key = str(base)
     if key in _migrated:
         return {}
@@ -87,7 +90,7 @@ def migrate_internal_scopes() -> dict[str, int]:
             return moved
         target = base / SHARED
         for d in base.iterdir():
-            if not d.is_dir() or d.name == SHARED or not is_internal(d.name):
+            if not d.is_dir() or d.name == SHARED or d.name.startswith(".") or not is_internal(d.name):
                 continue
             n = 0
             for f in d.rglob("*.md"):
