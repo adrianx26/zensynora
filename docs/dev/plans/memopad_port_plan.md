@@ -5,8 +5,10 @@
 > ZenSynora's `myclaw/knowledge/`. ZenSynora's knowledge base is a port of
 > memopad's Markdown + SQLite design.
 
-**Status:** Phase 0 done on branch `kb-phase0-fixes` (2026-10-23). Phases 1–6
-not started; each needs approval.
+**Status:** Phase 0 done on branch `kb-phase0-fixes` (2026-10-24), including
+the fixes from an independent review (see incidents 2.4 and 2.5 in
+[incidents_and_lessons.md](../../incidents_and_lessons.md)). Phases 1–6 not
+started; each needs approval.
 
 Two findings shaped the plan:
 
@@ -46,7 +48,10 @@ ignores `user_id` and `knowledge.enabled`; scrapes Google); `Agent._kb_gaps`
 is a class-level dict that never shrinks; `myclaw/vector/` and
 `knowledge_spaces` are still unused; `search_advanced` still ranks the
 "semantic" list with the FTS rank (Phase 3); `write_note` with the same
-title replaces facts and links (Phase 1 adds `edit_note`).
+title replaces facts and links — the previous version goes to `.trash/` when
+something is lost (Phase 1 adds `edit_note`); the hundreds of old
+`session-summary-YYYYMMDD-HHMMSS` notes on existing installs are left as
+they are (they could be merged into the new one-note-per-day form).
 
 ## Phase 1 — note tools agents are missing
 

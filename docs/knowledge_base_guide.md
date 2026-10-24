@@ -9,7 +9,7 @@ of truth**, and the index can always be rebuilt from them.
 |---|---|
 | Notes of the shared knowledge base | `~/.myclaw/knowledge/default/*.md` (sub-folders allowed) |
 | Other knowledge bases (e.g. a WhatsApp user) | `~/.myclaw/knowledge/<base>/` |
-| Deleted notes | `~/.myclaw/knowledge/<base>/.trash/` (never erased) |
+| Deleted notes, and earlier versions of overwritten notes | `~/.myclaw/knowledge/<base>/.trash/` (never erased) |
 | Search index (rebuildable) | `~/.myclaw/knowledge_<base>.db` |
 | Another folder for the notes | `knowledge.knowledge_dir` in `~/.myclaw/config.json` |
 
@@ -48,7 +48,9 @@ Runs Ubuntu 24.04 and hosts ZenSynora. Free text, as long as you like.
   `created`, `updated`. Tags and aliases may be written as `[a, b]`,
   `a, b`, a single word, or a YAML list (`- a`). Every other key (`type`,
   `status`, `source`, …) is kept as **metadata** and is searchable.
-* **Facts** (observations): `- [category] text #tag`.
+* **Facts** (observations): `- [category] text #tag` — under any heading
+  (the generated *Observations* section is just the usual place), never inside
+  a code block. Task checkboxes `- [ ]` / `- [x]` are text, not facts.
 * **Links** (relations): `- relation [[Other note]]`. The target can be the
   other note's title, permalink, file name or one of its aliases (case does
   not matter; `[[Note|label]]` and `[[Note#Section]]` work too).
@@ -67,6 +69,7 @@ Agents, the Web UI and the CLI search titles, note text, tags and facts.
 | `ollama port` | notes with both words (free text; a long sentence falls back to "any word") |
 | `ollama OR lmstudio` | either word |
 | `ollama NOT docker` | `ollama`, but not notes that mention `docker` |
+| `tag:homelab NOT nas` (agent tool) | notes tagged `homelab` that do not mention `nas`; `NOT nas` alone = every note without `nas` |
 | `"home server"` | the exact phrase |
 | `pyth*` | words starting with `pyth` |
 | `tag:homelab` (agent tool) | notes with that tag (frontmatter or fact tags); `tag:homelab ollama` combines both |
@@ -87,7 +90,7 @@ words. Tag search matches whole tags (`py` does not find `python`).
 |---|---|
 | `search_knowledge(query, limit)` | Search (syntax above); one-line snippet per result |
 | `read_knowledge(permalink)` | The whole note: text (up to 6000 characters), facts, links, waiting links, aliases, metadata, *Linked from* |
-| `write_to_knowledge(title, content, tags, observations, relations)` | Save a note. Writing the same title again **replaces** the note's text, facts and links (aliases and metadata are kept) |
+| `write_to_knowledge(title, content, tags, observations, relations)` | Save a note. Writing the same title again **replaces** the note's text, facts and links (aliases and metadata are kept); if anything would be lost, the previous version is first kept in `.trash/` |
 | `get_knowledge_context(permalink, depth)` | The note with its text plus the notes around it (snippets, *Linked from*) |
 | `list_knowledge`, `get_related_knowledge`, `list_knowledge_tags`, `sync_knowledge_base` | List, follow links, tags, re-index |
 

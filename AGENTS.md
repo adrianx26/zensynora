@@ -30,4 +30,7 @@ rules when changing ZenSynora:
 - Never auto-save snapshots of system state (health, errors, listings, recovery progress) to the knowledge base — they go stale and get repeated as facts.
 - When agents build their own tool for something, add it as a built-in.
 - After fixing an error, run the feature end to end — the next bug often hides behind it.
+- Knowledge base: the Markdown files are the source of truth; a full rebuild (`sync --force`) must give the same index as step-by-step updates. Links resolve permalink > slug > name > title > alias, never fuzzy.
+- Never overwrite or delete a user's note without keeping the previous version in `<base>/.trash/` when anything would be lost.
+- Changes to stored user data get an independent review (someone who did not write them, with real experiments) before merge.
 
