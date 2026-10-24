@@ -9,7 +9,7 @@ GET    /api/knowledge/note/{permalink}      one note: markdown, observations, li
 POST   /api/knowledge/note                  create a note ({name, title?, tags?, content?})
 PUT    /api/knowledge/note/{permalink}      replace a note's markdown ({content})
 DELETE /api/knowledge/note/{permalink}      move a note to the base's .trash folder (undo: move it back)
-GET    /api/knowledge/search?q=&base=       full-text search
+GET    /api/knowledge/search?q=&base=&mode= full-text search; mode auto|fts|semantic|hybrid (KB phase 3)
 POST   /api/knowledge/sync?base=            re-index the markdown files into the database
 POST   /api/knowledge/enrich?base=          add tags, facts and links to plain notes (default model)
 
@@ -438,21 +438,30 @@ async def remove_note(permalink: str, base: str | None = None):
 
 
 @router.get("/api/knowledge/search", dependencies=guard)
-async def search(q: str, base: str | None = None, limit: int = 30):
+async def search(q: str, base: str | None = None, limit: int = 30, mode: str = "auto"):
     """Full-text search; falls back to matching titles and text when the index finds nothing.
 
     2026-10-23 (KB phase 0): AND / OR / NOT and "quoted phrases" work (boolean=True).
+    2026-10-24 (KB phase 3): ``mode`` auto | fts | semantic | hybrid; the answer
+    also says which was used (``mode``) and why not semantic (``note``).
     """
+    from myclaw.knowledge import semantic
     from myclaw.knowledge.storage import search_notes
 
     b = _base(base)
     q = (q or "").strip()
+    m = semantic.normalise_mode(mode)
+    if m is None:
+        raise HTTPException(status_code=400, detail="mode must be auto, fts, semantic or hybrid.")
     if not q:
-        return {"results": []}
+        return {"results": [], "mode": "fts", "note": None}
     hits: list[str] = []
+    info: dict[str, Any] = {}
     try:
+        kw: dict[str, Any] = {} if (m == "fts" or (m == "auto" and not semantic.enabled())) else {
+            "mode": m, "info": info, "semantic_timeout": semantic.SEARCH_TIMEOUT}
         hits = [n.permalink for n in await asyncio.to_thread(
-            search_notes, q, b, max(1, min(limit, 100)), None, True)]
+            lambda: search_notes(q, b, max(1, min(limit, 100)), None, True, **kw))]
     except Exception as e:
         logger.debug("FTS search failed: %s", e)
     if not hits:
@@ -460,7 +469,7 @@ async def search(q: str, base: str | None = None, limit: int = 30):
         for n in await asyncio.to_thread(_parse_all, b):
             if ql in (n.title or "").lower() or ql in n.permalink or ql in (n.content or "").lower():
                 hits.append(n.permalink)
-    return {"results": hits[:limit]}
+    return {"results": hits[:limit], "mode": info.get("mode", "fts"), "note": info.get("fallback")}
 
 
 class EnrichRequest(BaseModel):

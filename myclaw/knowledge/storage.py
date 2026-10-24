@@ -668,20 +668,41 @@ def search_notes(
     limit: int = 10,
     db_path: Optional[Path] = None,
     boolean: bool = False,
+    mode: str = "fts",
+    semantic_timeout: Optional[float] = None,
+    semantic_wait: Optional[float] = None,
+    info: Optional[Dict[str, Any]] = None,
 ) -> List[Note]:
     """
-    Search notes using FTS5.
+    Search notes using FTS5 (and, optionally, semantic vectors).
 
     Args:
         query: Search query
         user_id: User ID for isolation
         limit: Maximum results
+        mode: 2026-10-24 (KB phase 3) — ``"fts"`` (default: word search only,
+            exactly as before), ``"auto"`` (hybrid when semantic search is on
+            and notes are embedded, else FTS), ``"semantic"`` (vectors only) or
+            ``"hybrid"`` (FTS + vectors fused by RRF). Boolean syntax (AND / OR
+            / NOT, "phrases", prefix*) always uses FTS only; when vectors are
+            not available the result is the FTS one.
+        semantic_timeout: seconds to wait for the query embedding (default 15)
+        semantic_wait: seconds to wait for the model to load (default: the timeout)
+        info: optional dict, filled with ``mode`` (what was used) and
+            ``fallback`` (why semantic search was not used)
 
     Returns:
         List of matching Note objects
     """
     with KnowledgeDB(user_id, db_path=db_path) as db:
-        entities = db.search_fts(query, limit, boolean=boolean)
+        if mode == "fts" and info is None:
+            entities = db.search_fts(query, limit, boolean=boolean)
+        else:
+            from . import semantic as _semantic
+
+            entities = _semantic.search_entities(
+                db, query, limit, boolean=boolean, mode=mode, timeout=semantic_timeout,
+                wait_load=semantic_wait, info=info)
 
     # Batch-read all matched notes in parallel. The previous N+1 loop
     # serialized stat()+open()+parse() per result; this overlaps them.

@@ -237,12 +237,22 @@ _BASE_OPTION = click.option("--base", "-b", default="default", show_default=True
 @knowledge.command()
 @click.argument('query', required=False)
 @_BASE_OPTION
-def search(query, base):
+@click.option("--mode", default="fts", show_default=True,
+              type=click.Choice(["auto", "fts", "semantic", "hybrid"]),
+              help="fts = words; semantic = by meaning; hybrid = both; auto = hybrid when "
+                   "semantic search is on and ready")
+def search(query, base, mode):
     """Search knowledge base (supports AND / OR / NOT and "quoted phrases")"""
     if not query:
         query = click.prompt("Search query")
     # 2026-10-23 (KB phase 0): boolean=True keeps AND/OR/NOT as search syntax.
-    notes = search_notes(query, base, boolean=True)
+    info: dict = {}
+    if mode == "fts":
+        notes = search_notes(query, base, boolean=True)
+    else:  # 2026-10-24 (KB phase 3)
+        notes = search_notes(query, base, boolean=True, mode=mode, info=info)
+        if info.get("fallback"):
+            click.echo(f"(semantic search not used: {info['fallback']})")
     if notes:
         click.echo(f"\n🔍 Found {len(notes)} results for '{query}':\n")
         for i, note in enumerate(notes, 1):
@@ -324,6 +334,44 @@ def sync(base, force):
     click.echo("Syncing knowledge base...")
     stats = sync_knowledge(base, force=force)
     click.echo(f"✅ Sync complete: {stats['added'] + stats['updated'] + stats['deleted']} changes")
+
+@knowledge.command(name="embed")
+@_BASE_OPTION
+@click.option("--all", "all_notes", is_flag=True,
+              help="Check every note, not only those without current vectors "
+                   "(unchanged parts are still not embedded again)")
+@click.option("--limit", type=click.IntRange(1, 1_000_000), default=None,
+              help="At most this many notes")
+def embed_cmd(base, all_notes, limit):
+    """Compute semantic-search vectors for the notes (KB phase 3)"""
+    import time
+
+    from .knowledge import semantic
+
+    load_config()  # applies knowledge.embedding_model
+    st = semantic.embedding_status(base)
+    click.echo(f"Model: {st['model']} · {st['embedded']}/{st['notes']} notes embedded"
+               f"{'' if st['enabled'] else ' · semantic search is off (knowledge.semantic_search)'}")
+    if not st["installed"]:
+        raise click.ClickException(
+            f"fastembed is not installed. Install it with:\n  {sys.executable} -m pip install "
+            f"\"{semantic.INSTALL_SPEC}\"")
+    if not all_notes and st["stale"] == 0:
+        click.echo("✅ Every note is embedded.")
+        return
+    click.echo("Loading the model (the first time it is downloaded to ~/.myclaw/models)…")
+    last = [0.0]
+
+    def progress(done, total):
+        if total and (time.time() - last[0] > 2 or done == total):
+            last[0] = time.time()
+            click.echo(f"  … {done}/{total} notes")
+
+    r = semantic.backfill_embeddings(base, limit=limit, all_notes=all_notes, progress=progress)
+    if not r.get("ok"):
+        raise click.ClickException(r.get("message") or "embedding failed")
+    click.echo(f"✅ {r['message']}")
+
 
 @knowledge.command()
 @_BASE_OPTION

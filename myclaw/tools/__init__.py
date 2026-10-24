@@ -209,7 +209,7 @@ TOOLS.update({
     "list_schedules":       {"func": list_schedules,       "desc": "List all active scheduled jobs"},
     # Knowledge
     "write_to_knowledge":   {"func": write_to_knowledge,   "desc": "Write a note to the knowledge base"},
-    "search_knowledge":     {"func": search_knowledge,     "desc": "Search knowledge base with FTS5"},
+    "search_knowledge":     {"func": search_knowledge,     "desc": "Search the knowledge base (words; AND/OR/NOT, \"phrases\", tag:x). mode: auto (default), fts, semantic (by meaning) or hybrid"},
     "read_knowledge":       {"func": read_knowledge,       "desc": "Read a specific knowledge note"},
     "list_knowledge":       {"func": list_knowledge,       "desc": "List all knowledge notes"},
     "get_knowledge_context":{"func": get_knowledge_context,"desc": "Build context from knowledge graph"},

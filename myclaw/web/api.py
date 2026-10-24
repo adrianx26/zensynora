@@ -153,6 +153,8 @@ app.include_router(_doctor_api.router)  # doctor report, errors viewer, download
 app.include_router(_knowledge_api.router)  # knowledge base explorer (graph, notes, tags)
 from myclaw.web import knowledge_import_api as _knowledge_import_api  # noqa: E402
 app.include_router(_knowledge_import_api.router)  # 2026-10-24 (KB phase 5): assimilate / import jobs
+from myclaw.web import knowledge_semantic_api as _knowledge_semantic_api  # noqa: E402
+app.include_router(_knowledge_semantic_api.router)  # 2026-10-24 (KB phase 3): semantic search status / backfill / install
 
 
 _mcp_manager = None

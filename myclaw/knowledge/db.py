@@ -17,6 +17,7 @@ from typing import List, Optional, Dict, Any, Callable, Tuple, Iterable
 
 from .parser import Note, Observation, Relation
 from . import quality as _quality
+from . import semantic as _semantic
 
 logger = logging.getLogger(__name__)
 
@@ -341,6 +342,9 @@ class KnowledgeDB:
 
         self._conn: Optional[sqlite3.Connection] = None
         self._batch_depth = 0  # 2026-10-24: >0 inside batch() (one big transaction)
+        # 2026-10-24 (KB phase 3): notes indexed inside batch(), queued for
+        # embedding once the batch is committed
+        self._indexed_in_batch: List[int] = []
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -671,6 +675,8 @@ class KnowledgeDB:
         conn.execute("UPDATE observations SET category_norm = kb_catnorm(category) "
                      "WHERE category_norm IS NULL AND category IS NOT NULL")
         _quality.ensure_schema(conn)
+        # 2026-10-24 (KB phase 3): vector tables (derived, rebuildable; never dropped)
+        _semantic.ensure_schema(conn)
 
         # Phase 4 (MemoPad import): sync_meta table for watermark-based incremental scanning
         conn.execute("""
@@ -903,13 +909,17 @@ class KnowledgeDB:
             conn.commit()
         conn.execute("BEGIN IMMEDIATE")
         self._batch_depth = 1
+        self._indexed_in_batch = []
         try:
             yield self
         except BaseException:
             conn.rollback()
+            self._indexed_in_batch = []
             raise
         else:
             conn.commit()
+            indexed, self._indexed_in_batch = self._indexed_in_batch, []
+            _semantic.note_indexed(self.db_path, indexed)
         finally:
             self._batch_depth = 0
 
@@ -1893,6 +1903,13 @@ class KnowledgeDB:
             # ones resolve, existing ones move to the best match (2026-10-24).
             new_folds, new_plinks = self._entity_keys(conn, eid)
             self._relink_for_keys(conn, old_folds | new_folds, old_plinks | new_plinks)
+        # 2026-10-24 (KB phase 3): every write, edit and sync passes here — queue
+        # the note for embedding after the commit (no-op when semantic search is
+        # off; never blocks; only changed chunks are embedded).
+        if self._batch_depth > 0:
+            self._indexed_in_batch.append(eid)
+        else:
+            _semantic.note_indexed(self.db_path, [eid])
         return eid
 
     # ── v0.7.5: full-text index of the note text ─────────────────────────────

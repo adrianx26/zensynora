@@ -67,6 +67,8 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
       { path: 'knowledge.detect_conflicts', label: 'Flag facts that contradict each other', kind: 'bool', help: 'E.g. "32 GB RAM" and "64 GB RAM" on the same note. Only flags them (⚠ on the Knowledge page); nothing is changed until you choose.' },
       { path: 'knowledge.hub_penalty', label: 'Rank very linked notes lower in the agent’s context', kind: 'bool', help: 'Notes with many links (hubs) match many questions but say little about each; they are kept, just ranked lower, and not walked through.' },
       { path: 'knowledge.hub_degree', label: 'A note is a hub above this many links', kind: 'number', help: 'Default 25.' },
+      { path: 'knowledge.semantic_search', label: 'Semantic search (find notes by meaning)', kind: 'bool', help: 'Agents, search_knowledge and the Knowledge page also match notes by meaning, not only by their words. Runs on this computer; needs the optional package fastembed (Install / Backfill on the Knowledge page → Tags & types).' },
+      { path: 'knowledge.embedding_model', label: 'Embedding model', kind: 'select', options: ['BAAI/bge-small-en-v1.5', 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'], help: 'bge-small-en-v1.5: English, 67 MB (default). paraphrase-multilingual-MiniLM: ~50 languages incl. Romanian, 220 MB, shorter chunks. Changing it needs a Backfill.' },
       { path: 'intelligence.research_enabled', label: 'Background researcher', kind: 'bool' },
       { path: 'intelligence.research_interval_hours', label: 'Research interval (hours)', kind: 'number' },
       { path: 'intelligence.research_idle_minutes', label: 'Research only after idle (minutes)', kind: 'number' },

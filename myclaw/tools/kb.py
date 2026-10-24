@@ -230,9 +230,30 @@ def _notes_with_tag(tag: str, user_id: str) -> list:
     return notes
 
 
-def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> str:
+def _semantic_args(mode: Any):
+    """``(search_notes kwargs, info dict, note)`` for the tool's ``mode`` (KB phase 3).
+
+    With semantic search off and mode "auto" the kwargs are empty: the search
+    is exactly the word search it always was.
     """
-    Search the knowledge base using full-text search.
+    from ..knowledge import semantic as _semantic
+
+    m = _semantic.normalise_mode(mode)
+    note = ""
+    if m is None:
+        note = (f"(mode '{mode}' is not known — use auto, fts, semantic or hybrid; "
+                "used auto.)")
+        m = "auto"
+    if m == "fts" or (m == "auto" and not _semantic.enabled()):
+        return {}, {}, note
+    info: Dict[str, Any] = {}
+    return {"mode": m, "semantic_timeout": _semantic.SEARCH_TIMEOUT, "info": info}, info, note
+
+
+def search_knowledge(query: str, limit: int = 5, user_id: str = "default",
+                     mode: str = "auto") -> str:
+    """
+    Search the knowledge base using full-text search (and semantic search).
 
     When no results are found, returns an actionable guidance payload that includes:
     - Confirmation that no results were found
@@ -247,6 +268,9 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> st
                starts with NOT means "every note (with the tags) except")
         limit: Maximum number of results (default: 5)
         user_id: User ID for multi-user isolation
+        mode: 2026-10-24 (KB phase 3) — "auto" (default: words + meaning when
+              semantic search is on, else words), "fts" (words only),
+              "semantic" (meaning only) or "hybrid" (both)
 
     Returns:
         Formatted search results, or standardized "no results" payload with guidance.
@@ -263,10 +287,11 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> st
         except (TypeError, ValueError):
             limit = 5
         fetch = limit * 4 if (tags or negated) else limit
+        sem_kw, sem_info, mode_note = _semantic_args(mode)
         if positive:
             # the text is passed on as it is: plain sentences are free text,
             # AND/OR/NOT and "phrases" are search syntax (db.search_fts)
-            notes = search_notes(positive, user_id, fetch, boolean=True)
+            notes = search_notes(positive, user_id, fetch, boolean=True, **sem_kw)
         elif tags:
             notes = _notes_with_tag(tags[0], user_id)
         elif negated:
@@ -290,6 +315,10 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> st
                 "",
                 "💡 Suggestions:",
             ]
+            if mode_note:
+                lines.insert(1, mode_note)
+            if sem_kw.get("mode") in ("semantic", "hybrid") and sem_info.get("fallback"):
+                lines.insert(1, f"(semantic search not used: {sem_info['fallback']})")
 
             if suggested_terms:
                 lines.append(f"  • Try broader search terms: '{broader_query}'")
@@ -311,6 +340,12 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> st
             return "\n".join(lines)
 
         lines = [f"🔍 Search results for '{query}':", ""]
+        if mode_note:
+            lines[1:1] = [mode_note]
+        if sem_info.get("mode") in ("semantic", "hybrid"):
+            lines[1:1] = [f"(search: {'meaning' if sem_info['mode'] == 'semantic' else 'words + meaning'})"]
+        elif sem_kw.get("mode") in ("semantic", "hybrid") and sem_info.get("fallback"):
+            lines[1:1] = [f"(semantic search not used: {sem_info['fallback']} — showing word matches)"]
 
         for i, note in enumerate(notes, 1):
             lines.append(f"{i}. **{note.title}** ([{note.permalink}](memory://{note.permalink}))")

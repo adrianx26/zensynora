@@ -88,7 +88,7 @@ words. Tag search matches whole tags (`py` does not find `python`).
 
 | Tool | What it does |
 |---|---|
-| `search_knowledge(query, limit)` | Search (syntax above); one-line snippet per result |
+| `search_knowledge(query, limit, mode)` | Search (syntax above); one-line snippet per result. `mode`: `auto` (default), `fts`, `semantic`, `hybrid` — see *Semantic search* |
 | `read_knowledge(permalink)` | The whole note: text (up to 6000 characters), facts, links, waiting links, aliases, metadata, *Linked from* |
 | `write_to_knowledge(title, content, tags, observations, relations)` | Save a note. Writing the same title again **replaces** the note's text, facts and links (aliases and metadata are kept); if anything would be lost, the previous version is first kept in `.trash/` |
 | `get_knowledge_context(permalink, depth)` | The note with its text plus the notes around it (snippets, *Linked from*); hub notes are not walked through |
@@ -114,6 +114,8 @@ zensynora knowledge list
 zensynora knowledge tags
 zensynora knowledge sync            # re-read files you edited by hand
 zensynora knowledge sync --force    # rebuild the whole index from the files
+zensynora knowledge embed           # vectors for semantic search (--all: check every note)
+zensynora knowledge search "my car" --mode hybrid   # fts (default) | semantic | hybrid | auto
 ```
 
 ## Editing by hand, folders, `.bmignore`
@@ -261,8 +263,65 @@ and a note whose permalink is already taken gets `permalink: <folder>-…`.
 | Web UI | Knowledge page → *Import*: a link or folder, or upload a file (up to 200 MB) |
 | Command line | `zensynora knowledge assimilate SOURCE [--max-notes 40] [-b BASE]`, `zensynora knowledge import FILE [--kind auto\|chatgpt\|claude\|mcp_memory\|markdown\|document] [-b BASE]` |
 
+## Semantic search (finding notes by meaning)
+
+Added 2026-10-24 (KB phase 3). Word search finds notes that contain the words
+you typed. Semantic search also finds notes that *mean* the same: "my car"
+finds a note about an *automobile*, "backup of the photos" finds *Picture
+archive copies*. Both are combined: notes found by words and by meaning rank
+first, a note found only by meaning is added, the order of the word matches
+is kept (Reciprocal Rank Fusion).
+
+**Turn it on**
+
+1. *Settings → Features → Semantic search* (`knowledge.semantic_search`,
+   default off).
+2. Knowledge page → *Tags & types* → *Semantic search* card → **Install**
+   (installs the optional package `fastembed` into ZenSynora's virtual
+   environment; with ONNX Runtime about 150 MB on disk). By hand:
+   `python -m pip install "fastembed>=0.5,<1.0"` in that environment, or
+   `pip install 'zensynora[semantic]'`. Updates keep it installed.
+3. **Backfill** on the same card (or `zensynora knowledge embed`) computes
+   the vectors of the existing notes. The first time, the model is
+   downloaded once from Hugging Face into `~/.myclaw/models`.
+
+From then on every note that is written, edited, imported or re-indexed is
+embedded in the background, a few seconds later; only the parts whose text
+changed are computed again.
+
+| Where | What changes when it is on |
+|---|---|
+| Automatic *Relevant Knowledge* | words + meaning (the hub penalty still applies). The search waits at most ~1.5 s for meaning; when the model is not loaded yet (first message after a start) that message uses word search and the model loads in the background. |
+| `search_knowledge` | `mode="auto"` (default) = words + meaning; `fts`, `semantic`, `hybrid` on request; the result says when meaning was not used and why |
+| Knowledge page | a *Auto / Words / Meaning / Words + meaning* picker next to the search box |
+
+Queries with `AND` / `OR` / `NOT`, `"phrases"` or `prefix*` always use word
+search only. With the switch off everything works exactly as before.
+
+**Models** (`knowledge.embedding_model`)
+
+| Model | Size | Licence | Languages | |
+|---|---|---|---|---|
+| `BAAI/bge-small-en-v1.5` (default) | 67 MB | MIT | English | best English quality at this size; reads ~1000 characters per piece |
+| `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` | 220 MB | Apache-2.0 | ~50 languages, Romanian included; a Romanian question finds an English note | reads only ~450 characters per piece (more pieces, slower backfill) |
+
+Changing the model makes every note "not embedded" for the new model (the old
+vectors are never mixed in): press *Backfill* again.
+`knowledge.semantic_min_score` (default 0 = the model's own: 0.5 for
+bge-small, 0.4 for the multilingual one — estimates) is the similarity below
+which a note found only by meaning is left out; raise it if unrelated notes
+show up, lower it if too few do.
+
+**Privacy and cost.** Everything runs on this computer (CPU, one thread);
+no note text leaves it. Only the model file is downloaded once. The vectors
+are kept in the index database (`knowledge_<base>.db`, about 1.5 KB per piece
+of ~1000 characters); like the rest of the index they can be rebuilt at any
+time and deleting them never loses a note. A note's vectors are removed with
+it; after `sync --force` or when a note comes back from `.trash` its old
+vectors are re-used (kept 30 days).
+
 ## Plans
 
-What comes next (more of memopad's features: note editing tools, semantic
-search, distillation into facts and a persona) is in
+What comes next (more of memopad's features: note editing tools,
+distillation into facts and a persona) is in
 [docs/dev/plans/memopad_port_plan.md](dev/plans/memopad_port_plan.md).

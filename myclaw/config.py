@@ -484,6 +484,12 @@ class KnowledgeConfig(BaseModel):
     detect_conflicts: bool = True
     hub_penalty: bool = True
     hub_degree: int = Field(25, ge=1, le=10000)
+    # 2026-10-24 (KB phase 3): semantic search (local embeddings, optional
+    # package fastembed). Off by default; vectors live in the index database.
+    semantic_search: bool = False
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    # cosine similarity below which a note is no semantic match (0 = the model's default)
+    semantic_min_score: float = Field(0.0, ge=0.0, le=1.0)
 
 
 class SwarmConfig(BaseModel):
@@ -925,6 +931,21 @@ def _apply_knowledge_quality(config: AppConfig) -> None:
         logger.warning("knowledge quality settings could not be applied (%s); using defaults", e)
 
 
+def _apply_knowledge_semantic(config: AppConfig) -> None:
+    """Apply ``knowledge.semantic_search`` / ``embedding_model`` /
+    ``semantic_min_score`` (2026-10-24, KB phase 3). Never makes loading fail."""
+    try:
+        kc = getattr(config, "knowledge", None)
+        from .knowledge.semantic import set_options
+
+        set_options(semantic_search=getattr(kc, "semantic_search", False),
+                    embedding_model=getattr(kc, "embedding_model", None),
+                    kb_enabled=getattr(kc, "enabled", True),
+                    min_score=getattr(kc, "semantic_min_score", 0.0))
+    except Exception as e:
+        logger.warning("semantic search settings could not be applied (%s); it stays off", e)
+
+
 def load_config(force_reload: bool = False) -> AppConfig:
     """Load and validate config. Exits with clear message on schema errors.
 
@@ -958,6 +979,7 @@ def load_config(force_reload: bool = False) -> AppConfig:
             _config_mtime = current_mtime
             _apply_knowledge_dir(_cached_config)
             _apply_knowledge_quality(_cached_config)
+            _apply_knowledge_semantic(_cached_config)
 
             # Validate critical configuration
             _validate_config(_cached_config)

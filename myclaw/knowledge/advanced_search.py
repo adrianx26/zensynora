@@ -1,77 +1,47 @@
-"""Advanced knowledge base search with semantic (embedding) support.
+"""Advanced knowledge base search: FTS + semantic vectors + filters.
 
-Provides search capabilities beyond FTS5:
-    - Semantic search using sentence-transformers embeddings
+Provides search capabilities beyond plain FTS5:
+    - Semantic ranking from the knowledge base's vector store
+      (``knowledge.semantic_search``, KB phase 3 — see ``semantic.py``)
     - Date-range filtering
     - Tag filtering
-    - Combined FTS + semantic hybrid search
+    - Category filtering
+    - Combined FTS + semantic hybrid ranking (RRF or weighted)
 
-Dependencies:
-    - sentence-transformers (optional, for semantic search)
-    - numpy (for embedding math)
-
-When sentence-transformers is not installed, semantic search falls back
-to FTS5 with a warning.
+2026-10-24 (KB phase 3): the "semantic" list used to copy the FTS rank (so
+RRF only re-sorted the FTS result) and every candidate was embedded again
+with sentence-transformers on every search. Now the semantic list is a real
+ranking from the stored vectors, notes found only by meaning are included
+(after the same filters), and nothing is embedded per candidate. When
+semantic search is off or not ready the result is the FTS one.
 """
 from __future__ import annotations
 
 import json
 import logging
-import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
-# Lazy-loaded embedding model (shared instance)
-_embedding_model = None
-_model_loaded = False
-
-
-def _get_embedding_model():
-    """Lazy-load the sentence-transformers embedding model."""
-    global _embedding_model, _model_loaded
-    if _model_loaded:
-        return _embedding_model
-
-    try:
-        from sentence_transformers import SentenceTransformer
-        try:
-            import torch
-            torch.set_num_threads(4)
-            device = "cpu"
-        except ImportError:
-            device = "cpu"
-
-        _embedding_model = SentenceTransformer("all-MiniLM-L6-v2", device=device)
-        _model_loaded = True
-        logger.info("Advanced search: embedding model loaded")
-        return _embedding_model
-    except ImportError:
-        _model_loaded = True
-        logger.warning(
-            "sentence-transformers not installed. Semantic search disabled. "
-            "Install: pip install sentence-transformers"
-        )
-        return None
-
 
 def compute_embedding(text: str) -> Optional[np.ndarray]:
-    """Compute embedding vector for text.
+    """Query embedding of ``text`` with the knowledge base's model (unit length).
 
-    Returns None if sentence-transformers is not available.
+    Returns None when semantic search is not available (fastembed not
+    installed, the model cannot be loaded, or it takes too long).
     """
-    model = _get_embedding_model()
-    if model is None:
-        return None
+    from . import semantic
+
     try:
-        return model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
-    except Exception as e:
-        logger.error(f"Embedding computation failed: {e}")
+        return semantic.query_vector(text, timeout=semantic.SEARCH_TIMEOUT,
+                                     wait_load=semantic.SEARCH_TIMEOUT)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.info("Embedding computation failed: %s", e)
         return None
 
 
@@ -138,14 +108,15 @@ def search_advanced(
     limit: int = 10,
     db_path: Optional[Path] = None,
 ) -> List[SearchResult]:
-    """Advanced hybrid search: FTS5 + semantic + filters.
+    """Advanced hybrid search: FTS5 + semantic vectors + filters.
 
     Algorithm:
-        1. Run FTS5 to get candidate entities
-        2. Apply date/tag/category filters in SQL
-        3. Compute semantic similarity for remaining candidates (if available)
-        4. Combine FTS score and semantic score with configurable weight
-        5. Return top-k results
+        1. FTS ranking (title, text, tags, facts) and — when semantic search
+           is on and notes are embedded — a vector ranking of the notes
+        2. Date/tag/category filters applied to both lists in SQL
+        3. Fusion: Reciprocal Rank Fusion of the two rankings (default) or a
+           weighted sum of the FTS score and the cosine similarity
+        4. Return top-k results
 
     Args:
         query: Search query
@@ -157,32 +128,26 @@ def search_advanced(
     Returns:
         List of SearchResult sorted by combined_score descending
     """
+    from . import semantic
     from .db import KnowledgeDB, sanitize_fts_query
 
     filters = filters or SearchFilters()
     results: List[SearchResult] = []
+    fetch = max(1, int(limit)) * 3
 
     with KnowledgeDB(user_id, db_path=db_path) as db:
         conn = db._get_connection()
-        safe_query = sanitize_fts_query(query)
+        has_query = sanitize_fts_query(query or "") != "*"
 
-        # ── Build the base query with optional filters ──────────────────────
+        # ── Filters (SQL on entities e) ────────────────────────────────────
         where_clauses = ["1=1"]
         params: List = []
-
-        # FTS match
-        if safe_query != "*":
-            where_clauses.append("e.id IN (SELECT rowid FROM entities_fts WHERE entities_fts MATCH ?)")
-            params.append(safe_query)
-
-        # Date range filter
         if filters.date_from:
             where_clauses.append("e.created_at >= ?")
             params.append(filters.date_from.isoformat())
         if filters.date_to:
             where_clauses.append("e.created_at <= ?")
             params.append(filters.date_to.isoformat())
-
         # Tag filter — note must have at least one matching tag in observations
         if filters.tags:
             tag_conditions = []
@@ -190,85 +155,66 @@ def search_advanced(
                 tag_conditions.append("EXISTS (SELECT 1 FROM observations o2 WHERE o2.entity_id = e.id AND json_extract(o2.tags, '$') LIKE ?)")
                 params.append(f'%"{tag}"%')
             where_clauses.append(f"({' OR '.join(tag_conditions)})")
-
-        # Category filter
         if filters.categories:
             cat_placeholders = ",".join("?" * len(filters.categories))
             where_clauses.append(
                 f"EXISTS (SELECT 1 FROM observations o3 WHERE o3.entity_id = e.id AND o3.category IN ({cat_placeholders}))"
             )
             params.extend(filters.categories)
+        where = " AND ".join(where_clauses)
 
-        # Run the filtered query
-        # Use FTS rank when FTS is active, otherwise order by updated_at
-        if safe_query != "*":
-            sql = f"""
-                SELECT e.*, fts.rank as fts_rank
-                FROM entities e
-                JOIN entities_fts fts ON e.id = fts.rowid
-                WHERE {' AND '.join(where_clauses)}
-                ORDER BY fts.rank
-                LIMIT ?
-            """
+        def _filtered(ids: List[int]) -> Dict[int, object]:
+            if not ids:
+                return {}
+            ph = ",".join("?" * len(ids))
+            rows = conn.execute(f"SELECT e.* FROM entities e WHERE {where} AND e.id IN ({ph})",
+                                (*params, *ids)).fetchall()
+            return {r["id"]: r for r in rows}
+
+        # ── Rankings ───────────────────────────────────────────────────────
+        fts_order: List[int] = []
+        sem_order: List[int] = []
+        sem_scores: Dict[int, float] = {}
+        if has_query:
+            fts_order = [e.id for e in db.search_fts(query, fetch * 2)]
+            use_semantic = filters.fusion_method == "rrf" or filters.semantic_weight > 0
+            if use_semantic and semantic.enabled():
+                vec, reason = semantic.vector_rank(conn, db.db_path, query, fetch * 2)
+                if vec is not None:
+                    sem_order = [eid for eid, _ in vec]
+                    sem_scores = dict(vec)
+                elif reason:
+                    logger.debug("advanced search without vectors: %s", reason)
+            rows_by_id = _filtered(list(dict.fromkeys(fts_order + sem_order)))
+            fts_order = [i for i in fts_order if i in rows_by_id][:fetch]
+            sem_order = [i for i in sem_order if i in rows_by_id][:fetch]
+            candidates = list(dict.fromkeys(fts_order + sem_order))
         else:
             # No FTS query — just filter + sort by updated_at
-            sql = f"""
-                SELECT e.*, 0.0 as fts_rank
-                FROM entities e
-                WHERE {' AND '.join(where_clauses)}
-                ORDER BY e.updated_at DESC
-                LIMIT ?
-            """
-        params.append(limit * 3)  # Fetch more for semantic re-ranking
+            rows = conn.execute(f"SELECT e.* FROM entities e WHERE {where} "
+                                f"ORDER BY e.updated_at DESC LIMIT ?", (*params, fetch)).fetchall()
+            rows_by_id = {r["id"]: r for r in rows}
+            candidates = [r["id"] for r in rows]
 
-        rows = conn.execute(sql, tuple(params)).fetchall()
-
-        if not rows:
+        if not candidates:
             return []
 
-        # ── Compute semantic similarity if enabled ──────────────────────────
-        query_embedding = None
-        if filters.semantic_weight > 0:
-            query_embedding = compute_embedding(query)
+        fts_ranks = {eid: i + 1 for i, eid in enumerate(fts_order)}
+        sem_ranks = {eid: i + 1 for i, eid in enumerate(sem_order)}
+        n_fts = max(1, len(fts_order))
 
-        entity_embeddings: Dict[int, np.ndarray] = {}
-        if query_embedding is not None:
-            for row in rows:
-                eid = row["id"]
-                text = _build_entity_text(db, eid)
-                emb = compute_embedding(text)
-                if emb is not None:
-                    entity_embeddings[eid] = emb
-
-        # ── Build results with combined scoring ─────────────────────────────
-        # Phase 3 (MemoPad import): support Reciprocal Rank Fusion (RRF)
-        fts_ranks: Dict[int, int] = {}
-        semantic_ranks: Dict[int, int] = {}
-
-        for rank, row in enumerate(rows):
-            eid = row["id"]
-            fts_ranks[eid] = rank + 1
-            if eid in entity_embeddings and query_embedding is not None:
-                semantic_ranks[eid] = rank + 1
-
-        for row in rows:
-            eid = row["id"]
-            fts_rank = row["fts_rank"]
-            fts_score = max(0.0, 1.0 + float(fts_rank))
-
-            semantic_score = 0.0
-            if eid in entity_embeddings and query_embedding is not None:
-                semantic_score = cosine_similarity(query_embedding, entity_embeddings[eid])
+        for eid in candidates:
+            row = rows_by_id[eid]
+            # FTS score in [0, 1]: 1 for the best FTS match, 0 when not found by words
+            fts_score = (1.0 - (fts_ranks[eid] - 1) / n_fts) if eid in fts_ranks else 0.0
+            semantic_score = float(sem_scores.get(eid, 0.0))
 
             if filters.fusion_method == "rrf":
-                fts_rrf = 1.0 / (filters.rrf_k + fts_ranks.get(eid, filters.rrf_k))
-                sem_rrf = 1.0 / (filters.rrf_k + semantic_ranks.get(eid, filters.rrf_k))
-                combined = fts_rrf + sem_rrf
+                combined = sum(1.0 / (filters.rrf_k + r[eid]) for r in (fts_ranks, sem_ranks)
+                               if eid in r)
             else:
-                combined = (
-                    (1 - filters.semantic_weight) * fts_score +
-                    filters.semantic_weight * semantic_score
-                )
+                combined = ((1 - filters.semantic_weight) * fts_score
+                            + filters.semantic_weight * semantic_score)
 
             # Gather tags
             tags: List[str] = []
@@ -295,6 +241,6 @@ def search_advanced(
                 tags=tags,
             ))
 
-    # Sort by combined score descending
+    # Sort by combined score descending (stable: FTS order breaks ties)
     results.sort(key=lambda r: r.combined_score, reverse=True)
     return results[:limit]

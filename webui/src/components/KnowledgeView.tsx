@@ -6,6 +6,8 @@ import { api } from '../api';
 import KnowledgeGraph, { type GEdge, type GNode, type GraphHandle } from './KnowledgeGraph';
 import KnowledgeImport from './KnowledgeImport';
 import { CategoriesCard, CategoryMergePanel, ConflictsSection, DuplicatesPanel, type Conflict } from './KnowledgeQuality';
+import { SearchModePicker, SemanticCard } from './KnowledgeSemantic';
+import { useSemanticStatus, type SearchMode } from '../knowledgeSemantic';
 
 interface Count { name: string; count: number }
 interface GraphNode extends GNode { updated: string | null; size: number; categories?: string[] }
@@ -40,6 +42,7 @@ type ColorBy = 'tag' | 'links' | 'none';
 // Categorical palette (works on the dark and light themes).
 const PALETTE = ['#58a6ff', '#3fb950', '#d29922', '#f778ba', '#a371f7', '#39c5cf', '#ff7b72', '#e3b341', '#7ee787', '#79c0ff'];
 const BASE_KEY = 'zensynora_kb_base';
+const MODE_KEY = 'zensynora_kb_search_mode'; // KB phase 3: words / meaning / both
 
 function hashColor(s: string): string {
   let h = 0;
@@ -78,6 +81,9 @@ const KnowledgeView: React.FC = () => {
   // filters
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<Set<string> | null>(null);
+  // 2026-10-24 (KB phase 3): semantic search mode + status
+  const [mode, setMode] = useState<SearchMode>(() => (stored(MODE_KEY) as SearchMode) || 'auto');
+  const [modeNote, setModeNote] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [relFilter, setRelFilter] = useState<string[]>([]);
   const [hideMissing, setHideMissing] = useState(false);
@@ -110,6 +116,8 @@ const KnowledgeView: React.FC = () => {
   }, [base]);
 
   useEffect(() => { loadBases(); }, [loadBases]);
+  const semantic = useSemanticStatus(base, data);
+  const searchMode: SearchMode = semantic.st?.enabled ? mode : 'fts';
   useEffect(() => { store(BASE_KEY, base); setSelected(null); setTagFilter([]); setRelFilter([]); setCatFilter([]); setSide(null); load(); }, [base, load]);
 
   const loadDetail = useCallback(async (id: string) => {
@@ -131,10 +139,11 @@ const KnowledgeView: React.FC = () => {
   // full-text search (debounced)
   useEffect(() => {
     const q = query.trim();
-    if (!q) { setHits(null); return; }
+    if (!q) { setHits(null); setModeNote(null); return; }
     const t = window.setTimeout(async () => {
       try {
-        const r = await api<{ results: string[] }>(`/api/knowledge/search?base=${encodeURIComponent(base)}&q=${encodeURIComponent(q)}`);
+        const r = await api<{ results: string[]; note?: string | null }>(`/api/knowledge/search?base=${encodeURIComponent(base)}&q=${encodeURIComponent(q)}&mode=${searchMode}`);
+        setModeNote(searchMode === 'fts' ? null : r.note || null);
         const ql = q.toLowerCase();
         const s = new Set(r.results);
         data?.nodes.forEach(n => { if (n.title.toLowerCase().includes(ql) || n.id.includes(ql)) s.add(n.id); });
@@ -142,7 +151,7 @@ const KnowledgeView: React.FC = () => {
       } catch { setHits(new Set()); }
     }, 250);
     return () => window.clearTimeout(t);
-  }, [query, base, data]);
+  }, [query, base, data, searchMode]);
 
   // ── Filtered graph ──
   const view = useMemo(() => {
@@ -332,6 +341,8 @@ const KnowledgeView: React.FC = () => {
           {bases.map(b => <option key={b.name} value={b.name}>{b.name === 'default' ? 'Shared (default)' : b.name} · {b.notes}</option>)}
         </select>
         <input className="field-input kb-search" placeholder="Search notes and facts…" value={query} onChange={e => setQuery(e.target.value)} />
+        <SearchModePicker mode={mode} status={semantic.st} note={query.trim() ? modeNote : null}
+          onChange={m => { setMode(m); store(MODE_KEY, m); }} />
         <div className="kb-tabs" role="tablist">
           {(['graph', 'notes', 'tags'] as Tab[]).map(t => (
             <button key={t} role="tab" aria-selected={tab === t} className={`settings-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
@@ -365,6 +376,12 @@ const KnowledgeView: React.FC = () => {
           <span title="Linked to, but no note exists yet"><b>{data.stats.missing}</b> missing</span>
           <span title="Notes with no links"><b>{data.stats.orphans}</b> unlinked</span>
           {data.truncated && <span className="probe-err">Only the first 2000 notes are shown.</span>}
+          {semantic.st?.enabled && (
+            <button type="button" className="chip small-chip" onClick={() => setTab('tags')}
+              title={semantic.st.reason || 'Notes with vectors for semantic search (details under Tags & types)'}>
+              <b>{semantic.st.embedded}</b>/{semantic.st.notes} embedded{semantic.st.installed ? '' : ' · not installed'}
+            </button>
+          )}
           {data.nodes.some(n => n.conflicts) && (
             <span title="Notes with facts that contradict each other (open a note to resolve)" style={{ color: '#d29922' }}>
               <b>{data.nodes.filter(n => n.conflicts).length}</b> ⚠ with conflicts</span>
@@ -464,6 +481,7 @@ const KnowledgeView: React.FC = () => {
                   {data.tags.length === 0 && <span className="muted">No tags yet.</span>}
                 </div>
               </section>
+              <SemanticCard base={base} status={semantic} />
               <CategoriesCard base={base} reloadKey={data} active={catFilter}
                 onToggle={c => toggle(catFilter, c, setCatFilter)}
                 onMerge={sg => { setCreating(null); setSelected(null); setSide({ type: 'catmerge', from: sg.from, to: sg.to }); }} />

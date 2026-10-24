@@ -1284,9 +1284,20 @@ class Agent:
             # are fetched, so a very linked note can be ranked below a specific one.
             from .knowledge.quality import hub_threshold, rank_with_hub_penalty
             fetch = max_results + 3 if hub_threshold() is not None else max_results
+            # 2026-10-24 (KB phase 3): with knowledge.semantic_search on, strategy 1
+            # is hybrid (FTS + vectors, RRF) when notes are embedded; the query
+            # embedding gets ~1.5 s, else this turn uses FTS and the model warms
+            # up in the background. Off: the call is exactly as before.
+            from .knowledge import semantic as _semantic
+            search_info: dict = {}
+            semantic_kw = _semantic.context_search_kwargs(search_info)
+            if semantic_kw:
+                semantic_kw["semantic_wait"] = 0.0
             if words:
                 # Strategy 1: search with full message text (FTS5 ranked)
-                notes = search_notes(message, user_id, limit=fetch)
+                notes = search_notes(message, user_id, limit=fetch, **semantic_kw)
+                if search_info.get("mode"):
+                    metadata["search_mode"] = search_info["mode"]
 
                 if not notes:
                     # Strategy 2: bigram + single-keyword OR query
