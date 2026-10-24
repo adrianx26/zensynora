@@ -130,6 +130,42 @@ async def semantic_backfill_stop(base: str | None = None):
     return {"ok": True, "job": _job_view(job)}
 
 
+# Indirections (2026-10-24 review): tests replace these, never the global
+# subprocess.Popen (other threads of the test process spawn processes too).
+_popen = subprocess.Popen
+_run = subprocess.run
+
+
+def _spawn(target: Any, *args: Any) -> None:
+    threading.Thread(target=target, args=args, name="kb-semantic-install", daemon=True).start()
+
+
+_SKIP_PIN = ("zensynora", "myclaw", "pip", "setuptools", "wheel")
+
+
+def _write_constraints(path: Path) -> Optional[str]:
+    """Pin every package already in the venv (``pip freeze``) so installing
+    fastembed only adds packages — it never upgrades or downgrades one
+    ZenSynora uses. Returns an error text (the install then runs unpinned)."""
+    try:
+        r = _run([sys.executable, "-m", "pip", "freeze", "--disable-pip-version-check"],
+                 capture_output=True, text=True, timeout=120)
+    except (OSError, subprocess.SubprocessError) as e:
+        return f"could not list the installed packages: {e}"
+    if r.returncode != 0:
+        return f"pip freeze failed: {(r.stderr or '').strip()[:300]}"
+    pins = []
+    for line in (r.stdout or "").splitlines():
+        line = line.strip()
+        if not line or line.startswith(("#", "-")) or " @ " in line or "==" not in line:
+            continue   # editable installs, direct URLs, comments
+        if line.split("==", 1)[0].strip().lower().replace("_", "-") in _SKIP_PIN:
+            continue
+        pins.append(line)
+    path.write_text("\n".join(pins) + "\n", encoding="utf-8")
+    return None
+
+
 def _run_install(cmd: List[str], log_file: Path) -> None:
     from myclaw.knowledge import semantic
 
@@ -137,10 +173,15 @@ def _run_install(cmd: List[str], log_file: Path) -> None:
     error: Optional[str] = None
     try:
         with open(log_file, "w", encoding="utf-8") as fh:
+            constraints = log_file.with_suffix(".constraints.txt")
+            problem = _write_constraints(constraints)
+            if problem is None:
+                cmd = [*cmd, "-c", str(constraints)]
+            else:
+                fh.write(f"(installed packages not pinned: {problem})\n")
             fh.write("$ " + " ".join(cmd) + "\n")
             fh.flush()
-            proc = subprocess.Popen(cmd, stdout=fh, stderr=subprocess.STDOUT,
-                                    stdin=subprocess.DEVNULL)
+            proc = _popen(cmd, stdout=fh, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
             try:
                 code = proc.wait(timeout=INSTALL_TIMEOUT)
             except subprocess.TimeoutExpired:
@@ -155,14 +196,17 @@ def _run_install(cmd: List[str], log_file: Path) -> None:
     if code == 0 and not ok and error is None:
         error = "pip finished, but fastembed cannot be found — restart ZenSynora."
     elif code not in (0, None) and error is None:
-        error = f"pip failed (exit code {code}) — see the log."
+        error = (f"pip failed (exit code {code}) — see the log. Packages ZenSynora already uses "
+                 "are kept at their versions; a conflict with them is shown there.")
     if ok:
         semantic.get_embedder(wait=0.0, retry=True)  # start loading (and downloading) the model
+        semantic.queue_known_bases()
         logger.info("Knowledge: fastembed installed for semantic search")
     else:
         logger.warning("Knowledge: installing fastembed failed: %s", error)
     with _lock:
-        _install.update(running=False, ok=ok, exit_code=code, error=error, finished=time.time())
+        _install.update(running=False, ok=ok, exit_code=code, error=error, finished=time.time(),
+                        command=" ".join(cmd))
 
 
 @router.post("/api/knowledge/semantic/install", dependencies=guard)
@@ -185,6 +229,5 @@ async def semantic_install():
         _install.clear()
         _install.update(running=True, ok=None, exit_code=None, error=None, started=time.time(),
                         finished=None, command=" ".join(cmd), log_file=str(log_file))
-    threading.Thread(target=_run_install, args=(cmd, log_file), name="kb-semantic-install",
-                     daemon=True).start()
+    _spawn(_run_install, cmd, log_file)
     return {"ok": True, "install": _install_view()}

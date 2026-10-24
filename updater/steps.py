@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import sys
 import tarfile
@@ -13,7 +14,7 @@ import time
 import urllib.request
 import zipfile
 from pathlib import Path
-from typing import List
+from typing import Dict, List
 
 from . import UPDATER_PROTOCOL, app_backup
 from .backup import RELEASE_USER_FILES, _safe_extract, create_backup, ensure_user_data, restore_backup
@@ -322,6 +323,27 @@ class CarryOverUserFiles(Step):
             log.info("  kept %s", name)
 
 
+def _norm_name(name: str) -> str:
+    return re.sub(r"[-_.]+", "-", str(name)).lower()
+
+
+def optional_specs(release_dir: Path) -> Dict[str, str]:
+    """``{normalised package name: requirement}`` from a release's optional extras."""
+    try:
+        import tomllib
+
+        data = tomllib.loads((Path(release_dir) / "pyproject.toml").read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    out: Dict[str, str] = {}
+    for reqs in (data.get("project", {}).get("optional-dependencies", {}) or {}).values():
+        for req in reqs or []:
+            m = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", str(req))
+            if m:
+                out.setdefault(_norm_name(m.group(1)), str(req).strip())
+    return out
+
+
 # ── 5. Build: venv, Python packages, web UI ──────────────────────────────────
 class BuildRelease(Step):
     name = "build"
@@ -357,10 +379,15 @@ class BuildRelease(Step):
                    if p["name"].lower() not in have and p["name"].lower() not in ("zensynora", "pip")]
         if not missing:
             return
-        log.info("  re-installing your extra packages: %s", ", ".join(missing))
-        r = sh(pip + ["install", "--quiet", *missing], check=False, timeout=1800)
+        # 2026-10-24 (KB phase 3 review): a package that is one of ZenSynora's
+        # optional extras (fastembed, pypdf…) is re-installed with the version
+        # range the NEW release declares in pyproject.toml, not just by name.
+        specs = optional_specs(ctx.new_dir)
+        wanted = [specs.get(_norm_name(n), n) for n in missing]
+        log.info("  re-installing your extra packages: %s", ", ".join(wanted))
+        r = sh(pip + ["install", "--quiet", *wanted], check=False, timeout=1800)
         if r.returncode != 0:
-            for name in missing:
+            for name in wanted:
                 if sh(pip + ["install", "--quiet", name], check=False).returncode != 0:
                     ctx.note(f"Could not re-install optional package '{name}' — install it manually.")
 

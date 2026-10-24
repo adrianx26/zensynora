@@ -194,6 +194,22 @@ async def _stop_background_runner() -> None:
 
 
 app.router.add_event_handler("startup", _start_background_runner)
+
+
+async def _start_semantic_scans() -> None:
+    """2026-10-24 (KB phase 3 review): the Web UI is the long-running process
+    that embeds notes still waiting (written by CLI commands, while the model
+    could not load, before the switch was on) — now and every 10 minutes,
+    only while semantic search is on."""
+    try:
+        from myclaw.knowledge import semantic
+
+        semantic.start_background()
+    except Exception as exc:  # pragma: no cover - never block the start
+        logger.warning("Semantic search background scans not started: %s", exc)
+
+
+app.router.add_event_handler("startup", _start_semantic_scans)
 app.router.add_event_handler("shutdown", _stop_background_runner)
 
 # Metrics middleware (must be first to capture all requests)

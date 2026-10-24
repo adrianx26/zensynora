@@ -291,9 +291,12 @@ taken gets `permalink: <folder>-…`.
 Added 2026-10-24 (KB phase 3). Word search finds notes that contain the words
 you typed. Semantic search also finds notes that *mean* the same: "my car"
 finds a note about an *automobile*, "backup of the photos" finds *Picture
-archive copies*. Both are combined: notes found by words and by meaning rank
-first, a note found only by meaning is added, the order of the word matches
-is kept (Reciprocal Rank Fusion).
+archive copies*. Both are combined: the two best word matches always come
+first, in their order (a note with the exact error code or name is never
+pushed out); then the rest of the word matches and the notes found by
+meaning, by a weighted rank fusion in which words count more than meaning. A
+note found only by meaning is added only when it is similar enough (the
+floor below).
 
 **Turn it on**
 
@@ -301,16 +304,24 @@ is kept (Reciprocal Rank Fusion).
    default off).
 2. Knowledge page → *Tags & types* → *Semantic search* card → **Install**
    (installs the optional package `fastembed` into ZenSynora's virtual
-   environment; with ONNX Runtime about 150 MB on disk). By hand:
-   `python -m pip install "fastembed>=0.5,<1.0"` in that environment, or
-   `pip install 'zensynora[semantic]'`. Updates keep it installed.
+   environment; with ONNX Runtime about 150 MB on disk). The packages
+   ZenSynora already has keep their versions — the install only adds new
+   ones. By hand: `python -m pip install "fastembed>=0.5,<1.0"` in that
+   environment, or `pip install 'zensynora[semantic]'`. Updates keep it
+   installed (with the version range of the new release).
 3. **Backfill** on the same card (or `zensynora knowledge embed`) computes
    the vectors of the existing notes. The first time, the model is
    downloaded once from Hugging Face into `~/.myclaw/models`.
 
 From then on every note that is written, edited, imported or re-indexed is
 embedded in the background, a few seconds later; only the parts whose text
-changed are computed again.
+changed are computed again. Notes that could not be embedded at once — written
+by a command-line command, or while the model could not be loaded — are
+shown as *N notes waiting* on the card and are picked up by the Web UI (at
+its start, every 10 minutes, when the switch is turned on or the model is
+changed, and when the model loads again after an error; failed loads are
+retried after 1, 2, 4 … up to 30 minutes). The model runs one job at a time
+on one CPU thread; a search goes before the next background batch.
 
 | Where | What changes when it is on |
 |---|---|
@@ -330,14 +341,17 @@ search only. With the switch off everything works exactly as before.
 
 Changing the model makes every note "not embedded" for the new model (the old
 vectors are never mixed in): press *Backfill* again.
-`knowledge.semantic_min_score` (default 0 = the model's own: 0.5 for
-bge-small, 0.4 for the multilingual one — estimates) is the similarity below
-which a note found only by meaning is left out; raise it if unrelated notes
-show up, lower it if too few do.
+`knowledge.semantic_min_score` (default 0 = the model's own: 0.75 for
+bge-small, 0.6 for the multilingual one) is the similarity below which a note
+found only by meaning is left out (also from the agent's automatic context,
+so "nothing found" still leads to the broader word search and the
+knowledge-gap hint). bge models give high similarities even to unrelated
+text, hence the high floor. These are estimates: **tune it on a real
+install** — raise it if unrelated notes show up, lower it if too few do.
 
 **Privacy and cost.** Everything runs on this computer (CPU, one thread);
 no note text leaves it. Only the model file is downloaded once. The vectors
-are kept in the index database (`knowledge_<base>.db`, about 1.5 KB per piece
+are kept in the index database (`knowledge_<base>.db`, about 2.3 KB per piece
 of ~1000 characters); like the rest of the index they can be rebuilt at any
 time and deleting them never loses a note. A note's vectors are removed with
 it; after `sync --force` or when a note comes back from `.trash` its old

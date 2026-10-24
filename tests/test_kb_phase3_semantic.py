@@ -35,6 +35,13 @@ def sem(home, monkeypatch):
         return e
 
     monkeypatch.setattr(semantic, "DEBOUNCE_SECONDS", 0)
+    semantic.wait_idle(20)
+    w = semantic._WORKER
+    with w.cv:      # a clean worker per test (no bases / backoff of earlier tests)
+        for part in (w.known, w.first_seen, w.deferred, w.backoff, w.retry_load, w.last_prune):
+            part.clear()
+        w.periodic = False
+    monkeypatch.setattr(semantic, "_APPLIED", False)
     monkeypatch.setattr(semantic, "_OPTIONS", dict(semantic._OPTIONS, semantic_search=True,
                                                    embedding_model="test/hash", kb_enabled=True,
                                                    min_score=0.2))
@@ -196,6 +203,7 @@ def test_full_rebuild_reuses_vectors_without_model_calls(home, sem):
 
 
 def test_stale_on_file_change_and_on_model_change(home, sem, monkeypatch):
+    """Counts only (no settings save in this process: _APPLIED is False)."""
     from myclaw.knowledge import update_note
 
     _three_notes()
@@ -589,7 +597,12 @@ def test_api_backfill_refused_without_library(api, home, monkeypatch):
     assert r.status_code == 400 and "fastembed" in r.json()["detail"]
 
 
-def test_api_install_runs_pip_and_refuses_when_installed(api, home, monkeypatch):
+def test_api_install_runs_pip_with_pins_and_refuses_when_installed(api, home, monkeypatch):
+    """2026-10-24 (review): deterministic — the install runs inline (no thread)
+    and only the module's own process hooks are replaced, never the global
+    subprocess.Popen (the cause of the 1-in-4 flake: other threads of the test
+    process got the fake)."""
+    import subprocess
     import sys
 
     from myclaw.knowledge import semantic
@@ -597,6 +610,7 @@ def test_api_install_runs_pip_and_refuses_when_installed(api, home, monkeypatch)
 
     installed = {"v": False}
     monkeypatch.setattr(semantic, "library_installed", lambda: installed["v"])
+    monkeypatch.setattr(semantic, "get_embedder", lambda *a, **k: None)
     monkeypatch.setattr(sys, "base_prefix", "/not/the/venv")
     seen = {}
 
@@ -610,17 +624,57 @@ def test_api_install_runs_pip_and_refuses_when_installed(api, home, monkeypatch)
             seen["timeout"] = timeout
             return 0
 
-    monkeypatch.setattr(mod.subprocess, "Popen", FakeProc)
-    monkeypatch.setattr(semantic, "get_embedder", lambda *a, **k: None)
-    mod._install.clear()
-    mod._install["running"] = False
+    def fake_run(cmd, **kw):
+        seen["freeze"] = cmd
+        return subprocess.CompletedProcess(cmd, 0, stdout=(
+            "numpy==2.2.6\n-e git+https://x/zensynora#egg=zensynora\nzensynora==0.7.5\n"
+            "pkg @ file:///tmp/pkg.whl\nrequests==2.32.3\n"), stderr="")
+
+    monkeypatch.setattr(mod, "_popen", FakeProc)
+    monkeypatch.setattr(mod, "_run", fake_run)
+    monkeypatch.setattr(mod, "_spawn", lambda target, *args: target(*args))
+    monkeypatch.setattr(mod, "_install", {"running": False})
     r = api.post("/api/knowledge/semantic/install")
     assert r.status_code == 200
-    st = _poll(api, lambda s: s["install"].get("running") is False)
-    assert st["install"]["ok"] is True and "Successfully installed" in st["install"]["log"]
-    assert seen["cmd"][:4] == [sys.executable, "-m", "pip", "install"]
-    assert seen["cmd"][-1].startswith("fastembed") and seen["timeout"] == mod.INSTALL_TIMEOUT
+    st = api.get("/api/knowledge/semantic/status").json()
+    assert st["install"]["running"] is False and st["install"]["ok"] is True
+    assert "Successfully installed" in st["install"]["log"]
+    cmd = seen["cmd"]
+    assert cmd[:4] == [sys.executable, "-m", "pip", "install"] and seen["timeout"] == mod.INSTALL_TIMEOUT
+    assert any(c.startswith("fastembed") for c in cmd)
+    pins = Path(cmd[cmd.index("-c") + 1]).read_text().split()
+    assert pins == ["numpy==2.2.6", "requests==2.32.3"]       # no editable / URL / zensynora
     assert api.post("/api/knowledge/semantic/install").status_code == 409
+
+
+def test_api_install_without_freeze_still_runs_unpinned(api, home, monkeypatch):
+    import sys
+
+    from myclaw.knowledge import semantic
+    from myclaw.web import knowledge_semantic_api as mod
+
+    monkeypatch.setattr(semantic, "library_installed", lambda: False)
+    monkeypatch.setattr(sys, "base_prefix", "/not/the/venv")
+    seen = {}
+
+    class FailProc:
+        def __init__(self, cmd, stdout=None, **kw):
+            seen["cmd"] = cmd
+
+        def wait(self, timeout=None):
+            return 1
+
+    def broken_run(cmd, **kw):
+        raise OSError("no pip")
+
+    monkeypatch.setattr(mod, "_popen", FailProc)
+    monkeypatch.setattr(mod, "_run", broken_run)
+    monkeypatch.setattr(mod, "_spawn", lambda target, *args: target(*args))
+    monkeypatch.setattr(mod, "_install", {"running": False})
+    assert api.post("/api/knowledge/semantic/install").status_code == 200
+    st = api.get("/api/knowledge/semantic/status").json()["install"]
+    assert st["ok"] is False and "exit code 1" in st["error"] and "-c" not in seen["cmd"]
+    assert "not pinned" in st["log"]
 
 
 def test_api_install_refused_outside_a_venv(api, home, monkeypatch):
@@ -717,3 +771,277 @@ def test_fastembed_real_model_if_available(home):
         pytest.skip(f"model not available: {e}")
     v = emb.embed_query("hello")
     assert v.shape == (emb.dim,) and abs(float((v * v).sum()) - 1.0) < 1e-3
+
+
+# ── 2026-10-24 review fixes ────────────────────────────────────────────────
+
+def test_review1_exact_keyword_hit_stays_in_hybrid_top(home, sem):
+    """rrf2.py: 30 similar notes must not push the one note with the code out."""
+    from myclaw.knowledge import search_notes, write_note
+
+    sem._OPTIONS["min_score"] = 0.05
+    write_note("Kx", content="ZX4521 was resolved by swapping the cable.")
+    for i in range(30):
+        write_note(f"Printer fix {i}", content=f"How the printer error got fixed {i}: what fixed "
+                                               "it was a driver update. fixed printer error")
+    assert sem.wait_idle(30)
+    q = "what fixed ZX4521 printer error"
+    fts = [n.permalink for n in search_notes(q, limit=5)]
+    hyb = [n.permalink for n in search_notes(q, limit=5, mode="hybrid")]
+    assert fts[0] == "kx" and hyb[:2] == fts[:2]
+
+
+def test_review1_fuse_weights_words_and_pins_top_word_hits():
+    from myclaw.knowledge.semantic import fuse
+
+    # meaning-only notes 7, 8 rank high by meaning; word hits keep their places
+    assert fuse([1, 2, 3], [7, 8, 3, 2])[:2] == [1, 2]
+    order = fuse([1, 2, 3], [7, 8, 3, 2])
+    assert order.index(3) < order.index(7)            # in both lists: above meaning-only
+    assert set(order) == {1, 2, 3, 7, 8}
+    assert fuse([], [5, 6]) == [5, 6]
+    assert fuse([4], []) == [4]
+
+
+def test_review2_switch_on_queues_waiting_notes(home, sem, monkeypatch):
+    monkeypatch.setitem(sem._OPTIONS, "semantic_search", False)
+    _three_notes()
+    assert sem.embedding_status()["waiting"] == 3
+    monkeypatch.setattr(sem, "_APPLIED", True)        # a settings save, not the start
+    sem.set_options(semantic_search=True)
+    assert sem.wait_idle(10)
+    st = sem.embedding_status()
+    assert st["waiting"] == 0 and st["embedded"] == 3
+
+
+def test_review2_model_change_requeues(home, sem, monkeypatch):
+    _three_notes()
+    assert sem.wait_idle(10)
+    monkeypatch.setattr(sem, "_APPLIED", True)
+    sem.set_options(embedding_model="test/other")
+    assert sem.wait_idle(10)
+    st = sem.embedding_status()
+    assert st["model"] == "test/other" and st["waiting"] == 0 and st["chunks"] == 3
+
+
+def test_review2_first_write_in_a_process_picks_up_waiting_notes(home, sem, monkeypatch):
+    from myclaw.knowledge import write_note
+
+    monkeypatch.setitem(sem._OPTIONS, "semantic_search", False)
+    _three_notes()                                    # e.g. written by a CLI command
+    monkeypatch.setitem(sem._OPTIONS, "semantic_search", True)
+    write_note("Fourth", content="another note")
+    assert sem.wait_idle(10)
+    assert sem.embedding_status()["waiting"] == 0
+
+
+def test_review2_load_error_keeps_notes_and_retries_with_backoff(home, sem, monkeypatch):
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.semantic import HashEmbedder
+
+    monkeypatch.setattr(sem, "RETRY_MIN", 0.3)
+    state = {"fail": True, "loads": 0}
+
+    def flaky(m):
+        state["loads"] += 1
+        if state["fail"]:
+            raise OSError("no network")
+        return HashEmbedder(model=m)
+
+    sem.set_embedder_factory(flaky)
+    write_note("A", content="one")
+    write_note("B", content="two")
+    assert sem.wait_idle(10)
+    st = sem.embedding_status()
+    assert st["waiting"] == 2 and "next try" in st["waiting_text"] and st["retry_in"] is not None
+    assert "no network" in (st["last_error"] or "")
+    state["fail"] = False
+    end = time.time() + 10
+    while time.time() < end and sem.embedding_status()["waiting"]:
+        time.sleep(0.1)
+    assert sem.embedding_status()["waiting"] == 0 and state["loads"] >= 2
+
+
+def test_review2_periodic_scan_in_long_running_process(home, sem, monkeypatch):
+    monkeypatch.setitem(sem._OPTIONS, "semantic_search", False)
+    _three_notes()
+    monkeypatch.setitem(sem._OPTIONS, "semantic_search", True)
+    monkeypatch.setattr(sem, "SCAN_INTERVAL", 0.2)
+    sem.start_background()
+    try:
+        end = time.time() + 10
+        while time.time() < end and sem.embedding_status()["waiting"]:
+            time.sleep(0.1)
+        assert sem.embedding_status()["waiting"] == 0
+    finally:
+        with sem._WORKER.cv:
+            sem._WORKER.periodic = False
+
+
+def test_review3_carry_pruned_by_the_worker_at_most_daily(home, sem, monkeypatch):
+    from myclaw.knowledge import write_note
+
+    calls = []
+    monkeypatch.setattr(sem, "prune_carry", lambda path: calls.append(path))
+    for i in range(3):
+        write_note(f"P{i}", content=f"note {i}")
+        assert sem.wait_idle(10)
+    assert len(calls) == 1
+
+
+def test_review4_timed_out_queries_do_not_pile_up(home, sem):
+    from myclaw.knowledge.semantic import HashEmbedder
+
+    sem.set_embedder_factory(lambda m: HashEmbedder(model=m, delay=0.5))
+    assert sem.get_embedder(wait=5) is not None
+    for i in range(6):
+        assert sem.query_vector(f"query {i}", timeout=0.05) is None
+    assert sem._ENGINE.pending() <= 1                  # the rest were cancelled
+    assert sem._ENGINE.thread.daemon
+
+
+def test_review5_search_budget_includes_model_loading(home, sem):
+    from myclaw.knowledge import search_notes
+    from myclaw.knowledge.semantic import HashEmbedder
+
+    _three_notes()
+    assert sem.wait_idle(10)
+    sem._reset_caches()
+
+    def slow_load(m):
+        time.sleep(3)
+        return HashEmbedder(model=m)
+
+    sem.set_embedder_factory(slow_load)
+    info = {}
+    t0 = time.time()
+    search_notes("car", mode="hybrid", semantic_timeout=0.5, info=info)
+    assert time.time() - t0 < 1.5 and info["mode"] == "fts"
+
+
+def test_review7_advanced_filters_apply_to_all_matches(home):
+    from myclaw.knowledge import SearchFilters, search_advanced, write_note
+    from myclaw.knowledge.parser import Observation
+
+    for i in range(60):
+        write_note(f"Server {i}", content="server server server config " * 3)
+    write_note("Special", content="Once mentions server. " + "filler words here " * 200,
+               observations=[Observation(category="special", content="a special fact")])
+    r = search_advanced("server", filters=SearchFilters(categories=["special"]), limit=5)
+    assert [x.permalink for x in r] == ["special"]
+
+
+def test_review7_search_fts_returns_limit_distinct_notes(home):
+    from myclaw.knowledge import search_notes, write_note
+
+    for i in range(12):   # title, text and fact all match: 3 index rows per note
+        write_note(f"Server {i}", content="server notes", observations=[
+            __import__("myclaw.knowledge.parser", fromlist=["Observation"]).Observation(
+                "fact", "server fact", [])])
+    assert len(search_notes("server", limit=10)) == 10
+
+
+def test_review9_floor_keeps_agent_strategy_two_and_gap_logging(home, sem, agent, monkeypatch):
+    _three_notes()
+    assert sem.wait_idle(10)
+    sem.get_embedder(wait=5)
+    monkeypatch.setitem(sem._OPTIONS, "min_score", 0.99)   # nothing is similar enough
+    agent._kb_gaps.pop("default", None)
+    res = agent._search_knowledge_context_sync("quantum chromodynamics lattice", "default",
+                                               return_structured=True)
+    assert res.has_results is False and res.gap_logged is True
+
+
+def test_review9_default_floors():
+    from myclaw.knowledge import semantic
+
+    assert semantic.MODELS["BAAI/bge-small-en-v1.5"].min_score == 0.75
+    assert semantic.MODELS[
+        "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"].min_score == 0.6
+
+
+def test_review10_one_inference_at_a_time_and_queries_first(home, sem):
+    import threading
+
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.semantic import HashEmbedder
+
+    live = {"now": 0, "max": 0}
+    lock = threading.Lock()
+
+    class Counting(HashEmbedder):
+        def _track(self, fn, *a):
+            with lock:
+                live["now"] += 1
+                live["max"] = max(live["max"], live["now"])
+            time.sleep(0.01)
+            try:
+                return fn(*a)
+            finally:
+                with lock:
+                    live["now"] -= 1
+
+        def embed_passages(self, texts):
+            return self._track(super().embed_passages, texts)
+
+        def embed_query(self, text):
+            return self._track(super().embed_query, text)
+
+    sem.set_embedder_factory(lambda m: Counting(model=m))
+    for i in range(20):
+        write_note(f"C{i}", content=f"note number {i} " * 50)
+    t = threading.Thread(target=sem.backfill_embeddings, kwargs={"all_notes": True})
+    t.start()
+    for i in range(10):
+        sem.query_vector(f"q{i}", timeout=2, wait_load=2)
+    t.join(20)
+    assert sem.wait_idle(20)
+    assert live["max"] == 1
+
+    # priority: a query submitted after a waiting batch runs first
+    gate = threading.Event()
+    order = []
+    sem._ENGINE.submit(1, gate.wait, 5)                       # occupies the thread
+    time.sleep(0.05)
+    f1 = sem._ENGINE.submit(sem.PRIO_PASSAGES, lambda: order.append("batch"))
+    f2 = sem._ENGINE.submit(sem.PRIO_QUERY, lambda: order.append("query"))
+    gate.set()
+    f1.result(5), f2.result(5)
+    assert order == ["query", "batch"]
+
+
+def test_review11_updater_reinstalls_extras_with_declared_range(tmp_path, monkeypatch):
+    import json
+    import subprocess
+    from types import SimpleNamespace
+
+    from updater import steps
+
+    new = tmp_path / "new"
+    new.mkdir()
+    (new / "pyproject.toml").write_text(
+        '[project]\nname = "x"\n[project.optional-dependencies]\n'
+        'semantic = ["fastembed>=0.5,<1.0"]\ningest = ["python-docx>=1.1,<2.0"]\n')
+    old = tmp_path / "old"
+    calls = []
+
+    def fake_sh(cmd, check=True, timeout=None):
+        cmd = [str(c) for c in cmd]
+        calls.append(cmd)
+        if "list" in cmd and "--not-required" in cmd:
+            out = [{"name": "fastembed"}, {"name": "python_docx"}, {"name": "anthropic"}]
+        elif "list" in cmd:
+            out = []
+        else:
+            out = None
+        return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(out) if out is not None else "")
+
+    monkeypatch.setattr(steps, "sh", fake_sh)
+    monkeypatch.setattr(steps, "venv_python", lambda d: Path(__file__))   # "exists"
+    ctx = SimpleNamespace(current_dir=old, new_dir=new, note=lambda m: None)
+    steps.BuildRelease()._keep_optional_packages(ctx, ["py", "-m", "pip"])
+    install = [c for c in calls if "install" in c][0]
+    assert "fastembed>=0.5,<1.0" in install and "python-docx>=1.1,<2.0" in install
+    assert "anthropic" in install
+    import updater
+    assert updater.UPDATER_PROTOCOL >= 4

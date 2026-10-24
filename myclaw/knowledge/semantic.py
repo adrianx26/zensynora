@@ -21,9 +21,11 @@ the base's index database and can always be rebuilt (``backfill_embeddings``).
   after the commit; a background thread embeds queued notes in small
   batches, one batch at a time, only chunks whose text or model changed.
 * **Search** — cosine in numpy over the current model's vectors (capped),
-  best chunk per note, fused with the FTS ranking by Reciprocal Rank Fusion
-  (k = 60). ``mode="auto"`` uses it only when it is switched on and ready;
-  boolean queries always use FTS only.
+  best chunk per note above a similarity floor, fused with the FTS ranking
+  (:func:`fuse`: weighted RRF, k = 60, words weigh more, the two best word
+  matches stay on top). ``mode="auto"`` uses it only when it is switched on
+  and ready; boolean queries always use FTS only. All model calls of a
+  process run on one inference thread (queries first).
 
 Lessons from memopad (its sqlite-vec/content-hash work, deleted by release
 5c3b6c4): composite key, checksum dedup per chunk, threads capped, inference
@@ -48,7 +50,9 @@ import sys
 import threading
 import time
 from collections import OrderedDict
-from concurrent.futures import Future, ThreadPoolExecutor
+import itertools
+import queue
+from concurrent.futures import CancelledError, Future
 from concurrent.futures import TimeoutError as FutureTimeout
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -82,12 +86,18 @@ class ModelInfo:
 # retrieval quality at its size. The multilingual MiniLM understands Romanian
 # (and ~50 languages, cross-lingual) but is 3x larger and reads only 128
 # tokens, so chunks are smaller (more chunks, more inference).
+#
+# min_score (2026-10-24 review): BAAI documents that bge similarities are
+# high even for unrelated text (the scores crowd into ~0.6-1.0; v1.5 only
+# eases this), so a meaning-only match must clear 0.75 to be shown. The
+# paraphrase MiniLM spreads scores wider (unrelated pairs ~0-0.4), so 0.6.
+# Both are estimates: tune knowledge.semantic_min_score on a real install.
 MODELS: Dict[str, ModelInfo] = {
-    "BAAI/bge-small-en-v1.5": ModelInfo(384, 67, "MIT", 512, 1000, 0.5, "English"),
+    "BAAI/bge-small-en-v1.5": ModelInfo(384, 67, "MIT", 512, 1000, 0.75, "English"),
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": ModelInfo(
-        384, 220, "Apache-2.0", 128, 450, 0.4, "about 50 languages, Romanian included"),
+        384, 220, "Apache-2.0", 128, 450, 0.6, "about 50 languages, Romanian included"),
 }
-_UNKNOWN_MODEL = ModelInfo(0, 0, "see the model card", 512, 1000, 0.3, "see the model card")
+_UNKNOWN_MODEL = ModelInfo(0, 0, "see the model card", 512, 1000, 0.5, "see the model card")
 
 RRF_K = 60
 CHUNK_OVERLAP = 150
@@ -102,6 +112,13 @@ LOAD_RETRY_SECONDS = 300          # a failed model load is retried after this
 CARRY_DAYS = 30                   # deleted notes' vectors kept for re-use
 CARRY_MAX_ROWS = 200_000
 DEBOUNCE_SECONDS = 0.3            # coalesce bursts of writes
+SCAN_INTERVAL = 600               # long-running processes: look for waiting notes every 10 min
+SCAN_BATCH = 2000                 # notes taken per scan pass (the next pass continues)
+PRUNE_INTERVAL = 86400            # carry copies pruned at most once a day per base
+RETRY_MIN, RETRY_MAX = 60.0, 1800.0   # backoff for queued notes when the model cannot load
+FUSION_FTS_WEIGHT = 1.0           # hybrid: word ranking counts more than meaning…
+FUSION_SEM_WEIGHT = 0.6
+FUSION_KEEP_FTS = 2               # …and the best word matches always stay on top
 MODES = ("auto", "fts", "semantic", "hybrid")
 
 # ── Options (config: knowledge.semantic_search / embedding_model / …) ───────
@@ -114,9 +131,19 @@ _OPTIONS: Dict[str, Any] = {
 }
 
 
+_APPLIED = False   # settings applied once in this process (later changes are transitions)
+
+
 def set_options(semantic_search: Optional[bool] = None, embedding_model: Optional[str] = None,
                 kb_enabled: Optional[bool] = None, min_score: Optional[float] = None) -> None:
-    """Apply the settings. A new model drops the loaded one (its vectors become stale)."""
+    """Apply the settings. A new model drops the loaded one (its vectors become stale).
+
+    2026-10-24 (review): turning the switch on or changing the model after
+    the first application (a settings save) queues every waiting note of
+    every known base.
+    """
+    global _APPLIED
+    was_on, was_model = enabled(), model_name()
     if semantic_search is not None:
         _OPTIONS["semantic_search"] = bool(semantic_search)
     if kb_enabled is not None:
@@ -131,6 +158,10 @@ def set_options(semantic_search: Optional[bool] = None, embedding_model: Optiona
         if name != _OPTIONS["embedding_model"]:
             _OPTIONS["embedding_model"] = name
             _reset_caches()
+    transition = (enabled() and not was_on) or model_name() != was_model
+    if _APPLIED and transition:
+        queue_known_bases()
+    _APPLIED = True
 
 
 def enabled() -> bool:
@@ -224,7 +255,9 @@ class FastEmbedEmbedder:
         cache.mkdir(parents=True, exist_ok=True)
         self.model = model
         self._m = TextEmbedding(model_name=model, cache_dir=str(cache), threads=threads)
-        self.dim = int(self.embed_passages(["dimension probe"]).shape[1])
+        known = MODELS.get(model)
+        # known models: no probe inference outside the shared inference thread
+        self.dim = known.dim if known else int(self.embed_passages(["dimension probe"]).shape[1])
 
     def embed_passages(self, texts: Sequence[str]) -> np.ndarray:
         fn = getattr(self._m, "passage_embed", None) or self._m.embed
@@ -319,6 +352,7 @@ class _Holder:
         self.state = "idle"            # idle | loading | ready | error
         self.error: Optional[str] = None
         self.error_at = 0.0
+        self.failed = False            # the last load of this model failed
         self.ready = threading.Event()
 
 
@@ -341,15 +375,20 @@ def _load(model: str, gen: int, ready: threading.Event) -> None:
             err += (f" — the first use downloads it from huggingface.co"
                     f"{f' ({size} MB)' if size else ''} into ~/.myclaw/models: check the internet "
                     "connection (or proxy) and press Backfill again")
+    recovered = False
     with _H.lock:
         if gen == _H.gen:
             if obj is not None:
-                _H.obj, _H.state, _H.error = obj, "ready", None
+                recovered = _H.failed
+                _H.obj, _H.state, _H.error, _H.failed = obj, "ready", None, False
             else:
                 _H.obj, _H.state, _H.error, _H.error_at = None, "error", err, time.time()
+                _H.failed = True
         ready.set()
     if obj is not None:
         logger.info("Knowledge: embedding model %s loaded in %.1f s", model, time.time() - t0)
+        if recovered:  # 2026-10-24 (review): notes that waited for the model
+            queue_known_bases()
     else:
         _log_once(f"load:{model}:{err}", logging.WARNING, "Knowledge: semantic search: %s", err)
 
@@ -395,27 +434,77 @@ def embedder_state() -> Tuple[str, Optional[str]]:
         return _H.state, _H.error
 
 
+# ── One inference thread per process (2026-10-24 review) ─────────────────
+#
+# Every model call — the worker's and the backfill's passage batches and the
+# search queries — runs on this one daemon thread, so at most one ONNX
+# inference (one CPU thread) is busy at a time. Queries have priority: they
+# run before the next waiting passage batch (a batch is at most
+# BATCH_CHUNKS chunks, so a query waits at most one batch). A query that
+# timed out is cancelled if it has not started, so jobs never pile up.
+
+class _Engine:
+    def __init__(self) -> None:
+        self.q: "queue.PriorityQueue[Tuple[int, int, Future, Callable[..., Any], tuple]]" = \
+            queue.PriorityQueue()
+        self.seq = itertools.count()
+        self.lock = threading.Lock()
+        self.thread: Optional[threading.Thread] = None
+        self.running = 0
+
+    def submit(self, prio: int, fn: Callable[..., Any], *args: Any) -> Future:
+        fut: Future = Future()
+        with self.lock:
+            if self.thread is None or not self.thread.is_alive():
+                self.thread = threading.Thread(target=self._run, name="kb-embed-engine",
+                                               daemon=True)
+                self.thread.start()
+        self.q.put((prio, next(self.seq), fut, fn, args))
+        return fut
+
+    def pending(self) -> int:
+        """Jobs waiting to run (cancelled ones are skipped when their turn comes)."""
+        with self.q.mutex:
+            return sum(1 for item in self.q.queue if not item[2].cancelled())
+
+    def _run(self) -> None:
+        while True:
+            _prio, _seq, fut, fn, args = self.q.get()
+            if not fut.set_running_or_notify_cancel():
+                continue   # cancelled while waiting
+            self.running += 1
+            try:
+                fut.set_result(fn(*args))
+            except BaseException as e:
+                fut.set_exception(e)
+            finally:
+                self.running -= 1
+
+
+_ENGINE = _Engine()
+PRIO_QUERY, PRIO_PASSAGES = 0, 1
+
+
+def _embed_passages(emb: Embedder, texts: Sequence[str]) -> np.ndarray:
+    """Passage embeddings through the shared inference thread (blocking)."""
+    return _ENGINE.submit(PRIO_PASSAGES, emb.embed_passages, list(texts)).result()
+
+
 # ── Query embeddings (bounded wait, LRU cache) ──────────────────────────────
 
 _QCACHE: "OrderedDict[Tuple[str, str], np.ndarray]" = OrderedDict()
 _QLOCK = threading.Lock()
-_QPOOL: Optional[ThreadPoolExecutor] = None
 _INFLIGHT: Dict[Tuple[str, str], Future] = {}
 QCACHE_MAX = 256
 
 
-def _query_pool() -> ThreadPoolExecutor:
-    global _QPOOL
-    with _QLOCK:
-        if _QPOOL is None:
-            _QPOOL = ThreadPoolExecutor(max_workers=1, thread_name_prefix="kb-embed-query")
-        return _QPOOL
-
-
 def query_vector(text: str, timeout: float, wait_load: float = 0.0) -> Optional[np.ndarray]:
-    """The query's vector within ``timeout`` seconds, else None (the embedding
-    keeps running and is cached, so the next identical query is instant)."""
-    emb = get_embedder(wait=wait_load)
+    """The query's vector within ``timeout`` seconds in all — loading the model
+    (at most ``wait_load`` of it) and embedding — else None. A started
+    embedding finishes and is cached (the next identical query is instant);
+    one that had not started is cancelled."""
+    deadline = time.monotonic() + max(0.0, timeout)
+    emb = get_embedder(wait=max(0.0, min(wait_load, timeout)))
     if emb is None:
         return None
     key = (emb.model, text)
@@ -425,30 +514,34 @@ def query_vector(text: str, timeout: float, wait_load: float = 0.0) -> Optional[
             _QCACHE.move_to_end(key)
             return hit
         fut = _INFLIGHT.get(key)
-    if fut is None:
-        def run() -> np.ndarray:
-            vec = emb.embed_query(text)
-            with _QLOCK:
-                _QCACHE[key] = vec
-                _QCACHE.move_to_end(key)
-                while len(_QCACHE) > QCACHE_MAX:
-                    _QCACHE.popitem(last=False)
-                _INFLIGHT.pop(key, None)
-            return vec
+        if fut is None or fut.cancelled():
+            def run() -> np.ndarray:
+                vec = emb.embed_query(text)
+                with _QLOCK:
+                    _QCACHE[key] = vec
+                    _QCACHE.move_to_end(key)
+                    while len(_QCACHE) > QCACHE_MAX:
+                        _QCACHE.popitem(last=False)
+                return vec
 
-        fut = _query_pool().submit(run)
-        with _QLOCK:
+            fut = _ENGINE.submit(PRIO_QUERY, run)
             _INFLIGHT[key] = fut
+
+            def _done(f: Future, key: Tuple[str, str] = key) -> None:
+                with _QLOCK:
+                    if _INFLIGHT.get(key) is f:
+                        _INFLIGHT.pop(key, None)
+
+            fut.add_done_callback(_done)
     try:
-        return fut.result(timeout=max(0.01, timeout))
-    except FutureTimeout:
+        return fut.result(timeout=max(0.01, deadline - time.monotonic()))
+    except (FutureTimeout, CancelledError):
+        fut.cancel()   # not started yet: dropped (a running one finishes and is cached)
         _log_once("slowquery", logging.INFO,
                   "Knowledge: a query embedding took longer than %.1f s; using word search "
                   "for this one", timeout)
         return None
     except Exception as e:
-        with _QLOCK:
-            _INFLIGHT.pop(key, None)
         _log_once(f"query:{type(e).__name__}", logging.WARNING,
                   "Knowledge: query embedding failed: %s", e)
         return None
@@ -800,7 +893,7 @@ def embed_notes(db_path: Path, ids: Sequence[int], emb: Embedder,
                     if stop and stop():
                         raise _Stopped()
                     part = todo[i:i + BATCH_CHUNKS]
-                    mat = emb.embed_passages([need[k] for k in part])
+                    mat = _embed_passages(emb, [need[k] for k in part])
                     if mat.shape != (len(part), emb.dim):
                         raise ValueError(f"the model returned vectors of shape {mat.shape}")
                     for k, row in zip(part, _normalise(mat)):
@@ -876,42 +969,96 @@ def prune_carry(db_path: Path) -> None:
 _LAST: Dict[str, Dict[str, Any]] = {}   # db path → last run / last error
 
 
+def known_db_paths() -> List[str]:
+    """Index databases of this computer's knowledge bases (+ any seen in this process)."""
+    paths = set(_WORKER.known)
+    try:
+        paths.update(str(p) for p in (Path.home() / ".myclaw").glob("knowledge_*.db"))
+    except OSError:
+        pass
+    return sorted(p for p in paths if os.path.isfile(p))
+
+
 class _Worker:
-    """One thread; embeds queued notes one batch at a time."""
+    """One thread; embeds queued notes one batch at a time.
+
+    2026-10-24 (review): nothing waiting is ever dropped — when the model
+    cannot be loaded the notes are retried with backoff (1 min … 30 min);
+    the first write to a base in a process, turning the switch on, changing
+    the model and a model load that works again after an error queue a scan
+    for every note still waiting; long-running processes (the Web UI)
+    scan every ``SCAN_INTERVAL`` seconds; carry copies are pruned at most
+    once a day per base.
+    """
 
     def __init__(self) -> None:
         self.cv = threading.Condition()
         self.pending: "OrderedDict[str, Optional[set]]" = OrderedDict()   # None = all stale
+        self.deferred: Dict[str, Tuple[Optional[set], float]] = {}       # path → (ids, due)
+        self.backoff: Dict[str, float] = {}
+        self.retry_load: set = set()
+        self.known: set = set()
+        self.first_seen: set = set()
+        self.last_prune: Dict[str, float] = {}
+        self.periodic = False
+        self.next_scan = 0.0
         self.busy = False
         self.current: Optional[str] = None   # base being embedded now
         self.stopping = False
         self.thread: Optional[threading.Thread] = None
 
+    # with self.cv held
+    def _merge(self, db_path: str, ids: Optional[Iterable[int]]) -> None:
+        cur = self.pending.get(db_path, set())
+        if ids is None or cur is None:
+            self.pending[db_path] = None
+        else:
+            cur.update(int(i) for i in ids)
+            self.pending[db_path] = None if len(cur) > QUEUE_CAP else cur
+
+    def _ensure_thread(self) -> None:
+        if self.thread is None or not self.thread.is_alive():
+            self.thread = threading.Thread(target=self._run, name="kb-embed-worker", daemon=True)
+            self.thread.start()
+
     def submit(self, db_path: str, ids: Optional[Iterable[int]]) -> None:
         with self.cv:
             if self.stopping:
                 return
-            cur = self.pending.get(db_path, set())
-            if ids is None or cur is None:
-                self.pending[db_path] = None
-            else:
-                cur.update(int(i) for i in ids)
-                self.pending[db_path] = None if len(cur) > QUEUE_CAP else cur
-            if self.thread is None or not self.thread.is_alive():
-                self.thread = threading.Thread(target=self._run, name="kb-embed-worker",
-                                               daemon=True)
-                self.thread.start()
+            self.known.add(db_path)
+            if db_path in self.deferred:      # the model is failing: wait for the retry
+                d_ids, due = self.deferred[db_path]
+                if ids is None or d_ids is None:
+                    self.deferred[db_path] = (None, due)
+                else:
+                    d_ids.update(int(i) for i in ids)
+                return
+            self._merge(db_path, ids)
+            self._ensure_thread()
+            self.cv.notify_all()
+
+    def start_periodic(self) -> None:
+        with self.cv:
+            if self.stopping:
+                return
+            self.periodic = True
+            self.next_scan = 0.0           # first scan now
+            self._ensure_thread()
             self.cv.notify_all()
 
     def queued(self, db_path: str) -> int:
-        """Queued notes of this base (-1: every note not embedded yet, or a run
-        of unknown size in progress)."""
+        """Queued notes of this base (-1: a scan of every waiting note is queued or running)."""
         with self.cv:
             v = self.pending.get(db_path, set())
             running = self.current == db_path
         if v is None or (running and not v):
             return -1
         return len(v)
+
+    def retry_in(self, db_path: str) -> Optional[float]:
+        with self.cv:
+            d = self.deferred.get(db_path)
+        return max(0.0, d[1] - time.monotonic()) if d else None
 
     def wait_idle(self, timeout: float = 30.0) -> bool:
         end = time.time() + timeout
@@ -927,28 +1074,57 @@ class _Worker:
         with self.cv:
             self.stopping = True
             self.pending.clear()
+            self.deferred.clear()
             self.cv.notify_all()
             t = self.thread
         if t is not None and t.is_alive() and t is not threading.current_thread():
             t.join(timeout)
 
+    def _next(self) -> Optional[Tuple[str, Optional[set], bool]]:
+        """Wait for work (with self.cv held); None = stop."""
+        while True:
+            if self.stopping:
+                return None
+            now = time.monotonic()
+            for path, (ids, due) in list(self.deferred.items()):
+                if due <= now:
+                    del self.deferred[path]
+                    self.retry_load.add(path)
+                    self._merge(path, ids)
+            if self.periodic and now >= self.next_scan:
+                self.next_scan = now + SCAN_INTERVAL
+                if wants_updates():
+                    for path in known_db_paths():
+                        if path not in self.deferred:
+                            self._merge(path, None)
+            if self.pending:
+                path, ids = self.pending.popitem(last=False)
+                retry = path in self.retry_load
+                self.retry_load.discard(path)
+                return path, ids, retry
+            wakes = [due for _, due in self.deferred.values()]
+            if self.periodic:
+                wakes.append(self.next_scan)
+            self.cv.wait(max(0.05, min(wakes) - now) if wakes else None)
+
     def _run(self) -> None:
         while True:
             with self.cv:
-                while not self.pending and not self.stopping:
-                    self.cv.wait()
-                if self.stopping:
+                item = self._next()
+                if item is None:
                     return
-                self.busy = True
+                path, ids, retry = item
+                self.busy, self.current = True, path
             try:
                 if DEBOUNCE_SECONDS:
                     time.sleep(DEBOUNCE_SECONDS)
-                with self.cv:
-                    if not self.pending:
-                        continue
-                    path, ids = self.pending.popitem(last=False)
-                    self.current = path
-                self._process(path, ids)
+                    with self.cv:      # writes that came in meanwhile
+                        more = self.pending.pop(path, set())
+                    if more is None or ids is None:
+                        ids = None
+                    else:
+                        ids = set(ids) | set(more)
+                self._process(path, ids, retry)
             except Exception as e:  # never let the thread die
                 _log_once(f"worker:{type(e).__name__}:{e}", logging.WARNING,
                           "Knowledge: embedding notes failed: %s", e)
@@ -958,31 +1134,55 @@ class _Worker:
                     self.current = None
                     self.cv.notify_all()
 
-    def _process(self, path: str, ids: Optional[set]) -> None:
+    def _defer(self, path: str, ids: Optional[set]) -> None:
+        with self.cv:
+            delay = min(RETRY_MAX, max(RETRY_MIN, self.backoff.get(path, RETRY_MIN / 2) * 2))
+            self.backoff[path] = delay
+            old = self.deferred.get(path)
+            if old is not None and (old[0] is None or ids is None):
+                ids = None
+            elif old is not None and old[0] is not None and ids is not None:
+                ids = set(ids) | old[0]
+            self.deferred[path] = (ids, time.monotonic() + delay)
+            self.cv.notify_all()
+
+    def _process(self, path: str, ids: Optional[set], retry: bool = False) -> None:
         if not wants_updates():
             return
-        emb = None
+        emb = get_embedder(wait=1.0, retry=retry)
         end = time.time() + 1800   # first load may download the model
         while emb is None and time.time() < end and not self.stopping and wants_updates():
-            emb = get_embedder(wait=1.0)
             state, err = embedder_state()
-            if emb is None and state == "error":
+            if state == "error":
                 _LAST.setdefault(path, {})["last_error"] = err
-                return  # logged once by the loader; the notes stay "not embedded"
+                self._defer(path, ids)   # logged once by the loader; retried later
+                return
+            emb = get_embedder(wait=1.0)
         if emb is None:
+            if wants_updates() and not self.stopping:
+                self._defer(path, ids)
             return
+        with self.cv:
+            self.backoff.pop(path, None)
         try:
+            more = False
             if ids is None:
                 conn = _connect(Path(path))
                 try:
-                    todo = _stale_ids(conn, emb.model) if _has_tables(conn) else []
+                    todo = _stale_ids(conn, emb.model, limit=SCAN_BATCH) if _has_tables(conn) else []
                 finally:
                     conn.close()
+                more = len(todo) >= SCAN_BATCH
             else:
                 todo = sorted(ids)
             stats = embed_notes(Path(path), todo, emb,
                                 stop=lambda: self.stopping or not wants_updates())
             _LAST[path] = {"last_run": time.time(), "last_stats": stats, "last_error": None}
+            if more:
+                self.submit(path, None)      # the next pass of a large scan
+            if time.time() - self.last_prune.get(path, 0.0) > PRUNE_INTERVAL:
+                self.last_prune[path] = time.time()
+                prune_carry(Path(path))
         except _Stopped:
             pass
         except Exception as e:
@@ -1011,21 +1211,45 @@ def wants_updates() -> bool:
 
 
 def note_indexed(db_path: Any, entity_ids: Iterable[int]) -> None:
-    """Called after notes were (re-)indexed and committed. Never raises, never blocks."""
+    """Called after notes were (re-)indexed and committed. Never raises, never blocks.
+
+    The first call for a base in this process also queues a scan for notes
+    that are still waiting (e.g. written while the model could not load)."""
     try:
         if not wants_updates():
             return
+        path = str(db_path)
         ids = [int(i) for i in entity_ids if i]
         if ids:
-            _WORKER.submit(str(db_path), ids)
+            _WORKER.submit(path, ids)
+        if path not in _WORKER.first_seen:
+            _WORKER.first_seen.add(path)
+            _WORKER.submit(path, None)
     except Exception as e:  # pragma: no cover - defensive
         logger.debug("embedding queue: %s", e)
 
 
 def queue_all(db_path: Any) -> None:
-    """Queue every stale note of a base (e.g. after turning the feature on)."""
+    """Queue every waiting note of a base."""
     if wants_updates():
         _WORKER.submit(str(db_path), None)
+
+
+def queue_known_bases() -> None:
+    """Queue every waiting note of every knowledge base (settings change, model works again)."""
+    try:
+        if wants_updates():
+            for path in known_db_paths():
+                _WORKER.submit(path, None)
+    except Exception as e:  # pragma: no cover - defensive
+        logger.debug("embedding queue: %s", e)
+
+
+def start_background() -> None:
+    """Long-running processes (the Web UI): look for waiting notes now and every
+    ``SCAN_INTERVAL`` seconds while semantic search is on (short-lived CLI
+    commands leave them to this or to ``knowledge embed``)."""
+    _WORKER.start_periodic()
 
 
 def wait_idle(timeout: float = 30.0) -> bool:
@@ -1131,6 +1355,21 @@ def embedding_status(base: str = "default", db_path: Optional[Path] = None) -> D
     out["ready"] = bool(out["enabled"] and out["installed"] and out["chunks"] > 0)
     out["reason"] = unavailable_reason() or (None if out["chunks"] else
                                              "no note is embedded yet — run Backfill")
+    # 2026-10-24 (review): notes waiting for vectors, and when the next try is
+    out["waiting"] = out["stale"]
+    retry = _WORKER.retry_in(str(path))
+    out["retry_in"] = None if retry is None else round(retry)
+    if out["waiting"]:
+        why = ""
+        if retry is not None:
+            why = f" — the model could not be loaded; next try in {max(1, round(retry / 60))} min"
+        elif not out["enabled"]:
+            why = " — semantic search is off"
+        elif not out["installed"]:
+            why = " — fastembed is not installed"
+        out["waiting_text"] = f"{out['waiting']} note(s) waiting to be embedded{why}"
+    else:
+        out["waiting_text"] = None
     return out
 
 
@@ -1232,6 +1471,25 @@ def rrf(rankings: Sequence[Sequence[int]], k: int = RRF_K) -> List[Tuple[int, fl
     return sorted(scores.items(), key=lambda kv: (-kv[1], order[kv[0]]))
 
 
+def fuse(fts_ids: Sequence[int], sem_ids: Sequence[int], k: int = RRF_K,
+         w_fts: float = FUSION_FTS_WEIGHT, w_sem: float = FUSION_SEM_WEIGHT,
+         keep_fts: int = FUSION_KEEP_FTS) -> List[int]:
+    """Hybrid order (2026-10-24 review): weighted RRF where the word ranking
+    counts more than meaning, and the best ``keep_fts`` word matches always
+    come first, in their order — plain RRF let a crowd of similar notes push
+    the one note with the exact keyword (an error code, a name) out of the
+    top results. ``sem_ids`` holds only notes above the similarity floor."""
+    scores: Dict[int, float] = {}
+    order: Dict[int, int] = {}
+    for weight, ranking in ((w_fts, fts_ids), (w_sem, sem_ids)):
+        for rank, key in enumerate(dict.fromkeys(ranking)):
+            scores[key] = scores.get(key, 0.0) + weight / (k + rank + 1)
+            order.setdefault(key, len(order))
+    pinned = list(dict.fromkeys(fts_ids))[:max(0, keep_fts)]
+    rest = sorted((i for i in scores if i not in pinned), key=lambda i: (-scores[i], order[i]))
+    return pinned + rest
+
+
 def normalise_mode(mode: Any) -> Optional[str]:
     m = str(mode or "auto").strip().lower()
     aliases = {"words": "fts", "text": "fts", "keyword": "fts", "keywords": "fts", "lexical": "fts",
@@ -1276,7 +1534,7 @@ def search_entities(db: Any, query: str, limit: int = 10, boolean: bool = False,
         ranked = [eid for eid, _ in vec]
         info["mode"] = "semantic"
     else:
-        ranked = [eid for eid, _ in rrf([[e.id for e in fts], [eid for eid, _ in vec]])]
+        ranked = fuse([e.id for e in fts], [eid for eid, _ in vec])
         info["mode"] = "hybrid"
     info["semantic_hits"] = len(vec)
     ranked = ranked[:limit]

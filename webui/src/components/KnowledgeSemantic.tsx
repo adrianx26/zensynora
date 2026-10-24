@@ -77,7 +77,7 @@ export const SemanticCard: React.FC<{ base: string; status: ReturnType<typeof us
                 <span className="kb-bar-track"><span className="kb-bar-fill" style={{ width: `${pct}%` }} /></span>
                 <b>{st.embedded}/{st.notes}</b>
               </div>
-              {st.stale > 0 && !running && <p className="muted small">{st.stale} note(s) have no vectors for this model yet{st.queued !== 0 ? ' (being embedded now…)' : ''}.</p>}
+              {st.waiting > 0 && !running && <p className="muted small">{st.waiting_text || `${st.waiting} note(s) waiting to be embedded`}{st.queued !== 0 ? ' (being embedded now…)' : '.'}</p>}
               {running && (
                 <p className="small">{job?.phase === 'loading the model' || !job?.total
                   ? `Loading the model… (the first time it is downloaded${info?.size_mb ? `, ${info.size_mb} MB` : ''})`

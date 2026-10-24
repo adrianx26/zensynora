@@ -176,10 +176,16 @@ def search_advanced(
         sem_order: List[int] = []
         sem_scores: Dict[int, float] = {}
         if has_query:
-            fts_order = [e.id for e in db.search_fts(query, fetch * 2)]
+            # 2026-10-24 (review): with filters, rank every match and filter
+            # afterwards — cutting first lost filtered notes ranked lower
+            # than the first limit*6 unfiltered ones.
+            pool = fetch * 2
+            if len(where_clauses) > 1:
+                pool = max(pool, conn.execute("SELECT COUNT(*) FROM entities").fetchone()[0])
+            fts_order = [e.id for e in db.search_fts(query, pool)]
             use_semantic = filters.fusion_method == "rrf" or filters.semantic_weight > 0
             if use_semantic and semantic.enabled():
-                vec, reason = semantic.vector_rank(conn, db.db_path, query, fetch * 2)
+                vec, reason = semantic.vector_rank(conn, db.db_path, query, pool)
                 if vec is not None:
                     sem_order = [eid for eid, _ in vec]
                     sem_scores = dict(vec)

@@ -22,6 +22,9 @@ export interface SemanticStatus {
   last_error: string | null;
   ready: boolean;
   reason: string | null;
+  waiting: number;
+  waiting_text: string | null;
+  retry_in: number | null;
   in_venv: boolean;
   job: Job | null;
   install: Install;

@@ -1495,13 +1495,16 @@ class KnowledgeDB:
         if safe_query == "*":
             return []  # no searchable words (MATCH "*" is an FTS5 error)
 
-        rows = self._match_entities(conn, safe_query, limit, boolean=boolean)
+        # 2026-10-24 (KB phase 3 review): the UNION gives one row per index a
+        # note matches in (title, text, facts), so LIMIT counted duplicates and
+        # fewer than ``limit`` notes came back — fetch more rows, cut below.
+        rows = self._match_entities(conn, safe_query, limit * 3, boolean=boolean)
         # v0.7.1: a whole sentence (the agent searches with the user's
         # message) rarely has every word in one note. If the strict search
         # finds nothing, accept notes with any of the words, best match first.
         # Not for boolean queries: there the user chose AND/OR on purpose.
         if not boolean and not rows and safe_query.count(" ") >= 3:
-            rows = self._match_entities(conn, sanitize_fts_query(query, any_term=True), limit)
+            rows = self._match_entities(conn, sanitize_fts_query(query, any_term=True), limit * 3)
 
         entities = []
         seen_ids = set()
@@ -1509,7 +1512,7 @@ class KnowledgeDB:
             if row["id"] not in seen_ids:
                 seen_ids.add(row["id"])
                 entities.append(_row_to_entity(row))
-        return entities
+        return entities[:limit]
 
     @staticmethod
     def _match_entities(conn, q: str, limit: int, boolean: bool = False):

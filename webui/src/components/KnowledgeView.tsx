@@ -94,6 +94,7 @@ const KnowledgeView: React.FC = () => {
   const [paused, setPaused] = useState(false);
   const [sort, setSort] = useState<{ key: 'title' | 'observations' | 'degree' | 'updated'; dir: 1 | -1 }>({ key: 'degree', dir: -1 });
   const graphRef = useRef<GraphHandle>(null);
+  const searchSeq = useRef(0); // 2026-10-24 (review): only the latest search answer is used
 
   const loadBases = useCallback(async () => {
     try {
@@ -139,16 +140,18 @@ const KnowledgeView: React.FC = () => {
   // full-text search (debounced)
   useEffect(() => {
     const q = query.trim();
+    const seq = ++searchSeq.current;
     if (!q) { setHits(null); setModeNote(null); return; }
     const t = window.setTimeout(async () => {
       try {
         const r = await api<{ results: string[]; note?: string | null }>(`/api/knowledge/search?base=${encodeURIComponent(base)}&q=${encodeURIComponent(q)}&mode=${searchMode}`);
+        if (seq !== searchSeq.current) return; // a newer search was started meanwhile
         setModeNote(searchMode === 'fts' ? null : r.note || null);
         const ql = q.toLowerCase();
         const s = new Set(r.results);
         data?.nodes.forEach(n => { if (n.title.toLowerCase().includes(ql) || n.id.includes(ql)) s.add(n.id); });
         setHits(s);
-      } catch { setHits(new Set()); }
+      } catch { if (seq === searchSeq.current) setHits(new Set()); }
     }, 250);
     return () => window.clearTimeout(t);
   }, [query, base, data, searchMode]);
