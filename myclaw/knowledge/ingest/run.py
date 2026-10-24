@@ -117,7 +117,7 @@ def import_file(path: str, base: str = "default", kind: str = "auto",
     p = check_local_path(raw, trusted=trusted)
     if display_name:
         check_policy(Path(display_name), display_name)  # an uploaded ".env" / "id_rsa"
-    max_notes = _clamp(max_notes, MAX_IMPORT_NOTES, 20_000)
+    max_notes = _clamp(max_notes, MAX_IMPORT_NOTES, 50_000)
     budget = budget or Budget(max_notes=max_notes, max_bytes=2_000_000_000, seconds=None)
     budget.max_notes = min(budget.max_notes, max_notes)
     result = IngestResult(base=base, source=display_name or str(p), kind=kind)

@@ -415,7 +415,7 @@ def assimilate_cmd(source, base, max_notes):
 @click.option("--kind", default="auto", show_default=True,
               type=click.Choice(["auto", "chatgpt", "claude", "mcp_memory", "markdown", "document"]),
               help="What the file is (auto = detect)")
-@click.option("--max-notes", default=2000, show_default=True, type=click.IntRange(1, 20000),
+@click.option("--max-notes", default=10000, show_default=True, type=click.IntRange(1, 50000),
               help="At most this many notes")
 def import_cmd(file, base, kind, max_notes):
     """Import a ChatGPT/Claude export, MCP memory file, Markdown folder (Obsidian) or document"""

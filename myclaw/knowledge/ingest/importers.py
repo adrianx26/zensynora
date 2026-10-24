@@ -58,7 +58,7 @@ _KIND_ALIASES = {"mcp": "mcp_memory", "memory": "mcp_memory", "mcp-memory": "mcp
 # 2026-10-24 (KB phase 5, review): memory limits. A conversations.json is
 # streamed when the optional ``ijson`` package is installed; without it a file
 # up to MAX_JSON_BYTES is read at once.
-MAX_JSON_BYTES = 300_000_000
+MAX_JSON_BYTES = 150_000_000
 MAX_MD_FILE = 2_000_000           # one Markdown note
 MAX_MD_TOTAL = 100_000_000        # all Markdown notes of one import
 TRANSCRIPT_CHARS = 8_000          # transcript kept per conversation

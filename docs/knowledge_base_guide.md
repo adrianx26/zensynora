@@ -228,7 +228,7 @@ between files, imports between code files).
 | Source | What you get |
 |---|---|
 | Web page (`https://…`) | main text split at headings, the page's links; a PDF/Word/Excel URL is read as that document |
-| GitHub repository (`https://github.com/owner/repo`, also `/tree/branch/folder`) | architecture overview: languages, folders, entry points, dependencies, a diagram of folders and imports; README, docs, manifests and main source files as notes. No git needed; set `GITHUB_TOKEN` for private repositories or a higher rate limit |
+| GitHub repository (`https://github.com/owner/repo`, also `/tree/branch/folder`) | architecture overview: languages, folders, entry points, dependencies, a diagram of the packages and their imports; one note per file read: README, manifests, entry points and the most-imported source files first, docs at most a quarter of the notes, archives / plans / changelogs / tests last (the overview says what was left out). No git needed; set `GITHUB_TOKEN` for private repositories or a higher rate limit |
 | Folder or file on this computer | the same analysis for code folders (`.gitignore` honoured); documents: PDF, Word (.docx), Excel (.xlsx: one table per sheet, column names as facts), text, Markdown, HTML, CSV, JSON; images: file details only (no OCR) |
 
 **Import** reads exports: ChatGPT (`.zip` or `conversations.json`), Claude.ai
@@ -236,21 +236,44 @@ between files, imports between code files).
 (`memory.json` / `.jsonl`: entities → notes with facts, relations → links) and
 Markdown folders / Obsidian vaults (folder or `.zip`). Each conversation becomes
 one note (date, short transcript, tags `imported` + `chatgpt`/`claude`), grouped
-under one note per month. Markdown notes are **copied** into
-`<base>/imported/<folder-name>/` with their frontmatter and text; an existing
-file is never overwritten (a changed note is saved beside it as `name-2.md`),
-and a note whose permalink is already taken gets `permalink: <folder>-…`.
+under one note per month; the note's name comes from the conversation's id,
+so a renamed conversation updates the same note. Markdown notes are **copied**
+into `<base>/imported/<folder-name>/` with their frontmatter and text (symbolic
+links are not followed, attachments are not copied). Importing the folder
+again updates ZenSynora's own copy of a changed note (the old version goes to
+`.trash/`); if you edited that copy, the new version is saved beside it once
+(`name-2.md`, updated by later imports). A note whose permalink is already
+taken gets `permalink: <folder>-…`.
 
 * **Run it again** on the same source: the same notes are updated (unchanged
   ones are not rewritten; a version that loses text goes to `.trash/` first).
-* **Limits:** 40 notes per assimilate by default (`max_notes`, at most 500),
-  12 000 characters per note (longer parts are split), a byte and time limit
-  per run. At a limit you get what was done so far — run it again to continue.
-* **Never imported:** hidden folders (`~/.ssh`, ZenSynora's settings…), `.env`,
-  key and credential files (`*.pem`, `id_rsa*`, `credentials*`…); tokens,
-  API keys and passwords in the text become `[redacted]`. Agents may only read
-  files in your home folder and the agent workspace; web addresses must be
-  public (no local or private network addresses).
+  A note you **edited by hand** since it was imported is kept as it is ("kept
+  your edits"). A note **you wrote** that happens to have the same name is
+  never replaced — the import is saved as `…-imported` and says so.
+* **Limits:** 40 notes per assimilate by default (`max_notes`, at most 500;
+  one note per file of a repository), 12 000 characters per note (longer parts
+  are split), a byte and time limit per run; an import takes up to 10 000
+  notes (`--max-notes`). At a limit you get what was done so far; running the
+  same call again **continues** with the next files or parts (the progress is
+  kept in `<base>/.ingest/`). After *Stop* or a timeout nothing more is written.
+  Two imports can run at a time; a stuck Web UI import is stopped after
+  30 minutes.
+* **Big files:** Markdown notes over 2 MB and Word/Excel files that unpack to
+  more than 300 MB are skipped; an export's `conversations.json` over 150 MB
+  needs the optional `ijson` package (`pip install ijson`), which reads it
+  piece by piece.
+* **Never imported:** hidden files and folders (`~/.ssh`, ZenSynora's
+  settings, also inside the agent workspace), `.env`, key and credential
+  files (`*.pem`, `id_rsa*`, `credentials*`, `*.tfvars`, `kubeconfig`,
+  `wp-config.php`, `appsettings*.json`…) — the same rules for agents, the Web
+  UI and the command line. Tokens, API keys and passwords in the text (also
+  `NAME_PASSWORD: "…"`-style settings and `?token=` in URLs) become
+  `[redacted]`; a URL's `user:password@` and secret query parameters are never
+  stored or logged. Agents may only read files in your home folder and the
+  agent workspace. Web addresses must be public: every address of the name is
+  checked, and the connection goes to exactly the checked address. Behind an
+  HTTP(S) proxy the proxy resolves the name itself, so what it connects to
+  cannot be checked from here.
 * PDF, Word and Excel need an optional package:
   `pip install 'zensynora[ingest]'` (or, in ZenSynora's virtual environment,
   `python -m pip install pypdf python-docx openpyxl`). Without it you get a

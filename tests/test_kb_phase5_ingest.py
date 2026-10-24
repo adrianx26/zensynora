@@ -131,11 +131,20 @@ def test_note_limit_is_respected_and_reported(home):
 
 
 def test_time_limit_writes_the_overview_and_stops(home):
-    budget = Budget(max_notes=50, seconds=None)
-    budget.cancel.set()
+    budget = Budget(max_notes=50, seconds=0.001)  # the run's own deadline: overview only
+    time.sleep(0.01)
     r = write_document_notes(sample_doc(), "default", budget=budget)
     assert [n.permalink for n in r.notes] == [r.overview.permalink]
     assert r.stopped and "Stopped early" in note(r.overview.permalink).content
+
+
+def test_nothing_is_written_after_a_cancel(home):
+    # review item 6: once the tool returned / Stop was pressed, no more writes
+    budget = Budget(max_notes=50, seconds=None)
+    budget.cancel.set()
+    r = write_document_notes(sample_doc(), "default", budget=budget)
+    assert r.notes == [] and r.overview is None and r.stopped == "cancelled"
+    assert list(kdir(home).glob("*.md")) == []
 
 
 def test_clean_body_escapes_fact_lines_and_reserved_headings():
@@ -221,7 +230,7 @@ def _fake_github(monkeypatch, status=200, headers=None):
     }
     calls = []
 
-    def fake_get(url, headers=None, max_bytes=0, timeout=0):
+    def fake_get(url, headers=None, max_bytes=0, timeout=0, budget=None):
         calls.append((url, dict(headers or {})))
         if status != 200:
             return sources.HttpResponse(status, url, b"{}", headers or {})
@@ -574,12 +583,26 @@ def test_markdown_folder_import_keeps_frontmatter_and_never_overwrites(home):
     # again: nothing changes
     again = import_file(str(vault))
     assert again.extra["copied"] == 0 and again.extra["unchanged_files"] == 2
-    # a changed note is saved beside the earlier copy, never over it
+    # review item 10: a changed note updates our own (unedited) copy — no -2 pile-up;
+    # the previous version is kept in .trash
     (vault / "Projects" / "Garden.md").write_text("# Garden\n\nChanged.\n")
     third = import_file(str(vault))
-    assert third.extra["kept_beside_existing"] == 1
-    assert "Back to [[Home]]" in (dest / "Projects" / "Garden.md").read_text()
-    assert "Changed." in (dest / "Projects" / "Garden-2.md").read_text()
+    assert third.extra["updated_files"] == 1 and third.extra["kept_your_edits"] == 0
+    assert "Changed." in (dest / "Projects" / "Garden.md").read_text()
+    assert not (dest / "Projects" / "Garden-2.md").exists()
+    assert any("Back to [[Home]]" in t.read_text() for t in (kdir(home) / ".trash").glob("*.md"))
+    # the user edits our copy: the next change is written beside it, once
+    (dest / "Projects" / "Garden.md").write_text("# Garden\n\nMY EDIT\n")
+    (vault / "Projects" / "Garden.md").write_text("# Garden\n\nChanged again.\n")
+    fourth = import_file(str(vault))
+    assert fourth.extra["kept_your_edits"] == 1
+    assert (dest / "Projects" / "Garden.md").read_text() == "# Garden\n\nMY EDIT\n"
+    assert "Changed again." in (dest / "Projects" / "Garden-2.md").read_text()
+    (vault / "Projects" / "Garden.md").write_text("# Garden\n\nThird change.\n")
+    import_file(str(vault))
+    assert "Third change." in (dest / "Projects" / "Garden-2.md").read_text()
+    assert not (dest / "Projects" / "Garden-3.md").exists()
+    assert (dest / "Projects" / "Garden.md").read_text() == "# Garden\n\nMY EDIT\n"
 
 
 def test_markdown_zip_import(home):
@@ -763,3 +786,383 @@ def test_cli_assimilate_and_import(home):
     assert "(chatgpt)" in res.output and list((home / ".myclaw" / "knowledge" / "work").glob("chatgpt-*.md"))
     res = CliRunner().invoke(cli, ["knowledge", "import", str(home / "missing.zip")])
     assert res.exit_code != 0 and "does not exist" in res.output
+
+
+# ── review fixes (2026-10-24) ────────────────────────────────────────────────
+import socket  # noqa: E402
+import threading  # noqa: E402
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer  # noqa: E402
+
+
+def _addr(ip, port=80):
+    return [(socket.AF_INET6 if ":" in ip else socket.AF_INET, socket.SOCK_STREAM, 6, "",
+             (ip, port))]
+
+
+_real_getaddrinfo = socket.getaddrinfo
+
+
+def _fake_dns(answers):
+    """getaddrinfo that answers for the '*.example' test names only."""
+    def resolve(host, port=None, *a, **k):
+        if isinstance(host, str) and host.endswith(".example"):
+            return _addr(answers(host), port or 80)
+        return _real_getaddrinfo(host, port, *a, **k)
+    return resolve
+
+
+def test_1_only_global_addresses_and_unresolvable_names_are_refused(monkeypatch):
+    monkeypatch.setattr(sources, "_proxy_for", lambda url: None)
+    for ip in ("100.64.0.1", "::ffff:127.0.0.1", "64:ff9b::7f00:1", "169.254.169.254", "fd00::1"):
+        monkeypatch.setattr(sources.socket, "getaddrinfo", lambda *a, _ip=ip, **k: _addr(_ip))
+        with pytest.raises(IngestError, match="local or private"):
+            sources.check_url("http://name.example/")
+
+    def fail(*a, **k):
+        raise socket.gaierror("no such host")
+
+    monkeypatch.setattr(sources.socket, "getaddrinfo", fail)
+    with pytest.raises(IngestError, match="could not be found"):
+        sources.check_url("http://nowhere.example/")
+    # behind a proxy the proxy resolves names (documented limitation)
+    monkeypatch.setattr(sources, "_proxy_for", lambda url: "http://proxy:3128")
+    assert sources.check_url("http://nowhere.example/") == []
+    with pytest.raises(IngestError):
+        sources.check_url("http://foo.localhost/")
+
+
+class _Echo(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+    hosts: list = []
+    slow = False
+
+    def do_GET(self):
+        _Echo.hosts.append(self.headers.get("Host"))
+        if _Echo.slow:
+            self.send_response(200)
+            self.send_header("content-type", "text/html")
+            self.send_header("transfer-encoding", "chunked")
+            self.end_headers()
+            try:
+                for _ in range(20):
+                    d = b"<p>slow</p>"
+                    self.wfile.write(b"%x\r\n%s\r\n" % (len(d), d))
+                    self.wfile.flush()
+                    time.sleep(0.3)
+                self.wfile.write(b"0\r\n\r\n")
+            except OSError:
+                pass
+            return
+        body = b"<html><head><title>T</title></head><body><p>" + b"hello " * 50 + b"</p></body></html>"
+        self.send_response(200)
+        self.send_header("content-type", "text/html")
+        self.send_header("content-length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *a):
+        pass
+
+
+@pytest.fixture
+def local_server():
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), _Echo)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    _Echo.hosts, _Echo.slow = [], False
+    yield srv.server_address[1]
+    srv.shutdown()
+
+
+def test_1_connection_goes_to_the_checked_address_dns_rebinding(monkeypatch, local_server):
+    # the check sees 127.0.0.1 (allowed here for the test); any later lookup
+    # would give an unroutable address — the request must not resolve again
+    calls = []
+
+    def answer(host):
+        calls.append(host)
+        return "127.0.0.1" if len(calls) == 1 else "10.255.255.1"
+
+    monkeypatch.setattr(sources.socket, "getaddrinfo", _fake_dns(answer))
+    monkeypatch.setattr(sources, "ip_is_public", lambda ip: True)
+    monkeypatch.setattr(sources, "_proxy_for", lambda url: None)
+    r = sources.http_get(f"http://pinned.example:{local_server}/", timeout=5)
+    assert r.status == 200 and b"hello" in r.content
+    assert _Echo.hosts == [f"pinned.example:{local_server}"] and calls == ["pinned.example"]
+
+
+def test_6_download_stops_at_the_deadline(monkeypatch, local_server):
+    _Echo.slow = True
+    monkeypatch.setattr(sources.socket, "getaddrinfo", _fake_dns(lambda h: "127.0.0.1"))
+    monkeypatch.setattr(sources, "ip_is_public", lambda ip: True)
+    monkeypatch.setattr(sources, "_proxy_for", lambda url: None)
+    t = time.monotonic()
+    with pytest.raises(IngestError, match="time limit"):
+        sources.http_get(f"http://slow.example:{local_server}/", budget=Budget(seconds=1))
+    assert time.monotonic() - t < 3
+
+
+def test_2_markdown_import_never_follows_symlinks(home):
+    import os
+    from myclaw.knowledge.ingest import import_file
+
+    secret = home / "outside.txt"
+    secret.write_text("TOP SECRET OUTSIDE")
+    vault = home / "vault"
+    vault.mkdir()
+    (vault / "a.md").write_text("# A\n\nhello")
+    os.symlink(secret, vault / "link.md")
+    os.symlink(home, vault / "linkdir")
+    r = import_file(str(vault))
+    assert r.extra["copied"] == 1 and any("symbolic links" in s for s in r.skipped)
+    texts = "\n".join(p.read_text() for p in (kdir(home) / "imported").rglob("*.md"))
+    assert "TOP SECRET" not in texts
+    z = home / "links.zip"
+    with zipfile.ZipFile(z, "w") as zf:
+        zf.writestr("v/ok.md", "# ok")
+        info = zipfile.ZipInfo("v/evil.md")
+        info.external_attr = (0o120777 << 16)
+        zf.writestr(info, "/etc/passwd")
+    r = import_file(str(z), kind="markdown")
+    assert r.extra["copied"] == 1 and not list((kdir(home) / "imported").rglob("evil.md"))
+
+
+def test_3_workspace_and_cli_paths_follow_the_same_secret_and_hidden_rules(home):
+    from myclaw.knowledge.ingest import assimilate, import_file
+    from myclaw.knowledge.ingest.documents import read_document
+    from myclaw.knowledge.ingest.safety import check_local_path
+
+    ws = home / ".myclaw" / "workspace"
+    (ws / "credentials.json").write_text('{"client_secret": "zzz"}')
+    (ws / ".hidden").mkdir()
+    (ws / ".hidden" / "n.txt").write_text("hidden")
+    with pytest.raises(IngestError, match="keys or passwords"):
+        assimilate("credentials.json")
+    with pytest.raises(IngestError, match="hidden"):
+        assimilate(".hidden/n.txt")
+    (home / ".ssh").mkdir()
+    (home / ".ssh" / "notes.md").write_text("x")
+    with pytest.raises(IngestError, match="hidden"):
+        check_local_path(str(home / ".ssh" / "notes.md"), trusted=True)  # the CLI too
+    with pytest.raises(IngestError, match="keys or passwords"):
+        import_file(str(ws / "credentials.json"), trusted=True)
+    (home / "wp-config.php").write_text("<?php define('DB_PASSWORD', 'x');")
+    with pytest.raises(IngestError, match="keys or passwords"):
+        read_document(home / "wp-config.php")
+
+
+def test_4_credentials_in_source_urls_are_never_stored_or_logged(home, monkeypatch):
+    from myclaw.knowledge.ingest import assimilate
+
+    monkeypatch.setattr(sources, "http_get", lambda url, **kw: sources.HttpResponse(
+        200, url, PAGE.encode() + b"<a href='https://x.example/?token=LINKTOKEN123'>x</a>",
+        {"content-type": "text/html"}))
+    r = assimilate("https://alice:SuperSecretPw1@example.com/docs?api_key=ZZZKEY123456&sig=QQQSIG&page=2")
+    assert r.source == "https://example.com/docs?page=2"
+    stored = "\n".join(p.read_text() for p in (home / ".myclaw").rglob("*") if p.is_file()
+                       and p.suffix in (".md", ".jsonl", ".json"))
+    for secret in ("SuperSecretPw1", "ZZZKEY123456", "QQQSIG", "LINKTOKEN123"):
+        assert secret not in stored
+
+
+def test_5_redaction_and_secret_file_names():
+    from myclaw.knowledge.ingest.safety import is_secret_file, redact
+
+    for text, secret in [('DB_PASS: "S3cr3tPassw0rd!"', "S3cr3t"),
+                         ("SECRET_KEY = 'django-insecure-x9$k2@mz!q8w^v3p0(r7&tb5n1'", "django-insecure"),
+                         ("aws_secret_access_key = wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", "wJalr"),
+                         ("https://api.example.com/v1?access_token=abcdef1234567890&x=1", "abcdef123"),
+                         ('"apiKey": "AbCdEf0123456789AbCdEf0123456789"', "AbCdEf0123"),
+                         ("clientSecret: 'abcd1234xyz'", "abcd1234")]:
+        assert secret not in redact(text), text
+    for harmless in ("token_count = 5", "tokenizer = BertTokenizer", "compass: north", "api_key=None"):
+        assert redact(harmless) == harmless
+    for name in ("terraform.tfvars", "prod.tfstate", "kubeconfig", "wp-config.php",
+                 "appsettings.Production.json", ".npmrc", ".pypirc", ".netrc", ".git-credentials",
+                 "cert.p12", "cert.pfx", "vault.kdbx"):
+        assert is_secret_file(name), name
+    assert not is_secret_file("settings.py")
+
+
+def test_6_tool_runs_are_limited_and_a_source_runs_once(home, monkeypatch):
+    from myclaw.tools import ingest as tool_mod
+
+    (home / "n.txt").write_text("Text " * 80)
+    with tool_mod._active_lock:
+        tool_mod._active.add(f"default:{home / 'n.txt'}")
+    try:
+        assert "Not started" in tool_mod.assimilate(str(home / "n.txt"))
+        tool_mod._active.add("default:other")
+        assert "Not started" in tool_mod.assimilate(str(home / "doc-x.txt"))  # 2 already running
+    finally:
+        tool_mod._active.clear()
+    assert tool_mod.assimilate(str(home / "n.txt")).startswith("✅")
+    assert not tool_mod._active  # the slot is freed when the work ends
+
+
+def test_6_stuck_web_jobs_time_out_and_free_their_slot(web, monkeypatch):
+    from myclaw.web import knowledge_import_api as mod
+
+    for jid in ("old1", "old2"):
+        mod._jobs[jid] = {"id": jid, "kind": "x", "source": "s", "base": "default",
+                          "status": "running", "progress": "", "result": None, "error": "",
+                          "started": time.time() - mod.JOB_SECONDS - 120, "finished": None}
+        mod._budgets[jid] = Budget()
+    budget = mod._budgets["old1"]
+    j = web.get("/api/knowledge/import/old1").json()
+    assert j["status"] == "error" and "longer than" in j["error"] and budget.cancel.is_set()
+    r = web.post("/api/knowledge/assimilate", json={"source": "/etc"})
+    assert r.status_code == 200  # the slots are free again
+    for jid in ("old1", "old2"):
+        mod._jobs.pop(jid, None)
+
+
+def test_7_multipart_needs_a_length_and_uploads_take_a_slot(web, monkeypatch):
+    from myclaw.web import knowledge_import_api as mod
+
+    def chunks():
+        yield b"--B\r\nContent-Disposition: form-data; name=\"file\"; filename=\"c.json\"\r\n\r\n"
+        yield b"x" * 1000
+        yield b"\r\n--B--\r\n"
+
+    r = web.post("/api/knowledge/import", content=chunks(),
+                 headers={"content-type": "multipart/form-data; boundary=B"})
+    assert r.status_code == 411
+    r = web.post("/api/knowledge/import", content=b"x" * 10,
+                 headers={"content-type": "multipart/form-data; boundary=B",
+                          "content-length": str(mod.MAX_UPLOAD_BYTES + 5_000_000)})
+    assert r.status_code == 413
+    monkeypatch.setattr(mod, "_uploads", mod.MAX_RUNNING)
+    r = web.post("/api/knowledge/import?filename=a.json", content=b"{}")
+    assert r.status_code == 429
+
+
+def test_8_imports_never_replace_a_hand_written_note(home):
+    from myclaw.knowledge.ingest import import_file
+    from myclaw.knowledge.storage import write_note
+
+    write_note("chatgpt-conversations", title="ChatGPT conversations", content="MY OWN NOTES")
+    f = home / "c.json"
+    f.write_text(json.dumps(CHATGPT))
+    r = import_file(str(f))
+    assert "MY OWN NOTES" in note("chatgpt-conversations").content
+    assert r.overview.permalink == "chatgpt-conversations-imported"
+    # a document whose overview name is taken by a hand-written note
+    doc = sample_doc()
+    perm = notes_mod.overview_permalink(doc)
+    write_note(perm, title="Mine", content="hand written")
+    res = write_document_notes(doc, "default")
+    assert res.overview.permalink == f"{perm}-imported" and note(perm).title == "Mine"
+    assert any("another name" in s for s in res.skipped)
+    part = next(n.permalink for n in res.notes if n.permalink.endswith("birds"))
+    assert (part, "part_of", f"{perm}-imported") in index_links()
+
+
+def test_9_reingest_keeps_notes_edited_by_hand(home):
+    from myclaw.knowledge.ingest import assimilate
+    from myclaw.knowledge.sync import sync_knowledge
+
+    f = home / "a.md"
+    f.write_text("# A\n\n## One\n\n" + "x " * 300 + "\n\n## Two\n\n" + "y " * 300)
+    r = assimilate(str(f))
+    part = next(n.permalink for n in r.notes if n.permalink.endswith("one"))
+    path = kdir(home) / f"{part}.md"
+    path.write_text(path.read_text().replace("x x x", "x MY ANNOTATION x", 1))
+    sync_knowledge("default")
+    f.write_text("# A\n\n## One\n\n" + "z " * 300 + "\n\n## Two\n\n" + "y " * 300)
+    again = assimilate(str(f))
+    assert ("kept" in {n.action for n in again.notes}) and "MY ANNOTATION" in path.read_text()
+    assert any("kept your edits" in s for s in again.skipped)
+
+
+def test_10_renamed_conversation_updates_the_same_note(home):
+    from myclaw.knowledge.ingest import import_file
+
+    f = home / "c.json"
+    f.write_text(json.dumps(CHATGPT))
+    first = {n.permalink for n in import_file(str(f)).notes}
+    renamed = json.loads(json.dumps(CHATGPT))
+    renamed[0]["title"] = "Rome, renamed"
+    f.write_text(json.dumps(renamed))
+    again = import_file(str(f))
+    assert {n.permalink for n in again.notes} == first and again.count("created") == 0
+    rome = next(n for n in again.notes if "Rome, renamed" in n.title)
+    assert rome.action == "updated"
+    assert len(list(kdir(home).glob("chatgpt-2024*.md"))) == 2
+
+
+def test_11_repo_analysis_prefers_central_code_and_caps_docs(home):
+    from myclaw.knowledge.ingest import assimilate
+
+    repo = home / "proj"
+    (repo / "pkg").mkdir(parents=True)
+    (repo / "docs" / "archive").mkdir(parents=True)
+    (repo / "tests").mkdir()
+    (repo / "README.md").write_text("# Proj\n\nA project.")
+    (repo / "pkg" / "__init__.py").write_text("")
+    (repo / "pkg" / "core.py").write_text("def core():\n    return 1\n" * 20)
+    for i in range(12):
+        (repo / "pkg" / f"mod{i}.py").write_text(f"from pkg.core import core\n\ndef f{i}():\n    return core()\n")
+        (repo / "docs" / f"guide{i}.md").write_text(f"# Guide {i}\n\n" + "words " * 60)
+        (repo / "docs" / "archive" / f"old{i}.md").write_text("# Old\n\n" + "old " * 60)
+        (repo / "tests" / f"test_{i}.py").write_text("def test():\n    assert True\n")
+    r = assimilate(str(repo), max_notes=9)
+    files = [n.title.split(" — ", 1)[1] for n in r.notes[1:]]
+    assert "pkg/core.py" in files[:4]
+    assert sum(f.startswith("docs/") for f in files) <= 2  # ≤ a quarter (README counts too)
+    assert not any("archive" in f or f.startswith("tests/") for f in files)
+    assert any("test files not read" in s for s in r.skipped)
+    assert "-.->|imports|" in r.diagram or "pkg" in r.diagram
+
+
+def test_12_running_again_continues_with_the_next_files(home):
+    from myclaw.knowledge.ingest import assimilate
+
+    repo = home / "many"
+    repo.mkdir()
+    for i in range(9):
+        (repo / f"m{i}.py").write_text(f"def f{i}():\n    return {i}\n")
+    first = assimilate(str(repo), max_notes=4)
+    assert first.stopped.startswith("note limit")
+    seen = {n.permalink for n in first.notes[1:]}
+    second = assimilate(str(repo), max_notes=4)
+    new = {n.permalink for n in second.notes[1:]}
+    assert new and not (new & seen)  # the next batch, not the same files again
+    over = note(second.overview.permalink).content
+    assert all(f"[[{p}]]" in over for p in seen | new)  # the contents list both runs
+    third = assimilate(str(repo), max_notes=4)
+    assert not third.stopped  # the last batch: complete
+    assert len(seen | new | {n.permalink for n in third.notes[1:]}) == 9
+
+
+def test_13_shortened_messages_keep_code_fences_closed():
+    from myclaw.knowledge.ingest.importers import MESSAGE_CHARS, _transcript
+
+    long_code = "```python\n" + "x = 1\n" * (MESSAGE_CHARS // 4) + "```"
+    t = _transcript([("user", long_code), ("assistant", "- [tip] not a fact")], "ChatGPT")
+    assert t.startswith("**You:**\n\n```python")
+    first = t.split("**ChatGPT:**")[0]
+    assert first.count("```") % 2 == 0
+    assert "**ChatGPT:**\n\n" in t
+
+
+def test_14_size_caps_for_archives_and_exports(home, monkeypatch):
+    from myclaw.knowledge.ingest import documents, import_file, importers
+
+    monkeypatch.setattr(importers, "MAX_MD_FILE", 100)
+    z = _zip(home / "big.zip", {"v/big.md": "# B\n\n" + "a" * 500, "v/small.md": "# S"})
+    r = import_file(str(z), kind="markdown")
+    assert r.extra["copied"] == 1 and any("big.md" in s and "not imported" in s for s in r.skipped)
+    monkeypatch.setattr(importers, "MAX_JSON_BYTES", 50)
+    f = home / "conversations.json"
+    f.write_text(json.dumps(CHATGPT))
+    with pytest.raises(IngestError, match="ijson"):
+        import_file(str(f))
+    # a Word / Excel file that unpacks to too much is refused before parsing
+    monkeypatch.setattr(documents, "MAX_OOXML_PART", 1000)
+    bomb = home / "bomb.docx"
+    with zipfile.ZipFile(bomb, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.writestr("word/document.xml", "<w/>" + " " * 50_000)
+    pytest.importorskip("docx")
+    with pytest.raises(IngestError, match="unpacks to"):
+        documents.read_document(bomb)
+    assert importers.MAX_IMPORT_NOTES >= 10_000
