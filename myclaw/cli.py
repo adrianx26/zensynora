@@ -335,6 +335,54 @@ def tags(base):
     else:
         click.echo("No tags found.")
 
+
+# 2026-10-24 (KB phase 5): read a URL / GitHub repository / file / folder, or
+# import an export, into the knowledge base. Your own files: no allowed-roots
+# check here (agents and the Web UI have one); secret files are never read.
+def _ingest_progress(text):
+    click.echo(f"  … {text}")
+
+
+@knowledge.command(name="assimilate")
+@click.argument("source")
+@_BASE_OPTION
+@click.option("--max-notes", default=40, show_default=True, type=click.IntRange(1, 500),
+              help="At most this many notes")
+def assimilate_cmd(source, base, max_notes):
+    """Read a URL, GitHub repository, file or folder into linked notes + a Mermaid diagram"""
+    from .knowledge.ingest import Budget, IngestError, assimilate
+    from .knowledge.ingest.run import format_summary
+
+    budget = Budget(max_notes=max_notes, seconds=3600, progress=_ingest_progress)
+    try:
+        result = assimilate(source, base=base, max_notes=max_notes, budget=budget, trusted=True)
+    except IngestError as e:
+        raise click.ClickException(str(e))
+    click.echo(format_summary("Assimilated", f"'{source}'", result))
+
+
+@knowledge.command(name="import")
+@click.argument("file")
+@_BASE_OPTION
+@click.option("--kind", default="auto", show_default=True,
+              type=click.Choice(["auto", "chatgpt", "claude", "mcp_memory", "markdown", "document"]),
+              help="What the file is (auto = detect)")
+@click.option("--max-notes", default=2000, show_default=True, type=click.IntRange(1, 20000),
+              help="At most this many notes")
+def import_cmd(file, base, kind, max_notes):
+    """Import a ChatGPT/Claude export, MCP memory file, Markdown folder (Obsidian) or document"""
+    from .knowledge.ingest import Budget, IngestError, import_file
+    from .knowledge.ingest.run import format_summary
+
+    budget = Budget(max_notes=max_notes, max_bytes=2_000_000_000, seconds=None,
+                    progress=_ingest_progress)
+    try:
+        result = import_file(file, base=base, kind=kind, max_notes=max_notes, budget=budget,
+                             trusted=True)
+    except IngestError as e:
+        raise click.ClickException(str(e))
+    click.echo(format_summary("Imported", f"'{file}' ({result.kind})", result, with_diagram=False))
+
 ### MEMORY COMMANDS ###
 @cli.group()
 def memory():

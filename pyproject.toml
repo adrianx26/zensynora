@@ -83,6 +83,9 @@ redis = ["redis>=4.0"]
 metrics = ["prometheus-client>=0.20.0"]
 security = ["cryptography>=42.0.0", "keyring>=25.0.0"]
 mfa = ["pyotp>=2.9.0", "qrcode>=7.4"]
+# KB phase 5 (2026-10-24) — read PDF, Word and Excel files into the knowledge base
+# (assimilate / import). pypdf: BSD-3-Clause; python-docx, openpyxl: MIT.
+ingest = ["pypdf>=4.0,<7.0", "python-docx>=1.1,<2.0", "openpyxl>=3.1,<4.0"]
 
 # Sprint 2 — distributed tracing
 tracing = [
@@ -131,6 +134,9 @@ all = [
     "PyJWT[crypto]>=2.8",
     "discord.py>=2.3",
     "slack-bolt>=1.18",
+    "pypdf>=4.0,<7.0",
+    "python-docx>=1.1,<2.0",
+    "openpyxl>=3.1,<4.0",
 ]
 
 # Test runner only — what CI installs for the test jobs.
