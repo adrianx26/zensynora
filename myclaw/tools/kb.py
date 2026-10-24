@@ -50,7 +50,9 @@ def write_to_knowledge(
     title: short specific title (becomes the note's name; writing the same title again replaces the note)
     content: the text of the note (plain text or markdown)
     tags: 1-4 comma-separated topic words, e.g. "homelab, linux" — always add some
-    observations: facts, one per line as "category | text", e.g. "spec | 32 GB RAM"
+    observations: facts, one per line as "category | text", e.g. "spec | 32 GB RAM";
+                  optionally "category | text | source" (where the fact comes from,
+                  e.g. "spec | 32 GB RAM | tool shell free -g" or a URL)
     relations: links to other notes, one per line as "relation | Other note title",
                e.g. "runs_on | Home server" — link to notes that already exist (search_knowledge first)
     user_id: User ID for multi-user isolation
@@ -65,10 +67,16 @@ def write_to_knowledge(
             for line in observations.strip().split("\n"):
                 if "|" in line:
                     category, obs_content = line.split("|", 1)
+                    # 2026-10-24 (KB phase 2): optional third field = source
+                    source = None
+                    if "|" in obs_content:
+                        obs_content, source = obs_content.rsplit("|", 1)
+                        source = " ".join(source.split()) or None
                     obs_list.append(Observation(
                         category=category.strip(),
                         content=obs_content.strip(),
-                        tags=[]
+                        tags=[],
+                        provenance_path=source,
                     ))
 
         # Parse relations
@@ -376,7 +384,9 @@ def read_knowledge(permalink: str, user_id: str = "default") -> str:
         if note.observations:
             lines.append("## Observations")
             for obs in note.observations:
-                lines.append(f"- [{obs.category}] {obs.content}")
+                # 2026-10-24 (KB phase 2): where the fact comes from
+                src = getattr(obs, "provenance_path", None)
+                lines.append(f"- [{obs.category}] {obs.content}" + (f" (source: {src})" if src else ""))
             lines.append("")
 
         if note.relations:
@@ -518,6 +528,118 @@ def list_knowledge_tags(user_id: str = "default") -> str:
 
 
 
+# ── KB phase 2 (2026-10-24): quality tools ───────────────────────────────────
+# Read-mostly: listing conflicts / categories / duplicates, and resolving ONE
+# conflict. Merging notes or categories rewrites many files, so it is a user
+# action in the Web UI (Knowledge page), not an agent tool.
+
+def knowledge_conflicts(permalink: str = "", user_id: str = "default") -> str:
+    """
+    List open conflicts: facts of the same category on the same note that
+    contradict each other (e.g. "32 GB RAM" and "64 GB RAM").
+
+    permalink: only this note (empty = every note)
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge.quality import list_conflicts
+
+    try:
+        items = list_conflicts(user_id, permalink=(permalink or "").strip())
+    except Exception as e:
+        logger.warning("knowledge_conflicts failed: %s", e)
+        return f"Could not list conflicts: {e}. Try sync_knowledge_base() and ask again."
+    where = f" in {permalink}" if permalink else ""
+    if not items:
+        return f"No open conflicts{where}. Facts that contradict each other are flagged when a note is saved."
+    lines = [f"⚠ {len(items)} open conflict(s){where}:", ""]
+    for c in items:
+        lines.append(f"#{c['id']} {c['title'] or c['permalink']} ({c['permalink']}) [{c['category']}]")
+        lines.append(f"   a: {c['a']}")
+        lines.append(f"   b: {c['b']}")
+    lines += ["", "Check which one is true (ask the user if unsure), then call "
+              "resolve_knowledge_conflict(conflict_id, keep) with keep = \"a\", \"b\" or \"both\"."]
+    return "\n".join(lines)
+
+
+def resolve_knowledge_conflict(conflict_id: int, keep: str, user_id: str = "default") -> str:
+    """
+    Resolve one conflict from knowledge_conflicts().
+
+    conflict_id: the number shown as #id
+    keep: "a" or "b" removes the other fact from the note (the old version is kept
+          in .trash); "both" means both facts are right — the pair is not flagged again
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge.quality import resolve_conflict
+
+    try:
+        result = resolve_conflict(user_id, conflict_id, keep)
+    except ValueError as e:
+        return f"Cannot resolve: {e} Example: resolve_knowledge_conflict(12, \"a\")."
+    except LookupError as e:
+        return f"{e} Call knowledge_conflicts() to see the open conflicts and their ids."
+    except Exception as e:
+        logger.warning("resolve_knowledge_conflict failed: %s", e)
+        return f"Could not resolve conflict {conflict_id}: {e}"
+    return ("✅ " if result.get("changed") else "") + result.get("message", "Done.")
+
+
+def knowledge_categories(user_id: str = "default") -> str:
+    """
+    List the fact categories (the [category] of "- [category] text" lines) with
+    how many facts use each, and suggestions of categories that should be merged.
+
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge.quality import list_categories
+
+    try:
+        data = list_categories(user_id)
+    except Exception as e:
+        logger.warning("knowledge_categories failed: %s", e)
+        return f"Could not read the categories: {e}. Try sync_knowledge_base() and ask again."
+    cats = data.get("categories") or []
+    if not cats:
+        return "No facts yet, so no categories. Facts are lines like \"- [setting] port 8080\"."
+    lines = ["Fact categories (facts per category):"]
+    for c in cats:
+        variants = [v for v in (c.get("variants") or {}) if v != c["name"]]
+        extra = f" (written as: {', '.join(variants)})" if variants else ""
+        lines.append(f"- {c['name']}: {c['count']}{extra}")
+    sugg = data.get("suggestions") or []
+    if sugg:
+        lines += ["", "Merge suggestions (the user can apply them on the Knowledge page → Tags & types):"]
+        for s in sugg:
+            lines.append(f"- \"{s['from']}\" ({s['from_count']}) → \"{s['to']}\" ({s['to_count']}): {s['reason']}")
+    lines += ["", "When writing facts, reuse one of these categories."]
+    return "\n".join(lines)
+
+
+def find_duplicate_notes(user_id: str = "default") -> str:
+    """
+    List notes that look like duplicates of each other (same title, title is the
+    other's alias, identical or nearly identical text). Preview only — nothing is changed.
+
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge.quality import find_duplicates
+
+    try:
+        pairs = find_duplicates(user_id, limit=30)
+    except Exception as e:
+        logger.warning("find_duplicate_notes failed: %s", e)
+        return f"Could not look for duplicates: {e}. Try sync_knowledge_base() and ask again."
+    if not pairs:
+        return "No duplicate notes found."
+    lines = [f"{len(pairs)} possible duplicate pair(s):", ""]
+    for d in pairs:
+        k, x = d["keep"], d["drop"]
+        lines.append(f"- keep {k['title']} ({k['permalink']}), merge {x['title']} ({x['permalink']}) "
+                     f"into it — {', '.join(d['reasons'])}")
+    lines += ["", "Merging is done by the user on the Knowledge page (Find duplicates → preview → merge); "
+              "tell the user which pairs look right."]
+    return "\n".join(lines)
+
 
 # ── v0.7.5: every knowledge tool uses the knowledge base of the current turn ──
 # The tools defaulted to user "default" while the automatic search and saving
@@ -548,3 +670,8 @@ list_knowledge = _scoped(list_knowledge)
 sync_knowledge_base = _scoped(sync_knowledge_base)
 get_related_knowledge = _scoped(get_related_knowledge)
 list_knowledge_tags = _scoped(list_knowledge_tags)
+# KB phase 2 (2026-10-24)
+knowledge_conflicts = _scoped(knowledge_conflicts)
+resolve_knowledge_conflict = _scoped(resolve_knowledge_conflict)
+knowledge_categories = _scoped(knowledge_categories)
+find_duplicate_notes = _scoped(find_duplicate_notes)

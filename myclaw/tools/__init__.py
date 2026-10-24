@@ -61,6 +61,8 @@ from .kb import (
     get_knowledge_context, list_knowledge, sync_knowledge_base,
     get_related_knowledge, list_knowledge_tags,
     _extract_search_terms,
+    # KB phase 2 (2026-10-24): quality tools
+    knowledge_conflicts, resolve_knowledge_conflict, knowledge_categories, find_duplicate_notes,
 )
 from .jobs import job_create, job_list, job_run, job_status, job_update  # noqa: E402
 from .scheduler import (
@@ -130,6 +132,9 @@ _LAZY_AGENT_TOOLS = {
     "list_skills":               ("myclaw.agent_skills",         "list_agent_skills",         "List all skills (name and what each is for)"),
     "send_telegram_message":     ("myclaw.channels.telegram",    "send_telegram_message",     "Send a Telegram message to the user through ZenSynora's own bot (only to allowed users)"),
     "create_agent":              ("myclaw.agent_team",           "create_agent",              "Create a new named agent (specialist) that can then be talked to and given tasks with delegate"),
+    # 2026-10-24 (KB phase 5): ingestion into the knowledge base
+    "assimilate":                ("myclaw.tools.ingest",         "assimilate",                "Read a web page, a GitHub repository (https://github.com/owner/repo) or a local file/folder (PDF, Word, Excel, text, code, images) into linked knowledge notes plus a Mermaid diagram of its structure, in one call; returns the overview note and the diagram"),
+    "import_knowledge":          ("myclaw.tools.ingest",         "import_knowledge",          "Import a ChatGPT or Claude.ai export (.zip/.json), an MCP memory file, a folder or zip of Markdown notes (Obsidian vault) or one document into the knowledge base (kind: auto, chatgpt, claude, mcp_memory, markdown, document)"),
     # Medic Agent
     "check_system_health":       ("myclaw.agents.medic_agent",   "check_system_health",       "Check overall system health status"),
     "check_memory_usage":        ("myclaw.agents.medic_agent",   "check_memory_usage",        "Checks current system memory usage and logs a warning if it exceeds a threshold."),
@@ -211,6 +216,10 @@ TOOLS.update({
     "get_related_knowledge":{"func": get_related_knowledge,"desc": "Get related entities from knowledge base"},
     "sync_knowledge_base":  {"func": sync_knowledge_base,  "desc": "Sync knowledge base with files"},
     "list_knowledge_tags":  {"func": list_knowledge_tags,  "desc": "List all knowledge tags"},
+    "knowledge_conflicts":  {"func": knowledge_conflicts,  "desc": "List contradicting facts in knowledge notes"},
+    "resolve_knowledge_conflict": {"func": resolve_knowledge_conflict, "desc": "Resolve one knowledge conflict: keep a, b or both"},
+    "knowledge_categories": {"func": knowledge_categories, "desc": "List fact categories with counts and merge suggestions"},
+    "find_duplicate_notes": {"func": find_duplicate_notes, "desc": "List possible duplicate knowledge notes (preview only)"},
     # Agent Swarm
     "swarm_create":         {"func": swarm_create,         "desc": "Create a new agent swarm"},
     "swarm_assign":         {"func": swarm_assign,         "desc": "Assign a task to a swarm"},

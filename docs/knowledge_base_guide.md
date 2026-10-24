@@ -91,7 +91,7 @@ words. Tag search matches whole tags (`py` does not find `python`).
 | `search_knowledge(query, limit)` | Search (syntax above); one-line snippet per result |
 | `read_knowledge(permalink)` | The whole note: text (up to 6000 characters), facts, links, waiting links, aliases, metadata, *Linked from* |
 | `write_to_knowledge(title, content, tags, observations, relations)` | Save a note. Writing the same title again **replaces** the note's text, facts and links (aliases and metadata are kept); if anything would be lost, the previous version is first kept in `.trash/` |
-| `get_knowledge_context(permalink, depth)` | The note with its text plus the notes around it (snippets, *Linked from*) |
+| `get_knowledge_context(permalink, depth)` | The note with its text plus the notes around it (snippets, *Linked from*); hub notes are not walked through |
 | `list_knowledge`, `get_related_knowledge`, `list_knowledge_tags`, `sync_knowledge_base` | List, follow links, tags, re-index |
 
 * Agents never store passwords, API keys, tokens or other secrets in the
@@ -130,9 +130,82 @@ exclude more, one pattern per line: `drafts/`, `*.tmp`, `archive/**`.
 to other MCP clients. Parameters have real types (numbers, true/false), and
 the tools always use the shared `default` knowledge base there.
 
+## Quality: fact sources, categories, conflicts, duplicates
+
+Added 2026-10-24 (KB phase 2). Everything below is worked out from the files
+and kept in the index; a note file only changes when you (or an agent
+resolving one conflict) choose so, and the previous version is kept in
+`.trash/`.
+
+**Where a fact comes from.** A fact line may end with its source:
+
+```markdown
+- [spec] 32 GB RAM #hardware (source: tool shell free -g)
+- [url] Ollama docs (source: tool browse https://ollama.com/docs)
+- [preference] Answers in English (source: chat 2026-10-24)
+```
+
+Only this exact `(source: …)` form is special; any other `(…)` at the end
+of a fact stays part of the fact. Facts saved automatically get their source
+(`chat <date>` from a conversation, `tool <name> <URL or path>` from a tool
+result). Agents can give one as a third field: `spec | 32 GB RAM | tool shell
+free -g`. `read_knowledge` and the note panel on the Knowledge page show it.
+
+**Categories.** `[Specs]`, `[spec]` and `[specification]` are counted as one
+category, `spec`: lower case, singular, and common synonyms (`config` /
+`settings` → `setting`, `prefs` → `preference`, `link` → `url`, `howto` →
+`how-to`). The file keeps what you wrote. *Tags & types* lists the
+categories with their counts (click one to filter) and suggests merging a
+rare spelling (used 1–2 times) into a common one (3+), e.g. `Specs → spec`
+or the typo `preferance → preference`. *Preview…* shows every fact that
+would change; *Apply* rewrites those notes.
+
+**Conflicts.** When a note is saved or re-indexed, facts of the same category
+on that note are compared. Only clear contradictions are flagged ⚠:
+
+| Flagged | Not flagged |
+|---|---|
+| `32 GB RAM` / `64 GB RAM` | the same fact twice, `32GB RAM` / `32 GB RAM` |
+| `listens on port 11434` / `listens on port 8080` | `32 GB RAM` / `32 GB RAM DDR4` (one contains the other) |
+| `port: 80` / `port: 8080`, `OS = Debian` / `OS = Ubuntu` | `Server 1 has …` / `Server 2 has …` (two things) |
+| `Default model is llama3` / `Default model is qwen2.5` | dates and times (`backup ran on 2026-10-01` / `… 10-02`), `Step 1` / `Step 2` |
+|  | differently worded or unrelated facts, `Python is installed` / `Python is fast` |
+
+Open the note (notes with conflicts have an amber dot in the graph):
+**Keep A** or **Keep B** removes the other fact from the note file; **Both
+are fine** dismisses the pair for good. A conflict closes by itself when you
+edit one of the two facts away.
+
+**Duplicate notes.** *⧉ Find duplicates* lists pairs with the same title, a
+title that is the other note's alias, the same text, or nearly the same
+short text. Nothing is merged automatically: pick a pair, check the preview
+(tags, aliases, facts and links of both; the other note's text under
+`## Merged from <title>`), then *Merge*. The merged note's title, aliases and
+file name become aliases of the kept note, so `[[links]]` to it keep working;
+its file goes to `.trash/`.
+
+**Hub notes.** A note with more than 25 links (a "hub" such as *Homelab*)
+matches many questions but says little about each one. In the automatic
+*Relevant Knowledge* it is ranked lower (never left out on purpose), and
+`get_knowledge_context` with depth 2 or more lists it without following its
+links.
+
+**Agent tools:** `knowledge_conflicts(permalink)`,
+`resolve_knowledge_conflict(conflict_id, keep)` (`"a"`, `"b"` or `"both"`),
+`knowledge_categories()`, `find_duplicate_notes()` (a list only). Merging
+notes or categories is left to you on the Knowledge page.
+
+**Settings → Features** (`~/.myclaw/config.json`):
+
+| Setting | Default | |
+|---|---|---|
+| `knowledge.detect_conflicts` | `true` | flag contradicting facts (only flags) |
+| `knowledge.hub_penalty` | `true` | rank hub notes lower, do not walk through them |
+| `knowledge.hub_degree` | `25` | links above which a note is a hub |
+
 ## Plans
 
-What comes next (more of memopad's features: note editing tools, conflict
-detection, semantic search, distillation into facts and a persona, importing
-repositories and documents) is in
+What comes next (more of memopad's features: note editing tools, semantic
+search, distillation into facts and a persona, importing repositories and
+documents) is in
 [docs/dev/plans/memopad_port_plan.md](dev/plans/memopad_port_plan.md).

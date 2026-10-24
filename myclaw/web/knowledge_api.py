@@ -11,6 +11,20 @@ PUT    /api/knowledge/note/{permalink}      replace a note's markdown ({content}
 DELETE /api/knowledge/note/{permalink}      move a note to the base's .trash folder (undo: move it back)
 GET    /api/knowledge/search?q=&base=       full-text search
 POST   /api/knowledge/sync?base=            re-index the markdown files into the database
+POST   /api/knowledge/enrich?base=          add tags, facts and links to plain notes (default model)
+
+Quality layer (KB phase 2, 2026-10-24):
+GET    /api/knowledge/conflicts?base=&permalink=   open conflicts (contradicting facts)
+POST   /api/knowledge/conflicts/{id}?base=         resolve one ({keep: "a" | "b" | "both"})
+GET    /api/knowledge/categories?base=             fact categories with counts + merge suggestions
+POST   /api/knowledge/categories/merge?base=       rename a category in every note ({from, to, dry_run})
+GET    /api/knowledge/duplicates?base=             candidate pairs of duplicate notes (no changes)
+POST   /api/knowledge/merge?base=                  merge two notes ({keep, drop, dry_run})
+
+Every change to note files has a preview (``dry_run``, default true) and keeps
+the previous versions in the base's .trash folder. The note route returns
+``conflicts`` and each fact's ``source``; graph nodes carry ``conflicts`` and
+``categories``.
 
 The markdown files are the source of truth, so the graph is read from them;
 a relation to a note that does not exist (yet) is returned as a "missing"
@@ -31,7 +45,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from myclaw.web.settings_api import guard
 
@@ -157,6 +171,8 @@ def _body(content: str) -> str:
 
 
 def build_graph(base: str) -> dict[str, Any]:
+    from myclaw.knowledge.quality import normalize_category
+
     notes = _parse_all(base)
     resolve = _Resolver(notes)
     nodes: dict[str, dict[str, Any]] = {}
@@ -168,8 +184,10 @@ def build_graph(base: str) -> dict[str, Any]:
     for n in notes:
         ntags = _note_tags(n)
         tags.update(ntags)
+        # 2026-10-24 (KB phase 2): facts grouped by their normalised category
+        ncats = sorted({normalize_category(o.category) or o.category for o in n.observations})
         for o in n.observations:
-            categories[o.category] += 1
+            categories[normalize_category(o.category) or o.category] += 1
             tags.update(o.tags or [])
         obs_total += len(n.observations)
         stat = n.file_path.stat() if n.file_path else None
@@ -179,14 +197,22 @@ def build_graph(base: str) -> dict[str, Any]:
             "updated": _iso(n.updated_at) or (time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(stat.st_mtime)) if stat else None),
             "size": stat.st_size if stat else 0, "missing": False, "degree": 0,
             "preview": _body(n.content)[:240],
+            "categories": ncats, "conflicts": 0,
         }
+    # 2026-10-24 (KB phase 2): open conflicts per note (graph marker)
+    from myclaw.knowledge.quality import conflict_counts
+
+    for pl, count in conflict_counts(base).items():
+        if pl in nodes:
+            nodes[pl]["conflicts"] = count
     seen: set[tuple[str, str, str]] = set()
     for n in notes:
         for r in n.relations:
             target, found = resolve(r.target)
             if not found and target not in nodes:
                 nodes[target] = {"id": target, "title": r.target, "tags": [], "observations": 0, "relations": 0,
-                                 "updated": None, "size": 0, "missing": True, "degree": 0, "preview": ""}
+                                 "updated": None, "size": 0, "missing": True, "degree": 0, "preview": "",
+                                 "categories": [], "conflicts": 0}
             key = (n.permalink, target, r.relation_type)
             if key in seen or target == n.permalink:
                 continue
@@ -277,16 +303,26 @@ def _note_detail(base: str, permalink: str) -> dict[str, Any]:
                 backlinks.append({"type": r.relation_type, "source": other.permalink,
                                   "label": other.title or other.permalink})
     st = f.stat()
+    try:  # 2026-10-24 (KB phase 2): open conflicts of this note
+        from myclaw.knowledge.quality import list_conflicts
+
+        conflicts = list_conflicts(base, permalink=n.permalink)
+    except Exception as e:
+        logger.debug("conflicts of %s unavailable: %s", n.permalink, e)
+        conflicts = []
     return {
         "permalink": n.permalink, "title": n.title, "name": n.name, "tags": _note_tags(n),
         "content": n.content, "body": _body(n.content),
-        "observations": [{"category": o.category, "content": o.content, "tags": o.tags or []} for o in n.observations],
+        "observations": [{"category": o.category, "content": o.content, "tags": o.tags or [],
+                          # 2026-10-24 (KB phase 2): additive — fact source
+                          "source": getattr(o, "provenance_path", None)} for o in n.observations],
         "links": links, "backlinks": backlinks,
         "created": _iso(n.created_at), "updated": _iso(n.updated_at),
         # 2026-10-23 (KB phase 0): additive — frontmatter aliases and other keys.
         "aliases": _aliases(n), "metadata": _jsonable(getattr(n, "metadata", None) or {}),
         "file": str(f), "size": st.st_size,
         "modified": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
+        "conflicts": conflicts,
     }
 
 
@@ -434,3 +470,82 @@ async def sync(base: str | None = None):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)[:300]}")
     return {"ok": True, "stats": stats}
+
+
+# ── Quality layer (KB phase 2, 2026-10-24) ───────────────────────────────────
+
+@router.get("/api/knowledge/conflicts", dependencies=guard)
+async def conflicts(base: str | None = None, permalink: str = "", status: str = "open"):
+    from myclaw.knowledge.quality import list_conflicts
+
+    if status not in ("open", "dismissed", "resolved", ""):
+        raise HTTPException(status_code=400, detail="status must be open, dismissed, resolved or empty.")
+    items = await asyncio.to_thread(list_conflicts, _base(base), (permalink or "").strip(), status)
+    return {"conflicts": items}
+
+
+class ConflictResolution(BaseModel):
+    keep: str
+
+
+@router.post("/api/knowledge/conflicts/{conflict_id}", dependencies=guard)
+async def resolve_conflict(conflict_id: int, req: ConflictResolution, base: str | None = None):
+    from myclaw.knowledge.quality import resolve_conflict as _resolve
+
+    try:
+        return await asyncio.to_thread(_resolve, _base(base), conflict_id, req.keep)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/api/knowledge/categories", dependencies=guard)
+async def categories(base: str | None = None):
+    from myclaw.knowledge.quality import list_categories
+
+    return await asyncio.to_thread(list_categories, _base(base))
+
+
+class CategoryMerge(BaseModel):
+    from_: str = Field(alias="from")
+    to: str
+    dry_run: bool = True
+
+    model_config = {"populate_by_name": True}
+
+
+@router.post("/api/knowledge/categories/merge", dependencies=guard)
+async def merge_categories(req: CategoryMerge, base: str | None = None):
+    from myclaw.knowledge.quality import merge_category
+
+    try:
+        return await asyncio.to_thread(merge_category, _base(base), req.from_, req.to, req.dry_run)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/api/knowledge/duplicates", dependencies=guard)
+async def duplicates(base: str | None = None, limit: int = 100):
+    from myclaw.knowledge.quality import find_duplicates
+
+    pairs = await asyncio.to_thread(find_duplicates, _base(base), None, max(1, min(limit, 500)))
+    return {"pairs": pairs}
+
+
+class NoteMerge(BaseModel):
+    keep: str
+    drop: str
+    dry_run: bool = True
+
+
+@router.post("/api/knowledge/merge", dependencies=guard)
+async def merge(req: NoteMerge, base: str | None = None):
+    from myclaw.knowledge.quality import merge_notes
+
+    try:
+        return await asyncio.to_thread(merge_notes, _base(base), req.keep, req.drop, req.dry_run)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))

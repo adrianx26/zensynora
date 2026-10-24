@@ -315,6 +315,15 @@ class SyncEngine:
                 self._sync_full(db, stats)
             else:
                 self._sync_incremental(db, stats, since)
+            # 2026-10-24 (KB phase 2): recount the fact-category registry
+            if force or stats["added"] or stats["updated"] or stats["deleted"]:
+                try:
+                    from . import quality as _quality
+
+                    with db._write_txn() as conn:
+                        _quality.refresh_registry(conn)
+                except Exception as e:  # derived data: never fail the sync for it
+                    logger.info("Knowledge: category registry not refreshed: %s", e)
 
         total = stats["added"] + stats["updated"] + stats["deleted"]
         logger.info(

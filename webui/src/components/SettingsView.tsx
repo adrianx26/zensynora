@@ -64,6 +64,9 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
     fields: [
       { path: 'knowledge.enabled', label: 'Knowledge base', kind: 'bool' },
       { path: 'knowledge.auto_extract', label: 'Auto-index notes written to disk', kind: 'bool' },
+      { path: 'knowledge.detect_conflicts', label: 'Flag facts that contradict each other', kind: 'bool', help: 'E.g. "32 GB RAM" and "64 GB RAM" on the same note. Only flags them (⚠ on the Knowledge page); nothing is changed until you choose.' },
+      { path: 'knowledge.hub_penalty', label: 'Rank very linked notes lower in the agent’s context', kind: 'bool', help: 'Notes with many links (hubs) match many questions but say little about each; they are kept, just ranked lower, and not walked through.' },
+      { path: 'knowledge.hub_degree', label: 'A note is a hub above this many links', kind: 'number', help: 'Default 25.' },
       { path: 'intelligence.research_enabled', label: 'Background researcher', kind: 'bool' },
       { path: 'intelligence.research_interval_hours', label: 'Research interval (hours)', kind: 'number' },
       { path: 'intelligence.research_idle_minutes', label: 'Research only after idle (minutes)', kind: 'number' },

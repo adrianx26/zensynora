@@ -417,14 +417,39 @@ def parse_observations(content: str) -> List[Observation]:
         if not match:
             continue
         category = match.group(1).strip()
-        content_text = match.group(2).strip()
-        tags = TAG_PATTERN.findall(content_text)  # Extract tags from content
+        content_text, source, trailing_tags = split_source(match.group(2).strip())
+        tags = TAG_PATTERN.findall(content_text) + trailing_tags  # Extract tags from content
         clean_content = TAG_PATTERN.sub('', content_text).strip()
         if not category or (category, clean_content) in seen:
             continue
         seen.add((category, clean_content))
-        observations.append(Observation(category=category, content=clean_content, tags=tags))
+        observations.append(Observation(category=category, content=clean_content, tags=tags,
+                                        provenance_path=source))
     return observations
+
+
+# 2026-10-24 (KB phase 2): where a fact comes from, written at the end of the
+# fact line: ``- [spec] 32 GB RAM #hw (source: tool read_file /etc/x)``. Only
+# this exact ``(source: …)`` form is special; any other trailing "(…)" stays
+# part of the fact. ``#tags`` may come before or after it. The source itself
+# may contain parentheses and '#' (URLs), so it is cut off before tags are read.
+_SOURCE_SUFFIX = re.compile(r'^(.*?)\s*\(source:[ \t]*(.+?)\)((?:\s+#\w+)*)\s*$', re.IGNORECASE)
+
+
+def split_source(text: str) -> Tuple[str, Optional[str], List[str]]:
+    """``(fact text, source or None, tags written after the source)``."""
+    m = _SOURCE_SUFFIX.match(text or '')
+    if not m or not m.group(1).strip() or not m.group(2).strip():
+        return text, None, []
+    return m.group(1).rstrip(), m.group(2).strip(), TAG_PATTERN.findall(m.group(3) or '')
+
+
+def format_source(source: Optional[str]) -> str:
+    """`` (source: …)`` for a fact line ("" without a source); one line, no ')' at the end."""
+    text = " ".join(str(source or "").split())
+    if not text:
+        return ""
+    return f" (source: {text[:300]})"
 
 
 def parse_relations(content: str) -> List[Relation]:
@@ -699,7 +724,9 @@ def generate_markdown(note: Note) -> str:
         lines.append('')
         for obs in note.observations:
             tags_str = ' '.join(f'#{tag}' for tag in obs.tags) if obs.tags else ''
-            lines.append(f'- [{obs.category}] {obs.content} {tags_str}'.strip())
+            # 2026-10-24 (KB phase 2): the fact's source goes back to the file
+            lines.append(f'- [{obs.category}] {obs.content} {tags_str}'.strip()
+                         + format_source(getattr(obs, 'provenance_path', None)))
         lines.append('')
 
     # Relations section

@@ -276,7 +276,10 @@ SYSTEM_PROMPT = (
     "cancel_schedule(job_id), list_schedules(). "
     "Knowledge: write_to_knowledge(title, content, tags, observations, relations), search_knowledge(query), "
     "read_knowledge(permalink), get_knowledge_context(permalink, depth), list_knowledge(), "
-    "get_related_knowledge(permalink), sync_knowledge_base(), list_knowledge_tags(). "
+    "get_related_knowledge(permalink), sync_knowledge_base(), list_knowledge_tags(), "
+    # 2026-10-24 (KB phase 2): quality tools
+    "knowledge_conflicts(permalink), resolve_knowledge_conflict(conflict_id, keep), "
+    "knowledge_categories(), find_duplicate_notes(). "
     # 2026-10-23 (KB phase 0): how notes link to each other.
     "A line `- relation [[Other note]]` in a note's text links it to another note. "
     "Agent Swarms: swarm_create(name, strategy, workers, coordinator, aggregation), "
@@ -705,7 +708,10 @@ class Agent:
             if not facts:
                 return
             # max 5 notes per turn, each with tags, facts and links (2026-10-23)
-            saved = await asyncio.to_thread(kb_save_items, facts, user_id, ["auto-extracted"], 5, "[KB-AUTO]")
+            # 2026-10-24 (KB phase 2): every fact records where it came from
+            from .knowledge.quality import chat_source
+            saved = await asyncio.to_thread(kb_save_items, facts, user_id, ["auto-extracted"], 5, "[KB-AUTO]",
+                                            chat_source())
 
             if saved:
                 logger.info(
@@ -1269,9 +1275,13 @@ class Agent:
             words = [w for w in cleaned.split() if len(w) > 3]
 
             notes = []
+            # 2026-10-24 (KB phase 2): with the hub penalty a few more candidates
+            # are fetched, so a very linked note can be ranked below a specific one.
+            from .knowledge.quality import hub_threshold, rank_with_hub_penalty
+            fetch = max_results + 3 if hub_threshold() is not None else max_results
             if words:
                 # Strategy 1: search with full message text (FTS5 ranked)
-                notes = search_notes(message, user_id, limit=max_results)
+                notes = search_notes(message, user_id, limit=fetch)
 
                 if not notes:
                     # Strategy 2: bigram + single-keyword OR query
@@ -1280,7 +1290,9 @@ class Agent:
                     query = " OR ".join(f'"{t}"' if " " in t else t for t in candidates)
                     # 2026-10-23 (KB phase 0): boolean=True so OR means OR
                     # (as free text every word had to match).
-                    notes = search_notes(query, user_id, limit=max_results, boolean=True)
+                    notes = search_notes(query, user_id, limit=fetch, boolean=True)
+            if fetch != max_results and notes:
+                notes = rank_with_hub_penalty(notes, user_id)[:max_results]
 
             # 2026-10-23 (KB phase 0): memory://permalink references were
             # only used when the search happened to find that note.
@@ -1576,8 +1588,11 @@ class Agent:
             if not facts:
                 return
             # max 3 notes per tool call, each with tags, facts and links (2026-10-23)
+            # 2026-10-24 (KB phase 2): facts record the tool and its URL/path
+            from .knowledge.quality import tool_source
             saved = await asyncio.to_thread(kb_save_items, facts, user_id,
-                                            ["auto-extracted", f"tool-{tool_name}"], 3, "[KB-TOOL]")
+                                            ["auto-extracted", f"tool-{tool_name}"], 3, "[KB-TOOL]",
+                                            tool_source(tool_name, args))
 
             if saved:
                 logger.info(

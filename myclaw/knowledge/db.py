@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Callable, Tuple, Iterable
 
 from .parser import Note, Observation, Relation
+from . import quality as _quality
 
 logger = logging.getLogger(__name__)
 
@@ -243,6 +244,10 @@ def _sql_fold(value: Any) -> Optional[str]:
     return value.strip().casefold() if isinstance(value, str) else value
 
 
+def _sql_catnorm(value: Any) -> Optional[str]:
+    return _quality.normalize_category(value) if isinstance(value, str) else value
+
+
 # search_by_metadata keys: names, dotted paths allowed (2026-10-23, KB phase 0)
 _METADATA_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$")
 
@@ -351,6 +356,8 @@ class KnowledgeDB:
             # Unicode case folding for names/titles/aliases/tags (queries only —
             # never used in triggers or indexes, so other tools can open the file).
             self._conn.create_function("kb_fold", 1, _sql_fold, deterministic=True)
+            # 2026-10-24 (KB phase 2): normalised fact category (queries/backfill only)
+            self._conn.create_function("kb_catnorm", 1, _sql_catnorm, deterministic=True)
             # Enable WAL mode for better concurrent access
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
@@ -650,6 +657,18 @@ class KnowledgeDB:
         except sqlite3.OperationalError:
             pass
 
+        # 2026-10-24 (KB phase 2): normalised fact category (indexed; the file
+        # keeps the category as written), the category registry and conflicts.
+        try:
+            conn.execute("ALTER TABLE observations ADD COLUMN category_norm TEXT")
+        except sqlite3.OperationalError:
+            pass
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_category_norm "
+                     "ON observations(category_norm)")
+        conn.execute("UPDATE observations SET category_norm = kb_catnorm(category) "
+                     "WHERE category_norm IS NULL AND category IS NOT NULL")
+        _quality.ensure_schema(conn)
+
         # Phase 4 (MemoPad import): sync_meta table for watermark-based incremental scanning
         conn.execute("""
             CREATE TABLE IF NOT EXISTS sync_meta (
@@ -843,6 +862,21 @@ class KnowledgeDB:
         else:
             conn.commit()
 
+    @staticmethod
+    @contextmanager
+    def _savepoint(conn: sqlite3.Connection, name: str):
+        """A nested savepoint inside an open transaction (2026-10-24, KB phase 2):
+        optional work whose failure is undone without undoing the transaction."""
+        conn.execute(f"SAVEPOINT {name}")
+        try:
+            yield conn
+        except BaseException:
+            conn.execute(f"ROLLBACK TO {name}")
+            conn.execute(f"RELEASE {name}")
+            raise
+        else:
+            conn.execute(f"RELEASE {name}")
+
     @contextmanager
     def batch(self):
         """Run several index writes as ONE transaction (all or nothing).
@@ -1001,6 +1035,11 @@ class KnowledgeDB:
                                   rel["to_name"] or permalink)
             cursor = conn.execute("DELETE FROM entities WHERE id = ?", (eid,))
             self._relink_for_keys(conn, folds, plinks)
+            try:  # 2026-10-24 (KB phase 2): its open conflicts are closed
+                with self._savepoint(conn, "kb_quality"):
+                    _quality.on_note_deleted(conn, permalink)
+            except Exception as e:
+                logger.info("Knowledge: conflicts of %s not closed: %s", permalink, e)
         return cursor.rowcount > 0
 
     def clear_all_data(self, keep_file_paths: Optional[Iterable[str]] = None) -> None:
@@ -1057,10 +1096,12 @@ class KnowledgeDB:
 
         conn.execute(
             """
-            INSERT INTO observations (entity_id, category, content, tags, created_at, context, provenance_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO observations (entity_id, category, content, tags, created_at, context,
+                                      provenance_path, category_norm)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (entity_id, category, content, tags_json, now, context, provenance_path),
+            (entity_id, category, content, tags_json, now, context, provenance_path,
+             _quality.normalize_category(category)),
         )
         conn.commit()
 
@@ -1792,12 +1833,22 @@ class KnowledgeDB:
                 conn.execute(
                     """
                     INSERT INTO observations
-                        (entity_id, category, content, tags, created_at, context, provenance_path)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                        (entity_id, category, content, tags, created_at, context, provenance_path,
+                         category_norm)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (eid, obs.category, obs.content, json.dumps(obs.tags or []), now,
-                     getattr(obs, "context", None), getattr(obs, "provenance_path", None)),
+                     getattr(obs, "context", None), getattr(obs, "provenance_path", None),
+                     _quality.normalize_category(obs.category)),
                 )
+
+            # 2026-10-24 (KB phase 2): contradicting facts of this note (derived
+            # data; a failure here never stops the note from being indexed)
+            try:
+                with self._savepoint(conn, "kb_quality"):
+                    _quality.on_note_indexed(conn, eid, note.permalink, note.observations)
+            except Exception as e:
+                logger.info("Knowledge: conflict check skipped for %s: %s", note.permalink, e)
 
             # Aliases: replace the set (before links, so a self-link by alias resolves)
             conn.execute("DELETE FROM entity_aliases WHERE entity_id = ?", (eid,))

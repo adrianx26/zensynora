@@ -478,6 +478,12 @@ class KnowledgeConfig(BaseModel):
     enabled: bool = True
     auto_extract: bool = False  # Auto-extract knowledge from conversations
     knowledge_dir: str = "~/.myclaw/knowledge"
+    # 2026-10-24 (KB phase 2): quality layer. Conflict detection only flags
+    # contradicting facts (never changes a note); notes with more than
+    # hub_degree links rank lower in the automatic context.
+    detect_conflicts: bool = True
+    hub_penalty: bool = True
+    hub_degree: int = Field(25, ge=1, le=10000)
 
 
 class SwarmConfig(BaseModel):
@@ -905,6 +911,20 @@ def _apply_knowledge_dir(config: AppConfig) -> None:
         logger.warning("knowledge.knowledge_dir could not be applied (%s); using ~/.myclaw/knowledge", e)
 
 
+def _apply_knowledge_quality(config: AppConfig) -> None:
+    """Apply ``knowledge.detect_conflicts`` / ``hub_penalty`` / ``hub_degree``
+    (2026-10-24, KB phase 2). Never makes loading the config fail."""
+    try:
+        kc = getattr(config, "knowledge", None)
+        from .knowledge.quality import set_options
+
+        set_options(detect_conflicts=getattr(kc, "detect_conflicts", True),
+                    hub_penalty=getattr(kc, "hub_penalty", True),
+                    hub_degree=getattr(kc, "hub_degree", 25))
+    except Exception as e:
+        logger.warning("knowledge quality settings could not be applied (%s); using defaults", e)
+
+
 def load_config(force_reload: bool = False) -> AppConfig:
     """Load and validate config. Exits with clear message on schema errors.
 
@@ -937,6 +957,7 @@ def load_config(force_reload: bool = False) -> AppConfig:
             _cached_config = AppConfig(**raw)
             _config_mtime = current_mtime
             _apply_knowledge_dir(_cached_config)
+            _apply_knowledge_quality(_cached_config)
 
             # Validate critical configuration
             _validate_config(_cached_config)
