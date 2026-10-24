@@ -698,6 +698,182 @@ def find_duplicate_notes(user_id: str = "default") -> str:
     return "\n".join(lines)
 
 
+# ── KB phase 4 (2026-10-24): distilled facts, scenarios, persona ─────────────
+# Derived data (rebuilt from the notes); reading never changes a note.
+
+def _distill_off_hint() -> str:
+    from ..knowledge import distill as _d
+
+    return ("" if _d.enabled() else
+            "\n(Automatic distillation is off — Settings → Features → \"Distil facts, scenarios "
+            "and a persona\" (knowledge.distill); distill_knowledge() runs it once.)")
+
+
+def _fmt_fact(f: Dict[str, Any]) -> str:
+    n = f["support"]
+    flags = (" ⚠ conflicting" if f.get("conflicted") else "") + (" · about you" if f.get("about_user") else "")
+    return (f"f{f['id']} [{f['category']}] {shorten_text(f['text'], 200)} — confidence "
+            f"{f['confidence']:.2f}, {n} note{'s' if n != 1 else ''}{flags}")
+
+
+def list_facts(query: str = "", limit: int = 20, user_id: str = "default") -> str:
+    """
+    List distilled facts (L1): atomic facts deduplicated across notes, with a
+    confidence and how many notes support them. Best first, or matching query.
+
+    query: words to look for (empty = the most confident facts)
+    limit: how many (1-100)
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge import distill as _d
+
+    try:
+        n = max(1, min(100, int(limit or 20)))
+    except (TypeError, ValueError):
+        return f"limit must be a number from 1 to 100 (got {limit!r}). Example: list_facts(\"ollama\", 10)."
+    try:
+        data = _d.list_facts(user_id, query=str(query or ""), limit=n)
+    except Exception as e:
+        logger.warning("list_facts failed: %s", e)
+        return f"Could not list facts: {e}. Try distill_knowledge() and ask again."
+    if not data.get("distilled"):
+        return "Nothing is distilled yet. Call distill_knowledge() first." + _distill_off_hint()
+    facts = data.get("facts") or []
+    if not facts:
+        return ((f"No distilled fact matches '{query}'. Try other words or search_knowledge()."
+                 if query else "No distilled facts yet — notes need facts (- [category] text) or "
+                 "first-person sentences (\"I prefer …\").") + _distill_off_hint())
+    head = (f"{len(facts)} fact(s) matching '{query}':" if query
+            else f"Top {len(facts)} of {data.get('total', len(facts))} fact(s):")
+    lines = [head] + [f"- {_fmt_fact(f)}" for f in facts]
+    lines.append("drill_down(\"f<id>\") shows the notes and lines behind a fact.")
+    return "\n".join(lines)
+
+
+def list_scenarios(query: str = "", user_id: str = "default") -> str:
+    """
+    List distilled scenarios (L2): groups of related facts (a note and the notes
+    it links to, a tag, a name, a category) with a title and a short summary.
+
+    query: words to look for (empty = the biggest scenarios)
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge import distill as _d
+
+    try:
+        data = _d.list_scenarios(user_id, query=str(query or ""), limit=20)
+    except Exception as e:
+        logger.warning("list_scenarios failed: %s", e)
+        return f"Could not list scenarios: {e}. Try distill_knowledge() and ask again."
+    if not data.get("distilled"):
+        return "Nothing is distilled yet. Call distill_knowledge() first." + _distill_off_hint()
+    items = data.get("scenarios") or []
+    if not items:
+        return ((f"No scenario matches '{query}'." if query else
+                 "No scenarios yet — they form when at least two facts are related.")
+                + _distill_off_hint())
+    lines = [f"{len(items)} scenario(s){f' matching {query!r}' if query else ''}:"]
+    for sc in items:
+        lines.append(f"- s{sc['id']} {sc['title']} ({sc['size']} facts, {sc['notes']} notes, "
+                     f"by {sc['grouped_by']}, confidence {sc['confidence']:.2f}): "
+                     f"{shorten_text(sc['summary'], 240)}")
+    lines.append("drill_down(\"s<id>\") lists its facts and their notes.")
+    return "\n".join(lines)
+
+
+def get_persona(user_id: str = "default") -> str:
+    """
+    The distilled persona (L3): a short summary of the user (preferences, setup,
+    projects, people, habits, decisions) built from the notes, with confidence.
+    It never contains secrets and does not replace the user profile (get_user_profile).
+
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge import distill as _d
+
+    try:
+        p = _d.get_persona(user_id)
+    except Exception as e:
+        logger.warning("get_persona failed: %s", e)
+        return f"Could not read the persona: {e}. Try distill_knowledge() and ask again."
+    if not p or not p.get("summary"):
+        return ("No persona yet. It is built by distill_knowledge() from facts about the user "
+                "(categories preference, person, decision, setting, habit, project, or sentences "
+                "like \"I prefer …\")." + _distill_off_hint())
+    lines = [f"Persona v{p['version']} ({p['created_at']}, confidence {p['confidence']:.2f}):",
+             p["summary"], ""]
+    for sec, items in (p.get("sections") or {}).items():
+        lines.append(f"{(p.get('titles') or {}).get(sec, sec)}:")
+        for it in items:
+            lines.append(f"  - f{it['id']} {shorten_text(it['text'], 160)} ({it['confidence']:.2f})")
+    lines.append("drill_down(\"persona\") shows the notes behind it.")
+    return "\n".join(lines)
+
+
+def drill_down(id: str, user_id: str = "default") -> str:
+    """
+    Show the notes and exact fact lines behind a distilled fact, scenario or the persona.
+
+    id: "f12" (fact), "s3" (scenario) or "persona" — as shown by list_facts,
+        list_scenarios, get_persona or the automatic context
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge import distill as _d
+
+    try:
+        data = _d.drill_down(id, user_id)
+    except ValueError as e:
+        return f"{e}. Use an id like \"f12\", \"s3\" or \"persona\" (from list_facts / list_scenarios)."
+    except LookupError as e:
+        return str(e)
+    except Exception as e:
+        logger.warning("drill_down failed: %s", e)
+        return f"Could not trace {id}: {e}. Try distill_knowledge() and ask again."
+    item = data["item"]
+    if data["kind"] == "fact":
+        lines = [f"Fact {_fmt_fact(item)}"]
+        if item.get("merged_into"):
+            lines.append(f"(merged into {item['merged_into']} — a near-duplicate by meaning)")
+    elif data["kind"] == "scenario":
+        lines = [f"Scenario s{item['id']} {item['title']}: {item['summary']}"]
+    else:
+        lines = [f"Persona v{item['version']}: {shorten_text(item['summary'], 400)}"]
+    lines.append("")
+    for f in data["facts"][:30]:
+        if data["kind"] != "fact":
+            lines.append(_fmt_fact(f))
+        for e in f.get("evidence", [])[:10]:
+            src = f" (source: {e['source']})" if e.get("source") else ""
+            lines.append(f"   ↳ {e['title']} (memory://{e['permalink']}): {shorten_text(e['line'], 200)}{src}")
+    lines += ["", f"Notes: {', '.join(data['notes']) or '—'} — read_knowledge(permalink) shows a whole note."]
+    return "\n".join(lines)
+
+
+def distill_knowledge(full: bool = False, user_id: str = "default") -> str:
+    """
+    Distil the knowledge base now: facts (deduplicated, with confidence),
+    scenarios (related facts) and the persona. Only changed notes are read again.
+
+    full: read every note again (a rebuild; normally not needed)
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge import distill as _d
+
+    try:
+        sync_knowledge(user_id)   # notes edited by hand are seen too
+    except Exception as e:
+        logger.info("distill_knowledge: sync skipped: %s", e)
+    try:
+        r = _d.distill(user_id, full=bool(full), budget_seconds=60.0, wait_lock=10.0)
+    except Exception as e:
+        logger.warning("distill_knowledge failed: %s", e)
+        return f"Distillation failed: {e}. Try sync_knowledge_base() and then distill_knowledge() again."
+    if not r.get("ok"):
+        return r.get("message") or "Distillation did not run — try again in a minute."
+    return ("✅ " + r["message"] + " Use list_facts(), list_scenarios(), get_persona()."
+            + _distill_off_hint())
+
+
 # ── v0.7.5: every knowledge tool uses the knowledge base of the current turn ──
 # The tools defaulted to user "default" while the automatic search and saving
 # in the Web UI used "webui", so agents could not find their own notes. A
@@ -732,3 +908,9 @@ knowledge_conflicts = _scoped(knowledge_conflicts)
 resolve_knowledge_conflict = _scoped(resolve_knowledge_conflict)
 knowledge_categories = _scoped(knowledge_categories)
 find_duplicate_notes = _scoped(find_duplicate_notes)
+# KB phase 4 (2026-10-24)
+list_facts = _scoped(list_facts)
+list_scenarios = _scoped(list_scenarios)
+get_persona = _scoped(get_persona)
+drill_down = _scoped(drill_down)
+distill_knowledge = _scoped(distill_knowledge)

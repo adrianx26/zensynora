@@ -18,6 +18,7 @@ from typing import List, Optional, Dict, Any, Callable, Tuple, Iterable
 from .parser import Note, Observation, Relation
 from . import quality as _quality
 from . import semantic as _semantic
+from . import distill as _distill
 
 logger = logging.getLogger(__name__)
 
@@ -677,6 +678,8 @@ class KnowledgeDB:
         _quality.ensure_schema(conn)
         # 2026-10-24 (KB phase 3): vector tables (derived, rebuildable; never dropped)
         _semantic.ensure_schema(conn)
+        # 2026-10-24 (KB phase 4): distilled facts / scenarios / persona (derived, rebuildable)
+        _distill.ensure_schema(conn)
 
         # Phase 4 (MemoPad import): sync_meta table for watermark-based incremental scanning
         conn.execute("""
@@ -920,6 +923,8 @@ class KnowledgeDB:
             conn.commit()
             indexed, self._indexed_in_batch = self._indexed_in_batch, []
             _semantic.note_indexed(self.db_path, indexed)
+            # 2026-10-24 (KB phase 4): counts towards the next background distillation
+            _distill.note_changed(self.db_path, len(indexed))
         finally:
             self._batch_depth = 0
 
@@ -1059,6 +1064,8 @@ class KnowledgeDB:
                     _quality.on_note_deleted(conn, permalink)
             except Exception as e:
                 logger.info("Knowledge: conflicts of %s not closed: %s", permalink, e)
+        if self._batch_depth == 0 and cursor.rowcount > 0:
+            _distill.note_changed(self.db_path, 1)  # 2026-10-24 (KB phase 4): its facts lose support
         return cursor.rowcount > 0
 
     def clear_all_data(self, keep_file_paths: Optional[Iterable[str]] = None) -> None:
@@ -1913,6 +1920,7 @@ class KnowledgeDB:
             self._indexed_in_batch.append(eid)
         else:
             _semantic.note_indexed(self.db_path, [eid])
+            _distill.note_changed(self.db_path, 1)  # 2026-10-24 (KB phase 4); no-op when off
         return eid
 
     # ── v0.7.5: full-text index of the note text ─────────────────────────────

@@ -63,6 +63,8 @@ from .kb import (
     _extract_search_terms,
     # KB phase 2 (2026-10-24): quality tools
     knowledge_conflicts, resolve_knowledge_conflict, knowledge_categories, find_duplicate_notes,
+    # KB phase 4 (2026-10-24): distilled facts / scenarios / persona
+    list_facts, list_scenarios, get_persona, drill_down, distill_knowledge,
 )
 from .jobs import job_create, job_list, job_run, job_status, job_update  # noqa: E402
 from .scheduler import (
@@ -220,6 +222,11 @@ TOOLS.update({
     "resolve_knowledge_conflict": {"func": resolve_knowledge_conflict, "desc": "Resolve one knowledge conflict: keep a, b or both"},
     "knowledge_categories": {"func": knowledge_categories, "desc": "List fact categories with counts and merge suggestions"},
     "find_duplicate_notes": {"func": find_duplicate_notes, "desc": "List possible duplicate knowledge notes (preview only)"},
+    "list_facts":           {"func": list_facts,           "desc": "List distilled facts (deduplicated across notes, with confidence); query filters"},
+    "list_scenarios":       {"func": list_scenarios,       "desc": "List distilled scenarios: groups of related facts with a title and summary"},
+    "get_persona":          {"func": get_persona,          "desc": "The distilled persona: a short summary of the user from the notes"},
+    "drill_down":           {"func": drill_down,           "desc": "Show the notes and fact lines behind a distilled fact (f12), scenario (s3) or the persona"},
+    "distill_knowledge":    {"func": distill_knowledge,    "desc": "Distil the knowledge base now into facts, scenarios and a persona"},
     # Agent Swarm
     "swarm_create":         {"func": swarm_create,         "desc": "Create a new agent swarm"},
     "swarm_assign":         {"func": swarm_assign,         "desc": "Assign a task to a swarm"},

@@ -155,6 +155,8 @@ from myclaw.web import knowledge_import_api as _knowledge_import_api  # noqa: E4
 app.include_router(_knowledge_import_api.router)  # 2026-10-24 (KB phase 5): assimilate / import jobs
 from myclaw.web import knowledge_semantic_api as _knowledge_semantic_api  # noqa: E402
 app.include_router(_knowledge_semantic_api.router)  # 2026-10-24 (KB phase 3): semantic search status / backfill / install
+from myclaw.web import knowledge_distill_api as _knowledge_distill_api  # noqa: E402
+app.include_router(_knowledge_distill_api.router)  # 2026-10-24 (KB phase 4): facts / scenarios / persona / drill-down
 
 
 _mcp_manager = None
@@ -210,6 +212,22 @@ async def _start_semantic_scans() -> None:
 
 
 app.router.add_event_handler("startup", _start_semantic_scans)
+
+
+async def _start_distill_scans() -> None:
+    """2026-10-24 (KB phase 4): the Web UI distils changed notes in the
+    background (after knowledge.distill_every changed notes or when idle; also
+    notes written by CLI commands) — only while knowledge.distill is on. Runs
+    on its own thread; waits while the semantic worker embeds."""
+    try:
+        from myclaw.knowledge import distill
+
+        distill.start_background()
+    except Exception as exc:  # pragma: no cover - never block the start
+        logger.warning("Knowledge distillation scheduler not started: %s", exc)
+
+
+app.router.add_event_handler("startup", _start_distill_scans)
 app.router.add_event_handler("shutdown", _stop_background_runner)
 
 # Metrics middleware (must be first to capture all requests)

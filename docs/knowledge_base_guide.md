@@ -357,8 +357,60 @@ time and deleting them never loses a note. A note's vectors are removed with
 it; after `sync --force` or when a note comes back from `.trash` its old
 vectors are re-used (kept 30 days).
 
+## Distillation: facts, scenarios, a persona
+
+Added 2026-10-24 (KB phase 4). ZenSynora works out three levels from the
+notes (level 0), by rules — no model is called:
+
+| Level | What | Example |
+|---|---|---|
+| **Facts** (L1) | every `- [category] text` fact, and sentences in your own notes that say something about you (*"I prefer quiet fans"*, *"My NAS has four disks"*); the same fact in several notes is **one** fact (`32 GB RAM` = `32GB ram.`; with semantic search on, also *"The car is blue"* = *"The automobile is blue"* — never two facts with different numbers) | `[spec] 32 GB RAM` — confidence 0.86, 2 notes |
+| **Scenarios** (L2) | related facts: a note and the notes it links to, a shared tag, a shared name, a category (*Preferences*, *People*, *Decisions*), or meaning | *Home server*: 5 facts from 2 notes |
+| **Persona** (L3) | a short summary of you: preferences, setup, projects, people, habits, decisions | *Preferences: Answers in English; … People: Ana is my wife.* |
+
+* **Confidence** (0–1) starts from the category (a decision or a setting
+  counts more than a to-do; a sentence less than a written fact), rises with
+  every note that says the same, a little with more `(source: …)`; facts older
+  than 6 months and facts in an open ⚠ conflict count less. A session summary,
+  an import or a tool result supports a fact less than a note of yours.
+* **Where it comes from:** every fact, scenario and the persona keep the notes
+  and the exact fact lines they come from — *drill down* to them.
+* **Never included:** secrets (passwords, tokens, keys — the same rules as the
+  importer; the persona leaves out anything that even mentions one),
+  snapshots of system state (notes tagged `health`, `snapshot`, `diagnostics`…),
+  and where an imported page came from (`source`, `size` …). Sentences are
+  read from your own notes only (session summaries: only *"the user …"*
+  sentences — in chats and summaries "I" is often the assistant).
+* The persona does **not** replace your profile (`update_user_profile`,
+  `user_dialectic.md`); it is kept next to it and changes only with the notes
+  (each change is a new version; the last 20 are kept).
+* Everything is kept in the index database (tables `distilled_facts`,
+  `fact_sources`, `scenarios`, `scenario_facts`, `persona`, `distill_notes`,
+  `distill_state`). Only notes whose file changed since the last run are read
+  again; an edited or deleted note takes its support with it, and a fact with
+  no note left disappears. `--full` (or *Rebuild*) reads every note again and
+  gives the same result. Nothing here ever changes a note.
+
+**Turn it on:** *Settings → Features → Distil facts, scenarios and a persona*
+(`knowledge.distill`, default off). Then the Web UI distils in the background
+after `knowledge.distill_every` (20) changed notes, or `knowledge.distill_idle_minutes`
+(10) after the last change — one run at a time, never while semantic search is
+embedding, at most about two minutes per run (the next run continues). And the
+agent's automatic *Relevant Knowledge* starts with a short **What I know about
+you** (the persona, about 400 characters, when the message is about you) and
+**Relevant facts** (matching scenarios, then facts with their id and
+confidence), then the note snippets as before — all in the same ~2000
+characters. Off: the agent's context is exactly as before.
+
+| Where | How |
+|---|---|
+| Web UI | Knowledge page → *Distilled*: status, *Distil now* / *Rebuild*, the persona, scenarios and facts (with confidence); click one to see its notes and lines, click a note to open it |
+| Agent | `list_facts(query, limit)`, `list_scenarios(query)`, `get_persona()`, `drill_down(id)` (`f12`, `s3` or `persona`), `distill_knowledge()` (works with the switch off too) |
+| Command line | `zensynora knowledge distill [--base NAME] [--full]` |
+| API | `GET /api/knowledge/facts`, `/scenarios`, `/persona`, `/drill/{fact\|scenario\|persona}/{id}`, `/distill/status`; `POST /api/knowledge/distill` |
+
 ## Plans
 
-What comes next (more of memopad's features: note editing tools,
-distillation into facts and a persona) is in
+What comes next (more of memopad's features: note editing tools, an optional
+model pass for distillation) is in
 [docs/dev/plans/memopad_port_plan.md](dev/plans/memopad_port_plan.md).

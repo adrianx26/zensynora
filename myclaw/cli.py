@@ -373,6 +373,34 @@ def embed_cmd(base, all_notes, limit):
     click.echo(f"✅ {r['message']}")
 
 
+@knowledge.command(name="distill")
+@_BASE_OPTION
+@click.option("--full", is_flag=True, help="Read every note again (a rebuild of the distilled data)")
+def distill_cmd(base, full):
+    """Distil notes into facts, scenarios and a persona (KB phase 4)"""
+    from .knowledge import distill
+
+    load_config()  # applies knowledge.distill / semantic settings
+    click.echo("Re-indexing changed notes…")
+    sync_knowledge(base)
+    last = [0.0]
+
+    def progress(done, total):
+        import time
+
+        if total and (time.time() - last[0] > 2 or done == total):
+            last[0] = time.time()
+            click.echo(f"  … {done}/{total} notes")
+
+    r = distill.distill(base, full=full, progress=progress, wait_lock=60.0)
+    if not r.get("ok"):
+        raise click.ClickException(r.get("message") or "distillation failed")
+    click.echo(f"✅ {r['message']}")
+    if not distill.enabled():
+        click.echo("   (automatic distillation and the distilled agent context are off: "
+                   "knowledge.distill in Settings → Features)")
+
+
 @knowledge.command()
 @_BASE_OPTION
 def tags(base):

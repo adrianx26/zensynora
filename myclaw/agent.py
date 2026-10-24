@@ -280,6 +280,9 @@ SYSTEM_PROMPT = (
     # 2026-10-24 (KB phase 2): quality tools
     "knowledge_conflicts(permalink), resolve_knowledge_conflict(conflict_id, keep), "
     "knowledge_categories(), find_duplicate_notes(). "
+    # 2026-10-24 (KB phase 4): distilled facts, scenarios and persona
+    "Distilled: list_facts(query, limit), list_scenarios(query), get_persona(), drill_down(id) "
+    "(the notes behind a fact f12, scenario s3 or the persona), distill_knowledge(). "
     # 2026-10-24 (KB phase 5): ingestion
     "Import: assimilate(source, max_notes) reads a web page, a GitHub repository (https://github.com/owner/repo) "
     "or a local file/folder into linked notes plus a Mermaid diagram in one call — use it for 'analyze this "
@@ -308,6 +311,9 @@ SYSTEM_PROMPT = (
 KB_CONTEXT_BUDGET = 2000       # characters for the whole block
 KB_CONTEXT_NOTE_TEXT = 500     # characters of text per note
 KB_CONTEXT_FACTS = 3           # facts per note
+# 2026-10-24 (KB phase 4): with knowledge.distill on, the persona / scenarios /
+# distilled facts come first, in at most this many characters of the budget.
+KB_CONTEXT_DISTILLED = 900
 # One session-summary note per day; its text keeps the newest characters.
 SESSION_SUMMARY_MAX_CHARS = 20000
 _SESSION_SUMMARY_LOCK = threading.Lock()
@@ -1310,6 +1316,20 @@ class Agent:
             if fetch != max_results and notes:
                 notes = rank_with_hub_penalty(notes, user_id)[:max_results]
 
+            # 2026-10-24 (KB phase 4): knowledge.distill on → "What I know about
+            # you / relevant facts" first (persona > scenarios > facts), inside
+            # the same budget; off → nothing here, the context is unchanged.
+            distilled = ""
+            try:
+                from .knowledge import distill as _distill
+                if _distill.enabled():
+                    distilled = _distill.context_block(user_id, message,
+                                                       budget=KB_CONTEXT_DISTILLED)
+                    if distilled:
+                        metadata["distilled"] = True
+            except Exception as e:  # derived data must never break the turn
+                logger.debug("distilled context skipped: %s", e)
+
             # 2026-10-23 (KB phase 0): memory://permalink references were
             # only used when the search happened to find that note.
             if memory_refs:
@@ -1326,6 +1346,14 @@ class Agent:
                     if ref_note is not None:
                         notes = [ref_note] + list(notes)
                         found.add(ref)
+
+            if not notes and distilled:
+                context = "## Relevant Knowledge" + distilled + "\n\n---\n"
+                result = KnowledgeSearchResult(
+                    context=context, has_results=True, suggested_topics=[], gap_logged=False,
+                    metadata={**metadata, "results_count": 0},
+                )
+                return result if return_structured else context
 
             if not notes:
                 # Record gap so the agent can suggest KB creation.
@@ -1377,6 +1405,9 @@ class Agent:
             context_lines = ["## Relevant Knowledge"]
             used = len(context_lines[0])
             budget = KB_CONTEXT_BUDGET
+            if distilled:  # KB phase 4: distilled lines first
+                context_lines.append(distilled)
+                used += len(distilled) + 1
 
             def _add(line: str) -> bool:
                 nonlocal used

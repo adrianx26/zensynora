@@ -490,6 +490,11 @@ class KnowledgeConfig(BaseModel):
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     # cosine similarity below which a note is no semantic match (0 = the model's default)
     semantic_min_score: float = Field(0.0, ge=0.0, le=1.0)
+    # 2026-10-24 (KB phase 4): L0–L3 distillation (facts, scenarios, persona) in
+    # the background and first in the agent's context. Off by default.
+    distill: bool = False
+    distill_every: int = Field(20, ge=1, le=100000)          # changed notes per background run
+    distill_idle_minutes: float = Field(10.0, ge=0.0, le=10080.0)  # … or this long after the last change
 
 
 class SwarmConfig(BaseModel):
@@ -946,6 +951,21 @@ def _apply_knowledge_semantic(config: AppConfig) -> None:
         logger.warning("semantic search settings could not be applied (%s); it stays off", e)
 
 
+def _apply_knowledge_distill(config: AppConfig) -> None:
+    """Apply ``knowledge.distill`` / ``distill_every`` / ``distill_idle_minutes``
+    (2026-10-24, KB phase 4). Never makes loading the config fail."""
+    try:
+        kc = getattr(config, "knowledge", None)
+        from .knowledge.distill import set_options
+
+        set_options(distill=getattr(kc, "distill", False),
+                    distill_every=getattr(kc, "distill_every", 20),
+                    idle_minutes=getattr(kc, "distill_idle_minutes", 10.0),
+                    kb_enabled=getattr(kc, "enabled", True))
+    except Exception as e:
+        logger.warning("distillation settings could not be applied (%s); it stays off", e)
+
+
 def load_config(force_reload: bool = False) -> AppConfig:
     """Load and validate config. Exits with clear message on schema errors.
 
@@ -980,6 +1000,7 @@ def load_config(force_reload: bool = False) -> AppConfig:
             _apply_knowledge_dir(_cached_config)
             _apply_knowledge_quality(_cached_config)
             _apply_knowledge_semantic(_cached_config)
+            _apply_knowledge_distill(_cached_config)
 
             # Validate critical configuration
             _validate_config(_cached_config)

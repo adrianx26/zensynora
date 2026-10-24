@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../api';
 import KnowledgeGraph, { type GEdge, type GNode, type GraphHandle } from './KnowledgeGraph';
 import KnowledgeImport from './KnowledgeImport';
+import KnowledgeDistilled from './KnowledgeDistilled';
 import { CategoriesCard, CategoryMergePanel, ConflictsSection, DuplicatesPanel, type Conflict } from './KnowledgeQuality';
 import { SearchModePicker, SemanticCard } from './KnowledgeSemantic';
 import { useSemanticStatus, type SearchMode } from '../knowledgeSemantic';
@@ -36,7 +37,7 @@ interface NoteDetail {
   conflicts?: Conflict[]; // 2026-10-24 (KB phase 2)
 }
 
-type Tab = 'graph' | 'notes' | 'tags';
+type Tab = 'graph' | 'notes' | 'tags' | 'distilled';
 type ColorBy = 'tag' | 'links' | 'none';
 
 // Categorical palette (works on the dark and light themes).
@@ -347,9 +348,9 @@ const KnowledgeView: React.FC = () => {
         <SearchModePicker mode={mode} status={semantic.st} note={query.trim() ? modeNote : null}
           onChange={m => { setMode(m); store(MODE_KEY, m); }} />
         <div className="kb-tabs" role="tablist">
-          {(['graph', 'notes', 'tags'] as Tab[]).map(t => (
+          {(['graph', 'notes', 'tags', 'distilled'] as Tab[]).map(t => (
             <button key={t} role="tab" aria-selected={tab === t} className={`settings-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-              {t === 'graph' ? 'Graph' : t === 'notes' ? 'Notes' : 'Tags & types'}
+              {t === 'graph' ? 'Graph' : t === 'notes' ? 'Notes' : t === 'tags' ? 'Tags & types' : 'Distilled'}
             </button>
           ))}
         </div>
@@ -466,6 +467,11 @@ const KnowledgeView: React.FC = () => {
                 {sortedNotes.length === 0 && <div className="kb-empty">No notes{hits || tagFilter.length ? ' match the filters' : ' yet'}.</div>}
               </div>
             </div>
+          )}
+
+          {tab === 'distilled' && (
+            // 2026-10-24 (KB phase 4): persona, scenarios, facts with drill-down
+            <KnowledgeDistilled base={base} onOpenNote={p => { setCreating(null); setSide(null); select(p); }} />
           )}
 
           {tab === 'tags' && data && (
