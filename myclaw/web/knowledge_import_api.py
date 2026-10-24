@@ -46,6 +46,8 @@ BASE_RE = re.compile(r"^[\w.@-]{1,64}$")
 _jobs: Dict[str, Dict[str, Any]] = {}
 _budgets: Dict[str, Any] = {}
 _lock = threading.Lock()
+_uploads = 0           # uploads being received (they count against MAX_RUNNING)
+GRACE_SECONDS = 60     # a job past JOB_SECONDS + this is marked failed and frees its slot
 
 
 def _base(base: Optional[str]) -> str:
@@ -55,15 +57,39 @@ def _base(base: Optional[str]) -> str:
     return b
 
 
+def _reap() -> None:
+    """Watchdog: a job past its time limit is cancelled, marked failed and frees its slot.
+
+    2026-10-24 (KB phase 5, review): a stuck job (e.g. a hanging download)
+    blocked the two job slots for good.
+    """
+    now = time.time()
+    for job in list(_jobs.values()):
+        if job["status"] == "running" and now - job["started"] > JOB_SECONDS + GRACE_SECONDS:
+            budget = _budgets.pop(job["id"], None)
+            if budget is not None:
+                budget.cancel.set()
+            job["status"] = "error"
+            job["error"] = (f"Stopped: the import took longer than {int(JOB_SECONDS // 60)} minutes. "
+                            "Notes saved so far are kept; run it again to continue.")
+            job["finished"] = now
+            logger.warning("Knowledge import %s timed out and was stopped", job["id"])
+
+
 def _running() -> int:
-    return sum(1 for j in _jobs.values() if j["status"] == "running")
+    _reap()
+    return sum(1 for j in _jobs.values() if j["status"] == "running") + _uploads
 
 
-def _new_job(kind: str, source: str, base: str) -> str:
+def _new_job(kind: str, source: str, base: str, reserved: bool = False) -> str:
+    """Register a job; ``reserved``: the caller already holds an upload slot."""
+    global _uploads
     with _lock:
-        if _running() >= MAX_RUNNING:
+        if _running() - (1 if reserved else 0) >= MAX_RUNNING:
             raise HTTPException(status_code=429, detail=(
                 f"{MAX_RUNNING} imports are already running; wait until one has finished."))
+        if reserved:  # the upload's slot becomes the job's
+            _uploads = max(0, _uploads - 1)
         job_id = uuid.uuid4().hex[:12]
         _jobs[job_id] = {"id": job_id, "kind": kind, "source": source, "base": base,
                          "status": "running", "progress": "starting", "result": None,
@@ -75,7 +101,7 @@ def _new_job(kind: str, source: str, base: str) -> str:
         return job_id
 
 
-def _start(job_id: str, work, cleanup: Optional[Path] = None, max_notes: int = 2000) -> None:
+def _start(job_id: str, work, cleanup: Optional[Path] = None, max_notes: int = 10_000) -> None:
     from myclaw.knowledge.ingest import Budget, IngestError
 
     def progress(text: str) -> None:
@@ -89,18 +115,22 @@ def _start(job_id: str, work, cleanup: Optional[Path] = None, max_notes: int = 2
         job = _jobs[job_id]
         try:
             result = work(budget)
+            if job["status"] != "running":  # the watchdog gave up on it meanwhile
+                return
             job["result"] = result.to_dict()
             job["status"] = "done"
             job["progress"] = "finished"
         except IngestError as e:
-            job["status"], job["error"] = "error", str(e)
+            if job["status"] == "running":
+                job["status"], job["error"] = "error", str(e)
             logger.info("Knowledge import %s: %s", job_id, e)
         except Exception as e:  # already logged with traceback by the entry point
-            job["status"] = "error"
-            job["error"] = (f"The import failed unexpectedly ({type(e).__name__}: {e}). "
-                            "Details are in the log (Doctor → Errors).")
+            if job["status"] == "running":
+                job["status"] = "error"
+                job["error"] = (f"The import failed unexpectedly ({type(e).__name__}). "
+                                "Details are in the log (Doctor → Errors).")
         finally:
-            job["finished"] = time.time()
+            job["finished"] = job["finished"] or time.time()
             _budgets.pop(job_id, None)
             if cleanup is not None:
                 shutil.rmtree(cleanup, ignore_errors=True)
@@ -117,6 +147,7 @@ class AssimilateIn(BaseModel):
 @router.post("/api/knowledge/assimilate", dependencies=guard)
 async def assimilate(body: AssimilateIn) -> Dict[str, Any]:
     from myclaw.knowledge.ingest import assimilate as run_assimilate
+    from myclaw.knowledge.ingest.safety import clean_source
 
     base = _base(body.base)
     source = (body.source or "").strip()
@@ -124,7 +155,7 @@ async def assimilate(body: AssimilateIn) -> Dict[str, Any]:
         raise HTTPException(status_code=400, detail="Enter a web address, a GitHub repository URL "
                                                     "or a file/folder path.")
     n = max(1, min(int(body.max_notes or 40), 500))
-    job_id = _new_job("assimilate", source, base)
+    job_id = _new_job("assimilate", clean_source(source), base)
     _start(job_id, lambda b: run_assimilate(source, base=base, max_notes=n, budget=b), max_notes=n)
     return {"job_id": job_id}
 
@@ -154,14 +185,28 @@ async def import_upload(request: Request, base: str = "default", kind: str = "au
     from myclaw.knowledge.ingest import import_file
     from myclaw.knowledge.ingest.importers import IngestError, normalize_kind
 
+    global _uploads
+    too_big = HTTPException(status_code=413, detail=(
+        f"The file is larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB. Import it with: "
+        "zensynora knowledge import FILE"))
     length = request.headers.get("content-length", "")
+    ctype = request.headers.get("content-type", "")
     if length.isdigit() and int(length) > MAX_UPLOAD_BYTES + 1_000_000:
-        raise HTTPException(status_code=413, detail=(
-            f"The file is larger than {MAX_UPLOAD_BYTES // (1024 * 1024)} MB. Import it with: "
-            "zensynora knowledge import FILE"))
+        raise too_big
+    if ctype.startswith("multipart/form-data") and not length.isdigit():
+        # 2026-10-24 (KB phase 5, review): the form parser stores the whole
+        # file before we see it — only uploads of a known, allowed size
+        raise HTTPException(status_code=411, detail=(
+            "Multipart uploads need a Content-Length; send the file as the request body instead "
+            "(?base=&kind=&filename=)."))
+    with _lock:  # an upload in progress takes a job slot (disk + work)
+        if _running() >= MAX_RUNNING:
+            raise HTTPException(status_code=429, detail=(
+                f"{MAX_RUNNING} imports are already running; wait until one has finished."))
+        _uploads += 1
+    reserved = True
     tmp = Path(tempfile.mkdtemp(prefix="zensynora-import-"))
     try:
-        ctype = request.headers.get("content-type", "")
         if ctype.startswith("multipart/form-data"):
             try:
                 form = await request.form()
@@ -200,10 +245,15 @@ async def import_upload(request: Request, base: str = "default", kind: str = "au
             # no extension (some browsers): guess zip vs json from the first bytes
             head = path.read_bytes()[:4]
             path = path.rename(path.with_suffix(".zip" if head.startswith(b"PK") else ".json"))
-        job_id = _new_job(f"import:{k}", name, b)
+        job_id = _new_job(f"import:{k}", name, b, reserved=True)
+        reserved = False
     except BaseException:
         shutil.rmtree(tmp, ignore_errors=True)
         raise
+    finally:
+        if reserved:
+            with _lock:
+                _uploads = max(0, _uploads - 1)
     _start(job_id, lambda bud: import_file(str(path), base=b, kind=k, budget=bud, trusted=True,
                                            display_name=name), cleanup=tmp)
     return {"job_id": job_id}
@@ -211,6 +261,7 @@ async def import_upload(request: Request, base: str = "default", kind: str = "au
 
 @router.get("/api/knowledge/import/{job_id}", dependencies=guard)
 async def import_status(job_id: str) -> Dict[str, Any]:
+    _reap()
     job = _jobs.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Unknown import job (jobs are kept until the "

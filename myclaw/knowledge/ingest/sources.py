@@ -30,12 +30,14 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-from urllib.parse import quote, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 from .documents import kind_of, read_document, read_text_file
 from .model import Budget, Document, IngestError
 from .repo import TreeEntry, analyze_repo
-from .safety import GitIgnore, check_local_path, is_secret_file, skip_dir
+from .safety import (
+    GitIgnore, check_local_path, clean_url, ip_is_public, is_secret_file, skip_dir,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -67,11 +69,37 @@ class HttpResponse:
         return json.loads(self.content.decode("utf-8", errors="replace"))
 
 
-def check_url(url: str) -> None:
-    """Refuse non-http(s) URLs and URLs that reach this computer or the local network."""
+def _proxy_for(url: str) -> Optional[str]:
+    """The HTTP(S) proxy the environment sets for ``url`` (None = direct)."""
+    import urllib.request
+
+    parsed = urlparse(url)
+    proxies = urllib.request.getproxies()
+    proxy = proxies.get(parsed.scheme) or proxies.get("all")
+    if not proxy:
+        return None
+    try:
+        if urllib.request.proxy_bypass(parsed.hostname or ""):
+            return None
+    except Exception:  # a broken no_proxy entry: use the proxy
+        pass
+    return proxy
+
+
+def check_url(url: str) -> List[str]:
+    """Refuse URLs that are not public web addresses; returns the checked IPs.
+
+    2026-10-24 (KB phase 5, review): every address of the host must be
+    globally routable (``ipaddress.is_global``, also the IPv4 inside mapped /
+    NAT64 / 6to4 IPv6 addresses), and a name that cannot be resolved is
+    refused — except behind an HTTP(S) proxy, which resolves names itself
+    (then names that resolve here must still be public; what the proxy
+    resolves cannot be checked from here).
+    """
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
-        raise IngestError(f"'{url}' is not a web address (it must start with http:// or https://).")
+        raise IngestError(f"'{clean_url(url)}' is not a web address (it must start with http:// or "
+                          "https://).")
     try:
         from myclaw.tools.web import _is_safe_url  # the browse tool's check
 
@@ -80,56 +108,114 @@ def check_url(url: str) -> None:
         ok, reason = True, ""
     if not ok:
         raise IngestError(f"{reason} Only public web pages can be imported.")
-    host = parsed.hostname
+    host = parsed.hostname.rstrip(".")
+    if host == "localhost" or host.endswith(".localhost"):
+        raise IngestError("Access to localhost is not allowed; only public web pages can be imported.")
     try:
-        infos = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))
-    except (socket.gaierror, UnicodeError):
-        return  # not resolvable here (e.g. behind a proxy): the request decides
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    except ValueError as e:
+        raise IngestError(f"'{clean_url(url)}' has an invalid port.") from e
+    try:
+        infos = socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    except (socket.gaierror, UnicodeError, OSError) as e:
+        if _proxy_for(url):
+            return []  # the proxy resolves the name
+        raise IngestError(f"'{host}' could not be found (DNS). Check the address.") from e
+    ips: List[str] = []
     for info in infos:
         try:
-            ip = ipaddress.ip_address(info[4][0])
+            ip = ipaddress.ip_address(str(info[4][0]).split("%", 1)[0])
         except ValueError:
             continue
-        if (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
-                or ip.is_multicast or ip.is_unspecified):
+        if not ip_is_public(ip):
             raise IngestError(f"'{host}' points to a local or private address ({ip}); only public "
                               "web pages can be imported.")
+        if str(ip) not in ips:
+            ips.append(str(ip))
+    if not ips and not _proxy_for(url):
+        raise IngestError(f"'{host}' could not be found (DNS). Check the address.")
+    return ips
+
+
+def _deadline_error(url: str) -> IngestError:
+    return IngestError(f"Stopped downloading '{clean_url(url)}': the time limit of this run was "
+                       "reached.")
 
 
 def http_get(url: str, headers: Optional[Dict[str, str]] = None, max_bytes: int = MAX_PAGE_BYTES,
-             timeout: float = HTTP_TIMEOUT) -> HttpResponse:
-    """GET with redirect checks and a size cap (raises :class:`IngestError`)."""
+             timeout: float = HTTP_TIMEOUT, budget: Optional[Budget] = None) -> HttpResponse:
+    """GET with address checks on every hop, a size cap and a time limit.
+
+    2026-10-24 (KB phase 5, review): without a proxy the connection goes to
+    exactly the address that was checked (the URL is rewritten to the IP; the
+    Host header and the TLS server name stay the host name, so certificates
+    are still verified), so a DNS answer that changes between the check and
+    the connection (DNS rebinding) cannot reach a local address. The budget's
+    deadline and cancel flag stop the download between chunks; the whole
+    request never takes longer than ``timeout``.
+    """
+    import time as _time
+
     import httpx
 
     hdrs = {"User-Agent": USER_AGENT, **(headers or {})}
     current = url
-    with httpx.Client(timeout=timeout, follow_redirects=False) as client:
-        for _ in range(6):
-            check_url(current)
-            try:
-                with client.stream("GET", current, headers=hdrs) as r:
-                    if r.status_code in (301, 302, 303, 307, 308) and r.headers.get("location"):
-                        current = str(r.url.join(r.headers["location"]))
-                        if urlparse(current).hostname != urlparse(url).hostname:
-                            hdrs.pop("Authorization", None)  # never send a token to another host
-                        continue
-                    chunks: List[bytes] = []
-                    size = 0
-                    for chunk in r.iter_bytes():
-                        size += len(chunk)
-                        if size > max_bytes:
-                            raise IngestError(f"'{current}' is larger than {max_bytes // 1_000_000} MB; "
-                                              "it is not imported.")
-                        chunks.append(chunk)
-                    return HttpResponse(r.status_code, str(r.url), b"".join(chunks),
-                                        {k.lower(): v for k, v in r.headers.items()})
-            except httpx.TimeoutException as e:
-                raise IngestError(f"'{current}' did not answer within {int(timeout)} s; try again "
-                                  "later.") from e
-            except httpx.HTTPError as e:
-                raise IngestError(f"Could not fetch '{current}': {e}. Check the address and the "
-                                  "internet connection.") from e
-    raise IngestError(f"'{url}' redirects too often.")
+    started = _time.monotonic()
+
+    def left() -> float:
+        rest = timeout - (_time.monotonic() - started)
+        if budget is not None:
+            rest = min(rest, budget.time_left())
+        return rest
+
+    for _ in range(6):
+        if left() <= 0 or (budget is not None and budget.cancel.is_set()):
+            raise _deadline_error(current)
+        ips = check_url(current)
+        proxy = _proxy_for(current)
+        parsed = urlparse(current)
+        target = current
+        extensions: Dict[str, object] = {}
+        req_headers = dict(hdrs)
+        if not proxy:
+            ip = ips[0]
+            ip_host = f"[{ip}]" if ":" in ip else ip
+            netloc = ip_host + (f":{parsed.port}" if parsed.port else "")
+            target = parsed._replace(netloc=netloc).geturl()
+            req_headers["Host"] = parsed.netloc.rsplit("@", 1)[-1]
+            if parsed.scheme == "https":
+                extensions["sni_hostname"] = parsed.hostname
+        try:
+            client = httpx.Client(timeout=httpx.Timeout(max(0.5, min(timeout, left()))),
+                                  follow_redirects=False, trust_env=bool(proxy))
+            with client, client.stream("GET", target, headers=req_headers,
+                                       extensions=extensions) as r:
+                if r.status_code in (301, 302, 303, 307, 308) and r.headers.get("location"):
+                    nxt = urljoin(current, r.headers["location"])
+                    if urlparse(nxt).hostname != urlparse(url).hostname:
+                        hdrs.pop("Authorization", None)  # never send a token to another host
+                    current = nxt
+                    continue
+                chunks: List[bytes] = []
+                size = 0
+                for chunk in r.iter_bytes():
+                    if left() <= 0 or (budget is not None and budget.cancel.is_set()):
+                        raise _deadline_error(current)
+                    size += len(chunk)
+                    if size > max_bytes:
+                        raise IngestError(f"'{clean_url(current)}' is larger than "
+                                          f"{max_bytes // 1_000_000} MB; it is not imported.")
+                    chunks.append(chunk)
+                return HttpResponse(r.status_code, current, b"".join(chunks),
+                                    {k.lower(): v for k, v in r.headers.items()})
+        except httpx.TimeoutException as e:
+            if budget is not None and budget.out_of_time():
+                raise _deadline_error(current) from e
+            raise IngestError(f"'{clean_url(current)}' did not answer in time; try again later.") from e
+        except httpx.HTTPError as e:
+            raise IngestError(f"Could not fetch '{clean_url(current)}': {type(e).__name__}. Check the "
+                              "address and the internet connection.") from e
+    raise IngestError(f"'{clean_url(url)}' redirects too often.")
 
 
 # ── web page ─────────────────────────────────────────────────────────────────
@@ -144,14 +230,15 @@ def fetch_url(url: str, budget: Budget) -> Document:
     """A web page (or a document behind a URL) as a :class:`Document`."""
     from .html_text import html_to_document
 
-    r = http_get(url)
+    shown = clean_url(url)  # never store / show credentials of the URL
+    r = http_get(url, budget=budget)
     if r.status == 404:
-        raise IngestError(f"'{url}' was not found (404). Check the address.")
+        raise IngestError(f"'{shown}' was not found (404). Check the address.")
     if r.status in (401, 403):
-        raise IngestError(f"'{url}' needs a login or blocks automated access ({r.status}); "
+        raise IngestError(f"'{shown}' needs a login or blocks automated access ({r.status}); "
                           "download the page and import the file instead.")
     if r.status >= 400:
-        raise IngestError(f"'{url}' answered with HTTP {r.status}; try again later.")
+        raise IngestError(f"'{shown}' answered with HTTP {r.status}; try again later.")
     budget.take_bytes(len(r.content))
     ctype = r.headers.get("content-type", "").split(";")[0].strip().lower()
     parsed = urlparse(r.url)
@@ -167,21 +254,22 @@ def fetch_url(url: str, budget: Budget) -> Document:
                 name += suffix
             path = Path(tmp) / name
             path.write_bytes(r.content)
-            doc = read_document(path, source=url)
+            doc = read_document(path, budget, source=shown)
         doc.permalink_hint = f"web-{parsed.hostname}-{Path(parsed.path).stem}"
         doc.date = ""
         return doc
     if not (ctype.startswith("text/html") or ctype in ("application/xhtml+xml", "") or "html" in ctype):
-        raise IngestError(f"'{url}' is {ctype or 'an unknown type'}, not a web page or a supported "
+        raise IngestError(f"'{shown}' is {ctype or 'an unknown type'}, not a web page or a supported "
                           "document.")
-    doc = Document(title=parsed.hostname or url, source=url, kind="web", size=len(r.content),
+    doc = Document(title=parsed.hostname or shown, source=shown, kind="web", size=len(r.content),
                    permalink_hint=f"web-{parsed.hostname}-{parsed.path.strip('/').replace('/', '-')[:40]}")
     html_to_document(r.text, doc, base_url=r.url)
     if doc.metadata.get("doc_title"):
         doc.title = str(doc.metadata.pop("doc_title"))
     doc.metadata["site"] = parsed.hostname or ""
+    doc.links = list(dict.fromkeys(clean_url(u) for u in doc.links))
     if not doc.sections and not doc.summary:
-        raise IngestError(f"No readable text on '{url}' (the page may need JavaScript). Try "
+        raise IngestError(f"No readable text on '{shown}' (the page may need JavaScript). Try "
                           "another address, or save the page and import the file.")
     return doc
 
@@ -210,8 +298,8 @@ def _gh_headers() -> Dict[str, str]:
     return h
 
 
-def _gh_api(path: str) -> HttpResponse:
-    r = http_get(f"https://api.github.com{path}", headers=_gh_headers())
+def _gh_api(path: str, budget: Optional[Budget] = None) -> HttpResponse:
+    r = http_get(f"https://api.github.com{path}", headers=_gh_headers(), budget=budget)
     if r.status == 404:
         hint = ("" if os.environ.get("GITHUB_TOKEN")
                 else " If it is private, set GITHUB_TOKEN in ZenSynora's environment.")
@@ -230,17 +318,27 @@ def _gh_api(path: str) -> HttpResponse:
     return r
 
 
-def fetch_github(url: str, budget: Budget, max_files: int) -> Document:
+def _earlier(base: Optional[str], source: str) -> set:
+    """Files an unfinished earlier run of this source already wrote (continuation)."""
+    if not base:
+        return set()
+    from .notes import earlier_parts
+    from .safety import clean_source
+
+    return set(earlier_parts(base, clean_source(source)))
+
+
+def fetch_github(url: str, budget: Budget, max_files: int, base: Optional[str] = None) -> Document:
     """Architecture overview of a GitHub repository (REST API, no git)."""
     parsed = parse_github(url)
     if not parsed:
         raise IngestError(f"'{url}' is not a GitHub repository address "
                           "(https://github.com/owner/repo).")
     owner, repo, ref, sub = parsed
-    info = _gh_api(f"/repos/{owner}/{repo}").json()
+    info = _gh_api(f"/repos/{owner}/{repo}", budget).json()
     ref = ref or str(info.get("default_branch") or "main")
     budget.report("reading the file list")
-    tree = _gh_api(f"/repos/{owner}/{repo}/git/trees/{quote(ref, safe='')}?recursive=1").json()
+    tree = _gh_api(f"/repos/{owner}/{repo}/git/trees/{quote(ref, safe='')}?recursive=1", budget).json()
     entries: List[TreeEntry] = []
     prefix = f"{sub}/" if sub else ""   # what the entry paths are relative to
     for item in tree.get("tree") or []:
@@ -275,7 +373,7 @@ def fetch_github(url: str, budget: Budget, max_files: int) -> Document:
     def read(path: str) -> Optional[str]:
         raw = (f"https://raw.githubusercontent.com/{owner}/{repo}/{quote(ref, safe='')}/"
                f"{quote(prefix + path)}")
-        r = http_get(raw, headers=_gh_headers(), max_bytes=1_000_000)
+        r = http_get(raw, headers=_gh_headers(), max_bytes=1_000_000, budget=budget)
         if r.status >= 400:
             raise IngestError(f"HTTP {r.status}")
         if b"\x00" in r.content[:4096]:
@@ -283,12 +381,14 @@ def fetch_github(url: str, budget: Budget, max_files: int) -> Document:
         return r.content.decode("utf-8", errors="replace")
 
     name = f"{owner}/{repo}" + (f"/{sub}" if sub else "")
+    done = _earlier(base, f"https://github.com/{name}")
     doc = analyze_repo(
         title=f"{name} (GitHub)", source=f"https://github.com/{name}", kind="github",
         permalink_hint=f"github-{owner}-{repo}-{sub}" if sub else f"github-{owner}-{repo}",
         entries=entries, read=read, budget=budget, max_files=max_files,
         description=str(info.get("description") or ""),
-        link_base=f"https://github.com/{owner}/{repo}/blob/{ref}/{prefix}", extra_facts=facts)
+        link_base=f"https://github.com/{owner}/{repo}/blob/{ref}/{prefix}", extra_facts=facts,
+        done=done)
     doc.metadata.update({"repository": f"{owner}/{repo}", "branch": ref})
     return doc
 
@@ -350,21 +450,15 @@ def _flatten(doc: Document) -> str:
     return "\n\n".join(p for p in parts if p)
 
 
-def local_source(raw: str, budget: Budget, max_files: int, trusted: bool = False) -> Document:
+def local_source(raw: str, budget: Budget, max_files: int, trusted: bool = False,
+                 base: Optional[str] = None) -> Document:
     """A local file or folder as a :class:`Document`.
 
-    ``trusted`` (CLI, uploads): the path is not checked against the allowed
-    roots (secret files are still never read).
+    ``trusted`` (CLI, uploads): the path may be outside the allowed roots
+    (hidden folders and secret files are still never read).
     """
-    if trusted:
-        path = Path(raw).expanduser().resolve()
-        if not path.exists():
-            raise IngestError(f"'{raw}' does not exist.")
-        if path.is_file() and is_secret_file(path.name):
-            raise IngestError(f"'{path.name}' looks like a file with keys or passwords; it is "
-                              "never imported.")
-    else:
-        path = check_local_path(raw)
+    # 2026-10-24 (KB phase 5, review): the same hidden/secret rules for every caller
+    path = check_local_path(raw, trusted=trusted)
     if path.is_file():
         return read_document(path, budget)
     if not path.is_dir():
@@ -376,14 +470,15 @@ def local_source(raw: str, budget: Budget, max_files: int, trusted: bool = False
         full = path / rel
         kind = kind_of(full)
         if kind in ("pdf", "docx", "xlsx", "csv", "json", "html"):
-            return _flatten(read_document(full))
+            return _flatten(read_document(full, budget))
         if kind == "image":
             return None
         return read_text_file(full, 300_000)
 
     doc = analyze_repo(title=f"{path.name}/ (folder)", source=str(path), kind="folder",
                        permalink_hint=f"folder-{path.name}", entries=entries, read=read,
-                       budget=budget, max_files=max_files)
+                       budget=budget, max_files=max_files, prefetch=True,
+                       done=_earlier(base, str(path)))
     doc.skipped = skipped + doc.skipped
     return doc
 

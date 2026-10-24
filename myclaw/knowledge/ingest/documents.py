@@ -27,6 +27,29 @@ MAX_TEXT_CHARS = 400_000         # text kept from one document
 MAX_TABLE_ROWS = 200
 MAX_TABLE_COLS = 30
 PAGE_GROUP_CHARS = 10_000        # PDF pages are grouped into sections of about this size
+# 2026-10-24 (KB phase 5, review): Word/Excel files are zip archives — their
+# unpacked size is checked before parsing (a small "zip bomb" could fill the
+# memory); rows, sheets and pages are capped and the time limit is checked.
+MAX_OOXML_UNPACKED = 300_000_000
+MAX_OOXML_PART = 120_000_000
+MAX_XLSX_ROWS_COUNTED = 200_000
+MAX_PDF_PAGES = 2_000
+
+
+def check_ooxml(path: Path) -> None:
+    """Refuse a .docx/.xlsx whose unpacked contents are unreasonably large."""
+    import zipfile
+
+    try:
+        with zipfile.ZipFile(path) as zf:
+            infos = zf.infolist()
+    except zipfile.BadZipFile as e:
+        raise IngestError(f"'{path.name}' is damaged (not a valid Office file).") from e
+    total = sum(i.file_size for i in infos)
+    biggest = max((i.file_size for i in infos), default=0)
+    if total > MAX_OOXML_UNPACKED or biggest > MAX_OOXML_PART:
+        raise IngestError(f"'{path.name}' unpacks to {total // 1_000_000} MB, more than the "
+                          f"{MAX_OOXML_UNPACKED // 1_000_000} MB that are read; save a smaller copy.")
 
 TEXT_EXT = {".txt", ".text", ".log", ".rst", ".adoc", ".org", ".tex"}
 MD_EXT = {".md", ".markdown", ".mdx"}
@@ -103,9 +126,14 @@ def read_document(path: Path, budget: Optional[Budget] = None, source: str = "",
 
     ``source`` is what the notes show as the source (default: the path).
     """
+    from .safety import is_secret_file
+
     path = Path(path)
     if not path.is_file():
         raise IngestError(f"'{path}' is not a file.")
+    if is_secret_file(path.name):  # 2026-10-24 (KB phase 5, review): every caller
+        raise IngestError(f"'{path.name}' looks like a file with keys or passwords; it is never "
+                          "imported into the knowledge base.")
     size = path.stat().st_size
     kind = kind_of(path)
     if not kind:
@@ -124,7 +152,10 @@ def read_document(path: Path, budget: Optional[Budget] = None, source: str = "",
     reader = {"pdf": _pdf, "docx": _docx, "xlsx": _xlsx, "csv": _csv, "json": _json,
               "markdown": _markdown, "html": _html, "image": _image, "text": _text,
               "code": _code}[kind]
-    reader(path, doc)
+    if kind in ("pdf", "docx", "xlsx"):
+        reader(path, doc, budget)  # type: ignore[operator]
+    else:
+        reader(path, doc)  # type: ignore[operator]
     if not title and doc.metadata.get("doc_title"):
         doc.title = str(doc.metadata.pop("doc_title"))
     return doc
@@ -299,7 +330,7 @@ def _json(path: Path, doc: Document) -> None:
 
 
 # ── optional readers ─────────────────────────────────────────────────────────
-def _pdf(path: Path, doc: Document) -> None:
+def _pdf(path: Path, doc: Document, budget: Optional[Budget] = None) -> None:
     try:
         from pypdf import PdfReader
     except ImportError as e:
@@ -326,6 +357,13 @@ def _pdf(path: Path, doc: Document) -> None:
         start = 1
         total = 0
         for i, page in enumerate(reader.pages, 1):
+            if i > MAX_PDF_PAGES or (budget is not None and budget.out_of_time(margin=10.0)):
+                doc.skipped.append(f"pages {i}–{pages} not read ({'page limit' if i > MAX_PDF_PAGES else 'time limit'})")
+                doc.stopped = "" if i > MAX_PDF_PAGES else (budget.stop_reason() if budget else "")
+                if sum(len(b) for b in buf):
+                    sections.append(Section(heading=f"Pages {start}–{i - 1}",
+                                            text="\n\n".join(b for b in buf if b), key=f"pages-{start}"))
+                break
             try:
                 text = page.extract_text() or ""
             except Exception as e:  # one broken page must not stop the others
@@ -352,11 +390,12 @@ def _pdf(path: Path, doc: Document) -> None:
     doc.sections = sections
 
 
-def _docx(path: Path, doc: Document) -> None:
+def _docx(path: Path, doc: Document, budget: Optional[Budget] = None) -> None:
     try:
         import docx  # python-docx
     except ImportError as e:
         raise MissingDependency("Word (.docx)", "python-docx>=1.1") from e
+    check_ooxml(path)
     try:
         d = docx.Document(str(path))
     except Exception as e:
@@ -429,11 +468,12 @@ def _docx_blocks(d: Any):
             yield markdown_table(rows, len(t.rows) - 1)
 
 
-def _xlsx(path: Path, doc: Document) -> None:
+def _xlsx(path: Path, doc: Document, budget: Optional[Budget] = None) -> None:
     try:
         import openpyxl
     except ImportError as e:
         raise MissingDependency("Excel (.xlsx)", "openpyxl>=3.1") from e
+    check_ooxml(path)
     try:
         wb = openpyxl.load_workbook(str(path), read_only=True, data_only=True)
     except Exception as e:
@@ -446,14 +486,21 @@ def _xlsx(path: Path, doc: Document) -> None:
             ws = wb[name]
             rows: List[List[Any]] = []
             total = -1
-            for row in ws.iter_rows(values_only=True):
+            more = False
+            for n, row in enumerate(ws.iter_rows(values_only=True)):
+                if n % 5000 == 0 and budget is not None and budget.out_of_time(margin=10.0):
+                    more = True
+                    break
                 if not any(c not in (None, "") for c in row):
                     continue
                 total += 1
                 if len(rows) <= MAX_TABLE_ROWS:
-                    rows.append(list(row))
-                if total > 1_000_000:
+                    rows.append(list(row[:MAX_TABLE_COLS]))
+                if total >= MAX_XLSX_ROWS_COUNTED:
+                    more = True
                     break
+            if more:
+                doc.skipped.append(f"sheet {name}: rows after {total} not counted (row/time limit)")
             if rows:
                 sections.append(_table_section(name, rows, max(0, total)))
         doc.sections = sections

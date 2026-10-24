@@ -16,7 +16,7 @@ export interface KnowledgeImportProps {
   onOpenNote?: (permalink: string) => void;
 }
 
-interface ImportNote { permalink: string; title: string; action: 'created' | 'updated' | 'unchanged' }
+interface ImportNote { permalink: string; title: string; action: 'created' | 'updated' | 'unchanged' | 'kept' }
 interface ImportResult {
   base: string;
   source: string;
@@ -24,6 +24,8 @@ interface ImportResult {
   created: number;
   updated: number;
   unchanged: number;
+  /** Notes changed by hand since the import: left as they were. */
+  kept?: number;
   notes: ImportNote[];
   overview: { permalink: string; title: string } | null;
   diagram: string;
@@ -252,6 +254,7 @@ const KnowledgeImport: React.FC<KnowledgeImportProps> = ({ base, open, onClose, 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             <div className="notice">
               ✅ {result.created} created · {result.updated} updated · {result.unchanged} unchanged
+              {result.kept ? <> · {result.kept} kept as you edited them</> : null}
               <span className="muted small"> ({result.kind}, {Math.round(result.duration)} s)</span>
               {result.stopped && <div className="small">Stopped early: {result.stopped}. Run it again to continue.</div>}
             </div>

@@ -93,7 +93,7 @@ class Document:
 class NoteRef:
     permalink: str
     title: str
-    action: str   # created | updated | unchanged
+    action: str   # created | updated | unchanged | kept (edited by hand, left alone)
 
 
 @dataclass
@@ -118,7 +118,7 @@ class IngestResult:
         return {
             "base": self.base, "source": self.source, "kind": self.kind,
             "created": self.count("created"), "updated": self.count("updated"),
-            "unchanged": self.count("unchanged"),
+            "unchanged": self.count("unchanged"), "kept": self.count("kept"),
             "notes": [{"permalink": n.permalink, "title": n.title, "action": n.action}
                       for n in self.notes],
             "overview": ({"permalink": self.overview.permalink, "title": self.overview.title}

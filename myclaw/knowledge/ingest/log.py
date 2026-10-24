@@ -25,13 +25,16 @@ def log_path() -> Path:
 
 def append(result: IngestResult, error: str = "") -> None:
     """Add one line for a finished (or failed) run. Never raises."""
+    from .safety import clean_source
+
+    # 2026-10-24 (KB phase 5, review): no credentials of a URL in the log
     entry: Dict[str, Any] = {
         "time": time.strftime("%Y-%m-%dT%H:%M:%S"),
-        "base": result.base, "source": result.source, "kind": result.kind,
+        "base": result.base, "source": clean_source(result.source), "kind": result.kind,
         "created": result.count("created"), "updated": result.count("updated"),
-        "unchanged": result.count("unchanged"),
+        "unchanged": result.count("unchanged"), "kept": result.count("kept"),
         "overview": result.overview.permalink if result.overview else None,
-        "errors": ([error] if error else []) + list(result.errors)[:20],
+        "errors": [clean_source(e) for e in ([error] if error else []) + list(result.errors)[:20]],
         "skipped": len(result.skipped), "stopped": result.stopped,
         "duration": round(result.duration, 2),
     }

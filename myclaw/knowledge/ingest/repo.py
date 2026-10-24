@@ -26,8 +26,12 @@ from .safety import is_secret_file, skip_dir
 logger = logging.getLogger(__name__)
 
 MAX_FILE_BYTES = 200_000       # larger files are listed, not read
-MAX_PART_CHARS = 24_000        # text kept from one file (≈ 2 notes)
+# 2026-10-24 (KB phase 5, review): one file = one note, so "max_notes" is
+# also the number of files read
+MAX_PART_CHARS = 10_500        # text kept from one file
 MAX_READ_FILES = 80
+PREFETCH_FILES = 600           # local folders: code files read to rank them by imports
+PREFETCH_BYTES = 4_000_000
 
 LANG_NAMES = {
     "python": "Python", "javascript": "JavaScript", "typescript": "TypeScript", "tsx": "TypeScript",
@@ -97,32 +101,46 @@ def usable(entries: Iterable[TreeEntry]) -> Tuple[List[TreeEntry], List[str]]:
     return keep, skipped
 
 
-def _priority(e: TreeEntry, entry_points: Set[str]) -> Tuple[int, int, str]:
+_LOW_DOC = re.compile(
+    r"(^|/)(archive[sd]?|old|deprecated|legacy|plans?|drafts?|changelog|history|todo|roadmap|"
+    r"incidents?|graphify-out|diagrams?|examples?|samples?|demos?|fixtures?|benchmarks?|"
+    r"migrations?|generated|snapshots?)(/|\.|$)|changelog|todo|release[-_]?notes", re.I)
+_TEST = re.compile(r"(^|/)(tests?|spec|specs|__tests__|testing|e2e)/|(^|/)test_[^/]*$|"
+                   r"_test\.\w+$|\.(test|spec)\.\w+$|(^|/)conftest\.py$", re.I)
+DOCUMENT_EXT = {".pdf", ".docx", ".xlsx", ".xlsm", ".csv", ".tsv"}
+_CENTRAL_NAMES = {"core", "main", "app", "server", "api", "models", "engine", "agent", "cli",
+                  "client", "service", "services", "router", "routes", "config", "storage",
+                  "db", "database", "handler", "handlers", "manager", "index", "lib"}
+
+
+def category(e: TreeEntry) -> str:
+    """readme, manifest, agentdoc, doc, lowdoc, document, code, lowcode, test, config, other."""
     path = e.path
     name = path.rsplit("/", 1)[-1].lower()
     depth = path.count("/")
     ext = posixpath.splitext(name)[1]
+    lang = language_of(path)
     if depth == 0 and name.startswith("readme"):
-        return (0, depth, path)
-    if depth == 0 and name in MANIFESTS:
-        return (1, depth, path)
-    if name in AGENT_DOCS and depth <= 2:
-        return (2, depth, path)
-    if path in entry_points or (name in ENTRY_NAMES and depth <= 2):
-        return (3, depth, path)
-    if ext in MD_EXT and (depth == 0 or path.lower().startswith(("docs/", "doc/"))) and depth <= 2:
-        return (4, depth, path)
-    if name == "__init__.py" and depth == 1:
-        return (5, depth, path)
-    if name.startswith("readme") and depth <= 2:
-        return (5, depth, path)
-    if language_of(path) and language_of(path) not in NON_CODE_LANGS and depth <= 2:
-        return (6, depth, path)
-    if ext in MD_EXT | TEXT_EXT or name in MANIFESTS:
-        return (7, depth, path)
-    if language_of(path):
-        return (8, depth, path)
-    return (9, depth, path)
+        return "readme"
+    if depth == 0 and (name in MANIFESTS or (name.startswith("requirements") and name.endswith(".txt")
+                                            and "lock" not in name)):
+        return "manifest"
+    low = bool(_LOW_DOC.search(path))
+    if ext in DOCUMENT_EXT:
+        return "lowdoc" if low or _TEST.search(path) else "document"
+    if "lock" in name and ext in (".txt", ".json", ".yaml", ".yml", ".toml"):
+        return "config"
+    if name in AGENT_DOCS and depth <= 2 and not low:
+        return "agentdoc"
+    if ext in MD_EXT | TEXT_EXT or name.startswith("readme"):
+        return "lowdoc" if low else "doc"
+    if lang and lang not in NON_CODE_LANGS:
+        if _TEST.search(path):
+            return "test"
+        return "lowcode" if low else "code"
+    if lang:
+        return "config"
+    return "other"
 
 
 def _readable(e: TreeEntry) -> bool:
@@ -285,6 +303,23 @@ def module_imports(path: str, text: str, top_dirs: Set[str]) -> Set[str]:
     return out
 
 
+def entry_file(ep: str, paths: Set[str], py_roots: List[str]) -> Optional[str]:
+    """The file of an entry point ("cli → pkg.cli:main", "main → index.js", a path)."""
+    target = ep.split("→", 1)[-1].strip()
+    if target in paths:
+        return target
+    if target.startswith(("node ", "python ", "npx ", "deno ")):
+        target = target.split(None, 1)[-1].strip()
+    cand = posixpath.normpath(target.lstrip("./")) if ("/" in target or "." in target.rsplit("/", 1)[-1]
+                                                       and not re.match(r"^[\w.]+:\w+$", target)) else ""
+    if cand in paths:
+        return cand
+    module = target.split(":", 1)[0].strip()
+    if re.match(r"^[A-Za-z_][\w.]*$", module):
+        return _py_module_files(module, paths, py_roots)
+    return None
+
+
 # ── content tags (a light version of memopad's content detector) ─────────────
 _DETECT = [
     ("agent-instructions", re.compile(r"(AGENTS\.md|CLAUDE\.md|system[_ -]?prompt|\.cursorrules|copilot-instructions)", re.I)),
@@ -304,13 +339,17 @@ def content_tags(path: str, text: str) -> List[str]:
 def analyze_repo(*, title: str, source: str, kind: str, permalink_hint: str,
                  entries: List[TreeEntry], read: Callable[[str], Optional[str]],
                  budget: Budget, max_files: int, description: str = "",
-                 link_base: str = "", extra_facts: Iterable[Tuple[str, str]] = ()) -> Document:
+                 link_base: str = "", extra_facts: Iterable[Tuple[str, str]] = (),
+                 prefetch: bool = False, done: Optional[Set[str]] = None) -> Document:
     """Build the architecture :class:`Document` of a repository or folder.
 
     ``read(path)`` returns a file's text (Markdown for documents) or None.
     ``link_base`` (e.g. ``https://github.com/o/r/blob/main/``) gives each file
-    note a link to the original.
+    note a link to the original. ``prefetch`` (local folders) reads the code
+    files first to rank them by imports. ``done``: files already written by an
+    unfinished earlier run of the same source (the next batch is taken).
     """
+    done = set(done or ())
     entries, skipped = usable(entries)
     doc = Document(title=title, source=source, kind=kind, permalink_hint=permalink_hint,
                    split_all=True)
@@ -350,44 +389,135 @@ def analyze_repo(*, title: str, source: str, kind: str, permalink_hint: str,
     dep_names: Set[str] = set()
     entry_points: List[str] = []
     texts: Dict[str, str] = {}
-    candidates = sorted((e for e in entries if _readable(e)), key=lambda e: _priority(e, set()))
-    for e in candidates:
-        name = e.path.rsplit("/", 1)[-1].lower()
-        if e.path.count("/") == 0 and (name in MANIFESTS or (
-                name.startswith("requirements") and name.endswith(".txt") and "lock" not in name)):
-            text = _read(read, e, budget, doc)
-            if text is None:
-                continue
-            texts[e.path] = text
-            d, ep, desc = parse_manifest(name, text)
-            for dep in d:
-                dep_name = _DEP_NAME.split(dep, maxsplit=1)[0].lower()
-                if dep_name and dep_name not in dep_names:
-                    dep_names.add(dep_name)
-                    deps.append((dep, e.path))
-            entry_points += ep
-            description = description or desc
+    readable = [e for e in entries if _readable(e)]
+    cats = {e.path: category(e) for e in readable}
+    for e in readable:
+        if cats[e.path] != "manifest":
+            continue
+        text = _read(read, e, budget, doc)
+        if text is None:
+            continue
+        texts[e.path] = text
+        d, ep, desc = parse_manifest(e.path.lower(), text)
+        for dep in d:
+            dep_name = _DEP_NAME.split(dep, maxsplit=1)[0].lower()
+            if dep_name and dep_name not in dep_names:
+                dep_names.add(dep_name)
+                deps.append((dep, e.path))
+        entry_points += ep
+        description = description or desc
     for e in entries:
         name = e.path.rsplit("/", 1)[-1].lower()
-        if name in ENTRY_NAMES and e.path.count("/") <= 2:
+        if name in ENTRY_NAMES and e.path.count("/") <= 2 and cats.get(e.path) == "code":
             entry_points.append(e.path)
+    ep_paths = {p for p in (entry_file(ep, paths, py_roots) for ep in entry_points) if p}
 
-    # key files
-    ep_paths = {p for p in entry_points if p in paths}
-    ranked = sorted((e for e in candidates), key=lambda e: _priority(e, ep_paths))
+    # 2026-10-24 (KB phase 5, review): rank code by how many files import it
+    # (local folders: up to PREFETCH_FILES code files are read for that),
+    # entry points first; docs are at most a quarter of the notes; archives,
+    # plans, changelogs and tests come last.
+    indeg: Counter = Counter()
+    folder_edges: Set[Tuple[str, str]] = set()
+    code_paths = [e.path for e in readable if cats[e.path] == "code"]
+    main_lang = Counter(language_of(p) for p in code_paths).most_common(1)
+    root = code_root([p for p in code_paths if main_lang and language_of(p) == main_lang[0][0]])
+
+    def unit(path: str) -> str:
+        """The diagram node of a file: a package below the code root, or a top folder."""
+        if root and path.startswith(root):
+            rest = path[len(root):]
+            return root + rest.split("/", 1)[0] if "/" in rest else root.rstrip("/")
+        return path.split("/", 1)[0] if "/" in path else ""
+
+    def add_edges(path: str, text: str, targets: Iterable[str]) -> None:
+        src = unit(path)
+        for target in targets:
+            dst = unit(target)
+            if src and dst and src != dst:
+                folder_edges.add((src, dst))
+        if src and not root:
+            for dst in module_imports(path, text, top_dirs):
+                if dst != src:
+                    folder_edges.add((src, dst))
+
+    if prefetch:
+        pre_bytes = 0
+        code_files = sorted((e for e in readable if cats[e.path] in ("code", "lowcode")),
+                            key=lambda e: (e.path.count("/"), e.path))
+        for e in code_files[:PREFETCH_FILES]:
+            if pre_bytes + e.size > PREFETCH_BYTES or budget.out_of_time(margin=15.0):
+                break
+            text = _read(read, e, budget, doc, quiet=True)
+            if text is None:
+                continue
+            pre_bytes += e.size
+            texts[e.path] = text
+            targets = find_imports(e.path, text, paths, py_roots)
+            for target in targets:
+                indeg[target] += 1
+            add_edges(e.path, text, targets)
+
+    def code_score(e: TreeEntry) -> Tuple[float, str]:
+        name = posixpath.splitext(e.path.rsplit("/", 1)[-1].lower())[0]
+        score = 4.0 * min(indeg[e.path], 10)
+        if e.path in ep_paths:
+            score += 20
+        if name in _CENTRAL_NAMES:
+            score += 3
+        if name == "__init__" and e.size < 200:
+            score -= 6
+        score -= 1.5 * max(0, e.path.count("/") - 1)
+        score += min(3.0, e.size / 6000)
+        if cats[e.path] == "lowcode":
+            score -= 15
+        return (-score, e.path)
+
+    by_cat: Dict[str, List[TreeEntry]] = defaultdict(list)
+    for e in readable:
+        if e.path not in done:
+            by_cat[cats[e.path]].append(e)
+    for c in ("code", "lowcode", "test"):
+        by_cat[c].sort(key=code_score)
+    for c in ("doc", "agentdoc", "lowdoc", "document", "config"):
+        by_cat[c].sort(key=lambda e: (e.path.count("/"), e.path))
+    slots = max(1, max_files)
+    docs_cap = max(1, slots // 4)
     chosen: List[TreeEntry] = []
-    for e in ranked:
-        if len(chosen) >= max_files:
-            break
-        if _priority(e, ep_paths)[0] >= 9:
-            continue
-        chosen.append(e)
-    not_read = len([e for e in ranked if _priority(e, ep_paths)[0] < 9]) - len(chosen)
-    if not_read > 0:
-        doc.skipped.append(f"{not_read} more files not read (limit of {max_files} files per run)")
+    reasons: Counter = Counter()
+
+    def take(items: List[TreeEntry], limit: int) -> None:
+        for e in list(items):
+            if limit <= 0 or len(chosen) >= slots:
+                break
+            chosen.append(e)
+            items.remove(e)
+            limit -= 1
+
+    take(by_cat["readme"], 1)
+    take(by_cat["manifest"], min(3, max(1, slots // 8)))
+    has_code = bool(by_cat["code"])
+    take(by_cat["agentdoc"], max(0, docs_cap - 1))
+    take(by_cat["doc"], max(0, docs_cap - sum(1 for e in chosen if cats[e.path] in
+                                                ("readme", "agentdoc", "doc"))))
+    if has_code:
+        take(by_cat["document"], slots // 10)  # spreadsheets / PDFs in a code repository
+        take(by_cat["code"], slots)
+    else:  # a folder of documents
+        take(by_cat["document"], slots)
+    for c in ("doc", "lowcode", "config", "lowdoc", "test", "document"):
+        take(by_cat[c], slots)
+    for c, why in (("code", "code files ranked lower"), ("doc", "documentation (at most a quarter "
+                   "of the notes are docs)"), ("document", "documents"),
+                   ("lowdoc", "archived / planning / changelog docs"), ("test", "test files"),
+                   ("lowcode", "example / generated code"), ("agentdoc", "agent instructions"),
+                   ("config", "configuration files")):
+        if by_cat[c]:
+            reasons[why] = len(by_cat[c])
+    for why, n in reasons.most_common():
+        doc.skipped.append(f"{n} {why} not read (limit of {slots} files per run)")
+    doc.metadata["files_left"] = sum(reasons.values())
 
     sections: List[Section] = []
-    folder_edges: Set[Tuple[str, str]] = set()
     for e in chosen:
         if budget.out_of_time(margin=10.0):
             doc.stopped = budget.stop_reason() or "time limit reached"
@@ -418,17 +548,7 @@ def analyze_repo(*, title: str, source: str, kind: str, permalink_hint: str,
                 links.append(("links_to", target))
         sections.append(Section(heading=e.path, text=body, key=e.path, links=links,
                                 tags=content_tags(e.path, text)))
-        src_top = e.path.split("/", 1)[0] if "/" in e.path else ""
-        for rel, target in links:
-            if rel != "imports":
-                continue
-            dst_top = target.split("/", 1)[0] if "/" in target else ""
-            if src_top and dst_top and src_top != dst_top:
-                folder_edges.add((src_top, dst_top))
-        if src_top:
-            for dst_top in module_imports(e.path, text, top_dirs):
-                if dst_top != src_top:
-                    folder_edges.add((src_top, dst_top))
+        add_edges(e.path, text, [t for r, t in links if r == "imports"])
         budget.report(f"read {len(sections)}/{len(chosen)} files")
     doc.sections = sections
 
@@ -463,7 +583,13 @@ def analyze_repo(*, title: str, source: str, kind: str, permalink_hint: str,
         doc.facts.append(("dependency", f"{dep} (source: {where})"))
     for f, c in folders.most_common(10):
         doc.facts.append(("folder", f"{f}/ — {c} files"))
-    doc.diagram = repo_diagram(title, folders, sub, root_files, folder_edges, entry_points, paths)
+    if root:
+        units = Counter(unit(p) for p in code_paths if p.startswith(root))
+        others = Counter({f: c for f, c in folders.items() if not root.startswith(f + "/")})
+        doc.diagram = unit_diagram(title, root, units, folder_edges,
+                                   sorted(ep_paths), unit, others)
+    else:
+        doc.diagram = repo_diagram(title, folders, sub, root_files, folder_edges, entry_points, paths)
     return doc
 
 
@@ -489,15 +615,66 @@ def _readme_intro(text: str, limit: int = 1500) -> str:
 
 
 def _read(read: Callable[[str], Optional[str]], e: TreeEntry, budget: Budget,
-          doc: Document) -> Optional[str]:
+          doc: Document, quiet: bool = False) -> Optional[str]:
     if not budget.take_bytes(max(e.size, 1)):
-        doc.skipped.append(f"{e.path} (size limit of this run)")
+        if not quiet:
+            doc.skipped.append(f"{e.path} (size limit of this run)")
         return None
     try:
         return read(e.path)
     except Exception as ex:  # one unreadable file must not stop the others
-        doc.errors.append(f"{e.path}: {ex}")
+        if not quiet:
+            doc.errors.append(f"{e.path}: {ex}")
         return None
+
+
+def code_root(code_paths: List[str]) -> str:
+    """The folder that holds (almost) all the code, e.g. ``src/memopad/`` ('' if none).
+
+    2026-10-24 (KB phase 5, review): with a src/ layout or one main package,
+    imports between top-level folders show nothing — the diagram then shows
+    the packages inside that folder.
+    """
+    prefix = ""
+    total = len(code_paths)
+    if total < 4:
+        return ""
+    while True:
+        under = [p[len(prefix):] for p in code_paths if p.startswith(prefix)]
+        dirs = Counter(x.split("/", 1)[0] for x in under if "/" in x)
+        if not dirs:
+            return prefix
+        d, n = dirs.most_common(1)[0]
+        if n < 0.8 * total:
+            return prefix
+        prefix += d + "/"
+
+
+def unit_diagram(title: str, root: str, units: Counter, edges: Set[Tuple[str, str]],
+                 entry_points: List[str], unit: Callable[[str], str],
+                 others: Optional[Counter] = None) -> str:
+    """``graph TD``: the code root's packages and the other top folders, imports
+    dashed, entry points as rounded nodes."""
+    lines = ["graph TD", f'  repo["{mermaid_label(title, 60)}"]',
+             f'  repo --> r0["{mermaid_label(root, 48)}"]']
+    ids: Dict[str, str] = {root.rstrip("/"): "r0"}
+    for i, (f, c) in enumerate((others or Counter()).most_common(10)):
+        ids[f] = f"o{i}"
+        lines.append(f'  repo --> o{i}["{mermaid_label(f)}/ ({c})"]')
+    for i, (u, c) in enumerate(units.most_common(25)):
+        if u == root.rstrip("/"):
+            lines[2] = f'  repo --> r0["{mermaid_label(root, 40)} ({c} files)"]'
+            continue
+        ids[u] = f"u{i}"
+        label = u[len(root):] if u.startswith(root) else u
+        lines.append(f'  r0 --> u{i}["{mermaid_label(label)}/ ({c})"]')
+    for k, p in enumerate(entry_points[:6]):
+        parent = ids.get(unit(p), "repo")
+        lines.append(f'  {parent} --> e{k}(["▶ {mermaid_label(p.rsplit("/", 1)[-1])}"])')
+    for a, b in sorted(edges)[:40]:
+        if a in ids and b in ids:
+            lines.append(f"  {ids[a]} -.->|imports| {ids[b]}")
+    return "\n".join(lines)
 
 
 def repo_diagram(title: str, folders: Counter, sub: Dict[str, Counter], root_files: int,

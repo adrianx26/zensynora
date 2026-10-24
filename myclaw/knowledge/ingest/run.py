@@ -62,7 +62,10 @@ def assimilate(source: str, base: str = "default", max_notes: int = 40,
     max_notes = _clamp(max_notes, 40, MAX_NOTES_LIMIT)
     budget = budget or Budget(max_notes=max_notes)
     budget.max_notes = min(budget.max_notes, max_notes)
-    result = IngestResult(base=base, source=source, kind="")
+    from .safety import clean_source
+
+    shown = clean_source(source)  # credentials in a URL are never stored or logged
+    result = IngestResult(base=base, source=shown, kind="")
     started = time.monotonic()
     error = ""
     try:
@@ -70,26 +73,26 @@ def assimilate(source: str, base: str = "default", max_notes: int = 40,
             if parse_github(source):
                 result.kind = "github"
                 budget.report("reading the GitHub repository")
-                doc = fetch_github(source, budget, max_files=min(80, max(1, max_notes - 1)))
+                doc = fetch_github(source, budget, max_files=max(1, max_notes - 1), base=base)
             else:
                 result.kind = "web"
                 budget.report("fetching the page")
                 doc = fetch_url(source, budget)
         else:
             result.kind = "local"
-            doc = local_source(source, budget, max_files=min(80, max(1, max_notes - 1)),
-                               trusted=trusted)
+            doc = local_source(source, budget, max_files=max(1, max_notes - 1),
+                               trusted=trusted, base=base)
         result.kind = doc.kind
         result.source = doc.source
         budget.report("writing notes")
         write_document_notes(doc, base, max_notes=max_notes, budget=budget, result=result)
         return result
     except IngestError as e:
-        error = str(e)
+        error = clean_source(str(e))
         raise
     except Exception as e:  # a fault in ZenSynora: logged with traceback
         error = f"{type(e).__name__}: {e}"
-        logger.exception("Knowledge assimilate of %s failed", source)
+        logger.exception("Knowledge assimilate of %s failed", shown)
         raise
     finally:
         result.duration = time.monotonic() - started
@@ -104,18 +107,16 @@ def import_file(path: str, base: str = "default", kind: str = "auto",
     ``trusted``: the path is not checked against the allowed roots (CLI, Web
     UI uploads). ``display_name`` is the original file name of an upload.
     """
-    from .safety import check_local_path, is_secret_file
+    from .safety import check_local_path, check_policy
 
     base = check_base(base)
     raw = (path or "").strip().strip('"').strip("'")
     if not raw:
         raise IngestError("Give the path of the export file (.json / .zip) or of a folder of notes.")
-    p = Path(raw).expanduser().resolve() if trusted else check_local_path(raw)
-    if not p.exists():
-        raise IngestError(f"'{raw}' does not exist.")
-    if p.is_file() and is_secret_file(p.name):
-        raise IngestError(f"'{p.name}' looks like a file with keys or passwords; it is never "
-                          "imported into the knowledge base.")
+    # 2026-10-24 (KB phase 5, review): hidden/secret rules for every caller
+    p = check_local_path(raw, trusted=trusted)
+    if display_name:
+        check_policy(Path(display_name), display_name)  # an uploaded ".env" / "id_rsa"
     max_notes = _clamp(max_notes, MAX_IMPORT_NOTES, 20_000)
     budget = budget or Budget(max_notes=max_notes, max_bytes=2_000_000_000, seconds=None)
     budget.max_notes = min(budget.max_notes, max_notes)
@@ -176,8 +177,11 @@ def format_summary(verb: str, what: str, r: IngestResult, with_diagram: bool = T
     if not r.notes:
         lines.append(f"⚠️ Nothing was saved from {what}.")
     else:
+        kept = r.count("kept")
         lines.append(f"✅ {verb} {what} into the knowledge base '{r.base}': {created} notes created, "
-                     f"{updated} updated, {unchanged} unchanged ({r.duration:.0f} s).")
+                     f"{updated} updated, {unchanged} unchanged"
+                     + (f", {kept} kept as you edited them" if kept else "")
+                     + f" ({r.duration:.0f} s).")
     if r.overview:
         lines.append(f"Overview note: [{r.overview.title}](memory://{r.overview.permalink}) — "
                      f"read it with read_knowledge('{r.overview.permalink}').")
@@ -191,9 +195,16 @@ def format_summary(verb: str, what: str, r: IngestResult, with_diagram: bool = T
     for k, v in r.extra.items():
         if isinstance(v, (int, str)) and v not in (0, ""):
             lines.append(f"{k.replace('_', ' ')}: {v}")
-    if r.stopped:
-        lines.append(f"Stopped early: {r.stopped}. Run the same call again to continue — "
-                     "notes already saved are only updated.")
+    if r.stopped == "cancelled":
+        lines.append("Stopped: cancelled — nothing more was written after that.")
+    elif r.stopped.startswith("note limit"):
+        # 2026-10-24 (KB phase 5, review): the progress is saved per source,
+        # so running it again really takes the next files / parts
+        lines.append(f"Stopped at the {r.stopped}. Run the same call again to read the next part "
+                     "(what is saved is kept), or use a higher max_notes.")
+    elif r.stopped:
+        lines.append(f"Stopped early: {r.stopped}. Run the same call again to continue with what "
+                     "is missing (notes already saved are kept).")
     if r.skipped:
         lines.append("Left out: " + "; ".join(r.skipped[:6]) + (" …" if len(r.skipped) > 6 else ""))
     if r.errors:

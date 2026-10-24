@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 import fnmatch
+import ipaddress
 import re
 from pathlib import Path
 from typing import List, Optional
@@ -34,8 +35,10 @@ _SECRET_NAMES = (
     "*.keystore", "*.kdbx", "*.gpg", "*.asc", "id_rsa*", "id_dsa*", "id_ecdsa*",
     "id_ed25519*", "*.ppk", "credentials*", "*credentials.json", "secrets.*", "*secret*.json",
     "*secrets*.y*ml", ".netrc", "_netrc", ".pgpass", ".npmrc", ".pypirc", ".git-credentials",
-    "*.tfstate", "*.tfstate.*", "token.json", "*.token", "service-account*.json",
-    "known_hosts", "authorized_keys", "*.sqlite", "*.db", "shadow", "passwd",
+    "*.tfstate", "*.tfstate.*", "*.tfvars", "*.tfvars.json", "token.json", "*.token",
+    "service-account*.json", "known_hosts", "authorized_keys", "*.sqlite", "*.db", "shadow",
+    "passwd", "kubeconfig", "*.kubeconfig", "kube.config", "wp-config.php", "appsettings*.json",
+    ".htpasswd", "htpasswd", ".dockercfg", ".docker-config.json", "keychain*", "*.keychain*",
 )
 
 
@@ -62,6 +65,31 @@ _EXTRA = [
     re.compile(r"\bsk_(?:live|test)_[A-Za-z0-9]{20,}"),               # Stripe
     re.compile(r"\bnpm_[A-Za-z0-9]{30,}"),                            # npm
 ]
+# 2026-10-24 (KB phase 5, review): any "<name containing secret/pass/token/key…> = value"
+# or ': value' — quoted values may contain spaces and symbols. Values that are
+# code (a call, an index, a variable reference) and plain booleans are left alone.
+_SECRET_NAME = (r"(?:[\w.-]*[_.-])?(?:secret|passw(?:or)?d|pass|pwd|token|api_?key|apikey|"
+                r"access_?key|access_?token|auth_?token|refresh_?token|bot_?token|private_?key|"
+                r"client_?secret|credentials?)(?:[_.-]?(?:key|value|id|hash|b64|base64|string))?")
+_GENERIC_KV = re.compile(
+    r"(?i)(?<![\w-])(" + _SECRET_NAME + r"[\"']?\s*(?:=|:|=>)\s*)"
+    r"(?:\"([^\"\n]{3,})\"|'([^'\n]{3,})'|([^\s\"',;}{()\[\]<>]{4,})(?![\w(\[]))")
+_NOT_SECRET = {"true", "false", "null", "none", "nil", "yes", "no", "required", "optional",
+               "string", "str", "int", "bool", "[redacted]", "redacted", "changeme", "xxx", "****"}
+# ?token=… / &api_key=… in URLs
+_QUERY_SECRET = re.compile(
+    r"(?i)([?&](?:access_?token|refresh_?token|id_?token|token|api_?key|apikey|key|secret|"
+    r"client_?secret|password|passwd|pwd|sig|signature|x-amz-signature|x-amz-credential|"
+    r"x-amz-security-token|auth|session|sessionid|code)=)[^&#\s\"'<>]+")
+
+
+def _kv(m: "re.Match[str]") -> str:
+    value = m.group(2) or m.group(3) or m.group(4) or ""
+    if value.lower() in _NOT_SECRET or value.startswith(("$", "%", "{{", "<", "os.", "env.",
+                                                         "process.env", "[redacted")):
+        return m.group(0)
+    quote = '"' if m.group(2) is not None else ("'" if m.group(3) is not None else "")
+    return f"{m.group(1)}{quote}[redacted]{quote}"
 
 
 def redact(text: str) -> str:
@@ -73,7 +101,62 @@ def redact(text: str) -> str:
     text = _PRIVATE_KEY.sub("[redacted private key]", text)
     for rx in _EXTRA:
         text = rx.sub("[redacted]", text)
-    return _log_redact(text)
+    text = _QUERY_SECRET.sub(lambda m: m.group(1) + "[redacted]", text)
+    text = _log_redact(text)
+    return _GENERIC_KV.sub(_kv, text)
+
+
+# ── URLs ─────────────────────────────────────────────────────────────────────
+_SENSITIVE_PARAMS = {
+    "token", "access_token", "accesstoken", "refresh_token", "id_token", "key", "api_key",
+    "apikey", "api-key", "sig", "signature", "secret", "client_secret", "password", "passwd",
+    "pwd", "auth", "authorization", "session", "sessionid", "session_id", "code", "jwt",
+    "x-amz-signature", "x-amz-credential", "x-amz-security-token", "x-goog-signature",
+    "x-goog-credential", "sv", "se", "sp",  # Azure SAS
+}
+
+
+def clean_url(url: str) -> str:
+    """``url`` without user:password and without sensitive query parameters.
+
+    2026-10-24 (KB phase 5, review): every source URL that is stored in a note,
+    shown or logged goes through this.
+    """
+    from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+    try:
+        parts = urlsplit(url)
+    except ValueError:
+        return redact(url)
+    if parts.scheme not in ("http", "https"):
+        return url
+    host = parts.hostname or ""
+    if ":" in host:
+        host = f"[{host}]"
+    netloc = host + (f":{parts.port}" if parts.port else "") if parts.netloc else ""
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+             if k.lower() not in _SENSITIVE_PARAMS and not k.lower().endswith(
+                 ("token", "secret", "password", "_key", "-key", "signature"))]
+    return urlunsplit((parts.scheme, netloc, parts.path, urlencode(query), ""))
+
+
+def clean_source(source: str) -> str:
+    """A source as it may be shown: URLs cleaned, other text redacted."""
+    s = (source or "").strip()
+    if re.match(r"^https?://", s, re.I):
+        return clean_url(s)
+    return redact(s)
+
+
+def ip_is_public(ip: "ipaddress.IPv4Address | ipaddress.IPv6Address") -> bool:
+    """Only globally routable addresses (also the IPv4 inside mapped/NAT64/6to4 IPv6)."""
+    if isinstance(ip, ipaddress.IPv6Address):
+        inner = ip.ipv4_mapped or ip.sixtofour or (ip.teredo[1] if ip.teredo else None)
+        if inner is None and ip in ipaddress.IPv6Network("64:ff9b::/96"):
+            inner = ipaddress.IPv4Address(int(ip) & 0xFFFFFFFF)
+        if inner is not None and not ip_is_public(inner):
+            return False
+    return bool(ip.is_global) and not ip.is_multicast
 
 
 # ── local paths ──────────────────────────────────────────────────────────────
@@ -91,12 +174,41 @@ def allowed_roots() -> List[Path]:
     return out
 
 
-def check_local_path(raw: str) -> Path:
+def _hidden_part(target: Path, roots: List[Path]) -> Optional[str]:
+    """The first hidden path part below the nearest root (or anywhere when outside them)."""
+    base: Optional[Path] = None
+    for r in roots:
+        if _within(target, r) and (base is None or len(r.parts) > len(base.parts)):
+            base = r
+    rel = target.relative_to(base).parts if base is not None else target.parts[1:]
+    return next((p for p in rel if p.startswith(".")), None)
+
+
+def check_policy(target: Path, raw: str) -> None:
+    """No hidden files/folders, no secret files — for every caller (agents,
+    Web UI and the command line alike).
+
+    2026-10-24 (KB phase 5, review): the workspace and CLI paths skipped
+    these checks before.
+    """
+    hidden = _hidden_part(target, allowed_roots())
+    if hidden:
+        raise IngestError(
+            f"'{raw}' is in a hidden file or folder ({hidden}); hidden folders such as ~/.ssh or "
+            "ZenSynora's settings are never read. Copy the files to a normal folder first.")
+    if is_secret_file(target.name):
+        raise IngestError(f"'{raw}' looks like a file with keys or passwords; it is never "
+                          "imported into the knowledge base.")
+
+
+def check_local_path(raw: str, trusted: bool = False) -> Path:
     """The resolved path if ingestion may read it, else :class:`IngestError`.
 
-    Allowed: anything inside the agent workspace, and anything inside the
-    home folder that is not in (or itself) a hidden file/folder. Symlinks are
-    resolved first, so a link cannot point outside.
+    Allowed: inside the agent workspace or the home folder (``trusted`` — the
+    command line, Web UI uploads — also elsewhere), never a hidden file or
+    folder or a secret file. Symlinks are resolved first, so a link cannot
+    point around the rules. The rules are checked before existence, so nothing
+    is revealed about files that may not be read.
     """
     if not raw or "\x00" in raw:
         raise IngestError("Give a file or folder path (for example ~/Documents/report.pdf).")
@@ -104,30 +216,17 @@ def check_local_path(raw: str) -> Path:
     if not p.is_absolute():
         from myclaw.tools import core as _core
 
-        p = Path(_core.WORKSPACE) / p  # relative paths are relative to the workspace
+        p = (Path.cwd() if trusted else Path(_core.WORKSPACE)) / p
     try:
         target = p.resolve()
     except (OSError, RuntimeError) as e:
         raise IngestError(f"Cannot read '{raw}': {e}.") from e
-    # the rules first, then existence: nothing is said about files outside
-    roots = allowed_roots()
-    workspace, home = (roots + [None, None])[:2]
-    if workspace is not None and _within(target, workspace):
-        return _existing(target, raw)
-    if home is not None and _within(target, home):
-        rel = target.relative_to(home)
-        if not any(part.startswith(".") for part in rel.parts):
-            if is_secret_file(target.name):
-                raise IngestError(f"'{raw}' looks like a file with keys or passwords; it is never "
-                                  "imported into the knowledge base.")
-            return _existing(target, raw)
+    if not trusted and not any(_within(target, r) for r in allowed_roots()):
         raise IngestError(
-            f"'{raw}' is in a hidden folder ({'/'.join(rel.parts[:1])}); hidden folders such as "
-            "~/.ssh or ZenSynora's settings are never read. Copy the files to a normal folder "
-            "first.")
-    raise IngestError(
-        f"'{raw}' is outside the folders ZenSynora may read (your home folder and the agent "
-        "workspace). Copy it into your home folder first.")
+            f"'{raw}' is outside the folders ZenSynora may read (your home folder and the agent "
+            "workspace). Copy it into your home folder first.")
+    check_policy(target, raw)
+    return _existing(target, raw)
 
 
 def _existing(target: Path, raw: str) -> Path:
