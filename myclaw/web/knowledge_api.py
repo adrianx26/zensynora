@@ -77,8 +77,27 @@ def _dir(base: str) -> Path:
     return get_knowledge_dir(base)
 
 
+def _iter_md(d: Path) -> list[Path]:
+    """Every note file of a base, sub-folders included (2026-10-24, KB phase 5:
+    imported Obsidian folders live in ``imported/<name>/``). Like the sync:
+    dot-folders (``.trash``, ``.git``, ``.obsidian``) and symlinked folders are skipped."""
+    import os
+
+    out: list[Path] = []
+    if not d.is_dir():
+        return out
+    for root, dirs, files in os.walk(d, followlinks=False):
+        dirs[:] = sorted(x for x in dirs if not x.startswith(".") and not os.path.islink(os.path.join(root, x)))
+        for name in files:
+            if name.endswith(".md") and not name.startswith("."):
+                p = Path(root) / name
+                if p.is_file():
+                    out.append(p)
+    return out
+
+
 def _note_files(base: str) -> list[Path]:
-    return sorted(p for p in _dir(base).glob("*.md") if p.is_file())
+    return sorted(_iter_md(_dir(base)))
 
 
 def _parse_all(base: str) -> list[Any]:
@@ -139,14 +158,29 @@ class _Resolver:
             table[key] = permalink
 
     def __call__(self, target: str) -> tuple[str, bool]:
-        t = (target or "").strip()
+        # 2026-10-24: `[[Note|label]]`, `[[note.md]]` and `[[Note#Section]]` as in
+        # KnowledgeDB.resolve_target (the '#' only in heading form, no spaces).
+        t = (target or "").split("|", 1)[0].strip()
+        if t.lower().endswith(".md"):
+            t = t[:-3].strip()
+        hit = self._lookup(t)
+        if hit is None and "#" in t:
+            head, _, section = t.partition("#")
+            if head and section and not head.endswith(" ") and not section.startswith(" "):
+                hit = self._lookup(head.strip())
+        if hit is not None:
+            return hit, True
+        low, sl = t.lower(), _slug(t)
+        return "missing:" + (sl or low), False
+
+    def _lookup(self, t: str) -> str | None:
         low, sl = t.lower(), _slug(t)
         perm, slug, name, title, alias, extra = self.tiers
         for table, key in ((perm, low), (slug, sl), (name, low), (title, low), (alias, low),
                            (extra, sl)):
             if key and key in table:
-                return table[key], True
-        return "missing:" + (sl or low), False
+                return table[key]
+        return None
 
 
 def _iso(dt: Any) -> str | None:
@@ -244,7 +278,7 @@ async def list_bases():
     if root.exists():
         for d in sorted(root.iterdir()):
             if d.is_dir() and not d.name.startswith(".") and BASE_RE.match(d.name):
-                out.append({"name": d.name, "notes": sum(1 for _ in d.glob("*.md"))})
+                out.append({"name": d.name, "notes": len(_iter_md(d))})
     if not any(b["name"] == "default" for b in out):
         out.insert(0, {"name": "default", "notes": 0})
     out.sort(key=lambda b: (b["name"] != "default", b["name"]))
@@ -267,7 +301,7 @@ def _note_file(base: str, permalink: str) -> Path:
     # The file name can differ from the permalink in the frontmatter.
     from myclaw.knowledge.parser import parse_note
 
-    for f in d.glob("*.md"):
+    for f in _iter_md(d):
         try:
             if parse_note(f).permalink == permalink:
                 return f

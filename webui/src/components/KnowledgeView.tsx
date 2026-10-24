@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import KnowledgeGraph, { type GEdge, type GNode, type GraphHandle } from './KnowledgeGraph';
+import KnowledgeImport from './KnowledgeImport';
 import { CategoriesCard, CategoryMergePanel, ConflictsSection, DuplicatesPanel, type Conflict } from './KnowledgeQuality';
 
 interface Count { name: string; count: number }
@@ -64,6 +65,7 @@ const KnowledgeView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<Tab>('graph');
   const [selected, setSelected] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);  // KB phase 5: import dialog
   const [detail, setDetail] = useState<NoteDetail | null>(null);
   const [detailErr, setDetailErr] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -340,6 +342,8 @@ const KnowledgeView: React.FC = () => {
         <div className="kb-actions">
           <button type="button" className="ghost-btn" onClick={() => setCreating({ name: '', tags: '', content: '' })}>+ New note</button>
           <button type="button" className="ghost-btn" disabled={loading} onClick={sync} title="Re-read every markdown file into the search index">↻ Re-index</button>
+          <button type="button" className="ghost-btn" onClick={() => setImportOpen(true)}
+            title="Read a web page, GitHub repository, folder or document into linked notes, or import ChatGPT / Claude / MCP memory / Obsidian exports">⇪ Import</button>
           {data && data.stats.notes > 1 && (
             <button type="button" className="ghost-btn" onClick={() => { setCreating(null); setSelected(null); setSide({ type: 'dups' }); }}
               title="List notes that look like duplicates; preview and merge them one pair at a time">⧉ Find duplicates</button>
@@ -582,6 +586,8 @@ const KnowledgeView: React.FC = () => {
           </aside>
         )}
       </div>
+      <KnowledgeImport base={base} open={importOpen} onClose={() => setImportOpen(false)}
+        onDone={load} onOpenNote={(p) => { setImportOpen(false); setSide(null); setCreating(null); setSelected(p); }} />
     </div>
   );
 };

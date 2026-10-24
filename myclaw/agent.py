@@ -280,6 +280,11 @@ SYSTEM_PROMPT = (
     # 2026-10-24 (KB phase 2): quality tools
     "knowledge_conflicts(permalink), resolve_knowledge_conflict(conflict_id, keep), "
     "knowledge_categories(), find_duplicate_notes(). "
+    # 2026-10-24 (KB phase 5): ingestion
+    "Import: assimilate(source, max_notes) reads a web page, a GitHub repository (https://github.com/owner/repo) "
+    "or a local file/folder into linked notes plus a Mermaid diagram in one call — use it for 'analyze this "
+    "repo/site/document and make a diagram'; import_knowledge(path, kind) imports ChatGPT/Claude exports, "
+    "MCP memory files and Markdown/Obsidian folders. "
     # 2026-10-23 (KB phase 0): how notes link to each other.
     "A line `- relation [[Other note]]` in a note's text links it to another note. "
     "Agent Swarms: swarm_create(name, strategy, workers, coordinator, aggregation), "
