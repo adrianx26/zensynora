@@ -615,3 +615,195 @@ def test_write_note_round_trip_links(kb):
                        content="again", user_id=USER, db_path=kb.db_path)
     storage.write_note("Home server", content="A bigger box.", user_id=USER, db_path=kb.db_path)
     assert ("note-a", "runs_on", "home-server") in kb.links()
+
+
+# ── Review fixes (2026-10-24) ───────────────────────────────────────────────
+
+def test_review1_boolean_sentence_is_free_text(kb):
+    kb.write("hsb.md", note_md("Home server backup",
+                               body="Nightly restic backup of the home server to the NAS."))
+    kb.write("other.md", note_md("Other", body="restic notes without the box"))
+    kb.sync(force=True)
+    q = "what do we use for the home server backup"
+    with kb.db() as db:
+        free = [e.name for e in db.search_fts(q)]
+        assert free and free == [e.name for e in db.search_fts(q, boolean=True)]
+        # with an operator the search stays strict boolean
+        assert [e.name for e in db.search_fts("restic AND NOT nas", boolean=True)] == ["other"]
+        assert db.search_fts("restic AND unicorn AND box AND nightly", boolean=True) == []
+    assert [n.permalink for n in storage.search_notes(q, USER, db_path=kb.db_path,
+                                                      boolean=True)] == ["hsb"]
+
+
+def test_review2_note_written_during_sync_is_not_deleted(kb, monkeypatch):
+    kb.write("a.md", note_md("A", permalink="a"))
+    kb.sync()
+    bump(kb.dir / "a.md", note_md("A", permalink="a", body="changed"))
+    orig = SyncEngine._index_file
+    done = []
+
+    def hook(self, *a, **k):
+        r = orig(self, *a, **k)
+        if not done:
+            done.append(1)  # another caller writes a note while the sync runs
+            storage.write_note("Fresh", content="written meanwhile", user_id=USER,
+                               db_path=kb.db_path)
+        return r
+
+    monkeypatch.setattr(SyncEngine, "_index_file", hook)
+    stats = kb.sync()
+    assert done and stats["deleted"] == 0
+    with kb.db() as db:
+        assert db.get_entity_by_permalink("fresh") is not None
+
+
+def test_review3_non_ascii_targets_use_indexes_and_scale(kb):
+    with kb.db() as db:
+        conn = db._get_connection()
+        for sql in ("SELECT * FROM entities WHERE title_fold = ?",
+                    "SELECT * FROM entities WHERE name_fold = ?",
+                    "SELECT * FROM entities WHERE permalink_fold = ?",
+                    "SELECT * FROM entity_aliases WHERE alias_fold = ?",
+                    "SELECT * FROM relations WHERE to_key = ?"):
+            plan = " ".join(str(tuple(r)) for r in conn.execute("EXPLAIN QUERY PLAN " + sql, ("x",)))
+            assert "USING INDEX" in plan or "USING COVERING INDEX" in plan, (sql, plan)
+    n = 800
+    rnd = random.Random(0)
+    for i in range(n):
+        links = [("relates", f"Ñota {rnd.randrange(n * 2)}") for _ in range(3)]
+        kb.write(f"ñota-{i}.md", note_md(f"Ñota {i}", links))
+    t = time.time()
+    stats = kb.sync(force=True)
+    assert stats["added"] == n and stats["errors"] == 0
+    assert time.time() - t < 5
+    with kb.db() as db:
+        assert db.resolve_target("ÑOTA 7").title == "Ñota 7"
+
+
+def test_review4_hash_in_names_is_not_a_section_link(kb):
+    with kb.db() as db:
+        db.sync_entity_from_note(Note(name="C", permalink="c", title="C", content=""))
+        db.sync_entity_from_note(Note(name="Home", permalink="home", title="Home", content=""))
+        for text in ["C# tips", "C#", "C++", "c #x", "C# tips#Intro"]:
+            assert db.resolve_target(text) is None, text
+        assert db.resolve_target("Home#Setup").permalink == "home"
+        assert db.resolve_target("C#Intro").permalink == "c"  # heading style
+        db.sync_entity_from_note(Note(name="L", permalink="l", title="L", content="",
+                                      relations=[Relation("about", "C# tips"),
+                                                 Relation("about", "AC/DC")]))
+        lid = db.get_entity_by_permalink("l").id
+        assert db.get_relations_from(lid) == []
+        assert db.get_unresolved_relations(lid) == [("about", "C# tips"), ("about", "AC/DC")]
+        db.sync_entity_from_note(Note(name="C# tips", permalink="c-tips", title="C# tips",
+                                      content=""))
+        assert [r[1] for r in db.get_relations_from(lid)] == ["c-tips"]
+
+
+def test_review5_incremental_equals_force(kb):
+    def snapshot():
+        with kb.db() as db:
+            out = {}
+            for e in db.list_all_entities():
+                out[e.permalink] = (sorted(r[:2] for r in db.get_relations_from(e.id)),
+                                    sorted(db.get_unresolved_relations(e.id)))
+        return out
+
+    def check():
+        incremental = snapshot()
+        kb.sync(force=True)
+        assert snapshot() == incremental
+        return incremental
+
+    a = kb.write("a.md", "---\ntitle: Alpha\naliases: [Shared]\n---\n"
+                         "- uses [[Beta]]\n- self [[Alpha]]\n- al [[Shared]]\n")
+    b = kb.write("b.md", "---\ntitle: Beta\naliases: [Shared]\n---\n- uses [[Alpha]]\n")
+    kb.write("c.md", "---\ntitle: Beta\n---\n- uses [[Gamma]]\n")  # same title as b
+    kb.sync()
+    check()
+    bump(b, "---\ntitle: Bravo\naliases: [Shared]\n---\n- uses [[Alpha]]\n")  # retitle
+    kb.sync()
+    assert ("uses", "c") in check()["a"][0]
+    kb.write("g.md", "---\ntitle: Gamma\n---\nx\n")
+    kb.sync()
+    check()
+    bump(a, "---\ntitle: Alpha\n---\n- uses [[Beta]]\n- self [[Alpha]]\n- al [[Shared]]\n")
+    kb.sync()
+    assert ("al", "b") in check()["a"][0]
+    kb.write("shared.md", "---\ntitle: Shared thing\n---\nz\n")  # permalink beats alias
+    kb.sync()
+    assert ("al", "shared") in check()["a"][0]
+    (kb.dir / "c.md").unlink()  # the other "Beta" goes: link unresolved
+    kb.sync()
+    assert ("uses", "Beta") in check()["a"][1]
+
+
+def test_review6_concurrent_syncs_do_not_fail(kb):
+    import threading
+    for i in range(150):
+        kb.write(f"n{i}.md", f"---\ntitle: N{i}\n---\n# N{i}\n\nbody\n- uses [[N{(i + 1) % 150}]]\n")
+    results, errors = [], []
+
+    def run(force):
+        try:
+            results.append(SyncEngine(USER, db_path=kb.db_path).sync(force=force))
+        except Exception as e:  # pragma: no cover - reported below
+            errors.append(e)
+
+    threads = [threading.Thread(target=run, args=(f,)) for f in (False, False, True, False)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors and all(r["errors"] == 0 for r in results), (errors, results)
+    assert not sync_mod._engine_failures
+    with kb.db() as db:
+        s = db.get_stats()
+    assert s["entities"] == 150 and s["relations"] == 150 and s["unresolved_relations"] == 0
+
+
+def test_review6_busy_database_is_not_a_file_failure(kb, monkeypatch):
+    kb.write("a.md", note_md("A", permalink="a"))
+
+    def locked(self, *a, **k):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(KnowledgeDB, "sync_entity_from_note", locked)
+    monkeypatch.setattr(sync_mod.time, "sleep", lambda s: None)
+    for _ in range(sync_mod.MAX_CONSECUTIVE_FAILURES + 1):
+        assert kb.sync()["errors"] == 1  # reported, never skipped by the breaker
+    assert not sync_mod._engine_failures
+
+
+def test_review7_force_keeps_unreadable_and_is_one_transaction(kb, monkeypatch):
+    kb.write("a.md", note_md("A", [("uses", "B")], permalink="a"))
+    b = kb.write("b.md", note_md("B", [("uses", "A")], permalink="b"))
+    kb.sync()
+    b.write_bytes(b"---\ntitle: \xff broken\n---\n")
+    seen = []
+    orig = SyncEngine._index_file
+
+    def hook(self, *a, **k):  # another process reading during the rebuild
+        with sqlite3.connect(kb.db_path) as other:
+            seen.append(other.execute("SELECT COUNT(*) FROM entities").fetchone()[0])
+        return orig(self, *a, **k)
+
+    monkeypatch.setattr(SyncEngine, "_index_file", hook)
+    stats = kb.sync(force=True)
+    assert stats["errors"] == 1 and stats["added"] == 1
+    assert seen == [2]  # readers saw the old index, never an empty one
+    with kb.db() as db:
+        assert db.get_entity_by_permalink("b") is not None
+    assert kb.links() == {("a", "uses", "b"), ("b", "uses", "a")}
+    assert kb.sync()["deleted"] == 0  # incremental agrees
+
+
+def test_review8_symlinks(kb, tmp_path):
+    outside = tmp_path / "vault"
+    outside.mkdir()
+    (outside / "Idea.md").write_text(note_md("Idea"), encoding="utf-8")
+    os.symlink(outside, kb.dir / "vault")
+    os.symlink(outside / "Idea.md", kb.dir / "idea-link.md")
+    kb.write("real.md", note_md("Real"))
+    os.symlink(kb.dir / "real.md", kb.dir / "inside-link.md")
+    names = {p.name for p in scan_markdown_files(USER)}
+    assert names == {"real.md", "inside-link.md"}
