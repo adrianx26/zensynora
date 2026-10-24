@@ -203,9 +203,54 @@ notes or categories is left to you on the Knowledge page.
 | `knowledge.hub_penalty` | `true` | rank hub notes lower, do not walk through them |
 | `knowledge.hub_degree` | `25` | links above which a note is a hub |
 
+## Importing: web pages, repositories, documents, chat exports
+
+**Assimilate** reads one source into linked notes: an *overview* note (summary,
+contents, facts `source` / `kind` / `size` / `date`, tags `assimilated` + the
+kind, and a Mermaid diagram of the structure) plus one note per part, each
+with `part_of [[overview]]`. Links between parts are kept (Markdown links
+between files, imports between code files).
+
+| Source | What you get |
+|---|---|
+| Web page (`https://…`) | main text split at headings, the page's links; a PDF/Word/Excel URL is read as that document |
+| GitHub repository (`https://github.com/owner/repo`, also `/tree/branch/folder`) | architecture overview: languages, folders, entry points, dependencies, a diagram of folders and imports; README, docs, manifests and main source files as notes. No git needed; set `GITHUB_TOKEN` for private repositories or a higher rate limit |
+| Folder or file on this computer | the same analysis for code folders (`.gitignore` honoured); documents: PDF, Word (.docx), Excel (.xlsx: one table per sheet, column names as facts), text, Markdown, HTML, CSV, JSON; images: file details only (no OCR) |
+
+**Import** reads exports: ChatGPT (`.zip` or `conversations.json`), Claude.ai
+(`.zip`, `conversations.json`, `projects.json`), an MCP memory file
+(`memory.json` / `.jsonl`: entities → notes with facts, relations → links) and
+Markdown folders / Obsidian vaults (folder or `.zip`). Each conversation becomes
+one note (date, short transcript, tags `imported` + `chatgpt`/`claude`), grouped
+under one note per month. Markdown notes are **copied** into
+`<base>/imported/<folder-name>/` with their frontmatter and text; an existing
+file is never overwritten (a changed note is saved beside it as `name-2.md`),
+and a note whose permalink is already taken gets `permalink: <folder>-…`.
+
+* **Run it again** on the same source: the same notes are updated (unchanged
+  ones are not rewritten; a version that loses text goes to `.trash/` first).
+* **Limits:** 40 notes per assimilate by default (`max_notes`, at most 500),
+  12 000 characters per note (longer parts are split), a byte and time limit
+  per run. At a limit you get what was done so far — run it again to continue.
+* **Never imported:** hidden folders (`~/.ssh`, ZenSynora's settings…), `.env`,
+  key and credential files (`*.pem`, `id_rsa*`, `credentials*`…); tokens,
+  API keys and passwords in the text become `[redacted]`. Agents may only read
+  files in your home folder and the agent workspace; web addresses must be
+  public (no local or private network addresses).
+* PDF, Word and Excel need an optional package:
+  `pip install 'zensynora[ingest]'` (or, in ZenSynora's virtual environment,
+  `python -m pip install pypdf python-docx openpyxl`). Without it you get a
+  message saying exactly that; everything else works.
+* Every run is logged as one line in `~/.myclaw/logs/knowledge_ingest.jsonl`.
+
+| Where | How |
+|---|---|
+| Agent | `assimilate(source, max_notes)` — e.g. "analyze https://github.com/owner/repo and make a diagram" (returns the overview note and the diagram); `import_knowledge(path, kind)` |
+| Web UI | Knowledge page → *Import*: a link or folder, or upload a file (up to 200 MB) |
+| Command line | `zensynora knowledge assimilate SOURCE [--max-notes 40] [-b BASE]`, `zensynora knowledge import FILE [--kind auto\|chatgpt\|claude\|mcp_memory\|markdown\|document] [-b BASE]` |
+
 ## Plans
 
 What comes next (more of memopad's features: note editing tools, semantic
-search, distillation into facts and a persona, importing repositories and
-documents) is in
+search, distillation into facts and a persona) is in
 [docs/dev/plans/memopad_port_plan.md](dev/plans/memopad_port_plan.md).
