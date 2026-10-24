@@ -119,7 +119,8 @@ def save_items(items: List[Any], user_id: str, extra_tags: List[str], cap: int, 
                 rels.append(Relation(relation_type=rtype, target=target))
         try:
             write_note(name=title, title=title, content=content, tags=tag_list,
-                       observations=obs[:8], relations=rels[:8], user_id=user_id)
+                       observations=obs[:8], relations=rels[:8], user_id=user_id,
+                       origin="extract")  # 2026-10-24 (KB phase 4 review)
             saved += 1
             logger.info(f"{log_prefix} Saved: '{title}' ({len(obs)} facts, {len(rels)} links)")
         except Exception as e:

@@ -107,7 +107,8 @@ def write_to_knowledge(
             observations=obs_list,
             relations=rel_list,
             tags=tag_list,
-            user_id=user_id
+            user_id=user_id,
+            origin="agent",  # 2026-10-24 (KB phase 4 review): "I …" here is the agent
         )
 
         return f"✅ Knowledge note created: [{title}](memory://{permalink})"
@@ -712,7 +713,7 @@ def _distill_off_hint() -> str:
 def _fmt_fact(f: Dict[str, Any]) -> str:
     n = f["support"]
     flags = (" ⚠ conflicting" if f.get("conflicted") else "") + (" · about you" if f.get("about_user") else "")
-    return (f"f{f['id']} [{f['category']}] {shorten_text(f['text'], 200)} — confidence "
+    return (f"f{f['id']} [{f['category']}] {shorten_text(f.get('display') or f['text'], 200)} — confidence "
             f"{f['confidence']:.2f}, {n} note{'s' if n != 1 else ''}{flags}")
 
 

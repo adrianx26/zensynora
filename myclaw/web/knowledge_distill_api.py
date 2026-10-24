@@ -12,6 +12,8 @@ GET  /api/knowledge/drill/{kind}/{id}?base=                   the notes and fact
 GET  /api/knowledge/distill/status?base=                      counts, last run, waiting notes, job
 POST /api/knowledge/distill?base=&full=                       run it now in a background thread
                                                               (incremental; full = read every note)
+DELETE /api/knowledge/distill?base=                           ask a running job to stop (keeps what
+                                                              it did; the next run continues)
 
 Everything is derived data in the index database; reading never changes a
 note. Everything runs off the event loop. The notes are private, so every
@@ -45,11 +47,13 @@ def _job_view(job: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 
 @router.get("/api/knowledge/facts", dependencies=guard)
 async def facts(base: str | None = None, q: str = "", limit: int = Query(50, ge=1, le=500),
-                offset: int = Query(0, ge=0, le=1_000_000), category: str = ""):
+                offset: int = Query(0, ge=0, le=1_000_000), category: str = "",
+                about_user: Optional[bool] = None):
     from myclaw.knowledge import distill
 
     b = _base(base)
-    return await asyncio.to_thread(distill.list_facts, b, q[:500], limit, offset, category[:64])
+    return await asyncio.to_thread(distill.list_facts, b, q[:500], limit, offset, category[:64],
+                                   about_user)
 
 
 @router.get("/api/knowledge/scenarios", dependencies=guard)
@@ -120,7 +124,7 @@ def _run(b: str, job: Dict[str, Any], full: bool) -> None:
         r = distill.distill(b, full=full, progress=progress, stop=lambda: job["_stop"],
                             wait_lock=60.0)
         job["result"] = r
-        job["status"] = "done" if r.get("ok") else "error"
+        job["status"] = ("stopped" if job["_stop"] else "done") if r.get("ok") else "error"
         if not r.get("ok"):
             job["error"] = r.get("message")
     except Exception as e:  # a fault in ZenSynora, not in the user's input
@@ -144,4 +148,16 @@ async def distill_now(base: str | None = None, full: bool = False):
         _jobs[b] = job
     threading.Thread(target=_run, args=(b, job, bool(full)), name=f"kb-distill-{b}",
                      daemon=True).start()
+    return {"ok": True, "job": _job_view(job)}
+
+
+@router.delete("/api/knowledge/distill", dependencies=guard)
+async def distill_stop(base: str | None = None):
+    """2026-10-24 (KB phase 4 review): stop a running job between batches."""
+    b = _base(base)
+    with _lock:
+        job = _jobs.get(b)
+        if not job or job["status"] != "running":
+            raise HTTPException(status_code=404, detail="No distillation is running for this knowledge base.")
+        job["_stop"] = True
     return {"ok": True, "job": _job_view(job)}

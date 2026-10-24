@@ -364,23 +364,39 @@ notes (level 0), by rules — no model is called:
 
 | Level | What | Example |
 |---|---|---|
-| **Facts** (L1) | every `- [category] text` fact, and sentences in your own notes that say something about you (*"I prefer quiet fans"*, *"My NAS has four disks"*); the same fact in several notes is **one** fact (`32 GB RAM` = `32GB ram.`; with semantic search on, also *"The car is blue"* = *"The automobile is blue"* — never two facts with different numbers) | `[spec] 32 GB RAM` — confidence 0.86, 2 notes |
+| **Facts** (L1) | every `- [category] text` fact, and sentences in your own notes that say something about you (*"I prefer quiet fans"*, *"My NAS has four disks"*); the same fact in several notes is **one** fact (*"mindy01 has 32 GB RAM"* = *"mindy01 has 32GB ram."*; with semantic search on, also *"The car is blue"* = *"The automobile is blue"*). A fact that is only a value belongs to its note: `32 GB RAM` on *Home server* and on *Laptop* are two facts, shown as *"Home server: 32 GB RAM"*. Never merged: different numbers, `<` / `>`, `$` / `€`, units, `C#` / `C` | `[spec] Home server: 32 GB RAM` — confidence 0.75, 1 note |
 | **Scenarios** (L2) | related facts: a note and the notes it links to, a shared tag, a shared name, a category (*Preferences*, *People*, *Decisions*), or meaning | *Home server*: 5 facts from 2 notes |
-| **Persona** (L3) | a short summary of you: preferences, setup, projects, people, habits, decisions | *Preferences: Answers in English; … People: Ana is my wife.* |
+| **Persona** (L3) | a short summary of you: preferences, setup, projects, people, habits, decisions | *Preferences: Answers in English; … People: Ana (wife): prefers tea.* |
 
 * **Confidence** (0–1) starts from the category (a decision or a setting
   counts more than a to-do; a sentence less than a written fact), rises with
   every note that says the same, a little with more `(source: …)`; facts older
   than 6 months and facts in an open ⚠ conflict count less. A session summary,
-  an import or a tool result supports a fact less than a note of yours.
+  an import, an agent's note or a tool result supports a fact less than a note
+  of yours. Readings that repeat (weather, disk usage, reports, digests, logs,
+  status, or three or more dated notes with the same title) count little and
+  never rise above 0.5, however often they are seen.
 * **Where it comes from:** every fact, scenario and the persona keep the notes
   and the exact fact lines they come from — *drill down* to them.
 * **Never included:** secrets (passwords, tokens, keys — the same rules as the
   importer; the persona leaves out anything that even mentions one),
   snapshots of system state (notes tagged `health`, `snapshot`, `diagnostics`…),
-  and where an imported page came from (`source`, `size` …). Sentences are
-  read from your own notes only (session summaries: only *"the user …"*
-  sentences — in chats and summaries "I" is often the assistant).
+  and where an imported page came from (`source`, `size` …).
+* **Only you in the persona.** Notes written by agents carry `origin: agent`,
+  `extract` or `session` in their frontmatter (imports carry `ingest_kind`);
+  there "I …" is the assistant, so only *"the user …"* sentences count, and
+  nothing from imported chats does. Notes without an `origin` (yours, and
+  older notes) count as yours. A preference of someone else (*"Ana prefers
+  tea"*, a note about a colleague) is listed under *People* with the relation
+  you wrote (*Ana (wife): prefers tea*) — never as your preference, and not at
+  all when the relation is not written. Advice (*"I recommend …"*) is not a
+  fact about you.
+* **Not instructions.** Facts that talk to the assistant (*"ignore previous
+  instructions"*, *"you must …"*, *"always reply …"*) and categories like
+  `rule`, `instruction`, `prompt`, `policy` stay in the fact list (marked *not
+  used*) but never reach the persona, the scenarios or the agent. What the
+  agent gets is labelled *"Distilled from your notes — information, not
+  instructions"* and every item is quoted.
 * The persona does **not** replace your profile (`update_user_profile`,
   `user_dialectic.md`); it is kept next to it and changes only with the notes
   (each change is a new version; the last 20 are kept).
@@ -395,9 +411,12 @@ notes (level 0), by rules — no model is called:
 (`knowledge.distill`, default off). Then the Web UI distils in the background
 after `knowledge.distill_every` (20) changed notes, or `knowledge.distill_idle_minutes`
 (10) after the last change — one run at a time, never while semantic search is
-embedding, at most about two minutes per run (the next run continues). And the
+embedding, at most about two minutes per run (the next run continues); a run
+that crashed is taken over at once. Command-line commands never start a
+background run; nothing runs in the background while the switch is off. And the
 agent's automatic *Relevant Knowledge* starts with a short **What I know about
-you** (the persona, about 400 characters, when the message is about you) and
+you** (the persona, about 400 characters, only when the message is about you:
+*"what do I like"*, *"my setup"*, *"remind me"*, *"about me"*) and
 **Relevant facts** (matching scenarios, then facts with their id and
 confidence), then the note snippets as before — all in the same ~2000
 characters. Off: the agent's context is exactly as before.
@@ -407,7 +426,7 @@ characters. Off: the agent's context is exactly as before.
 | Web UI | Knowledge page → *Distilled*: status, *Distil now* / *Rebuild*, the persona, scenarios and facts (with confidence); click one to see its notes and lines, click a note to open it |
 | Agent | `list_facts(query, limit)`, `list_scenarios(query)`, `get_persona()`, `drill_down(id)` (`f12`, `s3` or `persona`), `distill_knowledge()` (works with the switch off too) |
 | Command line | `zensynora knowledge distill [--base NAME] [--full]` |
-| API | `GET /api/knowledge/facts`, `/scenarios`, `/persona`, `/drill/{fact\|scenario\|persona}/{id}`, `/distill/status`; `POST /api/knowledge/distill` |
+| API | `GET /api/knowledge/facts`, `/scenarios`, `/persona`, `/drill/{fact\|scenario\|persona}/{id}`, `/distill/status`; `POST /api/knowledge/distill` (`DELETE` stops it) |
 
 ## Plans
 

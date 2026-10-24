@@ -1043,7 +1043,11 @@ class _Worker:
                 return
             self.periodic = True
             self.next_scan = 0.0           # first scan now
-            self._ensure_thread()
+            # 2026-10-24 (KB phase 4 review): no thread while semantic search is
+            # off — turning it on queues every base (submit starts the thread,
+            # which then also scans periodically)
+            if wants_updates():
+                self._ensure_thread()
             self.cv.notify_all()
 
     def queued(self, db_path: str) -> int:

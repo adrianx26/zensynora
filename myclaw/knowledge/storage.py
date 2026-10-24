@@ -359,6 +359,7 @@ def write_note(
     db_path: Optional[Path] = None,
     aliases: Optional[List[str]] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    origin: Optional[str] = None,
 ) -> str:
     """
     Write a new note to the knowledge base.
@@ -376,6 +377,10 @@ def write_note(
             the existing note's aliases
         metadata: Other frontmatter keys (``type``, ``status``…); None keeps
             the existing note's metadata, a dict replaces it
+        origin: who wrote the text (frontmatter ``origin``: ``agent``,
+            ``extract``, ``session``, ``import``) — 2026-10-24 (KB phase 4
+            review): distillation counts first-person sentences as the user's
+            only in notes without an origin (written by the user)
 
     A note with the same permalink is replaced; if that loses anything, the
     previous file is kept in ``<base>/.trash/`` (2026-10-23, KB phase 0).
@@ -416,7 +421,8 @@ def write_note(
             relations=_merge_rel(given.relations, relations or []),
             file_path=file_path,
             aliases=_union(given.aliases, aliases),
-            metadata={**given.metadata, **(metadata or {})},
+            metadata={**given.metadata, **(metadata or {}),
+                      **({"origin": origin} if origin else {})},
             raw_frontmatter=given.raw_frontmatter,
         )
         if "name" in given.raw_frontmatter:
@@ -467,6 +473,8 @@ def write_note(
             if metadata is None:
                 note.metadata = dict(old.metadata)
             note.raw_frontmatter = old.raw_frontmatter
+        if origin:
+            note.metadata["origin"] = origin
         markdown_content = generate_markdown(note)
 
     # Write file (2026-10-23, KB phase 0: atomically; a lossy replace keeps

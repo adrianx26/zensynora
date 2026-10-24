@@ -1235,6 +1235,7 @@ class Agent:
                 tags=tags,
                 observations=observations,
                 relations=relations,
+                origin="session",  # 2026-10-24 (KB phase 4 review): written by the agent
             )
 
     def _search_knowledge_context_sync(

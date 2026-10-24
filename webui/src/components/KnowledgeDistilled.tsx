@@ -9,6 +9,7 @@ import { api } from '../api';
 interface Fact {
   id: number; text: string; category: string; kind: string; tags: string[];
   confidence: number; support: number; sources: number; conflicted: boolean; about_user: boolean;
+  display?: string; instruction?: boolean;
 }
 interface Scenario { id: number; title: string; summary: string; confidence: number; size: number; notes: number; grouped_by: string; facts: Fact[] }
 interface PersonaItem { id: number; text: string; confidence: number; support: number }
@@ -57,7 +58,7 @@ const DrillView: React.FC<{ base: string; kind: string; id: number | 'latest'; o
     <div className="kb-drill" style={{ borderLeft: '2px solid var(--border, #30363d)', paddingLeft: 10, margin: '6px 0' }}>
       {data.facts.map(f => (
         <div key={f.id} style={{ marginBottom: 6 }}>
-          {kind !== 'fact' && <div className="small">f{f.id} [{f.category}] {f.text}</div>}
+          {kind !== 'fact' && <div className="small">f{f.id} [{f.category}] {f.display || f.text}</div>}
           {f.evidence.map((e, i) => (
             <div key={i} className="small muted" style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
               <span>↳</span>
@@ -100,6 +101,7 @@ const KnowledgeDistilled: React.FC<{ base: string; onOpenNote: (permalink: strin
       .then(d => {
         if (!live) return;
         setSt(d);
+        setErr(null);
         const now = d.job?.status === 'running' || !!d.running;
         if (wasRunning.current && !now) setReload(r => r + 1);
         wasRunning.current = now;
@@ -126,14 +128,19 @@ const KnowledgeDistilled: React.FC<{ base: string; onOpenNote: (permalink: strin
   useEffect(() => {
     let live = true;
     const t = window.setTimeout(() => {
-      api<{ facts: Fact[]; total: number }>(`/api/knowledge/facts?${q(base)}&limit=200&q=${encodeURIComponent(query.trim())}`)
-        .then(r => { if (live) { setFacts(r.facts || []); setFactTotal(r.total || 0); } })
+      api<{ facts: Fact[]; total: number }>(`/api/knowledge/facts?${q(base)}&limit=200&q=${encodeURIComponent(query.trim())}${aboutOnly ? '&about_user=true' : ''}`)
+        .then(r => { if (live) { setFacts(r.facts || []); setFactTotal(r.total || 0); setErr(null); } })
         .catch(e => { if (live) setErr((e as Error).message); });
     }, 250);
     return () => { live = false; window.clearTimeout(t); };
-  }, [base, query, reload]);
+  }, [base, query, reload, aboutOnly]);
 
   const running = st?.job?.status === 'running' || !!st?.running;
+
+  const stop = async () => {
+    try { await api(`/api/knowledge/distill?${q(base)}`, { method: 'DELETE' }); } catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
+    setPoll(n => n + 1);
+  };
 
   const run = async (full: boolean) => {
     setMsg(null);
@@ -145,7 +152,7 @@ const KnowledgeDistilled: React.FC<{ base: string; onOpenNote: (permalink: strin
   };
 
   const toggle = (key: string) => setOpen(o => (o === key ? null : key));
-  const shown = aboutOnly ? facts.filter(f => f.about_user) : facts;
+  const shown = facts;
   const job = st?.job;
 
   return (
@@ -172,9 +179,10 @@ const KnowledgeDistilled: React.FC<{ base: string; onOpenNote: (permalink: strin
             </div>
             {running && <p className="small">{job?.phase === 'distilling' && job.total ? `Distilling ${job.done}/${job.total} notes…` : 'Distilling…'}</p>}
             {job && job.status !== 'running' && (job.error || job.result?.message) && (
-              <div className={`notice ${job.status === 'done' ? '' : 'error'}`} style={{ marginTop: 6 }}>{job.error || job.result?.message}</div>
+              <div className={`notice ${job.status === 'error' ? 'error' : ''}`} style={{ marginTop: 6 }}>{job.error || job.result?.message}</div>
             )}
             <div className="kb-buttons" style={{ marginTop: 8 }}>
+              {running && <button type="button" className="ghost-btn" onClick={stop} title="Stop after the current batch; the next run continues">Stop</button>}
               <button type="button" className="primary-btn" disabled={running} onClick={() => run(false)} title="Read the notes changed since the last run">Distil now</button>
               <button type="button" className="ghost-btn" disabled={running} onClick={() => run(true)} title="Read every note again">Rebuild</button>
             </div>
@@ -242,7 +250,8 @@ const KnowledgeDistilled: React.FC<{ base: string; onOpenNote: (permalink: strin
               style={{ background: 'none', border: 0, padding: '3px 0', color: 'inherit', textAlign: 'left', cursor: 'pointer', width: '100%', display: 'flex', gap: 8, alignItems: 'center' }}>
               <Conf value={f.confidence} />
               <span className="kb-tag">{f.category}</span>
-              <span className="small" style={{ flex: 1 }}>{f.text}</span>
+              <span className="small" style={{ flex: 1 }}>{f.display || f.text}</span>
+              {f.instruction && <span className="muted small" title="Addressed to the assistant or a rule: never given to the agent as context">not used</span>}
               {f.conflicted && <span title="Contradicts another fact on its note (open the note to resolve)" style={{ color: '#d29922' }}>⚠</span>}
               <span className="muted small" title="Supporting notes">{f.support} note{f.support === 1 ? '' : 's'}</span>
             </button>
