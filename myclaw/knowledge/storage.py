@@ -432,6 +432,7 @@ def write_note(
         else:
             if merged.created_at is None and "created" not in given.raw_frontmatter:
                 merged.created_at = (old.created_at if old else None) or now
+            merged.updated_at = now
             markdown_content = generate_markdown(merged)
     else:
         # ``content`` is the free text: the file gets frontmatter, title, text,

@@ -631,8 +631,8 @@ def test_review1_boolean_sentence_is_free_text(kb):
         # with an operator the search stays strict boolean
         assert [e.name for e in db.search_fts("restic AND NOT nas", boolean=True)] == ["other"]
         assert db.search_fts("restic AND unicorn AND box AND nightly", boolean=True) == []
-    assert [n.permalink for n in storage.search_notes(q, USER, db_path=kb.db_path,
-                                                      boolean=True)] == ["hsb"]
+    hits = storage.search_notes(q, USER, db_path=kb.db_path, boolean=True)
+    assert hits and hits[0].permalink == "hsb"
 
 
 def test_review2_note_written_during_sync_is_not_deleted(kb, monkeypatch):

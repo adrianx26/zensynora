@@ -122,12 +122,13 @@ def test_metadata_round_trip_is_stable(home):
     assert [(o.category, o.content) for o in n.observations] == [("fact", "one")]
 
 
-def test_generate_markdown_skips_reserved_and_bad_metadata_keys():
-    from myclaw.knowledge.parser import Note, generate_markdown
+def test_generate_markdown_skips_reserved_and_quotes_odd_metadata_keys():
+    from myclaw.knowledge.parser import Note, generate_markdown, parse_frontmatter
 
     md = generate_markdown(Note(name="x", permalink="x", title="X", content="",
-                                metadata={"title": "no", "bad key!": 1, "ok": "yes"}))
-    assert "ok: yes" in md and "bad key" not in md and md.count("title:") == 1
+                                metadata={"title": "no", "odd key!": 1, "ok": "yes"}))
+    assert "ok: yes" in md and '"odd key!": 1' in md and md.count("title:") == 1
+    assert parse_frontmatter(md)["odd key!"] == "1"
 
 
 # ── 4. task boxes ────────────────────────────────────────────────────────────
@@ -358,3 +359,262 @@ def test_search_notes_accepts_boolean(home):
     write_note("Alpha", content="apples and pears")
     assert [n.permalink for n in search_notes("apples", boolean=True)] == ["alpha"]
     assert [n.permalink for n in search_notes("apples")] == ["alpha"]
+
+
+# ── review fixes (2026-10-23) ────────────────────────────────────────────────
+
+def _trash(home):
+    return sorted((_kdir(home) / ".trash").glob("*.md")) if (_kdir(home) / ".trash").is_dir() else []
+
+
+HAND = ("---\ntags: [homelab]\nstatus: active\n---\n# Home Server\n\nMy hand-written notes: rack, UPS.\n\n"
+        "## Observations\n- [spec] 64 GB RAM\n\n## Relations\n- hosts [[Nextcloud]]\n")
+
+
+def test_r1_lossy_rewrite_keeps_the_old_file_in_trash(home, caplog):
+    import logging
+
+    from myclaw.knowledge import sync_knowledge, write_note
+
+    f = _note(home, "Projects/Home Server.md", HAND)
+    sync_knowledge("default")
+    with caplog.at_level(logging.INFO, logger="myclaw.knowledge.storage"):
+        write_note(name="Home Server", title="Home Server",
+                   content="The home server runs Debian.", tags=["linux"])
+    assert "runs Debian" in f.read_text()  # same note, replaced in place
+    assert not (_kdir(home) / "home-server.md").exists()
+    kept = _trash(home)
+    assert len(kept) == 1 and kept[0].read_text() == HAND
+    assert kept[0].name.startswith("Home Server-")
+    assert "previous version kept in .trash/" in caplog.text
+
+
+def test_r1_no_trash_copy_when_nothing_is_lost(home):
+    from myclaw.knowledge import read_note, update_note, write_note
+
+    write_note("Diary", content="Day one.", tags=["a"])
+    write_note("Diary", content="Day one.\n\nDay two.", tags=["a", "b"])  # append + new tag
+    update_note("diary", tags=["a", "b", "c"])
+    update_note("diary")
+    assert _trash(home) == []
+    update_note("diary", tags=["a"])  # drops tags b, c
+    assert len(_trash(home)) == 1
+    update_note("diary", content="Completely new.")
+    assert len(_trash(home)) == 2 and "Day two." in _trash(home)[-1].read_text()
+    assert read_note("diary").tags == ["a"]
+
+
+def test_r2_a_file_named_like_the_note_but_holding_another_permalink(home):
+    from myclaw.knowledge import delete_note, read_note, sync_knowledge, update_note, write_note
+
+    other = _note(home, "x.md", "---\ntitle: Y\npermalink: y\n---\n\n# Y\n\nI am note y.\n")
+    sync_knowledge("default")
+    assert read_note("x") is None
+    assert delete_note("x") is False and update_note("x", tags=["t"]) is False
+    assert other.exists() and read_note("y").title == "Y"
+    write_note("x", content="I am note x.")
+    assert "I am note y." in other.read_text()
+    n = read_note("x")
+    assert n is not None and "I am note x." in n.content and n.file_path.name == "x-2.md"
+    assert read_note("y").file_path == other
+
+
+def test_r3_pasted_permalink_cannot_take_over_another_note(home):
+    from myclaw.knowledge import read_note, write_note
+    from myclaw.knowledge.db import KnowledgeDB
+
+    write_note("Victim", content="victim body")
+    write_note("Attacker", content="---\ntitle: Attacker\npermalink: victim\n---\n\nmine\n")
+    with KnowledgeDB("default") as db:
+        assert Path(db.get_entity_by_permalink("victim").file_path).name == "victim.md"
+        assert Path(db.get_entity_by_permalink("attacker").file_path).name == "attacker.md"
+    assert "victim body" in read_note("victim").content
+    assert read_note("attacker").permalink == "attacker"
+    assert "permalink: attacker" in (_kdir(home) / "attacker.md").read_text()
+
+
+def test_r4_whole_file_content_merges_the_other_arguments(home):
+    from myclaw.knowledge import read_note
+    from myclaw.tools.kb import write_to_knowledge
+
+    write_to_knowledge("Full", "---\ntitle: Full\n---\nbody", tags="t1, t2",
+                       observations="spec | 32 GB", relations="uses | Notes")
+    n = read_note("full")
+    assert n.tags == ["t1", "t2"] and [(o.category, o.content) for o in n.observations] == [("spec", "32 GB")]
+    assert [(r.relation_type, r.target) for r in n.relations] == [("uses", "Notes")]
+    assert "body" in n.content
+
+
+def test_r4_a_body_starting_with_a_rule_is_text(home):
+    from myclaw.knowledge import read_note, write_note
+
+    write_note("Ruled", content="---\nNot frontmatter, just a rule above.", tags=["t"])
+    n = read_note("ruled")
+    assert n.tags == ["t"] and "Not frontmatter, just a rule above." in n.content
+    assert n.title == "Ruled"
+
+
+SECTIONS = """---
+title: Sections
+---
+
+# A Different Heading
+
+Intro text.
+
+## Notes
+
+Some general notes paragraph.
+
+## Observations
+
+- [fact] Earth is round #geo
+
+## Tasks
+
+- [ ] buy milk
+
+```
+- [code] not a fact
+- uses [[NotALink]]
+```
+
+## Relations
+
+- uses [[Other]]
+
+## Further reading
+
+- see [[Elsewhere]]
+- related [[Third]]
+"""
+
+
+def test_r5_facts_and_links_from_every_section(home):
+    from myclaw.knowledge import read_note, sync_knowledge, update_note
+
+    f = _note(home, "sections.md", SECTIONS)
+    sync_knowledge("default")
+    n = read_note("sections")
+    assert [(o.category, o.content) for o in n.observations] == [("fact", "Earth is round")]
+    assert [(r.relation_type, r.target) for r in n.relations] == [
+        ("uses", "Other"), ("see", "Elsewhere"), ("related", "Third")]
+    update_note("sections")
+    raw = f.read_text()
+    for text in ("# A Different Heading", "Intro text.", "Some general notes paragraph.",
+                 "- [ ] buy milk", "- [code] not a fact", "- uses [[NotALink]]",
+                 "- [fact] Earth is round #geo", "- see [[Elsewhere]]", "- related [[Third]]"):
+        assert text in raw, text
+    assert raw.count("Earth is round") == 1 and raw.count("[[Elsewhere]]") == 1
+    assert _trash(home) == []
+    again = read_note("sections")
+    assert [(r.relation_type, r.target) for r in again.relations] == [
+        ("uses", "Other"), ("see", "Elsewhere"), ("related", "Third")]
+
+
+def test_r5_note_titled_links_keeps_its_relations(home):
+    from myclaw.knowledge import read_note, sync_knowledge, update_note
+
+    _note(home, "links.md", "---\ntitle: Links\n---\n# Links\n\nIntro.\n\n## More\n\n- uses [[A]]\n- [k] v\n")
+    sync_knowledge("default")
+    assert [r.target for r in read_note("links").relations] == ["A"]
+    update_note("links")
+    n = read_note("links")
+    assert [r.target for r in n.relations] == ["A"] and [o.content for o in n.observations] == ["v"]
+
+
+GNARLY = """---
+title: Nested
+source:
+  url: http://x
+  urls:
+    - a
+    - b
+Date Created: 2024-01-01
+"quoted key": v
+ключ: значение
+2fa: yes
+name: Custom Name
+created: Jan 1 2024
+tags:
+  - alpha
+  - beta gamma
+# a comment
+desc: |
+  line one
+  line two
+deep:
+  a:
+    b: c
+---
+
+# Nested
+
+Some body.
+"""
+
+
+def test_r6_gnarly_frontmatter_survives_a_no_op_update(home):
+    from myclaw.knowledge import read_note, sync_knowledge, update_note
+    from myclaw.knowledge.parser import parse_frontmatter
+
+    f = _note(home, "nested.md", GNARLY)
+    sync_knowledge("default")
+    before = parse_frontmatter(GNARLY)
+    assert before["source"] == {"url": "http://x", "urls": ["a", "b"]}
+    assert before["deep"] == {"a": {"b": "c"}}
+    update_note("nested")
+    raw = f.read_text()
+    after = parse_frontmatter(raw)
+    for key, value in before.items():
+        assert after[key] == value, key
+    # unchanged keys keep their original lines
+    for block in ("source:\n  url: http://x\n  urls:\n    - a\n    - b", "Date Created: 2024-01-01",
+                  '"quoted key": v', "ключ: значение", "2fa: yes", "name: Custom Name",
+                  "created: Jan 1 2024", "tags:\n  - alpha\n  - beta gamma",
+                  "# a comment\ndesc: |\n  line one\n  line two", "deep:\n  a:\n    b: c"):
+        assert block in raw, block
+    n = read_note("nested")
+    assert n.name == "Custom Name" and n.created_at is None and "Some body." in n.content
+    assert _trash(home) == []
+    update_note("nested")
+    assert f.read_text().split("updated:")[0] == raw.split("updated:")[0]
+
+
+def test_r6_changed_values_are_written_and_read_back(home):
+    from myclaw.knowledge import read_note, sync_knowledge, update_note
+
+    _note(home, "nested.md", GNARLY)
+    sync_knowledge("default")
+    meta = dict(read_note("nested").metadata)
+    meta["source"] = {"url": "http://y", "urls": ["c"], "deep": {"k": "v"}}
+    meta["Date Created"] = "2025-02-02"
+    meta["новый"] = ["x", "y z"]
+    update_note("nested", metadata=meta)
+    assert read_note("nested").metadata == meta
+
+
+# ── performance ──────────────────────────────────────────────────────────────
+
+def test_r7_one_index_lookup_per_batch(home, monkeypatch):
+    from myclaw.knowledge import get_all_tags, search_notes, sync_knowledge
+    from myclaw.knowledge import db as dbm
+    from myclaw.knowledge.storage import _batch_read_notes
+
+    for i in range(30):
+        _note(home, f"folder/Note {i}.md", f"---\ntitle: Note {i}\ntags: [t{i % 3}]\n---\n\nlorem {i}\n")
+    sync_knowledge("default")
+    opens = {"n": 0}
+    real = dbm.KnowledgeDB._init_db
+
+    def counted(self):
+        opens["n"] += 1
+        return real(self)
+
+    monkeypatch.setattr(dbm.KnowledgeDB, "_init_db", counted)
+    notes = _batch_read_notes([f"note-{i}" for i in range(30)], "default")
+    assert len(notes) == 30 and opens["n"] == 1
+    opens["n"] = 0
+    assert get_all_tags("default") == ["t0", "t1", "t2"] and opens["n"] == 2
+    opens["n"] = 0
+    assert len(search_notes("lorem", limit=20)) == 20 and opens["n"] == 2
