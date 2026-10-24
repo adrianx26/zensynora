@@ -174,9 +174,40 @@ def _link_candidates(name: Any) -> List[str]:
     if base.lower().endswith(".md"):
         base = base[:-3]
         add(base)
-    if "#" in base:
-        add(base.split("#", 1)[0])
+    # 2026-10-24 (KB phase 0 review): only "Note#Heading" (no space on either
+    # side of the first "#") is a section link — "C# tips" and "C#" are names.
+    head, sep, section = base.partition("#")
+    if sep and head.strip() and section and not head[-1].isspace() \
+            and not section[0].isspace():
+        add(head)
     return out
+
+
+# Characters that carry meaning in a name: a target containing one is never
+# matched by its slug ("C#" / "C++" must not become note "c"). 2026-10-24.
+_SLUG_UNSAFE = set("#+@&%$*=<>|~^")
+
+
+def _target_slug(text: Any) -> str:
+    """The slug of a link target, or "" when slugging would change its meaning."""
+    text = str(text or "")
+    if any(ch in _SLUG_UNSAFE for ch in text):
+        return ""
+    return _slug(text)
+
+
+def _link_keys(to_name: Any) -> Tuple[str, str, str]:
+    """(key, alt, slug) of a link text, for indexed lookups of links.
+
+    key = folded target (``[[X|label]]`` → x), alt = folded target without
+    ".md" / "#Heading", slug = slug of the target ("" if unsafe).
+    """
+    raw = str(to_name or "").strip()
+    if raw.startswith("[[") and raw.endswith("]]"):
+        raw = raw[2:-2]
+    base = raw.split("|", 1)[0].strip()
+    cands = _link_candidates(base) if base else [base]
+    return _fold(base), _fold(cands[-1]), _target_slug(base)
 
 
 def _as_str_list(value: Any, strip_hash: bool = True) -> List[str]:
@@ -295,6 +326,7 @@ class KnowledgeDB:
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._conn: Optional[sqlite3.Connection] = None
+        self._batch_depth = 0  # 2026-10-24: >0 inside batch() (one big transaction)
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -567,15 +599,38 @@ class KnowledgeDB:
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_aliases_entity_id ON entity_aliases(entity_id)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_aliases_alias ON entity_aliases(alias)")
-        # 2026-10-23 (KB phase 0): case-insensitive link resolution uses these.
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entity_aliases_alias_nc "
-                     "ON entity_aliases(alias COLLATE NOCASE)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_permalink_nc "
-                     "ON entities(permalink COLLATE NOCASE)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_name_nc "
-                     "ON entities(name COLLATE NOCASE)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_entities_title_nc "
-                     "ON entities(title COLLATE NOCASE)")
+        # 2026-10-24 (KB phase 0 review): Unicode case-folded copies of the
+        # names a link can use, indexed (kb_fold scans were quadratic), and
+        # the folded link text of each relation (to re-resolve links when a
+        # note is renamed / retitled / added). Filled by the Python code.
+        for table, col in (("entities", "permalink_fold"), ("entities", "name_fold"),
+                           ("entities", "title_fold"), ("entity_aliases", "alias_fold"),
+                           ("relations", "to_key"), ("relations", "to_alt"),
+                           ("relations", "to_slug")):
+            try:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} TEXT")
+            except sqlite3.OperationalError:
+                pass
+        for name, table, col in (
+                ("idx_entities_permalink_fold", "entities", "permalink_fold"),
+                ("idx_entities_name_fold", "entities", "name_fold"),
+                ("idx_entities_title_fold", "entities", "title_fold"),
+                ("idx_entity_aliases_alias_fold", "entity_aliases", "alias_fold"),
+                ("idx_relations_to_key", "relations", "to_key"),
+                ("idx_relations_to_alt", "relations", "to_alt"),
+                ("idx_relations_to_slug", "relations", "to_slug")):
+            conn.execute(f"CREATE INDEX IF NOT EXISTS {name} ON {table}({col})")
+        # Rows written before these columns existed (or by an older version).
+        conn.execute(
+            "UPDATE entities SET permalink_fold = kb_fold(permalink), name_fold = kb_fold(name), "
+            "title_fold = kb_fold(title) WHERE permalink_fold IS NULL OR name_fold IS NULL "
+            "OR (title IS NOT NULL AND title_fold IS NULL)")
+        conn.execute("UPDATE entity_aliases SET alias_fold = kb_fold(alias) "
+                     "WHERE alias_fold IS NULL")
+        for row in conn.execute("SELECT id, to_name FROM relations WHERE to_name IS NOT NULL "
+                                "AND to_key IS NULL").fetchall():
+            conn.execute("UPDATE relations SET to_key = ?, to_alt = ?, to_slug = ? WHERE id = ?",
+                         (*_link_keys(row["to_name"]), row["id"]))
 
         # Phase 2 (MemoPad import): add context and provenance_path to observations
         try:

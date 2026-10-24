@@ -123,16 +123,67 @@ def _extract_search_terms(query: str) -> List[str]:
 
 # 2026-10-23 (KB phase 0): ``tag:name`` terms in a search_knowledge query.
 _TAG_RE = re.compile(r"(?<!\S)tag:([\w][\w\-/.]*)", re.IGNORECASE)
-_DANGLING_OP_RE = re.compile(r"^(?:\s*\b(?:AND|OR|NOT)\b\s*)+|(?:\s*\b(?:AND|OR|NOT)\b\s*)+$")
+# Only AND / OR are dropped when they dangle; a NOT is never turned into a
+# positive term (review 2026-10-23: "tag:homelab NOT nas" searched for "nas").
+_DANGLING_OP_RE = re.compile(r"^(?:(?:AND|OR)\s+)+|(?:\s+(?:AND|OR|NOT))+$|^(?:AND|OR|NOT)$")
+# "NOT term" / "NOT \"a phrase\"" (uppercase NOT only — "is not working" is text)
+_NOT_TERM_RE = re.compile(r'(?<!\S)NOT\s+("[^"]*"|[^\s()"]+)')
 
 
 def _split_tag_terms(query: str):
-    """``(text query, [tags])`` — the ``tag:name`` terms taken out of the query."""
+    """``(text query, [tags])`` — the ``tag:name`` terms taken out of the query.
+
+    Without ``tag:`` terms the query comes back unchanged.
+    """
+    if not _TAG_RE.search(query or ""):
+        return (query or "").strip(), []
     tags = [t.lower().rstrip(".") for t in _TAG_RE.findall(query or "")]
-    rest = _TAG_RE.sub(" ", query or "")
-    rest = re.sub(r"\b(AND|OR)\s+(?=\b(?:AND|OR)\b)", "", rest)  # "a AND  AND b"
-    rest = _DANGLING_OP_RE.sub("", " ".join(rest.split())).strip()
+    rest = " ".join(_TAG_RE.sub(" ", query or "").split())
+    rest = re.sub(r"\b(?:AND|OR)\s+(?=(?:AND|OR|NOT)\b)", "", rest)  # "a AND OR b", "AND NOT b"
+    rest = _DANGLING_OP_RE.sub("", rest).strip()
     return rest, tags
+
+
+def _split_negations(text: str):
+    """``(positive query, [negated terms])`` when ``text`` starts with NOT.
+
+    FTS5 cannot start a query with NOT, so "NOT nas" / "NOT nas backup" are
+    run as "everything in scope (or: backup) except notes matching nas".
+    Other queries come back unchanged with no negated terms.
+    """
+    if not text.startswith("NOT "):
+        return text, []
+    negated = [m.strip('"') for m in _NOT_TERM_RE.findall(text)]
+    positive = " ".join(_NOT_TERM_RE.sub(" ", text).split())
+    positive = re.sub(r"\b(?:AND|OR)\s+(?=(?:AND|OR)\b)", "", positive)
+    positive = _DANGLING_OP_RE.sub("", positive).strip()
+    return positive, [n for n in negated if n.strip(" *")]
+
+
+def _matches_term(note: Any, term: str) -> bool:
+    """Does the note's title or text contain ``term`` (a word, prefix* or phrase)?"""
+    prefix = term.endswith("*")
+    words = term.rstrip("*").split()
+    if not words:
+        return False
+    pattern = r"\b" + r"\s+".join(re.escape(w) for w in words) + (r"\w*" if prefix else r"\b")
+    hay = f"{getattr(note, 'title', '')}\n{getattr(note, 'content', '')}"
+    return bool(re.search(pattern, hay if isinstance(hay, str) else "", re.IGNORECASE))
+
+
+def _exclude(notes: list, negated: List[str], user_id: str) -> list:
+    """``notes`` without those matching any negated term (index or text)."""
+    if not negated:
+        return notes
+    hit: set = set()
+    for term in negated:
+        q = f'"{term}"' if " " in term else term
+        try:
+            hit.update(n.permalink for n in search_notes(q, user_id, 200, boolean=True))
+        except Exception as e:
+            logger.debug("NOT %s: index search failed: %s", term, e)
+    return [n for n in notes
+            if n.permalink not in hit and not any(_matches_term(n, t) for t in negated)]
 
 
 def _note_tags(note: Any) -> set:
@@ -175,7 +226,8 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> st
 
     Args:
         query: Search query (supports AND, OR, NOT, "quoted phrases", prefix*,
-               and tag:name to keep only notes with that tag)
+               and tag:name to keep only notes with that tag; a query that
+               starts with NOT means "every note (with the tags) except")
         limit: Maximum number of results (default: 5)
         user_id: User ID for multi-user isolation
 
@@ -186,23 +238,32 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> st
         # 2026-10-23 (KB phase 0): AND/OR/NOT really work (boolean=True), and
         # tag:name filters by tag; a query of only tags lists the tagged notes.
         text_query, tags = _split_tag_terms(query)
+        # Review fix: a leading NOT means "everything in scope except" — the
+        # NOT terms filter the result, they are never searched for.
+        positive, negated = _split_negations(text_query)
         try:
             limit = max(1, int(limit))
         except (TypeError, ValueError):
             limit = 5
-        if tags and not text_query:
-            notes = _notes_with_tag(tags[0], user_id)
+        fetch = limit * 4 if (tags or negated) else limit
+        if positive:
+            # the text is passed on as it is: plain sentences are free text,
+            # AND/OR/NOT and "phrases" are search syntax (db.search_fts)
+            notes = search_notes(positive, user_id, fetch, boolean=True)
         elif tags:
-            notes = search_notes(text_query, user_id, limit * 4, boolean=True)
+            notes = _notes_with_tag(tags[0], user_id)
+        elif negated:
+            notes = list_notes(user_id)  # "NOT nas" alone: every note without nas
         else:
             notes = search_notes(query, user_id, limit, boolean=True)
         if tags:
             notes = [n for n in notes if all(t in _note_tags(n) for t in tags)]
-        notes = list(notes or [])[:limit]
+        notes = _exclude(list(notes or []), negated, user_id)
+        notes = notes[:limit]
 
         if not notes:
             # Generate actionable guidance for empty results
-            suggested_terms = _extract_search_terms(text_query if tags else query)
+            suggested_terms = _extract_search_terms(positive if (tags or negated) else query)
 
             # Build broader query suggestion
             broader_query = " OR ".join(suggested_terms[:3]) if len(suggested_terms) > 1 else query

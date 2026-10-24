@@ -20,18 +20,37 @@ def _sample_tool(query: str, limit: int = 5, ratio: float = 0.5, exact: bool = F
                        "sliced": "abcdefgh"[:limit]})
 
 
-def test_mcp_schema_uses_annotations_and_hides_user_id():
+def test_mcp_schema_uses_annotations():
     from myclaw.mcp.server import build_input_schema
 
     schema = build_input_schema(_sample_tool)  # string annotations (__future__)
     props = schema["properties"]
     assert {k: v["type"] for k, v in props.items()} == {
         "query": "string", "limit": "integer", "ratio": "number", "exact": "boolean",
-        "tags": "array", "opts": "object"}
+        "tags": "array", "opts": "object", "user_id": "string"}
     assert props["limit"]["default"] == 5 and props["exact"]["default"] is False
     assert "default" not in props["tags"]  # None defaults are not advertised
     assert schema["required"] == ["query"]
-    assert "user_id" not in props and "kwargs" not in props
+    assert "kwargs" not in props
+
+
+def test_mcp_user_id_hidden_only_for_knowledge_tools():
+    """Regression: non-knowledge tools (schedule, swarm_*, user profile) keep user_id."""
+    import myclaw.tools as m_tools
+    from myclaw.mcp.server import coerce_arguments, list_tool_definitions
+
+    tools = {t.name: t.inputSchema for t in list_tool_definitions()}
+    for name in ("schedule", "nlp_schedule", "swarm_list", "swarm_stats", "swarm_assign",
+                 "get_user_profile", "update_user_profile", "generate_session_insights"):
+        assert tools[name]["properties"]["user_id"] == {"type": "string", "default": "default"}, name
+        func = m_tools.TOOLS[name]["func"]
+        assert coerce_arguments(func, {"user_id": "alice"}) == {"user_id": "alice"}, name
+    for name in ("write_to_knowledge", "search_knowledge", "read_knowledge", "list_knowledge",
+                 "get_knowledge_context", "get_related_knowledge", "sync_knowledge_base",
+                 "list_knowledge_tags"):
+        assert "user_id" not in tools[name]["properties"], name
+        func = m_tools.TOOLS[name]["func"]
+        assert "user_id" not in coerce_arguments(func, {"user_id": "alice"}), name
 
 
 def test_mcp_lists_real_knowledge_tools_with_types():
@@ -52,7 +71,7 @@ def test_mcp_coerces_string_arguments(monkeypatch):
         "query": 42, "limit": "3", "ratio": "2.5", "exact": "true", "tags": "a, b",
         "opts": '{"x": 1}', "user_id": "someone-else", "extra": "kept"})
     assert args == {"query": "42", "limit": 3, "ratio": 2.5, "exact": True, "tags": ["a", "b"],
-                    "opts": {"x": 1}, "extra": "kept"}
+                    "opts": {"x": 1}, "user_id": "someone-else", "extra": "kept"}
     assert coerce_arguments(_sample_tool, {"exact": "0", "tags": '["x"]', "limit": 4.0}) == {
         "exact": False, "tags": ["x"], "limit": 4}
 
@@ -60,6 +79,9 @@ def test_mcp_coerces_string_arguments(monkeypatch):
     out = json.loads(asyncio.run(call_registered_tool("_phase0_sample",
                                                       {"query": "q", "limit": "2"}))[0].text)
     assert out["limit"] == 2 and out["sliced"] == "ab" and out["user_id"] == "default"
+    out = json.loads(asyncio.run(call_registered_tool(
+        "_phase0_sample", {"query": "q", "user_id": "alice"}))[0].text)
+    assert out["user_id"] == "alice"  # a non-knowledge tool receives user_id
 
     bad = asyncio.run(call_registered_tool("_phase0_sample", {"query": "q", "limit": "lots"}))[0].text
     assert "limit" in bad and "whole number" in bad

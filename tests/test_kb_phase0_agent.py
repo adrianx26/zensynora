@@ -142,6 +142,61 @@ def test_search_knowledge_or_tag_filter_and_snippet(home):
     assert "No results found" in search_knowledge("apples tag:fruit")
 
 
+def _homelab(home):
+    from myclaw.knowledge import write_note
+
+    write_note("Home server backup", tags=["homelab"],
+               content="We use restic to back up the home server every night to the NAS.")
+    write_note("Router", tags=["homelab"], content="The router is an OpenWrt box in the hallway.")
+    write_note("NAS box", tags=["homelab"], content="The nas holds 8 TB of photos and backups.")
+    write_note("Shopping list", content="Milk, eggs and bread.")
+
+
+def test_natural_sentence_search_finds_notes(home):
+    """Review 2026-10-23: boolean=True must not make plain sentences find nothing
+    (db.search_fts treats text without AND/OR/NOT/NEAR or quotes as free text)."""
+    from myclaw.tools.kb import search_knowledge
+
+    _homelab(home)
+    out = search_knowledge("what do we use for the home server backup")
+    assert "Home server backup" in out and "No results found" not in out
+
+
+def test_tag_with_not_excludes_instead_of_searching(home):
+    """Review 2026-10-23: "tag:homelab NOT nas" returned the NAS note."""
+    from myclaw.tools.kb import search_knowledge
+
+    _homelab(home)
+    out = search_knowledge("tag:homelab NOT nas", limit=10)
+    assert "Router" in out
+    assert "NAS box" not in out and "Home server backup" not in out   # both mention nas
+    assert "Shopping list" not in out                                 # no homelab tag
+
+    with_nas = search_knowledge("tag:homelab nas", limit=10)
+    assert "NAS box" in with_nas and "Router" not in with_nas and "Shopping list" not in with_nas
+
+
+def test_not_alone_lists_every_note_without_the_term(home):
+    """A leading NOT with no positive term means "every note except"."""
+    from myclaw.tools.kb import search_knowledge
+
+    _homelab(home)
+    out = search_knowledge("NOT nas", limit=10)
+    assert "Router" in out and "Shopping list" in out
+    assert "NAS box" not in out and "Home server backup" not in out
+
+
+def test_split_negations():
+    from myclaw.tools.kb import _split_negations, _split_tag_terms
+
+    assert _split_tag_terms("tag:homelab NOT nas") == ("NOT nas", ["homelab"])
+    assert _split_tag_terms("tag:homelab AND NOT nas") == ("NOT nas", ["homelab"])
+    assert _split_negations("NOT nas") == ("", ["nas"])
+    assert _split_negations('NOT "old box" backup') == ("backup", ["old box"])
+    assert _split_negations("backup NOT nas") == ("backup NOT nas", [])     # FTS5 handles it
+    assert _split_tag_terms("why is it not working") == ("why is it not working", [])
+
+
 def test_split_tag_terms():
     from myclaw.tools.kb import _split_tag_terms
 
