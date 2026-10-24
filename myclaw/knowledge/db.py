@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Callable, Tuple
+from typing import List, Optional, Dict, Any, Callable, Tuple, Iterable
 
 from .parser import Note, Observation, Relation
 
@@ -135,6 +135,14 @@ def _sanitize_boolean_query(query: str) -> str:
         n_terms += 1
         pending_op = None  # a trailing operator is never emitted
     return " ".join(out) if out else "*"
+
+
+_BOOLEAN_SYNTAX_RE = re.compile(r'"|\b(?:AND|OR|NOT|NEAR)\b')
+
+
+def _has_boolean_syntax(query: str) -> bool:
+    """An UPPERCASE AND/OR/NOT/NEAR or a double quote (2026-10-24)."""
+    return bool(query) and bool(_BOOLEAN_SYNTAX_RE.search(query))
 
 
 # ── Link-target helpers (2026-10-23, KB phase 0) ─────────────────────────────
@@ -782,18 +790,85 @@ class KnowledgeDB:
             cursor = conn.execute(
                 """
                 INSERT INTO entities (name, permalink, file_path, created_at, updated_at,
-                                     checksum, mtime, size, entity_metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                     checksum, mtime, size, entity_metadata,
+                                     permalink_fold, name_fold)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (name, permalink, str(file_path), now, now,
-                 checksum, mtime, size, json.dumps(entity_metadata) if entity_metadata else None),
+                 checksum, mtime, size, json.dumps(entity_metadata) if entity_metadata else None,
+                 _fold(permalink), _fold(name)),
             )
-            conn.commit()
-            return cursor.lastrowid
+            if self._batch_depth == 0:
+                conn.commit()
+            return int(cursor.lastrowid or 0)
         except sqlite3.IntegrityError as e:
             # 2026-10-23 (KB phase 0): caused by the caller's input → WARNING
             logger.warning(f"Entity already exists: {permalink}")
             raise ValueError(f"Entity with permalink '{permalink}' already exists") from e
+
+    # ── Transactions (2026-10-24, KB phase 0 review) ─────────────────────────
+    @contextmanager
+    def _write_txn(self):
+        """One write transaction, taken with BEGIN IMMEDIATE.
+
+        The write lock is held from the first read, so two processes indexing
+        the same note cannot both decide "it does not exist yet" (that gave
+        "UNIQUE constraint failed"). Inside ``batch()`` it is a SAVEPOINT, so
+        one failing note is undone without undoing the batch.
+        """
+        conn = self._get_connection()
+        if self._batch_depth > 0:
+            name = f"kb_sp_{self._batch_depth}"
+            self._batch_depth += 1
+            conn.execute(f"SAVEPOINT {name}")
+            try:
+                yield conn
+            except BaseException:
+                conn.execute(f"ROLLBACK TO {name}")
+                conn.execute(f"RELEASE {name}")
+                raise
+            else:
+                conn.execute(f"RELEASE {name}")
+            finally:
+                self._batch_depth -= 1
+            return
+        if conn.in_transaction:
+            conn.commit()
+        conn.execute("BEGIN IMMEDIATE")
+        try:
+            yield conn
+        except BaseException:
+            conn.rollback()
+            raise
+        else:
+            conn.commit()
+
+    @contextmanager
+    def batch(self):
+        """Run several index writes as ONE transaction (all or nothing).
+
+        Readers keep seeing the previous index until the end (used by the
+        full re-index). Inside, ``sync_entity_from_note``, ``delete_entity``
+        and ``clear_all_data`` use savepoints instead of committing; do not
+        call the other single-item methods (they commit).
+        """
+        conn = self._get_connection()
+        if self._batch_depth > 0:
+            yield self
+            return
+        if conn.in_transaction:
+            conn.commit()
+        conn.execute("BEGIN IMMEDIATE")
+        self._batch_depth = 1
+        try:
+            yield self
+        except BaseException:
+            conn.rollback()
+            raise
+        else:
+            conn.commit()
+        finally:
+            self._batch_depth = 0
 
     def get_entity_by_permalink(self, permalink: str) -> Optional[Entity]:
         """Get entity by permalink."""
@@ -908,15 +983,16 @@ class KnowledgeDB:
         2026-10-23 (KB phase 0): links from other notes to the deleted note are
         kept as unresolved links (``get_unresolved_relations``), so they come
         back when the note is restored or re-created — the same state a full
-        re-index from the files gives.
+        re-index from the files gives. A link that another note also matches
+        (e.g. the same title) moves to that note, as a re-index would do.
         """
-        conn = self._get_connection()
-        with conn:
+        with self._write_txn() as conn:
             row = conn.execute(
                 "SELECT id FROM entities WHERE permalink = ?", (permalink,)).fetchone()
             if row is None:
                 return False
             eid = row["id"]
+            folds, plinks = self._entity_keys(conn, eid)
             incoming = conn.execute(
                 "SELECT from_entity_id, relation_type, to_name FROM relations "
                 "WHERE to_entity_id = ? AND from_entity_id != ?", (eid, eid)).fetchall()
@@ -924,23 +1000,53 @@ class KnowledgeDB:
                 self._add_pending(conn, rel["from_entity_id"], rel["relation_type"],
                                   rel["to_name"] or permalink)
             cursor = conn.execute("DELETE FROM entities WHERE id = ?", (eid,))
+            self._relink_for_keys(conn, folds, plinks)
         return cursor.rowcount > 0
 
-    def clear_all_data(self) -> None:
+    def clear_all_data(self, keep_file_paths: Optional[Iterable[str]] = None) -> None:
         """Remove every entity, observation, relation and alias in one transaction.
 
         Used by ``SyncEngine.sync(force=True)`` (``knowledge sync --force``).
         Child tables are cleared first so this works with or without
         ``PRAGMA foreign_keys``; the FTS delete triggers keep the full-text
         indexes in step.
+
+        2026-10-24 (KB phase 0 review): ``keep_file_paths`` — entries of these
+        files are kept (a note file that cannot be read now keeps its entry,
+        as in an incremental sync); their links to removed notes become
+        unresolved links, resolved again when those notes are re-added.
         """
-        conn = self._get_connection()
-        with conn:
-            conn.execute("DELETE FROM relations")
-            conn.execute("DELETE FROM pending_relations")  # 2026-10-23 (KB phase 0)
-            conn.execute("DELETE FROM observations")
-            conn.execute("DELETE FROM entity_aliases")
-            conn.execute("DELETE FROM entities")
+        keep = {str(p) for p in (keep_file_paths or [])}
+        with self._write_txn() as conn:
+            kept: List[int] = []
+            if keep:
+                kept = [r["id"] for r in conn.execute("SELECT id, file_path FROM entities")
+                        if r["file_path"] in keep]
+            if not kept:
+                conn.execute("DELETE FROM relations")
+                conn.execute("DELETE FROM pending_relations")
+                conn.execute("DELETE FROM observations")
+                conn.execute("DELETE FROM entity_aliases")
+                conn.execute("DELETE FROM entities")
+                return
+            conn.execute("CREATE TEMP TABLE IF NOT EXISTS kb_keep (id INTEGER PRIMARY KEY)")
+            conn.execute("DELETE FROM kb_keep")
+            conn.executemany("INSERT INTO kb_keep (id) VALUES (?)", [(i,) for i in kept])
+            for rel in conn.execute(
+                    "SELECT r.from_entity_id, r.relation_type, "
+                    "COALESCE(r.to_name, e.permalink) AS to_name FROM relations r "
+                    "JOIN entities e ON e.id = r.to_entity_id "
+                    "WHERE r.from_entity_id IN (SELECT id FROM kb_keep) "
+                    "AND r.to_entity_id NOT IN (SELECT id FROM kb_keep)").fetchall():
+                self._add_pending(conn, rel["from_entity_id"], rel["relation_type"],
+                                  rel["to_name"])
+            conn.execute("DELETE FROM relations WHERE from_entity_id NOT IN (SELECT id FROM kb_keep) "
+                         "OR to_entity_id NOT IN (SELECT id FROM kb_keep)")
+            for table, col in (("pending_relations", "from_entity_id"),
+                               ("observations", "entity_id"),
+                               ("entity_aliases", "entity_id"), ("entities", "id")):
+                conn.execute(f"DELETE FROM {table} WHERE {col} NOT IN (SELECT id FROM kb_keep)")
+            conn.execute("DELETE FROM kb_keep")
 
     def add_observation(self, entity_id: int, category: str, content: str, tags: List[str] = None,
                         context: Optional[str] = None, provenance_path: Optional[str] = None):
@@ -992,11 +1098,12 @@ class KnowledgeDB:
         now = datetime.now().isoformat()
         try:
             cursor = conn.execute(
-                "INSERT INTO entity_aliases (entity_id, alias, created_at) VALUES (?, ?, ?)",
-                (entity_id, alias, now),
+                "INSERT INTO entity_aliases (entity_id, alias, created_at, alias_fold) "
+                "VALUES (?, ?, ?, ?)",
+                (entity_id, alias, now, _fold(alias)),
             )
             conn.commit()
-            return cursor.lastrowid
+            return int(cursor.lastrowid or 0)
         except sqlite3.IntegrityError:
             return -1
 
@@ -1015,15 +1122,15 @@ class KnowledgeDB:
             """SELECT e.* FROM entities e
                JOIN entity_aliases ea ON e.id = ea.entity_id
                WHERE ea.alias = ?
-               ORDER BY e.id LIMIT 1""",
+               ORDER BY e.file_path, e.id LIMIT 1""",
             (alias,),
         ).fetchone()
         if row is None and alias:
             row = conn.execute(
                 """SELECT e.* FROM entities e
                    JOIN entity_aliases ea ON e.id = ea.entity_id
-                   WHERE kb_fold(ea.alias) = ?
-                   ORDER BY e.id LIMIT 1""",
+                   WHERE ea.alias_fold = ?
+                   ORDER BY e.file_path, e.id LIMIT 1""",
                 (_fold(alias),),
             ).fetchone()
         if row:
@@ -1107,8 +1214,7 @@ class KnowledgeDB:
         2026-10-23 (KB phase 0): re-indexing a note used ``clear_relations``,
         which also deleted every link from other notes to it (lost backlinks).
         """
-        conn = self._get_connection()
-        with conn:
+        with self._write_txn() as conn:
             conn.execute("DELETE FROM relations WHERE from_entity_id = ?", (entity_id,))
             conn.execute("DELETE FROM pending_relations WHERE from_entity_id = ?", (entity_id,))
 
@@ -1119,39 +1225,34 @@ class KnowledgeDB:
         Tried in order, each case-insensitive: exact permalink, the slug of the
         target (``"Home server"`` → ``home-server``), note name, note title,
         alias. ``[[Target|label]]``, ``[[note.md]]`` and ``[[Note#Section]]``
-        are understood. No fuzzy matching: a wrong link is worse than none.
+        are understood (``[[C# tips]]`` is a name, not a section link). No
+        fuzzy matching: a wrong link is worse than none. When two notes match
+        at the same level, the one with the first file path wins (the same
+        answer however the index was built).
         """
         row = self._resolve_target_row(self._get_connection(), name)
         return _row_to_entity(row) if row is not None else None
 
     @staticmethod
     def _resolve_target_row(conn: sqlite3.Connection, name: Any):
+        # 2026-10-24 (KB phase 0 review): indexed *_fold columns instead of
+        # kb_fold() scans (quadratic for non-ASCII targets).
+        order = " ORDER BY file_path, id LIMIT 1"
         for cand in _link_candidates(name):
             folded = _fold(cand)
-            slug = _slug(cand)
-            ascii_only = cand.isascii()
+            slug = _target_slug(cand)
             steps: List[Tuple[str, Any]] = [
                 ("SELECT * FROM entities WHERE permalink = ? LIMIT 1", cand),
-                ("SELECT * FROM entities WHERE permalink = ? COLLATE NOCASE "
-                 "ORDER BY id LIMIT 1", cand),
+                ("SELECT * FROM entities WHERE permalink_fold = ?" + order, folded),
             ]
             if slug and slug != cand:
                 steps.append(("SELECT * FROM entities WHERE permalink = ? LIMIT 1", slug))
             steps += [
-                ("SELECT * FROM entities WHERE name = ? COLLATE NOCASE ORDER BY id LIMIT 1", cand),
-                ("SELECT * FROM entities WHERE title = ? COLLATE NOCASE ORDER BY id LIMIT 1", cand),
+                ("SELECT * FROM entities WHERE name_fold = ?" + order, folded),
+                ("SELECT * FROM entities WHERE title_fold = ?" + order, folded),
                 ("SELECT e.* FROM entities e JOIN entity_aliases a ON a.entity_id = e.id "
-                 "WHERE a.alias = ? COLLATE NOCASE ORDER BY e.id LIMIT 1", cand),
+                 "WHERE a.alias_fold = ? ORDER BY e.file_path, e.id LIMIT 1", folded),
             ]
-            if not ascii_only:  # NOCASE folds ASCII only: Unicode-aware pass
-                steps += [
-                    ("SELECT * FROM entities WHERE kb_fold(permalink) = ? ORDER BY id LIMIT 1",
-                     folded),
-                    ("SELECT * FROM entities WHERE kb_fold(name) = ? ORDER BY id LIMIT 1", folded),
-                    ("SELECT * FROM entities WHERE kb_fold(title) = ? ORDER BY id LIMIT 1", folded),
-                    ("SELECT e.* FROM entities e JOIN entity_aliases a ON a.entity_id = e.id "
-                     "WHERE kb_fold(a.alias) = ? ORDER BY e.id LIMIT 1", folded),
-                ]
             for sql, param in steps:
                 row = conn.execute(sql, (param,)).fetchone()
                 if row is not None:
@@ -1161,84 +1262,107 @@ class KnowledgeDB:
     @staticmethod
     def _add_pending(conn: sqlite3.Connection, from_entity_id: int, relation_type: str,
                      to_name: str) -> None:
-        raw = str(to_name or "").strip()
-        if raw.startswith("[[") and raw.endswith("]]"):
-            raw = raw[2:-2]
-        key_src = raw.split("|", 1)[0].strip()  # [[Target|label]] → Target
-        alt = _link_candidates(key_src)[-1] if key_src else key_src  # no .md / #Section
+        key, alt, slug = _link_keys(to_name)
         conn.execute(
             "INSERT OR IGNORE INTO pending_relations "
             "(from_entity_id, relation_type, to_name, to_key, to_slug, to_alt, created_at) "
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (from_entity_id, relation_type, to_name, _fold(key_src), _slug(key_src),
-             _fold(alt), datetime.now().isoformat()),
+            (from_entity_id, relation_type, to_name, key, slug, alt,
+             datetime.now().isoformat()),
         )
 
-    def _resolve_pending_for(self, conn: sqlite3.Connection, entity_id: int) -> int:
-        """Turn unresolved links that now point at ``entity_id`` into relations."""
-        ent = conn.execute(
-            "SELECT permalink, name, title FROM entities WHERE id = ?", (entity_id,)).fetchone()
+    @staticmethod
+    def _insert_relation(conn: sqlite3.Connection, from_entity_id: int, relation_type: str,
+                         to_entity_id: int, to_name: Optional[str]) -> None:
+        key, alt, slug = _link_keys(to_name) if to_name else (None, None, None)
+        conn.execute(
+            "INSERT OR IGNORE INTO relations (from_entity_id, relation_type, to_entity_id, "
+            "created_at, to_name, to_key, to_alt, to_slug) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (from_entity_id, relation_type, to_entity_id, datetime.now().isoformat(),
+             to_name, key, alt, slug),
+        )
+
+    @staticmethod
+    def _entity_keys(conn: sqlite3.Connection, entity_id: int) -> Tuple[set, set]:
+        """(folded names a link may use, permalinks) of one note."""
+        ent = conn.execute("SELECT permalink, name, title FROM entities WHERE id = ?",
+                           (entity_id,)).fetchone()
         if ent is None:
-            return 0
-        keys = {_fold(ent["permalink"]), _fold(ent["name"]), _fold(ent["title"])}
-        keys |= {_fold(r["alias"]) for r in conn.execute(
+            return set(), set()
+        folds = {_fold(ent["permalink"]), _fold(ent["name"]), _fold(ent["title"])}
+        folds |= {_fold(r["alias"]) for r in conn.execute(
             "SELECT alias FROM entity_aliases WHERE entity_id = ?", (entity_id,))}
-        keys.discard("")
-        if not keys:
+        folds.discard("")
+        return folds, {ent["permalink"]}
+
+    def _relink_for_keys(self, conn: sqlite3.Connection, folds: set, permalinks: set) -> int:
+        """Re-resolve every link (resolved or not) whose text may mean one of
+        these names, with the normal priority rules.
+
+        2026-10-24 (KB phase 0 review): called whenever a note is (re)indexed
+        or deleted, with its old and new names, so the index does not depend
+        on the order notes were indexed in: a retitled note loses links by
+        its old title (they go to another note with that title, or become
+        unresolved), and a new note with a better match (a permalink beats an
+        alias) takes links over. Returns the number of links changed.
+        """
+        folds = {f for f in folds if f}
+        permalinks = {p for p in permalinks if p}
+        if not folds and not permalinks:
             return 0
-        ph = ",".join("?" * len(keys))
-        rows = conn.execute(
-            f"SELECT id, from_entity_id, relation_type, to_name FROM pending_relations "
-            f"WHERE to_key IN ({ph}) "
-            f"UNION SELECT id, from_entity_id, relation_type, to_name FROM pending_relations "
-            f"WHERE to_alt IN ({ph}) "
-            f"UNION SELECT id, from_entity_id, relation_type, to_name FROM pending_relations "
-            f"WHERE to_slug = ?",
-            (*keys, *keys, ent["permalink"]),
-        ).fetchall()
-        resolved = 0
-        now = datetime.now().isoformat()
-        for p in rows:
-            # Re-check with the normal rules, so priorities stay the same as
-            # when the source note is re-indexed (e.g. a permalink beats an alias).
-            target = self._resolve_target_row(conn, p["to_name"])
-            if target is None:
-                continue
-            conn.execute(
-                "INSERT OR IGNORE INTO relations "
-                "(from_entity_id, relation_type, to_entity_id, created_at, to_name) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (p["from_entity_id"], p["relation_type"], target["id"], now, p["to_name"]),
-            )
-            conn.execute("DELETE FROM pending_relations WHERE id = ?", (p["id"],))
-            resolved += 1
-        return resolved
+        fph = ",".join("?" * len(folds)) or "NULL"
+        pph = ",".join("?" * len(permalinks)) or "NULL"
+        params = (*folds, *folds, *permalinks)
+        changed = 0
+        for table in ("relations", "pending_relations"):
+            cols = ("id, from_entity_id, relation_type, to_name"
+                    + (", to_entity_id" if table == "relations" else ""))
+            rows = conn.execute(
+                f"SELECT {cols} FROM {table} WHERE to_key IN ({fph}) "
+                f"UNION SELECT {cols} FROM {table} WHERE to_alt IN ({fph}) "
+                f"UNION SELECT {cols} FROM {table} WHERE to_slug IN ({pph})",
+                params).fetchall()
+            for r in rows:
+                if not r["to_name"]:
+                    continue
+                target = self._resolve_target_row(conn, r["to_name"])
+                if table == "relations":
+                    if target is not None and target["id"] == r["to_entity_id"]:
+                        continue
+                    conn.execute("DELETE FROM relations WHERE id = ?", (r["id"],))
+                    if target is None:
+                        self._add_pending(conn, r["from_entity_id"], r["relation_type"],
+                                          r["to_name"])
+                    else:
+                        self._insert_relation(conn, r["from_entity_id"], r["relation_type"],
+                                              target["id"], r["to_name"])
+                    changed += 1
+                elif target is not None:
+                    self._insert_relation(conn, r["from_entity_id"], r["relation_type"],
+                                          target["id"], r["to_name"])
+                    conn.execute("DELETE FROM pending_relations WHERE id = ?", (r["id"],))
+                    changed += 1
+        return changed
 
     def resolve_pending_relations(self) -> Dict[str, int]:
         """Resolve every unresolved link whose target note exists now.
 
         Returns ``{"resolved": n, "unresolved": m}``.
         """
-        conn = self._get_connection()
         resolved = 0
-        with conn:
+        with self._write_txn() as conn:
             rows = conn.execute(
                 "SELECT id, from_entity_id, relation_type, to_name FROM pending_relations"
             ).fetchall()
-            now = datetime.now().isoformat()
             for p in rows:
                 target = self._resolve_target_row(conn, p["to_name"])
                 if target is None:
                     continue
-                conn.execute(
-                    "INSERT OR IGNORE INTO relations "
-                    "(from_entity_id, relation_type, to_entity_id, created_at, to_name) "
-                    "VALUES (?, ?, ?, ?, ?)",
-                    (p["from_entity_id"], p["relation_type"], target["id"], now, p["to_name"]),
-                )
+                self._insert_relation(conn, p["from_entity_id"], p["relation_type"],
+                                      target["id"], p["to_name"])
                 conn.execute("DELETE FROM pending_relations WHERE id = ?", (p["id"],))
                 resolved += 1
-        left = conn.execute("SELECT COUNT(*) FROM pending_relations").fetchone()[0]
+            left = conn.execute("SELECT COUNT(*) FROM pending_relations").fetchone()[0]
         return {"resolved": resolved, "unresolved": left}
 
     def get_unresolved_relations(self, entity_id: int) -> List[Tuple[str, str]]:
@@ -1299,6 +1423,12 @@ class KnowledgeDB:
             List of matching entities sorted by BM25 relevance
         """
         conn = self._get_connection()
+
+        # 2026-10-24 (KB phase 0 review): without an operator or a quoted
+        # phrase a "boolean" query is plain text (the agent often passes a
+        # sentence) — same search, including the any-word fallback.
+        if boolean and not _has_boolean_syntax(query):
+            boolean = False
 
         # Phase 1.5: Sanitize user input to prevent FTS5 injection
         safe_query = sanitize_fts_query(query, boolean=boolean)
@@ -1580,7 +1710,6 @@ class KnowledgeDB:
         Returns:
             Entity ID
         """
-        conn = self._get_connection()
         now = datetime.now().isoformat()
         title = note.title or note.name or note.permalink
         tags = _as_str_list(note.tags)
@@ -1591,8 +1720,13 @@ class KnowledgeDB:
         metadata_json = json.dumps(metadata, default=str, ensure_ascii=False)
         file_path = str(note.file_path) if note.file_path else None
 
-        with conn:
+        # 2026-10-24 (KB phase 0 review): the lookup happens inside the write
+        # transaction (BEGIN IMMEDIATE) — two processes indexing at once got
+        # "UNIQUE constraint failed: entities.permalink".
+        with self._write_txn() as conn:
             existing = None
+            old_folds: set = set()
+            old_plinks: set = set()
             if entity_id is not None:
                 existing = conn.execute(
                     "SELECT * FROM entities WHERE id = ?", (entity_id,)).fetchone()
@@ -1607,6 +1741,7 @@ class KnowledgeDB:
 
             if existing is not None:
                 eid = existing["id"]
+                old_folds, old_plinks = self._entity_keys(conn, eid)
                 name = note.name or existing["name"]
                 if name != existing["name"] and conn.execute(
                         "SELECT 1 FROM entities WHERE name = ? AND id != ?",
@@ -1615,6 +1750,8 @@ class KnowledgeDB:
                 sets: Dict[str, Any] = {
                     "name": name, "permalink": note.permalink, "title": title,
                     "entity_metadata": metadata_json, "updated_at": now,
+                    "name_fold": _fold(name), "permalink_fold": _fold(note.permalink),
+                    "title_fold": _fold(title),
                 }
                 if file_path:
                     sets["file_path"] = file_path
@@ -1639,11 +1776,13 @@ class KnowledgeDB:
                 cursor = conn.execute(
                     """
                     INSERT INTO entities (name, permalink, file_path, created_at, updated_at,
-                                          checksum, mtime, size, entity_metadata, title)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                          checksum, mtime, size, entity_metadata, title,
+                                          name_fold, permalink_fold, title_fold)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (name, note.permalink, file_path or f"{note.permalink}.md", now, now,
-                     checksum, mtime, size, metadata_json, title),
+                     checksum, mtime, size, metadata_json, title,
+                     _fold(name), _fold(note.permalink), _fold(title)),
                 )
                 eid = int(cursor.lastrowid or 0)
 
@@ -1668,8 +1807,8 @@ class KnowledgeDB:
                     continue
                 seen_alias.add(_fold(alias))
                 conn.execute(
-                    "INSERT OR IGNORE INTO entity_aliases (entity_id, alias, created_at) "
-                    "VALUES (?, ?, ?)", (eid, alias, now))
+                    "INSERT OR IGNORE INTO entity_aliases (entity_id, alias, created_at, "
+                    "alias_fold) VALUES (?, ?, ?, ?)", (eid, alias, now, _fold(alias)))
 
             # Outgoing links only: replace (resolved and unresolved)
             conn.execute("DELETE FROM relations WHERE from_entity_id = ?", (eid,))
@@ -1680,11 +1819,8 @@ class KnowledgeDB:
                     continue
                 target = self._resolve_target_row(conn, target_name)
                 if target is not None:
-                    conn.execute(
-                        "INSERT OR IGNORE INTO relations "
-                        "(from_entity_id, relation_type, to_entity_id, created_at, to_name) "
-                        "VALUES (?, ?, ?, ?, ?)",
-                        (eid, rel.relation_type, target["id"], now, target_name))
+                    self._insert_relation(conn, eid, rel.relation_type, target["id"],
+                                          target_name)
                 else:
                     logger.debug("Link target not found yet (kept as unresolved): %s",
                                  target_name)
@@ -1693,8 +1829,10 @@ class KnowledgeDB:
             # Note text index
             self._index_note_text_conn(conn, eid, title, note.content or "", tags)
 
-            # Links from other notes that were waiting for this note
-            self._resolve_pending_for(conn, eid)
+            # Links from other notes by this note's old or new names: waiting
+            # ones resolve, existing ones move to the best match (2026-10-24).
+            new_folds, new_plinks = self._entity_keys(conn, eid)
+            self._relink_for_keys(conn, old_folds | new_folds, old_plinks | new_plinks)
         return eid
 
     # ── v0.7.5: full-text index of the note text ─────────────────────────────

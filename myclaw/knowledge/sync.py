@@ -15,6 +15,8 @@ import fnmatch
 import hashlib
 import logging
 import os
+import sqlite3
+import time
 from pathlib import Path
 from typing import Any, Dict, List, Set, Tuple, Optional
 from datetime import datetime
@@ -44,6 +46,11 @@ _sync_failures_module: OrderedDict[str, Dict] = OrderedDict()
 # (sync_knowledge() makes a new engine per call). Key: "<user>\0<path>";
 # bounded to _MAX_TRACKED_FAILURES entries like the one above.
 _engine_failures: OrderedDict[str, Dict] = OrderedDict()
+
+
+class _TransientSyncError(Exception):
+    """The database was busy or another writer won a race: not the file's fault
+    (2026-10-24 — such errors must not trip the circuit breaker)."""
 
 
 def reset_sync_failures() -> None:
@@ -274,10 +281,32 @@ class SyncEngine:
 
     def _index_file(self, db: KnowledgeDB, file_path: Path, note, file_meta: Dict,
                     entity_id: Optional[int] = None) -> int:
-        return db.sync_entity_from_note(
-            note, checksum=file_meta["checksum"], mtime=file_meta["mtime"],
-            size=file_meta["size"], entity_id=entity_id,
-        )
+        # 2026-10-24 (KB phase 0 review): a busy database or a race with
+        # another writer (UNIQUE constraint) is retried once and then reported
+        # as _TransientSyncError, which does not count against the file.
+        for attempt in (1, 2):
+            try:
+                return db.sync_entity_from_note(
+                    note, checksum=file_meta["checksum"], mtime=file_meta["mtime"],
+                    size=file_meta["size"], entity_id=entity_id,
+                )
+            except (sqlite3.IntegrityError, sqlite3.OperationalError) as e:
+                text = str(e).lower()
+                if isinstance(e, sqlite3.OperationalError) and \
+                        "locked" not in text and "busy" not in text:
+                    raise
+                if attempt == 2:
+                    raise _TransientSyncError(str(e)) from e
+                time.sleep(0.2)
+        raise AssertionError("unreachable")
+
+    def _index_failed(self, stats: Dict[str, int], file_path: Path, error: Exception,
+                      checksum: Optional[str]) -> None:
+        stats["errors"] += 1
+        if isinstance(error, _TransientSyncError):
+            logger.warning(f"Could not index {file_path} now (database busy): {error}")
+        else:
+            self._record_failure(str(file_path), str(error), checksum)
 
     def sync(self, force: bool = False, since: Optional[float] = None) -> Dict[str, int]:
         stats = {"added": 0, "updated": 0, "deleted": 0, "errors": 0}
@@ -302,6 +331,7 @@ class SyncEngine:
         # 2026-10-23 (KB phase 0): read every file BEFORE clearing the index,
         # in a stable order, so the result does not depend on the file system.
         parsed = []
+        unreadable: List[str] = []
         for file_path in sorted(self._scan_markdown_files()):  # `since` is ignored
             try:
                 file_meta = _storage_module.get_file_metadata(file_path)
@@ -309,19 +339,24 @@ class SyncEngine:
                 parsed.append((file_path, note, file_meta))
             except Exception as e:
                 stats["errors"] += 1
+                unreadable.append(str(file_path))
                 logger.warning(f"Failed to sync {file_path}: {e}")
-        # Use a single, fast transaction to clear the database.
-        db.clear_all_data()
-        stats["deleted"] = -1  # Indicate a full clear, not individual deletes.
-        for file_path, note, file_meta in parsed:
-            try:
-                self._index_file(db, file_path, note, file_meta)
-                stats["added"] += 1
-                self._clear_failure(str(file_path))
-                logger.debug(f"Synced: {note.permalink}")
-            except Exception as e:
-                stats["errors"] += 1
-                logger.warning(f"Failed to sync {file_path}: {e}")
+        # 2026-10-24 (KB phase 0 review): clear + re-add in ONE transaction
+        # (readers keep the old index until it is done, never an empty one),
+        # and a file that cannot be read keeps its entry, as in an incremental
+        # sync. Each note is a savepoint: one failing note is only skipped.
+        with db.batch():
+            db.clear_all_data(keep_file_paths=unreadable)
+            stats["deleted"] = -1  # Indicate a full clear, not individual deletes.
+            for file_path, note, file_meta in parsed:
+                try:
+                    self._index_file(db, file_path, note, file_meta)
+                    stats["added"] += 1
+                    self._clear_failure(str(file_path))
+                    logger.debug(f"Synced: {note.permalink}")
+                except Exception as e:
+                    stats["errors"] += 1
+                    logger.warning(f"Failed to sync {file_path}: {e}")
 
     def _sync_incremental(self, db: KnowledgeDB, stats: Dict[str, int],
                           since: Optional[float]) -> None:
@@ -338,7 +373,9 @@ class SyncEngine:
         - notes indexed by an older version (no title stored) are re-indexed
           once, so links by title and frontmatter tags/aliases work.
         """
-        all_files = self._scan_markdown_files()
+        knowledge_dir = _storage_module.get_knowledge_dir(self.user_id)
+        patterns = self._load_bmignore_patterns()
+        all_files = _list_markdown_files(knowledge_dir, patterns)
         all_paths = {str(f) for f in all_files}
         entities = db.list_all_entities()
         by_permalink = {e.permalink: e for e in entities}
@@ -441,8 +478,7 @@ class SyncEngine:
                 self._clear_failure(str(file_path))
                 logger.info(f"Detected move: {match.file_path} -> {file_path}")
             except Exception as e:
-                stats["errors"] += 1
-                self._record_failure(str(file_path), str(e), file_meta["checksum"])
+                self._index_failed(stats, file_path, e, file_meta["checksum"])
 
         claimed_ids: Set[int] = set(used)
         path_owner: Dict[str, int] = {}
@@ -455,8 +491,7 @@ class SyncEngine:
                 self._clear_failure(str(file_path))
                 logger.info(f"Updated: {note.permalink}")
             except Exception as e:
-                stats["errors"] += 1
-                self._record_failure(str(file_path), str(e), file_meta["checksum"])
+                self._index_failed(stats, file_path, e, file_meta["checksum"])
 
         for file_path, note, file_meta in moved_new:
             try:
@@ -467,16 +502,23 @@ class SyncEngine:
                 self._clear_failure(str(file_path))
                 logger.info(f"Added: {note.permalink}")
             except Exception as e:
-                stats["errors"] += 1
-                self._record_failure(str(file_path), str(e), file_meta["checksum"])
+                self._index_failed(stats, file_path, e, file_meta["checksum"])
 
         # Deletions: the file is gone (or hidden/ignored now), or another note
         # took over its file. Never from the `since` subset.
-        for e in db.list_all_entities():
-            if e.id in claimed_ids:
+        # 2026-10-24 (KB phase 0 review): only entries that existed when the
+        # sync started, re-read and re-checked on disk right before deleting —
+        # a note written by another caller during the sync was deleted.
+        for snap in entities:
+            if snap.id in claimed_ids:
                 continue
-            gone = e.file_path not in all_paths
+            e = db.get_entity_by_id(snap.id)
+            if e is None:
+                continue
             taken = path_owner.get(e.file_path) not in (None, e.id)
+            gone = e.file_path not in all_paths and not (
+                os.path.exists(e.file_path)
+                and _is_indexable(Path(e.file_path), knowledge_dir, patterns))
             if not (gone or taken):
                 continue
             try:
@@ -566,24 +608,37 @@ def _list_markdown_files(knowledge_dir: Path, patterns: List[str]) -> Set[Path]:
     ``.obsidian``); unreadable folders are skipped instead of aborting.
     """
     files: Set[Path] = set()
-    seen_dirs: Set[str] = set()
-    for root, dirs, names in os.walk(knowledge_dir, followlinks=True):
-        try:
-            real = os.path.realpath(root)
-        except OSError:
-            real = root
-        if real in seen_dirs:  # a symlink loop
-            dirs[:] = []
-            continue
-        seen_dirs.add(real)
+    # 2026-10-24 (KB phase 0 review): symlinked folders are not followed and
+    # symlinked files pointing outside the knowledge folder are skipped —
+    # storage refuses to read paths outside it, so they were indexed but
+    # unreadable.
+    for root, dirs, names in os.walk(knowledge_dir, followlinks=False):
         dirs[:] = sorted(d for d in dirs if not d.startswith("."))
         for name in names:
             if name.startswith(".") or not name.endswith(".md"):
                 continue
             file_path = Path(root) / name
-            if not _should_ignore_path(file_path, knowledge_dir, patterns):
+            if _is_indexable(file_path, knowledge_dir, patterns):
                 files.add(file_path)
     return files
+
+
+def _is_indexable(path: Path, knowledge_dir: Path, patterns: List[str]) -> bool:
+    """Would the scan index this path? (.md, no dot-folder, not ignored,
+    not a symlink to outside the knowledge folder)."""
+    try:
+        rel = path.relative_to(knowledge_dir)
+    except ValueError:
+        return False
+    if path.suffix != ".md" or any(part.startswith(".") for part in rel.parts):
+        return False
+    if path.is_symlink():
+        try:
+            real = Path(os.path.realpath(path))
+            real.relative_to(Path(os.path.realpath(knowledge_dir)))
+        except (OSError, ValueError):
+            return False
+    return not _should_ignore_path(path, knowledge_dir, patterns)
 
 
 def _filter_since(files: Set[Path], since_timestamp: Optional[float]) -> Set[Path]:
