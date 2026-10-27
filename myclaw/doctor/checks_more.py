@@ -152,6 +152,25 @@ def _skills(ctx):
     return OK, f"{len(names)} skill(s) available"
 
 
+# 2026-10-27: the user's rules and the agents' proposals (myclaw/rules.py)
+@check("rules", "Rules", "configuration")
+def _rules(ctx):
+    from .. import rules
+
+    items = rules.list_rules()
+    active = sum(1 for r in items if r["enabled"])
+    off = len(items) - active
+    pending = rules.list_proposals("pending")
+    detail = f"{active} active" + (f" ({off} switched off)" if off else "") + \
+        f", {len(pending)} proposal(s) waiting"
+    stale = [p for p in pending if rules.waiting_since_days(p) > rules.STALE_DAYS]
+    if stale:
+        ids = ", ".join(f"#{p['id']}" for p in stale)
+        return WARN, f"{detail}; {len(stale)} waiting more than {rules.STALE_DAYS} days ({ids})", \
+            "Approve or reject them in the Web UI → Rules, or with zensynora rules approve/reject ID."
+    return OK, detail
+
+
 @check("mcp_servers", "MCP servers", "configuration")
 def _mcp_servers(ctx):
     mcp = ctx.get_config().mcp

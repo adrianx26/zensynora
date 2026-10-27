@@ -303,6 +303,11 @@ SYSTEM_PROMPT = (
     "write_to_knowledge() to persist it permanently. Do NOT wait to be asked. "
     "Every meaningful exchange must grow the knowledge base. "
     "Never store passwords, API keys, tokens or other secrets in the knowledge base. "
+    # 2026-10-27: the user's rules (myclaw/rules.py)
+    "RULES: the user's rules are listed under 'Rules you must follow' — always follow them. "
+    "list_rules() and read_rule(slug) show them. You cannot change a rule yourself: propose_rule(title, text, "
+    "scope, reason), propose_rule_change(slug, text, reason) or propose_rule_deletion(slug, reason) send a "
+    "proposal that the user approves or rejects; until then nothing changes. "
     "For all other responses, reply in plain text."
 )
 
@@ -742,7 +747,7 @@ class Agent:
         halves the prompt-load latency on cold cache.
         """
         if self._system_prompt_loaded:
-            return self._system_prompt
+            return self._with_rules(self._system_prompt)
 
         # Determine which profile path to use (local workspace wins).
         local_profile = self._local_profiles_dir / f"{self.name}.md"
@@ -792,14 +797,31 @@ class Agent:
 
         self._system_prompt = prompt
         self._system_prompt_loaded = True
-        return prompt
+        return self._with_rules(prompt)
+
+    def _with_rules(self, prompt: str) -> str:
+        """Add the user's rules for this agent (2026-10-27).
+
+        Every agent's prompt is built here (chat, jobs, delegation, Telegram).
+        The rules are not part of the cached prompt: myclaw.rules caches them
+        by the files' modification times, so an approved change applies on the
+        next message without rebuilding anything, and proposals never appear.
+        """
+        try:
+            from .rules import prompt_section
+
+            section = prompt_section(self.name)
+        except Exception as exc:  # a broken rule file must not stop the agent
+            logger.warning("Could not load rules for agent %s: %s", self.name, exc)
+            return prompt
+        return f"{prompt}\n\n{section}" if section else prompt
 
     @property
     def system_prompt(self) -> str:
         """Get system prompt (may be empty string if not loaded yet)."""
         if self._system_prompt_loaded:
-            return self._system_prompt
-        return self._custom_system_prompt or SYSTEM_PROMPT
+            return self._with_rules(self._system_prompt)
+        return self._with_rules(self._custom_system_prompt or SYSTEM_PROMPT)
 
     def _analyze_complexity(self, message: str) -> str:
         """Simple heuristic to determine task complexity."""

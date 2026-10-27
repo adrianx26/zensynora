@@ -740,9 +740,22 @@ class BackupConfig(BaseModel):
     # What a backup contains. Settings + API keys are always included.
     include_knowledge: bool = True
     include_memory: bool = True  # conversations, chat channels
-    include_jobs: bool = True  # jobs, self-made tools, skills
+    include_jobs: bool = True  # jobs, self-made tools, skills, rules
     before_update: bool = True  # the updater always backs up; this adds a full app backup
     dir: str = ""  # empty = <install base>/backups or ~/.myclaw-backups
+
+
+class RulesConfig(BaseModel):
+    """Rules every agent follows (2026-10-27) — see myclaw/rules.py.
+
+    The rules are files in ~/.myclaw/rules; agents can only propose changes,
+    which you approve or reject (Web UI → Rules, ``zensynora rules``).
+    """
+
+    enabled: bool = True  # put the enabled rules in every agent's system prompt
+    prompt_chars: int = 4000  # at most this many characters of rules per prompt (500-20000)
+    max_pending_per_agent: int = 5  # proposals one agent may have waiting at once
+    notify_telegram: bool = True  # tell allowed Telegram users about new proposals (bot in this process)
 
 
 class AppConfig(BaseModel):
@@ -765,6 +778,7 @@ class AppConfig(BaseModel):
     mcp: MCPConfig = MCPConfig()
     intelligence: IntelligenceConfig = IntelligenceConfig()
     backup: BackupConfig = BackupConfig()
+    rules: RulesConfig = RulesConfig()  # 2026-10-27
 
     def get(self, key: str, default=None):
         """Dict-style .get() for backward compatibility."""

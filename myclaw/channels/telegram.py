@@ -520,6 +520,8 @@ class TelegramChannel:
             return
         self._set("starting")
         self._started_at, self._first_conflict, self._conflict_noted = time.time(), None, False
+        # 2026-10-27 (rules): other threads (agent tools) send notices on this loop.
+        self.loop = asyncio.get_running_loop()
         try:
             self.app = self._build_app()
             await self.app.initialize()

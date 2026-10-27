@@ -785,6 +785,111 @@ def medic_problems(hours):
     click.echo(selfupdate.get_recent_problems(hours))
 
 
+# 2026-10-27: the user's rules (myclaw/rules.py)
+@cli.group()
+def rules():
+    """Rules every agent follows; review the changes agents propose.
+
+    \b
+    zensynora rules list                 all rules (priority, scope, on/off)
+    zensynora rules show SLUG            one rule in full
+    zensynora rules proposals            proposals waiting for you (--status all|approved|rejected)
+    zensynora rules approve ID           apply a proposal
+    zensynora rules reject ID --note …   reject it (kept as history)
+
+    Write and edit rules in the Web UI → Rules, or as files in ~/.myclaw/rules.
+    """
+
+
+def _scope_text(scope):
+    return "all agents" if scope == ["all"] else ", ".join("@" + s for s in scope)
+
+
+@rules.command("list")
+def rules_list():
+    from . import rules as store
+
+    items = store.list_rules()
+    if not items:
+        click.echo("No rules yet. Write one in the Web UI → Rules.")
+    for r in items:
+        state = "on " if r["enabled"] else "off"
+        click.echo(f"[{state}] {r['priority']:<6} {r['slug']}: {r['title']}  ({_scope_text(r['scope'])}, "
+                   f"by {r['author']})")
+    waiting = len(store.list_proposals("pending"))
+    if waiting:
+        click.echo(f"\n{waiting} proposal(s) waiting — zensynora rules proposals")
+
+
+@rules.command("show")
+@click.argument("slug")
+def rules_show(slug):
+    from . import rules as store
+
+    try:
+        r = store.get_rule(slug)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    if r is None:
+        raise click.ClickException(f"No rule '{slug}'. See: zensynora rules list")
+    click.echo(f"{r['title']}  [{r['slug']}]\npriority: {r['priority']} · applies to: {_scope_text(r['scope'])} · "
+               f"{'enabled' if r['enabled'] else 'switched off'} · by {r['author']} · updated {r['updated']}\n")
+    click.echo(r["text"])
+
+
+@rules.command("proposals")
+@click.option("--status", type=click.Choice(["pending", "approved", "rejected", "all"]), default="pending",
+              show_default=True)
+def rules_proposals(status):
+    from . import rules as store
+
+    items = store.list_proposals(None if status == "all" else status)
+    if not items:
+        click.echo("No proposals." if status != "pending" else "No proposals waiting.")
+    for p in items:
+        click.echo(f"#{p['id']} [{p['status']}] {p['action']} {p['slug']} — by @{p['proposed_by']} "
+                   f"({p['created']})")
+        if p.get("reason"):
+            click.echo(f"    why: {p['reason']}")
+        if p["status"] == "pending":
+            diff = store.proposal_diff(p)
+            click.echo("    " + (diff.replace("\n", "\n    ").rstrip() if diff else "(no change)"))
+        elif p.get("decided_by"):
+            click.echo(f"    {p['status']} by {p['decided_by']} at {p['decided_at']}"
+                       + (f": {p['note']}" if p.get("note") else ""))
+
+
+def _rules_decide(fn, pid, note):
+    try:
+        return fn(pid, by="user (cli)", note=note)
+    except KeyError:
+        raise click.ClickException(f"No proposal #{pid}. See: zensynora rules proposals")
+    except ValueError as e:
+        raise click.ClickException(str(e))
+
+
+@rules.command("approve")
+@click.argument("pid")
+@click.option("--note", default="")
+def rules_approve(pid, note):
+    """Apply a proposal (create, change or delete the rule)."""
+    from . import rules as store
+
+    p = _rules_decide(store.approve, pid, note)
+    click.echo(f"Approved #{p['id']}: {p['action']} {p['slug']} — active for every agent from its next message.")
+
+
+@rules.command("reject")
+@click.argument("pid")
+@click.option("--note", default="")
+def rules_reject(pid, note):
+    """Reject a proposal (it is kept as history)."""
+    from . import rules as store
+
+    p = _rules_decide(store.reject, pid, note)
+    click.echo(f"Rejected #{p['id']}.")
+
+
 @cli.command()
 def version():
     """Show the installed ZenSynora version."""
