@@ -1,51 +1,52 @@
-# Graph Report - zensynora  (2026-10-25)
+# Graph Report - zensynora  (2026-10-27)
 
 ## Corpus Check
-- 465 files · ~669,653 words
+- 465 files · ~672,629 words
 - Verdict: corpus is large enough that graph structure adds value.
 - Unclassified: 17 file(s) not represented in the graph (top: (none) 7, .css 3, .tsv 2)
 
 ## Summary
-- 11093 nodes · 25396 edges · 452 communities (357 shown, 95 thin omitted)
-- Extraction: 89% EXTRACTED · 11% INFERRED · 0% AMBIGUOUS · INFERRED: 2731 edges (avg confidence: 0.92)
+- 11137 nodes · 25539 edges · 461 communities (352 shown, 109 thin omitted)
+- Extraction: 89% EXTRACTED · 11% INFERRED · 0% AMBIGUOUS · INFERRED: 2748 edges (avg confidence: 0.92)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `43390ed9`
+- Built from commit: `a9dbb3dc`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
 ## Community Hubs (Navigation)
 - test_telegram_webui.py
-- test_kb_phase2_quality.py
-- importers.py
+- quality.py
+- re
 - update_api.py
 - typing
-- dev/README.md
+- test_report_fixes_20261023.py
 - parser.py
-- InProcessBroker
-- test_evals.py
-- test_registry.py
-- run.py
-- command
-- watch.py
+- AgentMessage
+- EvalCase
+- agents/__init__.py
+- Budget
+- myclaw/cli.py
+- Watcher
 - AbstractBackend
 - medic_evolver.py
 - KnowledgeDB
-- SwarmStorage
+- SwarmResult
 - test_telegram_channel.py
 - AdvancedContextManager
-- Knowledge base guide
-- tracing.py
-- agents/__init__.py
+- sync.py
+- span
+- medic_change_mgmt.py
 - pytest
-- test_security.py
+- write_note
 - SecurityPolicy
-- steps.py
+- updater/backup.py
 - NewTechAgent
 - SemanticCache
 - test_agent_internals.py
 - config.py
+- TelegramChannel
 - LogAnalyzer
 - TurboQuant Implementation Plan
 - models_api.py
@@ -54,22 +55,22 @@
 - test_kb_phase0_index.py
 - jobs_api.py
 - test_agent_classes.py
-- shutil
+- test_updater_node.py
 - Memory
 - AsyncSQLitePool
-- task_timer.py
+- TaskTimerOrchestrator
 - CircuitBreaker
-- TelegramChannel
-- test_v073_reliability.py
-- Other Core Modules
+- .run
+- SwarmOrchestrator
+- StructuredFormatter
 - async_scheduler.py
 - test_kb_phase6_robust.py
-- Manifest
+- MarketplaceSource
 - MyClaw Implementation Plan - Detailed Code Changes
 - SkillAdapter
 - TamperEvidentAuditLog
 - settings_api.py
-- Context
+- steps.py
 - AsyncScheduler
 - myclaw/backup.py
 - CodeHealer
@@ -77,7 +78,7 @@
 - browser.py
 - checks.py
 - telegram_api.py
-- kb.py
+- list_knowledge
 - report.py
 - Functions Summary
 - collaboration.py
@@ -86,7 +87,7 @@
 - StateStore
 - [0.5.0] - 2026-10-13
 - aiohttp_session.py
-- integrity.py
+- install_root
 - ZenSynora Skill Adapter Guide
 - Comprehensive Analysis: capability-evolver x medic_agent Cross-Reference
 - VectorBackend
@@ -94,18 +95,17 @@
 - TestBrowseErrorHandling
 - time
 - budget.py
-- Changelog
+- core.py
 - Contributing to ZenSynora
 - Agent
 - exceptions.py
-- WhatsAppChannel
 - PromptRegistry
-- TimeoutConfig
-- subprocess
+- _load_profile_cached
+- hardware.py
 - Zensynora/MyClaw Optimization Summary
 - Usage
 - knowledge_api.py
-- Default Agent Profile
+- MarketplaceClient
 - run_checks
 - test_structured_output.py
 - health.py
@@ -115,19 +115,19 @@
 - ZenSynora (MyClaw) — Comprehensive Application Review
 - json
 - test_discord_channel.py
-- GapResearcher
+- Layout
 - load_agents_from_yaml
 - ZenSynora Backends Guide
 - glm5.md
-- TTLEntry
-- MFAAuth
+- BaseTTLCache
+- trigger_hook
 - InMemoryStateStore
-- Feature 3: Voice Channel (TTS/STT)
-- start
+- myclaw/voice_channel.py
+- describe_llm_error
 - test_v075_channels_medic_skills.py
 - ZenSynora Full Application Analysis
-- test_updater.py
-- engine.py
+- point_source_to
+- channel_socket
 - ZenSynora Future Implementation Plan
 - WhatsApp Channel Implementation Plan
 - SQLiteBackend
@@ -135,8 +135,8 @@
 - MyClaw Agent Skills Reference
 - test_vector_backends.py
 - ChatEngine
-- function_list.md
-- execute_tools
+- http_session.py
+- Manifest
 - MyClaw Application Analysis
 - api
 - _Metrics
@@ -146,22 +146,22 @@
 - install.sh
 - checks_knowledge.py
 - MyClawDashboard
-- APIServer
+- _get_tool_schemas
 - RedisStateStore
 - test_scheduler_features.py
-- update_user_profile
+- write_to_knowledge
 - test_chat_message_actions.py
-- .setup_teardown
+- test_knowledge.py
 - WhisperSTTProvider
 - test_kb_phase3_semantic.py
 - test_doctor_report.py
 - MyClaw/Zensynora Architecture (With Optimizations)
-- documents.py
+- IngestError
 - chat_api.py
-- write_note
+- read_note
 - package.json
 - compilerOptions
-- ZenSynora Action Plan
+- browse
 - Code Analysis Section
 - updater/__main__.py
 - Code Analysis Section
@@ -169,32 +169,31 @@
 - compilerOptions
 - RateLimiter
 - ZenSynora Implementation Plan: New Agents & Features
-- `tests/test_agent.py` (Enhanced)
+- `tests/test_tools/` (Enhanced)
 - generate.py
 - test_kb_phase4_distill.py
 - Task Timer Integration Summary
 - server.py
 - PluginSystem
 - config_encryption.py
-- test_report_fixes_20261023.py
-- MCPClientManager
-- .load_plugin
+- shell.py
+- start
+- plugin_system.py
 - Scrapling
 - IntelligentRouter
-- Any
+- enabled
 - PersistentCacheMixin
-- _get_swarm_orchestrator
-- decorator
-- test_v074_update_and_prompt.py
-- candidates_for_note
+- swarm.py
+- .chat
+- ScheduledReviewSystem
+- distill.py
 - agent_skills.py
-- Security & Stability Fixes — 2026-04-29 (+ 2026-05-17/18)
+- Knowledge Gap & Error Handling Enhancement - Implementation Summary
 - test_agent_jobs.py
 - test_stream_runs_a_tool_call_written_as_text
 - repo.py
 - KnowledgeView.tsx
 - SettingsView.tsx
-- ZenSynora — Optimization & Improvement Audit
 - medic_api.py
 - test_sprint8_perf_quality.py
 - SkillGenerator
@@ -203,16 +202,16 @@
 - Phase 5.1: LLM Response Caching Integration
 - WorkerPoolManager
 - context_items
-- .create_app
-- provider_keys_api.py
+- api_server.py
+- UpdateError
 - vector_rank
-- logscan.py
+- self_healer.py
 - Agent Categories
 - planA1.md
-- re
-- distill.py
+- import_export
+- Any
 - knowledge_import_api.py
-- BaseTTLCache
+- _PersistedCache
 - Scheduler Reliability Layer (Phase 6.3)
 - record_usage
 - Phase 6.1: Skill Sandboxing Integration
@@ -220,17 +219,17 @@
 - embed_notes
 - docs/README.md
 - backup_api.py
-- os
+- app_backup.py
 - api.py
-- FastEmbedEmbedder
+- WhatsAppChannel
 - test_observability.py
 - LAST Implementation Plan - Detailed Technical Roadmap
 - api.ts
-- migrations/__init__.py
-- AgentMessage
+- test_updater.py
+- build_dashboard_data
 - asyncio
-- SkillPreloader
-- evals/__init__.py
+- agent.py
+- test_evals.py
 - TestExtractSearchTerms
 - TestSearchKnowledgeEnhancement
 - react
@@ -242,8 +241,8 @@
 - Code Reviewer Agent
 - PluginHook
 - ingest/sources.py
-- validator.py
-- MockConfig
+- Incidents and lessons learned
+- test_context_budget.py
 - uninstall.sh
 - telegram.py
 - bug_report.md
@@ -251,46 +250,44 @@
 - LLM Architect Agent
 - Python Pro Agent
 - eval_agent_skills.py
-- _NoopSpan
-- admin_dashboard.py
-- gdpr.py
-- enabled
+- tracing.py
+- get_metrics
+- Implementation Log
+- ZenSynora Personal — Recommended LLM Configuration
 - test_provider_selection.py
 - ZenSynora Diagram Palette
 - Checkpoint
-- medic.py
+- asyncio
 - DoctorReport.tsx
 - JobRunner
-- .generate_skill
+- ._setup_routes
 - 3. Core Systems Deep Dive
 - SSHBackend
 - MyClaw Todo List - Non-Implemented Items
-- group
+- recover_file
 - ZenSynora Architecture — Visual Guide
 - feature_request.md
 - RetryPolicy
 - PromptTemplate
 - Backend Developer Agent
 - Frontend Developer Agent
-- Phase 4.1: Unit Tests Enhancement
-- Any
 - UserProfile
 - scheduler.py
-- _get_db
+- TaskTiming
 - context_budget.py
 - DockerBackend
 - load_config
 - CostDashboard.tsx
 - search_knowledge
-- HookRegistry
-- init_app
-- harness.py
+- _ToolFunctionsProxy
+- 🚀 Proposed Improvements & Additions
+- MessageToken
 - How to Run MyClaw
-- PrometheusMetrics
+- TokenCounter
 - test_agent.py
 - SourceError
 - KnowledgeDistilled.tsx
-- ComplexityAnalyzer
+- StatusUpdate
 - _Scheduler
 - TestKnowledgeGapRecording
 - code-reviewer/SKILL.md
@@ -298,43 +295,42 @@
 - Web Application Testing
 - Medic Agent Change Management Enhancement
 - Telegram Guide — chat with your agents from your phone
-- BaseLLMProvider
+- provider.py
 - multi-agent-coordinator/SKILL.md
-- fastapi
-- skills_api.py
+- create_dashboard_app
+- delete_skill
 - Exception Handling Implementation
 - DevOps Engineer Agent
-- OpenAICompatProvider
+- cosine_similarity
 - Bootstrap Profile
 - Memory Profile
 - Optimization Plan (planx1.md)
 - chat/store.py
-- 📂 Module & Function Registry
+- 🛠️ Functional Logic Flows
 - knowledge_semantic_api.py
 - Category Summary
-- TestSearchKnowledgeContext
+- Added — `myclaw/marketplace/` — multi-source plugin marketplace (40 tests)
 - llm-architect/SKILL.md
+- InMemoryBackend
 - Heartbeat Profile
 - Identity Profile
 - User Profile Template
-- FallbackChatWrapper
+- configured_max_timeout
 - python-pro/SKILL.md
-- devDependencies
-- Distillation: facts, scenarios, a persona
-- myclaw/plugin_system.py
+- backends/router.py
+- kb.py
+- LogContext
 - ZenSynora Documentation
 - circuit_breaker.py
 - New module: `myclaw/scheduler_features.py`
 - install-online.sh
-- advanced_search.py
 - backend-developer/SKILL.md
 - medic_agent.py
 - Agent Profile
 - Soul Profile
-- shortest_path
+- path_reasoning.py
 - frontend-developer/SKILL.md
 - test_kb_phase0_surfaces.py
-- Implemented Features Detail
 - 2.1 High Priority
 - BackendRegistry
 - run_async
@@ -342,259 +338,266 @@
 - FallbackChain
 - ContextWindow
 - WSL2Backend
-- ResultCache
+- SQLitePool
 - knowledge/storage.py
-- check_system_health
+- MedicAgent
 - retry_locked
-- Path
-- status
+- watch.py
+- test_knowledge_api.py
 - QdrantBackend
 - broker.py
-- VoiceActivityDetector
+- .listen_stream
 - ZenSynora (MyClaw) Implementation Plan
 - update.sh script
 - SecuritySandbox
 - opencode.json
 - KnowledgeImport.tsx
-- _with_v1
+- Web UI Guide — chat, models, jobs, backups
 - tsconfig.json
 - test_log_fixes_20261018.py
 - cleanup.sh
-- .transcribe_stream
+- test_handle_callback_rejects_replayed_state
 - zensynora
 - ContextLength.tsx
 - semantic.py
-- myclaw/voice_channel.py
-- _load_index
-- 1. Function Name Consistency
+- voice_channel.py
+- hub/__init__.py
+- Sprint 4 — Vector Store + Structured-Output Integration (2026-04-30)
 - memo_mcp_server.py
 - test_marketplace.py
-- ❌ Not Implemented At All
+- analyze_external_skill
 - test_agent_has_nonempty_description
 - Future Updates Proposal: MyClaw Architecture Evolution
-- html_text.py
-- Performance & Optimization Overhaul (2026-04-06)
+- _Extractor
 - devops-engineer/SKILL.md
-- myclaw/cli.py
+- Any
 - CLAUDE.md
-- env
+- Skill Group 10: ZenHub Registry (NEW)
 - ZenSynora
 - ZenSynora Web UI
 - 3. New modules — quick reference
 - discover_backends
 - fake_telegram_api.py
 - PowerShell scripting
-- HashEmbedder
+- get_embedder
 - test_gateway_bot_runs_without_a_current_event_loop
 - 5.1 High Priority
-- watcher
+- start_background
 - _logs_to_stderr
-- start_background_extraction
+- SwarmStorage
 - Phase 4.2: Integration Tests Implementation
 - Web research
 - get_default_backend
 - Summary of Implemented Features
-- test_web_settings.py
-- mcp_server
-- 1.1 High Priority
+- _store_note
+- make_backend
+- Code Analysis Complete - Summary
 - .cleanup_idle
 - PHASE 5: Performance & Optimization Overhaul (2026-04-06) ✅ COMPLETED
 - Plan: memopad features for the ZenSynora knowledge base
 - Medium Priority — ✅ COMPLETED
-- TestDatabase
+- Implementation Details
 - LocalBackend
-- Knowledge System (myclaw/knowledge/)
+- db.py
 - start_background
 - start_background
-- scope.py
-- KnowledgeSearchResult
+- ZenSynora — Remaining Tasks (from planx.md)
 - pyttsx3Provider
-- Current State Assessment
-- hub_publish
+- ZenSynora (MyClaw) — Comprehensive Code Review & Optimization Strategy
+- Phase 4: ZenHub Ecosystem
 - 3.1 High Priority
 - ._create_issue
 - Sprint Summary — 12 Sprints (2026-04-29 → 2026-04-30)
-- GeneratedSkill
-- kb_phase0_contracts.md
+- Implementation Summary
+- Implemented Features Detail
+- memopad_port_plan.md
 - set_registry_getter
 - list_tool_definitions
-- ._create_completion
-- hub/__init__.py
-- 2.2 Stale or invented "crash loop" notes written by agents (2026-10-23, branch fix/report-20261023)
-- _LazyCallable
-- test_tenancy_scoping.py
-- m_0003_knowledge_reindex_links.py
+- 7. Install, update and CI
+- hub_install_from_external
+- Troubleshooting
+- New Files:
+- test_memory_user_id_attribute_publicly_accessible
 - 6. Configuration & Logging
-- Phase 6.2: Tamper-Evident Audit Logging
+- ToolAuditLogger
 - FakeChannel
-- Linux install check — 2026-10-12
+- _Engine
 - 7. Caching & Performance
 - get_scheduler
-- spaces_delete
-- get_registry
-- test_review10_one_inference_at_a_time_and_queries_first
-- test_status_start_failures_and_conflict
+- test_ollama_gets_num_ctx
+- prompts/registry.py
+- Agent System (myclaw/agents/)
+- Changelog
+- Knowledge Integration Plan
+- Examples
+- list_compatible_skills
+- HTTPClientPool
+- test_subclass_hooks_fire
+- _Echo
+- test_kb_phase5_wiring.py
+- registry
+- .size
 
 ## God Nodes (most connected - your core abstractions)
-1. `write_note()` - 182 edges
-2. `KnowledgeDB` - 164 edges
+1. `write_note()` - 186 edges
+2. `KnowledgeDB` - 165 edges
 3. `load_config()` - 159 edges
 4. `Agent` - 116 edges
 5. `read_note()` - 83 edges
-6. `sync_knowledge()` - 61 edges
+6. `sync_knowledge()` - 62 edges
 7. `Budget` - 56 edges
 8. `Observation` - 56 edges
 9. `Context` - 55 edges
 10. `TelegramChannel` - 54 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `2. Code Structure & Modularity` --references--> `init_app()`  [INFERRED]
+  docs/archive/OPTIMIZATION_RECOMMENDATIONS.md → myclaw/__init__.py
+- `Changeset 1 (2026-05-17) — OPTIMIZATION_RECOMMENDATIONS.md` --references--> `init_app()`  [INFERRED]
+  docs/archive/review01.md → myclaw/__init__.py
 - `14. Deprecated logging module retained as footgun` --references--> `init_app()`  [INFERRED]
   docs/archive/SECURITY_FIXES_2026_04_29.md → myclaw/__init__.py
 - `Files changed (2026-05-17/18)` --references--> `init_app()`  [INFERRED]
   docs/archive/SECURITY_FIXES_2026_04_29.md → myclaw/__init__.py
 - `Appendix B: God Nodes (from Graphify)` --references--> `Agent`  [INFERRED]
   docs/archive/review01.md → myclaw/agent.py
-- `15. Telegram bot` --references--> `create_agent()`  [INFERRED]
-  docs/architecture_diagram.md → myclaw/agent_team.py
-- `Agents and @mentions` --references--> `create_agent()`  [INFERRED]
-  docs/telegram_guide.md → myclaw/agent_team.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (452 total, 95 thin omitted)
+## Communities (461 total, 109 thin omitted)
 
 ### Community 0 - "test_telegram_webui.py"
-Cohesion: 0.10
-Nodes (19): _FakeClient, _patch_httpx(), test_bot_that_fails_to_start_does_not_break_the_webui(), test_health_reports_bot_state(), test_restart_refused_when_disabled_or_not_in_webui(), test_restart_starts_a_new_bot(), test_settings_save_restarts_only_on_telegram_changes(), run() (+11 more)
+Cohesion: 0.09
+Nodes (20): _FakeClient, _patch_httpx(), test_bot_that_fails_to_start_does_not_break_the_webui(), test_health_reports_bot_state(), test_restart_refused_when_disabled_or_not_in_webui(), test_restart_starts_a_new_bot(), test_send_test_message_to_allowed_users(), test_settings_save_restarts_only_on_telegram_changes() (+12 more)
 
-### Community 2 - "test_kb_phase2_quality.py"
-Cohesion: 0.03
-Nodes (101): Quality: fact sources, categories, conflicts, duplicates, _body_of(), category_suggestions(), chat_source(), _clean_url(), conflict_counts(), _conflict_dict(), conflict_kind() (+93 more)
-
-### Community 3 - "importers.py"
+### Community 2 - "quality.py"
 Cohesion: 0.05
-Nodes (51): _pdf(), _array_source(), stream(), _chatgpt_messages(), _claude_messages(), _conv_key(), _conv_when(), detect_kind() (+43 more)
+Nodes (50): _body_of(), category_suggestions(), chat_source(), _clean_url(), _conflict_dict(), conflict_kind(), _contains(), degrees_by_id() (+42 more)
+
+### Community 3 - "re"
+Cohesion: 0.05
+Nodes (55): find_line(), find_line(), _chatgpt_messages(), _claude_messages(), _conv_key(), _conv_when(), _fit_message(), _free_beside() (+47 more)
 
 ### Community 4 - "update_api.py"
-Cohesion: 0.13
-Nodes (18): release_version(), _clean_env(), _managed(), _pid_alive(), _progress(), _read_state(), restart(), rollback() (+10 more)
+Cohesion: 0.08
+Nodes (26): release_version(), stale_release(), _clean_env(), _pid_alive(), _progress(), _read_state(), restart(), rollback() (+18 more)
 
 ### Community 5 - "typing"
-Cohesion: 0.03
-Nodes (23): myclaw/skill_preloader.py, get_last_active_time(), set_config(), _run_research_if_idle(), start_researcher_job(), get_db_file_mapping(), _record_sync_failure(), _should_skip_file() (+15 more)
+Cohesion: 0.02
+Nodes (44): Optimization audit — Changeset 1 (2026-05-17), 10. Prioritized Action Plan (high to low), Feature 2: Multi-modal Tools (image/video), myclaw/multimodal.py, log_routing_decision(), _emit_tool(), _public_args(), _usage_hint() (+36 more)
 
-### Community 6 - "dev/README.md"
-Cohesion: 0.05
-Nodes (34): Agent Swarm Implementation Plan, Architecture, Database Schema, Merged ARK Documentation - Generated 2026-04-16T23:22:12+03:00, Immediate Action Items (This Sprint), Objective, Phase 1: Security Hotfixes (Week 1), Phase 5: Observability & Monitoring (Week 4) (+26 more)
+### Community 6 - "test_report_fixes_20261023.py"
+Cohesion: 0.08
+Nodes (21): 2. Arbitrary File Access, Immediate Action Items (This Sprint), Objective, Phase 1: Security Hotfixes (Week 1), Phase 5: Observability & Monitoring (Week 4), Risk Mitigation, Success Criteria, ZenSynora Implementation Plan — From planx.md Review (+13 more)
 
 ### Community 7 - "parser.py"
+Cohesion: 0.04
+Nodes (45): 2.1 Background extraction NameError (2026-10-18, PR #26), 2.3 266 notes, but no tags, facts or links (2026-10-23), 2.5 An independent review of the fix found data loss (2026-10-24, KB phase 0), 2. Knowledge base, _block_text(), _body_lines(), _clean_list(), extract_body() (+37 more)
+
+### Community 9 - "AgentMessage"
+Cohesion: 0.10
+Nodes (20): 2.2 Module Map, Sprint 7 — Developer ergonomics, InProcessBroker, AgentMessage, MessageEnvelopeError, test_broker_double_register_rejected(), h(), test_broker_handler_exceptions_dont_crash_drain() (+12 more)
+
+### Community 10 - "EvalCase"
+Cohesion: 0.15
+Nodes (12): EvalCase, Evaluator, exact_match(), test_evaluator_concurrency_returns_correct_size(), test_evaluator_empty_dataset_returns_zero_metrics(), test_evaluator_mixed_scores(), test_evaluator_perfect_run(), echo() (+4 more)
+
+### Community 11 - "agents/__init__.py"
+Cohesion: 0.06
+Nodes (31): myclaw/agents/discovery.py, myclaw/agents/registry.py, AgentDiscovery, AgentMatch, delegate_to_agent(), get_agent_info(), integrate_with_swarm(), list_all_agents_brief() (+23 more)
+
+### Community 14 - "Budget"
 Cohesion: 0.08
-Nodes (23): _block_text(), _clean_list(), format_source(), _frontmatter_entries(), _flush(), _frontmatter_with_raw(), _indent(), _match_key() (+15 more)
+Nodes (19): append(), Budget, IngestResult, format_summary(), run_bounded(), target(), clean_source(), work() (+11 more)
 
-### Community 9 - "InProcessBroker"
-Cohesion: 0.13
-Nodes (10): BrokerError, InProcessBroker, test_broker_double_register_rejected(), h(), test_broker_handler_exceptions_dont_crash_drain(), test_broker_publish_to_unknown_recipient(), test_broker_register_and_publish(), test_broker_routes_handler_replies() (+2 more)
+### Community 15 - "myclaw/cli.py"
+Cohesion: 0.03
+Nodes (77): CLI command wiring verification report, 2026-04-19 — Task #8: Audit Log CLI Commands, P2 — Medium Priority, What it checks, BenchmarkRunner, run_all_benchmarks(), agent(), assimilate_cmd() (+69 more)
 
-### Community 10 - "test_evals.py"
-Cohesion: 0.17
-Nodes (13): EvalCase, Evaluator, exact_match(), test_evaluator_concurrency_returns_correct_size(), test_evaluator_empty_dataset_returns_zero_metrics(), test_evaluator_mixed_scores(), test_evaluator_perfect_run(), echo() (+5 more)
-
-### Community 11 - "test_registry.py"
-Cohesion: 0.05
-Nodes (36): Added, Agent System (myclaw/agents/), myclaw/agents/discovery.py, myclaw/agents/medic_agent.py, myclaw/agents/newtech_agent.py, myclaw/agents/registry.py, myclaw/agents/skill_adapter.py, AgentDiscovery (+28 more)
-
-### Community 14 - "run.py"
-Cohesion: 0.08
-Nodes (20): ingest_errors(), append(), log_path(), read_recent(), IngestResult, format_summary(), run_bounded(), target() (+12 more)
-
-### Community 15 - "command"
-Cohesion: 0.07
-Nodes (34): assimilate_cmd(), audit_export(), backup_create(), backup_delete(), backup_restore(), _check_base(), clear(), distill_cmd() (+26 more)
-
-### Community 16 - "watch.py"
-Cohesion: 0.08
-Nodes (15): _apply(), classify(), _db_exists(), enabled(), _file_md5(), _ignored_name(), is_self_write(), _md5() (+7 more)
+### Community 16 - "Watcher"
+Cohesion: 0.09
+Nodes (8): _apply(), _db_exists(), enabled(), Watcher, keep(), watchfiles_installed(), test_review_failed_reindex_is_retried(), watcher()
 
 ### Community 18 - "medic_evolver.py"
-Cohesion: 0.09
-Nodes (10): AnalysisResult, Category, EvolutionPlanner, EvolutionStrategy, generate_evolution_proposal(), Pattern, PatternType, Priority (+2 more)
+Cohesion: 0.10
+Nodes (9): AnalysisResult, Category, EvolutionPlanner, EvolutionStrategy, generate_evolution_proposal(), PatternType, Priority, Recommendation (+1 more)
 
 ### Community 19 - "KnowledgeDB"
 Cohesion: 0.03
-Nodes (26): Added, Runtime bugs found after install (all fixed), 5.1 Why regenerate now, 5.2 How to regenerate, 5.3 Post-regeneration checklist, 5. Knowledge Graph (`graphify-out/`) — Regenerate, 2. Data Model Enrichment, 3. Search & Indexing (+18 more)
+Nodes (35): Added, Database Optimizations, 2. Database Layer, 5.1 Why regenerate now, 5.2 How to regenerate, 5.3 Post-regeneration checklist, 5. Knowledge Graph (`graphify-out/`) — Regenerate, Sprint 1 — Performance & quality quick wins (+27 more)
 
-### Community 20 - "SwarmStorage"
-Cohesion: 0.02
-Nodes (35): Optimized, ✅ E. Inconsistent Type Hints - VERIFIED/ENHANCED, myclaw/swarm/models.py, myclaw/swarm/orchestrator.py, myclaw/swarm/storage.py, myclaw/swarm/strategies.py, Swarm Strategies (myclaw/swarm/strategies.py), Swarm System (myclaw/swarm/) (+27 more)
+### Community 20 - "SwarmResult"
+Cohesion: 0.06
+Nodes (19): myclaw/swarm/models.py, myclaw/swarm/strategies.py, Swarm Strategies (myclaw/swarm/strategies.py), create_swarm(), AgentResult, AggregationMethod, MessageType, SwarmConfig (+11 more)
 
 ### Community 21 - "test_telegram_channel.py"
-Cohesion: 0.09
-Nodes (20): split_message(), _async(), channel(), FakeAgent, FakeChat, FakeMessage, make_update(), _run_queued() (+12 more)
+Cohesion: 0.07
+Nodes (24): load_tsv(), split_message(), _async(), f(), channel(), FakeAgent, FakeChat, FakeMessage (+16 more)
 
 ### Community 22 - "AdvancedContextManager"
-Cohesion: 0.07
-Nodes (11): 2.1 Hot-Path Analysis, 2.2 Resource Utilization, 2.3 Known Bottlenecks, 2. Performance, Feature 1: Advanced Context Window (128k+), myclaw/context_window.py, AdvancedContextManager, ContextSummary (+3 more)
+Cohesion: 0.14
+Nodes (5): Feature 1: Advanced Context Window (128k+), myclaw/context_window.py, AdvancedContextManager, ContextSummary, create_context_manager()
 
-### Community 24 - "Knowledge base guide"
+### Community 24 - "sync.py"
+Cohesion: 0.04
+Nodes (40): 1.1 Fix `get_backlinks()` scope bug in `myclaw/knowledge/graph.py`, 1.2 Pass `db_path` through in `advanced_search.py`, 1.3 Pass `db_path` through in `path_reasoning.py`, 1. Critical Fixes (do first), 2.1 Add `db_path` to `search_by_metadata()` in `graph.py`, 2.2 Audit all knowledge modules for missing `db_path`, 2. API Consistency (add `db_path` to new functions), 4.1 Expand `readme-architecture.mmd` to show new knowledge subsystems (+32 more)
+
+### Community 25 - "span"
+Cohesion: 0.15
+Nodes (14): Added, Deferred (again), Fixed (pre-existing bugs surfaced by the new tests), Sprint 2 — Observability & Resilience (2026-04-29), 3.8 Observability (`observability/`, `logging_config.py`), _primary(), is_tracing_enabled(), span() (+6 more)
+
+### Community 26 - "medic_change_mgmt.py"
 Cohesion: 0.05
-Nodes (42): 1.1 Fix `get_backlinks()` scope bug in `myclaw/knowledge/graph.py`, 1.2 Pass `db_path` through in `advanced_search.py`, 1.3 Pass `db_path` through in `path_reasoning.py`, 1. Critical Fixes (do first), 2.1 Add `db_path` to `search_by_metadata()` in `graph.py`, 2.2 Audit all knowledge modules for missing `db_path`, 2. API Consistency (add `db_path` to new functions), 4.1 Expand `readme-architecture.mmd` to show new knowledge subsystems (+34 more)
-
-### Community 25 - "tracing.py"
-Cohesion: 0.09
-Nodes (17): 3.8 Observability (`observability/`, `logging_config.py`), Sprint 2 — Observability & resilience primitives, _primary(), get_tracer(), init_tracing(), is_tracing_enabled(), span(), traced() (+9 more)
-
-### Community 26 - "agents/__init__.py"
-Cohesion: 0.05
-Nodes (16): 4.3 Missing: Evolution Strategy Framework, New Files, approve_change(), ChangeManagementSystem, ChangePlan, ChangePriority, ChangeStatus, ChangeType (+8 more)
+Nodes (14): 4.3 Missing: Evolution Strategy Framework, New Files, approve_change(), ChangeManagementSystem, ChangePlan, ChangePriority, ChangeStatus, ChangeType (+6 more)
 
 ### Community 27 - "pytest"
-Cohesion: 0.08
-Nodes (21): AuthenticatedPrincipal, JWTAuthenticator, JWTVerificationError, _require_jwt(), OAuth2Config, _make_handler(), _make_token(), test_audience_mismatch_rejected() (+13 more)
+Cohesion: 0.09
+Nodes (20): AuthenticatedPrincipal, JWTAuthenticator, JWTVerificationError, _require_jwt(), OAuth2Config, _make_handler(), _make_token(), test_audience_mismatch_rejected() (+12 more)
 
-### Community 28 - "test_security.py"
-Cohesion: 0.22
-Nodes (3): reset_rate_limiter(), test_allowed_commands(), test_disallowed_commands()
+### Community 28 - "write_note"
+Cohesion: 0.05
+Nodes (71): enrich_note(), existing_titles(), known_notes_hint(), needs_structure(), parse_json_array(), save_items(), Observation, list_conflicts() (+63 more)
 
 ### Community 29 - "SecurityPolicy"
 Cohesion: 0.13
 Nodes (8): Feature 12: Enhanced Security Sandbox, myclaw/sandbox.py, AuditEntry, create_sandbox(), execute_in_sandbox(), ExecutionResult, SandboxedFunction, SecurityPolicy
 
-### Community 30 - "steps.py"
-Cohesion: 0.22
-Nodes (9): create_backup(), ensure_user_data(), _protected(), restore_backup(), restore_release_files(), _safe_extract(), _sha256(), _tar_filter() (+1 more)
+### Community 30 - "updater/backup.py"
+Cohesion: 0.20
+Nodes (12): test_backup_and_restore_roundtrip(), test_restore_refuses_corrupted_backup(), create_backup(), ensure_user_data(), _protected(), restore_backup(), restore_release_files(), _safe_extract() (+4 more)
 
 ### Community 31 - "NewTechAgent"
-Cohesion: 0.07
-Nodes (14): API Reference, Best Practices, NewTechAgent Class, Tool Functions, Subtask 4.1-02: Enhance test_newtech_agent.py, add_to_roadmap(), enable_newtech_agent(), fetch_ai_news() (+6 more)
+Cohesion: 0.06
+Nodes (17): API Reference, Best Practices, NewTechAgent Class, Tool Functions, Detailed Task Breakdown, Subtask 4.1-02: Enhance test_newtech_agent.py, Subtask 4.1-03: Enhance test_skill_adapter.py, add_to_roadmap() (+9 more)
 
 ### Community 32 - "SemanticCache"
-Cohesion: 0.07
-Nodes (5): myclaw/semantic_cache.py, CacheEntry, SemanticCache, test_semantic_cache_vectorized_scan_finds_best_match(), f()
+Cohesion: 0.04
+Nodes (12): myclaw/semantic_cache.py, CacheEntry, SemanticCache, test_semantic_cache_vectorized_scan_finds_best_match(), _Err, _fake_agent(), _Mem, test_background_summary_skips_tool_steps_and_empty_summaries() (+4 more)
 
 ### Community 33 - "test_agent_internals.py"
-Cohesion: 0.05
-Nodes (30): Added — `myclaw/agent_internals/` — focused phase modules, Added — `tests/test_agent_internals.py` (14 tests), Critical: deleted broken stub package, Sprint 5 — Agent Decomposition (2026-04-30), Test count snapshot, Updated documentation, _build_context(), _execute_tools() (+22 more)
+Cohesion: 0.06
+Nodes (16): build_message_context(), medic_loop_check(), route_message(), agent_context_length(), _make_stub_agent(), _StubMemory, _StubTaskTimer, test_build_message_context_accepts_expected_signature() (+8 more)
 
 ### Community 34 - "config.py"
 Cohesion: 0.03
-Nodes (59): myclaw/config.py, Files to Modify, Files to Modify, Files to Modify, Files to Modify, Subtask 5.1-01: Add Cache Configuration to AppConfig, Subtask 5.2-02: Add Worker Pool Configuration, Subtask 6.1-01: Add Sandbox Configuration (+51 more)
+Nodes (55): myclaw/config.py, execute_tools(), max_rounds(), _wrap_up(), knowledge(), AgentDefaults, AgentsConfig, AnthropicConfig (+47 more)
 
 ### Community 36 - "LogAnalyzer"
-Cohesion: 0.05
-Nodes (13): 4.1 Missing: Deterministic Health Scoring, 4.2 Missing: Pattern Detection Engine, 4.4 Missing: Error Cascade Detection, 4.5 Missing: Structured Recommendation Generation, 4.6 Missing: Inefficiency Detection, 4. Gap Analysis & Integration Points, 4. Log analysis, evolution and change management, analyze_system_logs() (+5 more)
+Cohesion: 0.06
+Nodes (8): 4. Log analysis, evolution and change management, analyze_system_logs(), analyze_system_logs_enhanced(), LogAnalyzer, analyze_logs(), EvolverEngine, LogEntry, Pattern
 
 ### Community 37 - "TurboQuant Implementation Plan"
 Cohesion: 0.05
 Nodes (39): 10. References, 11. Appendix: TurboQuant Algorithm Pseudocode, 1. Executive Summary, 2.1 Core Algorithm, 2.2 Mathematical Foundation, 2.3 Performance Metrics, 2. TurboQuant Technical Overview, 3.1 Current Architecture (+31 more)
 
 ### Community 38 - "models_api.py"
-Cohesion: 0.07
-Nodes (30): cooldown_key(), complete_text(), complete_with_fallback(), _configure_semantic_cache(), get_provider(), agents_using_key(), config_with_key(), extra_keys() (+22 more)
+Cohesion: 0.06
+Nodes (36): Added, Added, _chain(), get_fallback_provider(), clear_provider_cache(), get_provider(), agents_using_key(), config_with_key() (+28 more)
 
 ### Community 39 - "web_search.py"
-Cohesion: 0.11
-Nodes (21): Optimization audit — Changeset 2 (2026-05-18), 5.2 Recommendations, Changeset 2 (2026-05-18) — review01.md Implementation Plan, 12. Billion-laughs XML attack vector in search_news(), 13. Missing rate limiting on public web search functions, 8. URL injection via string interpolation in web_search.py, Feature 4: Web Search (real-time), get_aiohttp_session() (+13 more)
+Cohesion: 0.10
+Nodes (25): Optimization audit — Changeset 2 (2026-05-18), 5.2 Recommendations, Changeset 2 (2026-05-18) — review01.md Implementation Plan, 10. No security linters in pre-commit pipeline, 11. Timing attack on API key comparison in web/auth.py, 12. Billion-laughs XML attack vector in search_news(), 13. Missing rate limiting on public web search functions, 14. Deprecated logging module retained as footgun (+17 more)
 
 ### Community 40 - "Agent Swarm Guide"
 Cohesion: 0.05
@@ -602,171 +605,139 @@ Nodes (37): 1. Agent Selection, 1. Basic Parallel Swarm, 2. Sequential Pipeline,
 
 ### Community 41 - "test_kb_phase0_index.py"
 Cohesion: 0.04
-Nodes (46): _sanitize_boolean_query(), sanitize_fts_query(), detect_moves(), _filter_since(), scan_markdown_files(), SyncEngine, _TransientSyncError, bump() (+38 more)
+Nodes (63): Knowledge System (myclaw/knowledge/), myclaw/knowledge/graph.py, myclaw/knowledge/parser.py, myclaw/knowledge/storage.py, myclaw/knowledge/sync.py, 1. Change Detection & Sync Improvements, 5. File Watching, 6. NOT Worth Importing (+55 more)
 
 ### Community 42 - "jobs_api.py"
 Cohesion: 0.13
-Nodes (22): _start_background_runner(), apply_fix(), BenchIn, benchmark(), cancel(), _check_agent(), code_fix(), create_job() (+14 more)
+Nodes (22): _stop_background_runner(), apply_fix(), BenchIn, benchmark(), cancel(), _check_agent(), code_fix(), create_job() (+14 more)
 
 ### Community 43 - "test_agent_classes.py"
-Cohesion: 0.06
-Nodes (34): Added — `myclaw/agent_internals/classes.py` — class-based DI (31 tests), 5. Outstanding deferrals, Phase 4: P2/P3 -- Quality, Testing and Architecture (Week 4+), 5. `agent.py` still 1,630 lines — class decomposition in `agent_internals/classes.py` exists but is unused, Sprint 9 — Plugin marketplace + decomposition phase 2, PR 1 — `MessageRouter` (lowest risk), PR 2 — `ContextBuilder`, PR 3 — `ToolExecutor` + `ResponseHandler` (+26 more)
-
-### Community 44 - "shutil"
 Cohesion: 0.07
-Nodes (26): _fake_node_dir(), no_path_node(), _script(), _site(), _tarball(), test_build_step_uses_ensure_node(), test_build_step_without_node_keeps_old_ui_and_says_why(), test_damaged_download_is_refused() (+18 more)
+Nodes (33): Added — `myclaw/agent_internals/classes.py` — class-based DI (31 tests), 5. Outstanding deferrals, Phase 4: P2/P3 -- Quality, Testing and Architecture (Week 4+), 5. `agent.py` still 1,630 lines — class decomposition in `agent_internals/classes.py` exists but is unused, Sprint 9 — Plugin marketplace + decomposition phase 2, PR 1 — `MessageRouter` (lowest risk), PR 2 — `ContextBuilder`, PR 3 — `ToolExecutor` + `ResponseHandler` (+25 more)
+
+### Community 44 - "test_updater_node.py"
+Cohesion: 0.07
+Nodes (27): _fake_node_dir(), no_path_node(), _script(), _site(), _tarball(), test_build_step_uses_ensure_node(), test_build_step_without_node_keeps_old_ui_and_says_why(), test_damaged_download_is_refused() (+19 more)
 
 ### Community 45 - "Memory"
-Cohesion: 0.08
-Nodes (13): Implementation Notes, Optimization #1: Async Database (aiosqlite) - ✅ IMPLEMENTED, Optimization #4: Proactive Skill Pre-loading - ✅ IMPLEMENTED, myclaw/memory.py, Memory, Communication Style, Interaction Patterns, Learning History (+5 more)
+Cohesion: 0.11
+Nodes (6): Optimization #1: Async Database (aiosqlite) - ✅ IMPLEMENTED, myclaw/memory.py, Memory, generate_session_insights(), clear_history(), memory()
 
 ### Community 46 - "AsyncSQLitePool"
+Cohesion: 0.08
+Nodes (19): 5. `AsyncSQLitePool` race condition + unsafe fallback, Fix, Root cause, Test plan, 4. Sync Architecture, 3.1 Broken relative imports after `myclaw/tools` became a package (2026-10-18, PR #31), 3.2 `SQLitePool._get_lock` missing (2026-10-18, PR #31), 3. Code structure (+11 more)
+
+### Community 49 - ".run"
 Cohesion: 0.09
-Nodes (16): 5. `AsyncSQLitePool` race condition + unsafe fallback, Fix, Root cause, Test plan, AsyncSQLitePool, pytest_sessionfinish(), test_sqlite_pool_get_and_release(), memory() (+8 more)
+Nodes (3): allow_list_problem(), main(), test_status_start_failures_and_conflict()
 
-### Community 47 - "task_timer.py"
-Cohesion: 0.06
-Nodes (11): New Files:, Colors, ErrorSeverity, get_task_timer_orchestrator(), reset_task_timer_orchestrator(), StatusUpdate, TaskStatus, TaskThresholdConfig (+3 more)
-
-### Community 48 - "CircuitBreaker"
-Cohesion: 0.10
-Nodes (9): CircuitBreaker, test_breaker_half_open_recovers_on_success(), test_breaker_starts_closed_and_passes_calls_through(), ok(), test_breaker_trips_after_threshold(), boom(), test_excluded_exceptions_do_not_trip_breaker(), test_fallback_exhausted_when_all_fail() (+1 more)
-
-### Community 49 - "TelegramChannel"
-Cohesion: 0.13
-Nodes (3): allow_list_problem(), TelegramChannel, main()
-
-### Community 50 - "test_v073_reliability.py"
-Cohesion: 0.11
-Nodes (8): _Err, _fake_agent(), _Mem, test_background_summary_skips_tool_steps_and_empty_summaries(), test_cache_key_covers_model_and_system_prompt_and_skips_empty(), test_follow_up_tool_calls_run_so_multi_step_tasks_finish(), test_message_errors_are_not_mistaken_for_missing_tool_support(), test_wrong_arguments_get_a_usage_hint()
-
-### Community 51 - "Other Core Modules"
-Cohesion: 0.06
-Nodes (20): Feature 2: Multi-modal Tools (image/video), myclaw/dashboard.py, myclaw/dashboard_server.py, myclaw/exceptions.py, myclaw/gateway.py, myclaw/logging_config.py, myclaw/multimodal.py, myclaw/skill_generator.py (+12 more)
+### Community 50 - "SwarmOrchestrator"
+Cohesion: 0.07
+Nodes (3): ✅ E. Inconsistent Type Hints - VERIFIED/ENHANCED, SwarmOrchestrator, run_with_semaphore()
 
 ### Community 52 - "async_scheduler.py"
 Cohesion: 0.08
-Nodes (10): Compatibility, Docs, Phase 6.3 — Scheduler reliability layer (2026-05-06), Tests, _exc_matches(), Job, TriggerType, ComplexityScore (+2 more)
+Nodes (11): Compatibility, Docs, `myclaw/async_scheduler.py`, Phase 6.3 — Scheduler reliability layer (2026-05-06), Tests, _exc_matches(), Job, TriggerType (+3 more)
 
 ### Community 53 - "test_kb_phase6_robust.py"
-Cohesion: 0.10
-Nodes (37): KnowledgeConfig, start_background(), status(), stop_background(), _start_file_watcher(), _bump(), _check(), _db() (+29 more)
-
-### Community 54 - "Manifest"
 Cohesion: 0.09
-Nodes (7): hash_artifact(), Manifest, ManifestVerificationError, GitHubReleasesSource, MarketplaceSource, SearchResult, test_github_releases_rejects_bad_repo_format()
+Nodes (34): KnowledgeConfig, _bump(), _check(), _Clock, _db(), _entity(), _kdir(), _note() (+26 more)
+
+### Community 54 - "MarketplaceSource"
+Cohesion: 0.14
+Nodes (4): hash_artifact(), ManifestVerificationError, MarketplaceSource, SearchResult
 
 ### Community 55 - "MyClaw Implementation Plan - Detailed Code Changes"
 Cohesion: 0.06
 Nodes (32): 1. HTTP Connection Pooling for LLM Providers, 2. Retry Logic with Exponential Backoff, 3. SQLite Connection Pool for Memory, 4. Environment Variable Overrides for Config, 5. Profile Caching for Agents, 6. Shell Timeout Configuration, 7. Knowledge Sync Optimization, File: `myclaw/agent.py` (+24 more)
 
-### Community 56 - "SkillAdapter"
-Cohesion: 0.09
-Nodes (6): Tool Functions, analyze_external_skill(), convert_skill(), list_compatible_skills(), register_external_skill(), SkillAdapter
-
-### Community 57 - "TamperEvidentAuditLog"
-Cohesion: 0.12
-Nodes (3): Subtask 6.2-02: Integrate Tamper-Evident Log with Tool Audit, TamperEvidentAuditLog, ToolAuditLogger
-
 ### Community 58 - "settings_api.py"
 Cohesion: 0.06
-Nodes (30): put(), _ToolFunctionsProxy, _choice(), models_overview(), provider_models(), rotate_default_model(), set_default_model(), _carry_over_renames() (+22 more)
+Nodes (44): put(), provider_models(), add_provider_key(), _builtin_names(), change_provider_key(), delete_provider_key(), KeyChange, list_provider_keys() (+36 more)
 
-### Community 59 - "Context"
-Cohesion: 0.05
-Nodes (37): Add a data migration, Add or change an update step, Change the updater itself, For developers: extending the update procedure, Test, test_review11_updater_reinstalls_extras_with_declared_range(), test_preflight_explains_missing_venv(), test_venv_check_passes_on_a_working_python() (+29 more)
+### Community 59 - "steps.py"
+Cohesion: 0.07
+Nodes (27): Add or change an update step, test_review11_updater_reinstalls_extras_with_declared_range(), clean_env(), Context, run_pipeline(), _safe_rollback(), sh(), Step (+19 more)
 
 ### Community 60 - "AsyncScheduler"
-Cohesion: 0.10
-Nodes (12): `myclaw/async_scheduler.py`, AsyncScheduler, test_scheduler_budget_enforces_timeout(), test_scheduler_existing_funcs_without_ctx_kwarg_still_work(), test_scheduler_injects_ctx_and_records_checkpoint(), with_ctx(), test_scheduler_invokes_fallback_after_exhaustion(), test_scheduler_retries_on_failure_then_succeeds() (+4 more)
+Cohesion: 0.11
+Nodes (12): 📂 Module & Function Registry, AsyncScheduler, test_scheduler_budget_enforces_timeout(), test_scheduler_existing_funcs_without_ctx_kwarg_still_work(), test_scheduler_injects_ctx_and_records_checkpoint(), with_ctx(), test_scheduler_invokes_fallback_after_exhaustion(), test_scheduler_retries_on_failure_then_succeeds() (+4 more)
 
 ### Community 61 - "myclaw/backup.py"
-Cohesion: 0.14
-Nodes (25): auto_backup_due(), _auto_backups(), backup_dir(), create_backup(), data_dir(), default_parts(), delete_backup(), import_backup() (+17 more)
+Cohesion: 0.19
+Nodes (13): create_backup(), data_dir(), import_backup(), install_root(), _is_sqlite(), _matches(), read_manifest(), restore_backup() (+5 more)
 
 ### Community 62 - "CodeHealer"
-Cohesion: 0.07
-Nodes (10): Feature 6: Self-Healing Code (auto-fix errors), myclaw/self_healer.py, CodeHealer, ErrorInfo, ErrorPatternDatabase, extract_error_info(), FixResult, heal_code() (+2 more)
+Cohesion: 0.12
+Nodes (3): CodeHealer, ErrorInfo, heal_code()
 
 ### Community 63 - "KnowledgeGapCache"
-Cohesion: 0.07
-Nodes (14): Documentation & Testing, Knowledge Base Enhancements, Knowledge Gap & Error Handling Enhancement (2026-04-10), 1. `deploy.py` — Hardcoded SSH credentials committed to source tree, 2. `memory.py` — Unbounded `_history_cache` can OOM on long sessions, 3. `asyncio.create_task` without exception guards — silent crashes at 27 call sites, Critical, Phase 2: Async Performance Fixes (Week 1–2) (+6 more)
+Cohesion: 0.11
+Nodes (6): Documentation & Testing, Knowledge Base Enhancements, Knowledge Gap & Error Handling Enhancement (2026-04-10), `myclaw/agent.py`, KnowledgeGapCache, TestKnowledgeGapCache
 
 ### Community 64 - "browser.py"
-Cohesion: 0.13
-Nodes (14): Added — `myclaw/tools/browser.py` — headless browser tooling, `myclaw/tools/browser.py`, browser_close_session(), browser_extract_text(), browser_fill_form(), browser_navigate(), browser_screenshot(), browser_wait_for() (+6 more)
+Cohesion: 0.11
+Nodes (18): Added — Cost dashboard, Added — `myclaw/structured_output/` — JSON validation + LLM repair, Added — `myclaw/tools/browser.py` — headless browser tooling, Sprint 3 — Capability Expansion (2026-04-30), Tests added, `myclaw/tools/browser.py`, browser_close_session(), browser_extract_text() (+10 more)
 
 ### Community 65 - "checks.py"
-Cohesion: 0.08
-Nodes (43): _config_file(), _core_packages(), _cpu(), _data_dir(), _databases(), _disk(), _fix_data_dir(), _fix_migrations() (+35 more)
+Cohesion: 0.06
+Nodes (46): _config_file(), _core_packages(), _cpu(), _data_dir(), _databases(), _disk(), _fix_data_dir(), _fix_migrations() (+38 more)
 
 ### Community 66 - "telegram_api.py"
-Cohesion: 0.12
-Nodes (22): _reset_agent_registry(), bot_state(), bot_status(), is_placeholder(), _load_channel_class(), on_settings_changed(), restart_bot(), _scrub() (+14 more)
+Cohesion: 0.15
+Nodes (19): bot_state(), bot_status(), is_placeholder(), _load_channel_class(), on_settings_changed(), restart_bot(), _scrub(), SendTestIn (+11 more)
 
-### Community 67 - "kb.py"
-Cohesion: 0.04
-Nodes (51): Database Optimizations, Fixed, Fixed, 2. Database Layer, ✅ E. Knowledge Graph Operations - N+1 Query Fix, myclaw/tools/, Database Improvements, Technical Highlights (+43 more)
+### Community 67 - "list_knowledge"
+Cohesion: 0.06
+Nodes (38): myclaw/tools/, 12) Async SQLite pool improvements, 13) Streaming LLM calls, 14) Semantic caching for LLM + tools, 15) Batching and pagination for heavy tools, D) Performance optimizations I’d prioritize, A note, Command line (+30 more)
 
 ### Community 68 - "report.py"
-Cohesion: 0.16
-Nodes (19): redact(), build_report(), _cell(), _config_summary(), error_view(), filename(), _fmt_ts(), _lessons_count() (+11 more)
+Cohesion: 0.09
+Nodes (29): Entry, _log_files(), normalize(), _read_tail(), redact(), Scan, tail_lines(), _ts() (+21 more)
 
 ### Community 69 - "Functions Summary"
-Cohesion: 0.13
-Nodes (14): Agent Categories (136+ agents), Agent Profiles (myclaw/agent_profiles/), Channels (myclaw/channels/), Core Development, Data & AI, Functions Summary, Hub System (myclaw/hub/), Infrastructure (+6 more)
+Cohesion: 0.11
+Nodes (17): Agent Categories (136+ agents), Agent Profiles (myclaw/agent_profiles/), Channels (myclaw/channels/), Core Development, Data & AI, Functions Summary, Hub System (myclaw/hub/), Infrastructure (+9 more)
 
 ### Community 70 - "collaboration.py"
 Cohesion: 0.05
-Nodes (9): Feature 11: Team Multi-agent (collaboration), myclaw/swarm/collaboration.py, CollaborationEvent, CollaborationEventType, SharedContext, SharedTeamContext, TeamChat, TeamCollaboration (+1 more)
+Nodes (10): Feature 11: Team Multi-agent (collaboration), myclaw/swarm/collaboration.py, CollaborationEvent, CollaborationEventType, SharedContext, SharedTeamContext, TeamChat, TeamCollaboration (+2 more)
 
 ### Community 71 - "test_sprint10_integrations.py"
 Cohesion: 0.09
 Nodes (13): Sprint 10 — Integrations + small refactors, _get_kb_search_executor(), shutdown_kb_search_executor(), test_agent_module_re_exports_gap_file_for_back_compat(), test_agent_think_uses_observability_span(), test_defaults_module_exports_canonical_names(), test_kb_search_executor_is_lazily_created_and_singleton(), test_kb_search_executor_shutdown_resets() (+5 more)
 
 ### Community 72 - "UserContext"
-Cohesion: 0.11
-Nodes (23): Sprint 6 — Enterprise foundations (42 tests), async_user_scope(), current_user(), require_scope(), set_current_user(), user_scope(), UserContext, test_memory_explicit_user_id_wins_over_context() (+15 more)
+Cohesion: 0.07
+Nodes (38): Sprint 6 — Enterprise foundations (42 tests), Sprint 11 — Multi-tenancy + shared cache + WebUI streaming, async_user_scope(), current_user(), require_scope(), set_current_user(), user_scope(), UserContext (+30 more)
 
 ### Community 74 - "[0.5.0] - 2026-10-13"
-Cohesion: 0.06
-Nodes (31): [0.5.0] - 2026-10-13, Added, Added — Cost dashboard, Added — `myclaw/structured_output/` — JSON validation + LLM repair, Deferred (again), Deferred from Sprint 1, Documentation, Documentation (+23 more)
+Cohesion: 0.05
+Nodes (38): [0.0.1] - 2026-03-08, [0.5.0] - 2026-10-13, [0.7.0] - 2026-10-13, [0.7.1] - 2026-10-13, [0.7.2] - 2026-10-14, [0.7.3] - 2026-10-14, [0.7.4] - 2026-10-14, Added (+30 more)
 
-### Community 75 - "aiohttp_session.py"
-Cohesion: 0.19
-Nodes (6): close_aiohttp_session(), _create_session(), _install_shutdown_handlers(), _graceful_shutdown(), _signal_handler(), reset_state_store()
-
-### Community 76 - "integrity.py"
-Cohesion: 0.19
-Nodes (16): backup_file(), _backup_root(), _baseline_file(), hash_check_enabled(), list_file_backups(), load_baseline(), load_state(), recover() (+8 more)
+### Community 76 - "install_root"
+Cohesion: 0.12
+Nodes (23): list_backups(), _install_layout(), _integrity(), backup_file(), _backup_root(), _baseline_file(), hash_check_enabled(), list_file_backups() (+15 more)
 
 ### Community 77 - "ZenSynora Skill Adapter Guide"
-Cohesion: 0.07
-Nodes (26): 1. Analyze External Skill, 2. Convert Skill to ZenSynora Format, 3. List Compatible Skills, 4. Register External Skill File, API Reference, Best Practices, Configuration, Data Flow (+18 more)
+Cohesion: 0.12
+Nodes (15): 1. Analyze External Skill, 2. Convert Skill to ZenSynora Format, 3. List Compatible Skills, 4. Register External Skill File, Best Practices, Configuration, Data Flow, External Skill Format (+7 more)
 
 ### Community 78 - "Comprehensive Analysis: capability-evolver x medic_agent Cross-Reference"
 Cohesion: 0.06
 Nodes (31): 1. Executive Summary, 2.1 Core Design Philosophy, 2.2 Type System Architecture, 2.3 Multi-Pass Analysis Engine, 2.4 Evolution Strategy Framework, 2.5 Pattern Classification Taxonomy, 2.6 Key Algorithms, 2. capability-evolver Architectural Deep Dive (+23 more)
 
-### Community 79 - "VectorBackend"
-Cohesion: 0.07
-Nodes (8): 7. Where to look next, `myclaw/vector/` (Sprint 4), Sprint 4 — Vector store + structured-output integration, SearchHit, VectorBackend, make_backend(), InMemoryBackend, is_qdrant_available()
-
-### Community 81 - "TestBrowseErrorHandling"
-Cohesion: 0.12
-Nodes (3): _mock_httpx_error(), _mock_httpx_response(), TestBrowseErrorHandling
-
 ### Community 82 - "time"
 Cohesion: 0.11
-Nodes (28): _job_runs(), compute_next_run(), _conn(), create_job(), db_path(), delete_job(), due_jobs(), finish_run() (+20 more)
+Nodes (31): restart_stats(), compute_next_run(), _conn(), create_job(), db_path(), delete_job(), due_jobs(), finish_run() (+23 more)
 
 ### Community 83 - "budget.py"
-Cohesion: 0.10
-Nodes (21): acquire(), background(), Busy, _can_take(), checkpoint(), foreground(), _give(), _held() (+13 more)
+Cohesion: 0.09
+Nodes (26): acquire(), background(), Busy, _can_take(), checkpoint(), foreground(), _give(), _held() (+18 more)
 
-### Community 84 - "Changelog"
-Cohesion: 0.08
-Nodes (26): [0.0.1] - 2026-03-08, [0.6.0] - 2026-10-13, [0.7.0] - 2026-10-13, [0.7.1] - 2026-10-13, [0.7.2] - 2026-10-14, [0.7.3] - 2026-10-14, [0.7.4] - 2026-10-14, [0.7.5] - 2026-10-14 (+18 more)
+### Community 84 - "core.py"
+Cohesion: 0.07
+Nodes (14): Optimization #3: Parallel Tool Execution - ✅ IMPLEMENTED, get_state_store(), clear_hooks(), get_parallel_executor(), is_tool_independent(), ParallelToolExecutor, register_chat_id(), register_hook() (+6 more)
 
 ### Community 85 - "Contributing to ZenSynora"
 Cohesion: 0.08
@@ -774,21 +745,21 @@ Nodes (26): 1. Define the Tool Function, 2. Register the Tool, 3. Add Tests, 4. 
 
 ### Community 86 - "Agent"
 Cohesion: 0.03
-Nodes (22): Modified — `myclaw/agent.py` slimmed by ~300 lines, Phase 1: Quick Wins, Sprint 10 — Integrations + small refactors (17 tests), 3. A chat message, end to end, Performance (Score: B), Acceptance criteria for any decomposition PR, Agent.py Decomposition Plan, Original phasing (now historical) (+14 more)
+Nodes (19): Modified — `myclaw/agent.py` slimmed by ~300 lines, Phase 1: Quick Wins, Sprint 10 — Integrations + small refactors (17 tests), 3. A chat message, end to end, 3. `asyncio.create_task` without exception guards — silent crashes at 27 call sites, Phase 2: Async Performance Fixes (Week 1–2), Performance Optimization, Performance (Score: B) (+11 more)
 
 ### Community 87 - "exceptions.py"
-Cohesion: 0.11
-Nodes (13): 3. Files Updated, Backward Compatibility, AgentRoutingError, ConfigurationError, KnowledgeBaseError, MemoryError, ProviderError, RateLimitExceededError (+5 more)
+Cohesion: 0.12
+Nodes (11): 3. Files Updated, AgentRoutingError, ConfigurationError, KnowledgeBaseError, MemoryError, RateLimitExceededError, SecurityError, SwarmError (+3 more)
 
 ### Community 89 - "PromptRegistry"
-Cohesion: 0.15
-Nodes (12): PromptRegistry, registry(), test_all_latest_returns_one_per_name(), test_get_returns_latest_by_default(), test_get_specific_version(), test_get_unknown_returns_none(), test_invalid_name_rejected(), test_list_names_and_versions() (+4 more)
+Cohesion: 0.20
+Nodes (11): PromptRegistry, test_all_latest_returns_one_per_name(), test_get_returns_latest_by_default(), test_get_specific_version(), test_get_unknown_returns_none(), test_invalid_name_rejected(), test_list_names_and_versions(), test_persistence_roundtrip() (+3 more)
 
-### Community 90 - "TimeoutConfig"
-Cohesion: 0.18
-Nodes (10): [0.1.1] - 2026-03-16, Added, Configuration Changes, Environment Variables Added, [0.1.1] - 2026-03-16, Added, Configuration Changes, Environment Variables Added (+2 more)
+### Community 90 - "_load_profile_cached"
+Cohesion: 0.09
+Nodes (18): [0.1.1] - 2026-03-16, Added, Code Quality, Concurrency & Thread Safety, Configuration Changes, Core Performance Improvements, Documentation & Testing, Environment Variables Added (+10 more)
 
-### Community 91 - "subprocess"
+### Community 91 - "hardware.py"
 Cohesion: 0.15
 Nodes (10): _deferred_hardware_check(), _get_cpu_metrics(), _get_gpu_metrics(), _get_memory_metrics(), _get_network_metrics(), _get_npu_metrics(), get_optimization_suggestions(), get_system_metrics() (+2 more)
 
@@ -801,48 +772,52 @@ Cohesion: 0.08
 Nodes (24): 1. Enable New Tech Agent, 2. Fetch AI News, 3. Summarize Technology, 4. Generate Proposal, 5. Add to Roadmap, 6. Get Roadmap, 7. Get Technology Proposals, 8. Run On-Demand Scan (+16 more)
 
 ### Community 94 - "knowledge_api.py"
-Cohesion: 0.12
-Nodes (26): _aliases(), _body(), build_graph(), CategoryMerge, ConflictResolution, create_note(), _dir(), EnrichRequest (+18 more)
+Cohesion: 0.11
+Nodes (27): conflict_counts(), _aliases(), _body(), build_graph(), CategoryMerge, ConflictResolution, _dir(), enrich() (+19 more)
 
-### Community 95 - "Default Agent Profile"
-Cohesion: 0.25
-Nodes (7): Agent Swarms, Available Tools, Core Capabilities, Default Agent Profile, Guidelines, Tool Calling, Tool Management
+### Community 95 - "MarketplaceClient"
+Cohesion: 0.11
+Nodes (7): MarketplaceClient, _FakeSource, test_client_install_writes_artifact(), test_client_requires_at_least_one_source(), test_client_search_aggregates_and_preserves_order(), test_client_search_skips_failing_source(), test_client_unknown_plugin_raises()
 
 ### Community 96 - "run_checks"
 Cohesion: 0.11
-Nodes (16): apply_fixes(), _Check, CheckResult, DoctorContext, registered_checks(), Report, run_checks(), save() (+8 more)
+Nodes (17): apply_fixes(), _Check, CheckResult, DoctorContext, registered_checks(), Report, run_checks(), save() (+9 more)
 
 ### Community 97 - "test_structured_output.py"
-Cohesion: 0.15
-Nodes (17): extract_json(), validate_json(), Item, test_extract_array_root(), test_extract_from_code_fence(), test_extract_handles_nested_braces(), test_extract_ignores_braces_in_strings(), test_extract_plain_object() (+9 more)
+Cohesion: 0.11
+Nodes (20): extract_json(), schema_for(), validate_json(), Item, test_extract_array_root(), test_extract_from_code_fence(), test_extract_handles_nested_braces(), test_extract_ignores_braces_in_strings() (+12 more)
 
 ### Community 98 - "health.py"
-Cohesion: 0.12
-Nodes (25): base_dir(), bases(), conflicts(), db_path(), distillation(), drift_text(), drift_total(), embeddings() (+17 more)
+Cohesion: 0.13
+Nodes (24): base_dir(), bases(), conflicts(), db_path(), distillation(), drift_text(), drift_total(), embeddings() (+16 more)
 
 ### Community 99 - "Code Optimization Proposal for Zensynora"
-Cohesion: 0.13
-Nodes (15): 10.1 Optional Dependencies, 10. Dependency Management, 8.1 High Priority, 8. Testing Improvements, 9.1 Module Docstrings, 9. Documentation Improvements, ✅ A. Unit Tests for Critical Paths, Code Optimization Proposal for Zensynora (+7 more)
+Cohesion: 0.20
+Nodes (10): 10.1 Optional Dependencies, 10. Dependency Management, 8.1 High Priority, 8. Testing Improvements, 9.1 Module Docstrings, 9. Documentation Improvements, ✅ A. Unit Tests for Critical Paths, Code Optimization Proposal for Zensynora (+2 more)
 
 ### Community 100 - "ZenSynora Implementation Plan"
-Cohesion: 0.10
-Nodes (20): Added, Changed, Changelog Entry Template, Changes/Documentation Log, Commit Message Format, Example Commit Messages, Executive Summary, Fixed (+12 more)
+Cohesion: 0.07
+Nodes (29): Added, Changed, Changelog Entry Template, Changes/Documentation Log, Commit Message Format, Consolidated Task Catalog, Example Commit Messages, Executive Summary (+21 more)
 
 ### Community 101 - "OAuth2CallbackHandler"
-Cohesion: 0.13
+Cohesion: 0.14
 Nodes (4): OAuth2CallbackHandler, OAuthFlowError, _PendingFlow, test_pkce_pair_format()
 
 ### Community 102 - "ZenSynora (MyClaw) — Comprehensive Application Review"
 Cohesion: 0.07
-Nodes (27): 1.1 Core Capabilities, 1.2 Feature Completeness Assessment, 1. Functionality, 4.1 Design Principles, 4.2 Data Flow, 4.3 Cross-Cutting Concerns, 4. Architecture, 5.1 Security Posture (+19 more)
+Nodes (29): 10. Changes Implemented in Accompanying Changesets, 1.1 Core Capabilities, 1.2 Feature Completeness Assessment, 1. Functionality, 4.1 Design Principles, 4.2 Data Flow, 4.3 Cross-Cutting Concerns, 4. Architecture (+21 more)
 
 ### Community 103 - "json"
-Cohesion: 0.02
-Nodes (87): Phase 2: Skill System Evolution, 6. AST sandbox bypass in dynamic tools, Fix, Note for operators, Root cause, Test plan, 2. Arbitrary File Access, Phase 3: Code Health — Decompose God Modules (Week 2–3) (+79 more)
+Cohesion: 0.04
+Nodes (62): Fixed, Phase 2: Skill System Evolution, 6. AST sandbox bypass in dynamic tools, Fix, Note for operators, Root cause, Test plan, Subtask 5.2-04: Add Worker Pool Management Tools (+54 more)
 
 ### Community 104 - "test_discord_channel.py"
 Cohesion: 0.08
 Nodes (17): 4. Optional dependency posture, Sprint 6 — Enterprise foundations, chunk_for_discord(), DiscordChannel, ask(), on_message(), is_discord_available(), test_chunks_at_paragraph_boundaries() (+9 more)
+
+### Community 105 - "Layout"
+Cohesion: 0.13
+Nodes (13): Add a data migration, Change the updater itself, Changes proposed by agents, Everyday use, For developers: extending the update procedure, Layout, Requirements checked by the update (2026-10-21), Test (+5 more)
 
 ### Community 106 - "load_agents_from_yaml"
 Cohesion: 0.17
@@ -853,164 +828,172 @@ Cohesion: 0.09
 Nodes (21): AbstractBackend, API Reference, Architecture, Backend Details, Backend Discovery, Backend not available, BackendRegistry, Best Practices (+13 more)
 
 ### Community 108 - "glm5.md"
-Cohesion: 0.07
-Nodes (26): 10) Notification preferences and channels, 11) External integrations via webhooks, 12) Async SQLite pool improvements, 13) Streaming LLM calls, 14) Semantic caching for LLM + tools, 15) Batching and pagination for heavy tools, 16) Auto-generate OpenAPI docs and client stubs, 17) Plugin/tool marketplace pattern (+18 more)
+Cohesion: 0.09
+Nodes (21): 10) Notification preferences and channels, 11) External integrations via webhooks, 16) Auto-generate OpenAPI docs and client stubs, 17) Plugin/tool marketplace pattern, 18) Multi-user / team support, 1) shell_async uses shell=True despite allowlist, 2) Workspace path validation edge cases, 3) API key management and auth hygiene (+13 more)
 
-### Community 110 - "MFAAuth"
-Cohesion: 0.13
-Nodes (5): mfa_disable(), mfa_setup(), mfa_status(), mfa_verify(), MFAAuth
+### Community 109 - "BaseTTLCache"
+Cohesion: 0.08
+Nodes (14): BaseTTLCache, TTLEntry, test_clear_resets_stats(), test_constructor_rejects_bad_max_size(), test_contains_respects_expiry(), test_get_returns_none_on_miss(), test_items_skips_expired(), test_lru_eviction_when_at_capacity() (+6 more)
 
-### Community 112 - "Feature 3: Voice Channel (TTS/STT)"
-Cohesion: 0.20
-Nodes (5): Feature 3: Voice Channel (TTS/STT), AudioSegment, GTTSProvider, SynthesisResult, TTSProvider
+### Community 110 - "trigger_hook"
+Cohesion: 0.12
+Nodes (15): Added — `myclaw/agent_internals/` — focused phase modules, Added — `tests/test_agent_internals.py` (14 tests), Critical: deleted broken stub package, Sprint 5 — Agent Decomposition (2026-04-30), Test count snapshot, Updated documentation, _build_context(), _execute_tools() (+7 more)
 
-### Community 113 - "start"
-Cohesion: 0.13
-Nodes (17): Consolidated Task Catalog, Detailed Task Breakdown, Files to Modify, Objective and Success Criteria, Phase 1.2: Auto Health Check on Startup, Risks and Mitigations, Rollback Plan, Step-by-Step Strategy (+9 more)
+### Community 112 - "myclaw/voice_channel.py"
+Cohesion: 0.15
+Nodes (7): Feature 3: Voice Channel (TTS/STT), myclaw/voice_channel.py, AudioSegment, GTTSProvider, SynthesisResult, TTSProvider, VoiceActivityDetector
+
+### Community 113 - "describe_llm_error"
+Cohesion: 0.16
+Nodes (10): cooldown_for(), cooldown_key(), describe_llm_error(), is_key_error(), is_provider_error(), is_rate_limit(), _match(), complete_with_fallback() (+2 more)
 
 ### Community 114 - "test_v075_channels_medic_skills.py"
-Cohesion: 0.05
-Nodes (28): Chat: channels and several agents, set_registry(), delegate(), _ensure_registry(), _client(), test_subfolder_notes_and_link_forms_in_graph(), chat(), FakeAgent (+20 more)
+Cohesion: 0.03
+Nodes (42): Chat: channels and several agents, _known_tools(), _one(), parse_text_tool_calls(), estimate_tokens(), token_speed(), _agents(), apply_fix() (+34 more)
 
 ### Community 115 - "ZenSynora Full Application Analysis"
-Cohesion: 0.08
-Nodes (26): 10. Technology Stack Summary, 1. Executive Summary, 4.1 Strengths, 4.2 Recent Security Fixes (2026-04-29), 4.3 Risks, 4. Security Analysis, 5.1 Test Coverage, 5.2 Code Organization (+18 more)
+Cohesion: 0.07
+Nodes (28): 10. Technology Stack Summary, 1. Executive Summary, 2.1 High-Level Flow, 2. Architecture Overview, 4.1 Strengths, 4.2 Recent Security Fixes (2026-04-29), 4.3 Risks, 4. Security Analysis (+20 more)
 
-### Community 116 - "test_updater.py"
-Cohesion: 0.16
-Nodes (16): _ctx(), _layout(), _release(), test_adopts_legacy_install_and_rollback_restores_it(), test_backup_and_restore_roundtrip(), test_fetch_from_dir_and_version_policy(), test_pipeline_rolls_back_completed_steps_in_reverse(), test_prune_keeps_current_and_rollback_target() (+8 more)
+### Community 116 - "point_source_to"
+Cohesion: 0.39
+Nodes (5): _release(), test_adopts_legacy_install_and_rollback_restores_it(), test_switch_between_releases_is_atomic_symlink(), ActivateRelease, point_source_to()
 
-### Community 117 - "engine.py"
-Cohesion: 0.11
-Nodes (10): estimate_tokens(), _persist_event(), to_json(), token_speed(), add_listener(), subscribe(), unsubscribe(), channel_socket() (+2 more)
+### Community 117 - "channel_socket"
+Cohesion: 0.38
+Nodes (5): to_json(), subscribe(), unsubscribe(), channel_socket(), pump()
 
 ### Community 118 - "ZenSynora Future Implementation Plan"
 Cohesion: 0.08
 Nodes (26): 1.1 Already Completed ✅, 1.1 Integrate Agents into Agent.think() Pipeline, 1.2 Auto Health Check on Startup, 1.2 Config Integration for Agents, 2.1 Local Backup Recovery, 2.2 VirusTotal Integration, 2.3 Proactive Latency Optimization, 3.1 Real GitHub Integration (+18 more)
 
 ### Community 119 - "WhatsApp Channel Implementation Plan"
-Cohesion: 0.07
-Nodes (26): Agent Routing, Architecture, Automated Testing, Config JSON Structure, Configuration, Created, Dependencies Added, Environment Variable Overrides (+18 more)
+Cohesion: 0.10
+Nodes (20): Architecture, Automated Testing, Config JSON Structure, Configuration, Created, Dependencies Added, Environment Variable Overrides, Files Modified / Created (+12 more)
 
 ### Community 120 - "SQLiteBackend"
-Cohesion: 0.13
-Nodes (10): Added — `Agent.complete_structured(messages, schema, ...)`, Added — Documentation pass, Added — `myclaw/vector/` — pluggable vector backends, Added — `pyproject.toml` optional-extras for new sprints, Deferred (4th time, now explicitly tracked), Sprint 4 — Vector Store + Structured-Output Integration (2026-04-30), Tests added, SQLiteBackend (+2 more)
+Cohesion: 0.22
+Nodes (3): SQLiteBackend, _clear(), _count()
 
 ### Community 121 - "selfupdate.py"
-Cohesion: 0.09
-Nodes (34): Added, log_file(), apply_proposal(), approve(), _cfg_flag(), _clean_env(), create_proposal(), delete_proposal() (+26 more)
+Cohesion: 0.08
+Nodes (37): Added, Learning, apply_in_background(), _run(), apply_proposal(), approve(), _cfg_flag(), _clean_env() (+29 more)
 
 ### Community 122 - "MyClaw Agent Skills Reference"
-Cohesion: 0.12
-Nodes (17): find(), MyClaw Agent Skills Reference, SK-0.1 — `register_hook`, SK-0.2 — `list_hooks`, SK-0.3 — `clear_hooks`, SK-11.1 — Scrapling Agent Guide, SK-2.1 — `shell`, SK-3.1 — `browse` (+9 more)
+Cohesion: 0.11
+Nodes (18): MyClaw Agent Skills Reference, SK-0.1 — `register_hook`, SK-0.2 — `list_hooks`, SK-0.3 — `clear_hooks`, SK-11.1 — Scrapling Agent Guide, SK-2.1 — `shell`, SK-4.1 — `delegate`, SK-4.2 — `list_tools` (+10 more)
 
 ### Community 123 - "test_vector_backends.py"
-Cohesion: 0.11
-Nodes (20): cosine_similarity(), VectorRecord, backend(), test_clear(), test_cosine_handles_zero_vector(), test_cosine_identical_is_one(), test_cosine_mismatched_length_returns_zero(), test_cosine_orthogonal_is_zero() (+12 more)
+Cohesion: 0.19
+Nodes (12): VectorRecord, test_clear(), test_delete(), test_factory_qdrant_falls_back_when_unavailable(), test_factory_sqlite(), test_metadata_filter(), test_search_ranks_by_similarity(), test_search_respects_limit() (+4 more)
 
 ### Community 124 - "ChatEngine"
-Cohesion: 0.14
-Nodes (4): ChatEngine, memory_scope(), memory_turns(), test_channels_can_be_renamed_and_the_topic_reaches_the_agents()
+Cohesion: 0.12
+Nodes (5): ChatEngine, memory_scope(), memory_turns(), _persist_event(), test_channels_can_be_renamed_and_the_topic_reaches_the_agents()
 
-### Community 125 - "function_list.md"
-Cohesion: 0.09
-Nodes (14): CLI command wiring verification report, Dead‑code report (auto‑generated), BenchmarkRunner, run_all_benchmarks(), audit_status(), audit_verify(), benchmark(), config_cmd() (+6 more)
-
-### Community 126 - "execute_tools"
-Cohesion: 0.07
-Nodes (21): _known_tools(), looks_like_text_tool_call(), _one(), parse_text_tool_calls(), _emit_tool(), execute_tools(), max_rounds(), _public_args() (+13 more)
+### Community 126 - "Manifest"
+Cohesion: 0.15
+Nodes (3): Manifest, GitHubReleasesSource, test_github_releases_rejects_bad_repo_format()
 
 ### Community 127 - "MyClaw Application Analysis"
 Cohesion: 0.08
 Nodes (25): 10. Add Multiple Channel Support, 11. Conversation Context Management, 12. Async Enhancement, 1. Arbitrary Shell Command Execution, 3. Missing `__init__.py` Files, 4. No Error Handling, 5. SQLite Connection Never Closed, 6. No Timeout on LLM Calls (+17 more)
 
 ### Community 128 - "api"
-Cohesion: 0.13
-Nodes (29): react-dom, api(), BackupInfo, fmtBytes(), getAdminKey(), getApiBase(), App(), HealthRow() (+21 more)
+Cohesion: 0.11
+Nodes (30): Where to Add Things, api(), BackupInfo, fmtBytes(), getAdminKey(), SystemHealth, App(), HealthRow() (+22 more)
 
 ### Community 129 - "_Metrics"
-Cohesion: 0.07
-Nodes (8): High Priority — ✅ COMPLETED, Low Priority, Remaining Work, _MessageDeduplicator, _Metrics, _RateLimiter, handle_webhook(), verify_webhook()
+Cohesion: 0.11
+Nodes (6): High Priority — ✅ COMPLETED, Low Priority, Remaining Work, _MessageDeduplicator, _Metrics, _RateLimiter
 
 ### Community 130 - "✅ Already Implemented (48 Optimizations)"
-Cohesion: 0.10
+Cohesion: 0.11
 Nodes (19): 1. [/] Comprehensive Test Suite (Code Quality), Agent Layer, ✅ Already Implemented (48 Optimizations), Channels, Code Quality, Configuration, Implementation Status, Knowledge Layer (+11 more)
 
 ### Community 131 - "LRUCacheWithTTL"
-Cohesion: 0.14
-Nodes (4): 12. `LRUCacheWithTTL._cleanup_expired` is O(n) on every Nth access, Memory Optimizations, _CacheEntry, LRUCacheWithTTL
+Cohesion: 0.04
+Nodes (34): 10. `AsyncScheduler` JSONL persistence has no file lock, 12. `LRUCacheWithTTL._cleanup_expired` is O(n) on every Nth access, 16. `stream_think` word-splitting corrupts markdown / multi-byte output, 17. `requirements.txt` absent; `requirements-lock.txt` underutilized, 18. No `.env` / `pydantic-settings` schema validation, 19. Ruff + Black competing in pre-commit config, 1. `deploy.py` — Hardcoded SSH credentials committed to source tree, 2. `memory.py` — Unbounded `_history_cache` can OOM on long sessions (+26 more)
 
 ### Community 132 - "test_kb_phase5_ingest.py"
 Cohesion: 0.05
-Nodes (61): write_document_notes(), assimilate(), check_base(), _clamp(), import_file(), parse_github(), reset_sync_failures(), refresh_tool_schemas() (+53 more)
+Nodes (62): log_path(), read_recent(), assimilate(), check_base(), _clamp(), import_file(), clear_note_cache(), refresh_tool_schemas() (+54 more)
 
 ### Community 133 - "install.sh"
 Cohesion: 0.24
 Nodes (17): check_import(), check_sprint_module(), detect_docker(), dry_run(), error(), header(), info(), is_wsl() (+9 more)
 
 ### Community 134 - "checks_knowledge.py"
-Cohesion: 0.25
+Cohesion: 0.26
 Nodes (16): _bases(), _cached(), _drifted(), _fix_knowledge_index(), _kb_conflicts(), _kb_distill(), _kb_embeddings(), _kb_ingest() (+8 more)
 
-### Community 136 - "APIServer"
-Cohesion: 0.04
-Nodes (20): Fixed, 2026-04-29 Audit Round (resolved), Files changed, Fix, Feature 8: REST API Server (external integration), Optimization #2: Semantic LLM Caching - ✅ IMPLEMENTED, myclaw/api_server.py, APIKey (+12 more)
+### Community 136 - "_get_tool_schemas"
+Cohesion: 0.08
+Nodes (6): Architecture (Score: B+), AnthropicProvider, GeminiProvider, _get_configured_semantic_cache(), _get_tool_schemas(), OllamaProvider
 
 ### Community 138 - "test_scheduler_features.py"
-Cohesion: 0.09
-Nodes (19): Chain, Custom, decompose_task(), JSONSchema, MaxLength, NotEmpty, Regex, test_chain_validator_short_circuits() (+11 more)
+Cohesion: 0.08
+Nodes (25): Chain, ComplexityAnalyzer, Custom, decompose_task(), JSONSchema, MaxLength, NotEmpty, Regex (+17 more)
 
-### Community 139 - "update_user_profile"
-Cohesion: 0.14
-Nodes (15): Changed, Phase 3: Memory & Learning, 3.1 Periodic Session Reflection (~3 hours) ✅, 3.2 User Dialectic Profile (~4 hours) ✅, PHASE 3: Memory & Learning (7 hours) ✅ COMPLETED, ChangeSet, SK-8.1 — `schedule_daily_reflection`, SK-8.2 — `generate_session_insights` (+7 more)
+### Community 139 - "write_to_knowledge"
+Cohesion: 0.08
+Nodes (24): Changed, Fixed, Phase 3: Memory & Learning, [Unreleased], 3.2 User Dialectic Profile (~4 hours) ✅, Live sync, background work and health checks, Communication Style, Interaction Patterns (+16 more)
 
 ### Community 140 - "test_chat_message_actions.py"
 Cohesion: 0.13
 Nodes (18): _channel(), chat(), FakeAgent, home(), _idle(), _msgs(), RecordingMemory, _recv_until() (+10 more)
 
+### Community 141 - "test_knowledge.py"
+Cohesion: 0.07
+Nodes (11): 3.1 Add `test_get_backlinks`, 3.2 Add `test_search_by_metadata`, 3.3 Add `test_sync_circuit_breaker`, 3.4 Add `test_detect_moves`, 3. Test Coverage Gaps (add before next merge), validate_permalink(), _record_sync_failure(), _should_skip_file() (+3 more)
+
+### Community 142 - "WhisperSTTProvider"
+Cohesion: 0.20
+Nodes (3): STTProvider, TranscriptionResult, WhisperSTTProvider
+
 ### Community 143 - "test_kb_phase3_semantic.py"
-Cohesion: 0.04
-Nodes (59): Sprint 1 — Performance & quality quick wins, 2026-04-19 — Task #7: Advanced Search & Filtering, search_advanced(), SearchFilters, a_search_advanced(), rrf(), search_notes(), agent() (+51 more)
+Cohesion: 0.03
+Nodes (75): 2026-04-19 — Task #7: Advanced Search & Filtering, Phase 0 — fix what exists (done), _build_entity_text(), compute_embedding(), cosine_similarity(), search_advanced(), SearchFilters, SearchResult (+67 more)
 
 ### Community 144 - "test_doctor_report.py"
-Cohesion: 0.23
-Nodes (17): _noisy_install(), _rec(), _run(), test_cli_report(), test_custom_tools_placeholders_and_secrets(), test_grouping_strips_numbers_and_ids(), test_knowledge_index_warns_and_fixer_syncs(), test_new_checks_are_fast_and_clean_on_empty_home() (+9 more)
+Cohesion: 0.19
+Nodes (20): MCPServerConfig, _noisy_install(), _rec(), _run(), test_cli_report(), test_custom_tools_placeholders_and_secrets(), test_grouping_strips_numbers_and_ids(), test_knowledge_index_warns_and_fixer_syncs() (+12 more)
 
 ### Community 145 - "MyClaw/Zensynora Architecture (With Optimizations)"
 Cohesion: 0.10
 Nodes (21): 1. Agent Request Flow, 1. Caching Layer (New), 2. Knowledge Graph Query Flow, 3. Agent Layer, 3. Database Connection Lifecycle, 4. Concurrency, 4. Knowledge Gap Handling Flow, 5. Browse Error Handling Flow (+13 more)
 
-### Community 146 - "documents.py"
-Cohesion: 0.11
-Nodes (28): _cell(), check_ooxml(), _code(), _csv(), _date(), _docx(), _docx_blocks(), _html() (+20 more)
+### Community 146 - "IngestError"
+Cohesion: 0.09
+Nodes (33): _cell(), check_ooxml(), _code(), _csv(), _date(), _docx(), _docx_blocks(), _html() (+25 more)
 
 ### Community 147 - "chat_api.py"
-Cohesion: 0.11
+Cohesion: 0.10
 Nodes (26): publish(), activity(), channel_messages(), ChannelIn, ChannelPatch, _check_agents(), clear_channel(), create_channel() (+18 more)
 
-### Community 148 - "write_note"
-Cohesion: 0.04
-Nodes (77): 3.1 Add `test_get_backlinks`, 3.2 Add `test_search_by_metadata`, 3.3 Add `test_sync_circuit_breaker`, 3.4 Add `test_detect_moves`, 3. Test Coverage Gaps (add before next merge), enrich_note(), existing_titles(), known_notes_hint() (+69 more)
+### Community 148 - "read_note"
+Cohesion: 0.07
+Nodes (50): Explicit deferrals (explicitly tracked, not silently skipped), Optional deps added to ``pyproject.toml``, Performance, Sprint 8 — Review cleanup (6 tests), Sprints 6, 7, 8 — Enterprise foundations + ergonomics + review wrap-up (2026-04-30), a_read_note(), a_write_note(), parse_frontmatter() (+42 more)
 
 ### Community 149 - "package.json"
-Cohesion: 0.09
-Nodes (24): eslint, @eslint/js, eslint-plugin-react-hooks, eslint-plugin-react-refresh, globals, @types/node, @types/react, @types/react-dom (+16 more)
+Cohesion: 0.06
+Nodes (38): eslint, @eslint/js, eslint-plugin-react-hooks, eslint-plugin-react-refresh, globals, react-dom, @types/node, @types/react (+30 more)
 
 ### Community 150 - "compilerOptions"
 Cohesion: 0.11
 Nodes (18): compilerOptions, allowImportingTsExtensions, erasableSyntaxOnly, jsx, lib, module, moduleDetection, moduleResolution (+10 more)
 
-### Community 151 - "ZenSynora Action Plan"
-Cohesion: 0.13
-Nodes (13): Critical Path, File-by-File Implementation Guide, Implementation Roadmap, Legend, Phase 1: P0 -- Stop Crashes and Breaches (Week 1), Phase 2: P1 -- Security Hardening and Async Migration (Week 2), Phase 3: P2 -- Performance and Dependencies (Week 3), Rollback Procedures (+5 more)
+### Community 151 - "browse"
+Cohesion: 0.06
+Nodes (32): OpenAI Tool Message Validation (`myclaw/provider.py`, `myclaw/agent.py`), Phase 2: P1 -- Security Hardening and Async Migration (Week 2), Current State Assessment, Security (Score: C+), Test Coverage (Score: C), Recent Bug Fixes (2026-04-13), 2. Agent UnboundLocalError, 3. OpenAI Tool Message Validation (+24 more)
 
 ### Community 152 - "Code Analysis Section"
 Cohesion: 0.10
 Nodes (20): Architecture Review, Circular Dependencies Detected, Code Analysis Section, Code Quality Metrics, Critical Findings (Priority Matrix), Current State Assessment, Dependency Bloat Analysis, Dependency Mapping (+12 more)
 
 ### Community 153 - "updater/__main__.py"
-Cohesion: 0.09
-Nodes (32): Added, Changes proposed by agents, Everyday use, Layout, Requirements checked by the update (2026-10-21), Updating ZenSynora safely, What happens during an update, default_base() (+24 more)
+Cohesion: 0.14
+Nodes (21): _ctx(), test_prune_keeps_current_and_rollback_target(), State, build_parser(), cmd_backup(), cmd_node(), cmd_prune(), cmd_restore() (+13 more)
 
 ### Community 154 - "Code Analysis Section"
 Cohesion: 0.10
@@ -1021,28 +1004,28 @@ Cohesion: 0.11
 Nodes (17): compilerOptions, allowImportingTsExtensions, erasableSyntaxOnly, lib, module, moduleDetection, moduleResolution, noEmit (+9 more)
 
 ### Community 157 - "RateLimiter"
-Cohesion: 0.16
-Nodes (3): 4. Asynchronous / Concurrency, Phase 6: Infrastructure & Scaling (Week 4–5), RateLimiter
+Cohesion: 0.09
+Nodes (12): 1. Package & Dependency Management, 2. Code Structure & Modularity, 3. Performance Hotspots, 4. Asynchronous / Concurrency, 5. Logging & Error Handling, 6. Testing & Coverage, 7. Security, 8. Documentation & Onboarding (+4 more)
 
 ### Community 158 - "ZenSynora Implementation Plan: New Agents & Features"
-Cohesion: 0.11
-Nodes (18): 2.2 GitHub Integration, 2.3 LLM Evaluation & Documentation, 2.4 Infinite Loop Prevention, 2.5 Hash Check Configuration, 3.2 User Consent System, 5.1 Local Backup Recovery, 5.2 Real GitHub Integration, 5.4 Agent Pipeline Integration (+10 more)
+Cohesion: 0.08
+Nodes (25): High Priority (Completed), Implemented Features ✅, Low Priority (Completed), Medium Priority (Completed), 2.2 GitHub Integration, 2.3 LLM Evaluation & Documentation, 2.4 Infinite Loop Prevention, 2.5 Hash Check Configuration (+17 more)
 
-### Community 159 - "`tests/test_agent.py` (Enhanced)"
-Cohesion: 0.13
-Nodes (10): 1. Core Implementation Files, 2. Test Files, 3. Documentation Files, `CHANGELOG.md`, `docs/architecture_diagram.md`, `docs/architecture_with_optimizations.md`, Files Modified, `README.md` (+2 more)
+### Community 159 - "`tests/test_tools/` (Enhanced)"
+Cohesion: 0.33
+Nodes (3): 2. Test Files, `tests/test_tools/` (Enhanced), TestBackwardCompatibility
 
 ### Community 160 - "generate.py"
 Cohesion: 0.26
 Nodes (12): collect_sources(), Diagram, doc_title(), extract_diagrams(), find_heading_before(), main(), render_diagram_card(), render_index() (+4 more)
 
 ### Community 161 - "test_kb_phase4_distill.py"
-Cohesion: 0.08
-Nodes (50): distill(), drill_down(), list_facts(), drill_down(), agent(), api(), _db(), _facts() (+42 more)
+Cohesion: 0.09
+Nodes (47): distill(), drill_down(), agent(), api(), _db(), _facts(), home(), _notes() (+39 more)
 
 ### Community 162 - "Task Timer Integration Summary"
-Cohesion: 0.12
-Nodes (15): Architecture, Console Output Example:, Error Handling, Failure output at the maximum (example with the old 300 s limit):, Files Added/Modified, Future Enhancements, Logs:, Modified Files: (+7 more)
+Cohesion: 0.14
+Nodes (13): Architecture, Console Output Example:, Error Handling, Failure output at the maximum (example with the old 300 s limit):, Future Enhancements, Logs:, Overview, Step Tracking: (+5 more)
 
 ### Community 163 - "server.py"
 Cohesion: 0.15
@@ -1052,57 +1035,57 @@ Nodes (12): build_input_schema(), _coerce(), coerce_arguments(), _hidden_params(
 Cohesion: 0.10
 Nodes (16): 9. Missing Fernet key validation in config_encryption.py, 2026-04-19 — Task #4: Encrypt Secrets at Rest, decrypt_config(), encrypt_config(), _generate_key(), _get_fernet(), _get_keyring_password(), _get_or_create_key() (+8 more)
 
-### Community 166 - "test_report_fixes_20261023.py"
-Cohesion: 0.08
-Nodes (21): 4.4 Fixed 300-second task limit (2026-10-23, branch fix/report-20261023), Configuration, configured_max_timeout(), _listing(), read_file(), _allowed(), _execute(), parse() (+13 more)
+### Community 166 - "shell.py"
+Cohesion: 0.06
+Nodes (27): 11. Shell regex duplicated between sync and async functions, 2. Shell injection via newline characters, 7. Broken `stream_chat` across all four providers, Files changed, Files changed (2026-05-17/18), Files NOT changed (verified already-fixed in this branch), Fix, Fix (applied to all four providers) (+19 more)
 
-### Community 167 - "MCPClientManager"
-Cohesion: 0.08
-Nodes (7): agent(), run_agent_chat(), _run_and_cleanup(), MCPClientManager, cleanup_on_shutdown(), _close_async_db_pool(), test_mcp_server_tools_reach_the_models()
+### Community 167 - "start"
+Cohesion: 0.05
+Nodes (13): 2. Proactive "Self-Healing" Knowledge Loop, get_last_active_time(), set_config(), run_agent_chat(), _run_and_cleanup(), _run_research_if_idle(), start(), GapResearcher (+5 more)
 
-### Community 168 - ".load_plugin"
-Cohesion: 0.21
-Nodes (3): Feature 9: Plugin System (third-party), PluginInfo, PluginManifest
+### Community 168 - "plugin_system.py"
+Cohesion: 0.20
+Nodes (7): Feature 9: Plugin System (third-party), myclaw/plugin_system.py, emit_plugin_hook(), get_plugin_system(), PluginInfo, PluginManifest, register_plugin_hook()
 
 ### Community 169 - "Scrapling"
-Cohesion: 0.13
+Cohesion: 0.12
 Nodes (16): Advanced Parsing & Navigation, Async Session Management Examples, Basic Usage, CLI Usage, Code overview, Docker, Guardrails (Always), Key options (browsers) (+8 more)
 
-### Community 170 - "IntelligentRouter"
-Cohesion: 0.06
-Nodes (24): 1. Enhanced Intelligence & Reasoning, 2. Architecture & Scalability, 3. User Experience (Web UI), 4. Security & Governance, 5. New Specialized Features, 🔍 Codebase Overview, 📄 Documentation Gaps, 🛠️ Implementation Priority (+16 more)
+### Community 171 - "enabled"
+Cohesion: 0.12
+Nodes (11): _embedder(), context_search_kwargs(), enabled(), fuse(), normalise_mode(), note_indexed(), queue_all(), search_entities() (+3 more)
 
-### Community 171 - "Any"
+### Community 172 - "PersistentCacheMixin"
+Cohesion: 0.19
+Nodes (4): Documentation, Sprint 11 — Multi-tenancy wiring + shared cache + WebUI streaming (35 tests), Sprints 10, 11, 12 — Closing the rest of the open list (2026-04-30), PersistentCacheMixin
+
+### Community 173 - "swarm.py"
+Cohesion: 0.11
+Nodes (20): API Reference, Core Functions, `swarm_assign()`, `swarm_create()`, `swarm_list()`, `swarm_result()`, `swarm_stats()`, `swarm_status()` (+12 more)
+
+### Community 174 - ".chat"
 Cohesion: 0.10
-Nodes (9): context_search_kwargs(), _Engine, fuse(), normalise_mode(), note_indexed(), queue_all(), search_entities(), _semantic_args() (+1 more)
+Nodes (8): _fill_empty_content(), lru_cache_with_ttl(), decorator(), wrapper(), generate(), retry_with_backoff(), decorator(), test_no_message_with_empty_content_reaches_the_provider()
 
-### Community 173 - "_get_swarm_orchestrator"
+### Community 175 - "ScheduledReviewSystem"
 Cohesion: 0.11
-Nodes (18): API Reference, Core Functions, `swarm_assign()`, `swarm_create()`, `swarm_list()`, `swarm_result()`, `swarm_stats()`, `swarm_status()` (+10 more)
+Nodes (8): 4.1 Missing: Deterministic Health Scoring, 4.2 Missing: Pattern Detection Engine, 4.4 Missing: Error Cascade Detection, 4.5 Missing: Structured Recommendation Generation, 4.6 Missing: Inefficiency Detection, 4. Gap Analysis & Integration Points, ScheduledReviewSystem, start_continuous_monitoring()
 
-### Community 174 - "decorator"
-Cohesion: 0.15
-Nodes (5): _CacheInfo, lru_cache_with_ttl(), decorator(), wrapper(), decorator()
-
-### Community 175 - "test_v074_update_and_prompt.py"
-Cohesion: 0.15
-Nodes (9): home(), test_check_reads_the_updater_json(), test_failed_update_is_reported(), test_prompt_generation_falls_back_when_the_main_model_is_refused(), test_prompt_generation_reports_every_reason_when_all_fail(), test_restart_is_refused_outside_webui_and_during_an_update(), test_update_runs_in_the_background_and_reports_progress(), upd() (+1 more)
-
-### Community 176 - "candidates_for_note"
-Cohesion: 0.11
-Nodes (13): Candidate, candidates_for_note(), add(), who(), extract_sentences(), is_instruction(), is_secret(), norm_key() (+5 more)
+### Community 176 - "distill.py"
+Cohesion: 0.05
+Nodes (30): build_persona_content(), Candidate, candidates_for_note(), add(), who(), confidence(), _conflict_keys(), display_text() (+22 more)
 
 ### Community 177 - "agent_skills.py"
-Cohesion: 0.11
-Nodes (27): Added, Backups: settings, API keys, knowledge, Doctor: change proposals, Doctor: report, errors and download, Models: switch, rotate, add providers, Several keys for one provider, Skills: instructions agents load when needed, Telegram bot (Settings → Channels) (+19 more)
+Cohesion: 0.18
+Nodes (19): Added, Skills: instructions agents load when needed, delete_skill(), _files(), get_skill(), import_skill(), list_agent_skills(), list_skills() (+11 more)
 
-### Community 178 - "Security & Stability Fixes — 2026-04-29 (+ 2026-05-17/18)"
-Cohesion: 0.10
-Nodes (20): 10. No security linters in pre-commit pipeline, 11. Timing attack on API key comparison in web/auth.py, 14. Deprecated logging module retained as footgun, 2. Shell injection via newline characters, 4. CORS misconfiguration, 7. Broken `stream_chat` across all four providers, Files changed (2026-05-17/18), Files NOT changed (verified already-fixed in this branch) (+12 more)
+### Community 178 - "Knowledge Gap & Error Handling Enhancement - Implementation Summary"
+Cohesion: 0.11
+Nodes (18): 1. Structured Knowledge Search Results, 2. Knowledge Gap Cache, 3. Enhanced Browse Error Handling, 4. Enhanced Search Knowledge, Backward Compatibility, Developer API, For Developers, For Users (+10 more)
 
 ### Community 179 - "test_agent_jobs.py"
-Cohesion: 0.14
-Nodes (27): Added, 5.1 Agents could not create or run jobs (2026-10-21, PR #34), Jobs: scheduled and on-demand tasks, list_jobs(), once(), SK-5.7 — `job_create` / `job_list` / `job_run` / `job_status` / `job_update` (2026-10-21), _agents(), _allowed() (+19 more)
+Cohesion: 0.07
+Nodes (28): Added, 5.1 Agents could not create or run jobs (2026-10-21, PR #34), Jobs: scheduled and on-demand tasks, SK-5.7 — `job_create` / `job_list` / `job_run` / `job_status` / `job_update` (2026-10-21), HookRegistry, _agents(), _allowed(), _describe_schedule() (+20 more)
 
 ### Community 180 - "test_stream_runs_a_tool_call_written_as_text"
 Cohesion: 0.10
@@ -1117,52 +1100,52 @@ Cohesion: 0.07
 Nodes (45): cssVar(), GEdge, GNode, GraphHandle, KnowledgeGraph, Props, SimNode, clock() (+37 more)
 
 ### Community 183 - "SettingsView.tsx"
-Cohesion: 0.07
-Nodes (43): ApiError, ProbeResult, ProviderKeysMap, setAdminKey(), LatencyTest(), ModelPicker(), ProbeState, TestResult (+35 more)
-
-### Community 184 - "ZenSynora — Optimization & Improvement Audit"
-Cohesion: 0.12
-Nodes (17): 10. `AsyncScheduler` JSONL persistence has no file lock, 11. Shell regex duplicated between sync and async functions, 16. `stream_think` word-splitting corrupts markdown / multi-byte output, 17. `requirements.txt` absent; `requirements-lock.txt` underutilized, 18. No `.env` / `pydantic-settings` schema validation, 19. Ruff + Black competing in pre-commit config, 4. `re` module recompiled inside hot loops in 11+ files, 6. Semantic cache manual `np.dot` loop — 5–15× slower than batched matmul (+9 more)
+Cohesion: 0.09
+Nodes (29): ApiError, setAdminKey(), LatencyTest(), ModelPicker(), ProbeState, TestResult, botStateText(), CHANNEL_FIELDS (+21 more)
 
 ### Community 185 - "medic_api.py"
-Cohesion: 0.18
-Nodes (15): apply_in_background(), _run(), delete_job(), apply(), approve(), ApproveIn, delete(), _get() (+7 more)
+Cohesion: 0.17
+Nodes (14): delete_job(), remove_note(), apply(), approve(), ApproveIn, delete(), _get(), get_proposal() (+6 more)
 
 ### Community 186 - "test_sprint8_perf_quality.py"
-Cohesion: 0.12
-Nodes (7): ToolCall, ToolCallFunction, test_graph_build_context_batches_depth1_reads(), test_kb_auto_extract_logs_once_on_failure(), test_memory_schema_includes_composite_index_ddl(), test_message_typeddict_is_exported(), test_semantic_cache_default_max_scan_raised_to_256()
+Cohesion: 0.11
+Nodes (8): Message, ToolCall, ToolCallFunction, test_graph_build_context_batches_depth1_reads(), test_kb_auto_extract_logs_once_on_failure(), test_memory_schema_includes_composite_index_ddl(), test_message_typeddict_is_exported(), test_semantic_cache_default_max_scan_raised_to_256()
+
+### Community 187 - "SkillGenerator"
+Cohesion: 0.08
+Nodes (4): auto_generate_skill(), SkillGenerator, SkillSpec, ValidationResult
 
 ### Community 189 - "Phase 6.3: Log Rotation"
-Cohesion: 0.20
-Nodes (10): Detailed Task Breakdown, Objective and Success Criteria, Phase 6.3: Log Rotation, Risks and Mitigations, Step-by-Step Strategy, Subtask 6.3-02: Implement Log Rotation in AuditLog, Subtask 6.3-03: Implement Log Retention and Compression, Subtask 6.3-05: Write Tests for Log Rotation (+2 more)
+Cohesion: 0.15
+Nodes (13): Detailed Task Breakdown, Files to Modify, Objective and Success Criteria, Phase 6.3: Log Rotation, Risks and Mitigations, Step-by-Step Strategy, Subtask 6.3-01: Add Log Rotation Configuration, Subtask 6.3-02: Implement Log Rotation in AuditLog (+5 more)
 
 ### Community 190 - "Phase 5.1: LLM Response Caching Integration"
-Cohesion: 0.20
-Nodes (10): Detailed Task Breakdown, Objective and Success Criteria, Phase 5.1: LLM Response Caching Integration, Risks and Mitigations, Step-by-Step Strategy, Subtask 5.1-02: Integrate Cache into Provider Chat Method, Subtask 5.1-03: Add Cache Management Tools, Subtask 5.1-04: Write Tests for Semantic Cache Integration (+2 more)
+Cohesion: 0.15
+Nodes (13): Detailed Task Breakdown, Files to Modify, Objective and Success Criteria, Phase 5.1: LLM Response Caching Integration, Risks and Mitigations, Step-by-Step Strategy, Subtask 5.1-01: Add Cache Configuration to AppConfig, Subtask 5.1-02: Integrate Cache into Provider Chat Method (+5 more)
 
 ### Community 191 - "WorkerPoolManager"
-Cohesion: 0.21
-Nodes (6): Detailed Task Breakdown, Subtask 5.2-01: Create Worker Pool Manager, Subtask 5.2-03: Integrate Worker Pool with Tool Execution, Subtask 5.2-05: Write Tests for Worker Pool, _QueuedTask, WorkerPoolManager
+Cohesion: 0.10
+Nodes (15): Detailed Task Breakdown, Files to Modify, Objective and Success Criteria, Phase 5.2: Worker Pool Management, Risks and Mitigations, Step-by-Step Strategy, Subtask 5.2-01: Create Worker Pool Manager, Subtask 5.2-02: Add Worker Pool Configuration (+7 more)
 
 ### Community 192 - "context_items"
 Cohesion: 0.11
-Nodes (16): build_persona_content(), _content_words(), context_block(), context_items(), display_text(), _fact_dict(), _fts_terms(), is_about_user() (+8 more)
+Nodes (21): _connect(), _content_words(), context_block(), context_items(), db_path_for(), _fact_dict(), _fts_terms(), get_persona() (+13 more)
 
-### Community 193 - ".create_app"
-Cohesion: 0.08
-Nodes (10): 3. Missing auth on `/api/v1/keys` endpoints, Fix, Root cause, Test plan, create_api_key(), list_api_keys(), list_tools(), _require_admin() (+2 more)
+### Community 193 - "api_server.py"
+Cohesion: 0.04
+Nodes (30): 3. Missing auth on `/api/v1/keys` endpoints, 4. CORS misconfiguration, Fix, Fix, Operator action required, Root cause, Root cause, Test plan (+22 more)
 
-### Community 194 - "provider_keys_api.py"
-Cohesion: 0.17
-Nodes (16): add_provider_key(), _builtin_names(), change_provider_key(), delete_provider_key(), KeyChange, list_provider_keys(), NewKey, _overview() (+8 more)
+### Community 194 - "UpdateError"
+Cohesion: 0.16
+Nodes (9): test_preflight_explains_missing_venv(), test_venv_check_passes_on_a_working_python(), _Rec, test_fetch_from_dir_and_version_policy(), test_pipeline_rolls_back_completed_steps_in_reverse(), NothingToDo, UpdateError, check_venv_support() (+1 more)
 
 ### Community 195 - "vector_rank"
-Cohesion: 0.16
-Nodes (9): _semantic_fact_ids(), embedder_state(), _matrix(), min_score(), model_name(), query_vector(), run(), unavailable_reason() (+1 more)
+Cohesion: 0.17
+Nodes (10): _semantic_fact_ids(), embedder_state(), min_score(), model_info(), model_name(), ModelInfo, query_vector(), run() (+2 more)
 
-### Community 196 - "logscan.py"
-Cohesion: 0.09
-Nodes (16): _custom_tools(), log_scan(), _mcp_servers(), _restart_loop(), risky_tools(), _ro(), toolbox_dir(), Entry (+8 more)
+### Community 196 - "self_healer.py"
+Cohesion: 0.14
+Nodes (7): Feature 6: Self-Healing Code (auto-fix errors), myclaw/self_healer.py, ErrorPatternDatabase, extract_error_info(), FixResult, RecoveryStrategy, suggest_fixes()
 
 ### Community 197 - "Agent Categories"
 Cohesion: 0.08
@@ -1172,21 +1155,21 @@ Nodes (23): 01. Core Development (12 agents), 02. Language Specialists (27 agent
 Cohesion: 0.15
 Nodes (12): Files Modified, ✅ Implementation Complete, Installation Methods Now Supported, New Files Created, Next Steps (Phase 5), **Phase 1: Immediate Cleanup & Polish (1–2 days) – HIGH PRIORITY**, **Phase 2: Packaging & Local Installation (1 day) – HIGH PRIORITY**, **Phase 3: Deployment & Developer Experience (2–3 days) – MEDIUM PRIORITY** (+4 more)
 
-### Community 199 - "re"
-Cohesion: 0.06
-Nodes (28): find_line(), find_line(), _json_kind(), Document, chunk_text(), clean_body(), clean_fact(), _clip_title() (+20 more)
+### Community 199 - "import_export"
+Cohesion: 0.12
+Nodes (15): _array_source(), stream(), detect_kind(), _find_member(), import_export(), _is_symlink_entry(), _iter_md(), _load_json() (+7 more)
 
-### Community 200 - "distill.py"
-Cohesion: 0.06
-Nodes (50): _age_days(), _aggregate(), _build_persona(), _build_scenarios(), save(), _chunks(), confidence(), _conflict_keys() (+42 more)
+### Community 200 - "Any"
+Cohesion: 0.09
+Nodes (36): _age_days(), _aggregate(), _build_persona(), _build_scenarios(), save(), _chunks(), _distill_locked(), drop() (+28 more)
 
 ### Community 201 - "knowledge_import_api.py"
-Cohesion: 0.16
-Nodes (12): assimilate(), AssimilateIn, _base(), import_cancel(), import_status(), import_upload(), _new_job(), _reap() (+4 more)
+Cohesion: 0.14
+Nodes (14): normalize_kind(), assimilate(), AssimilateIn, _base(), import_cancel(), import_status(), import_upload(), _new_job() (+6 more)
 
-### Community 202 - "BaseTTLCache"
-Cohesion: 0.08
-Nodes (22): BaseTTLCache, _PersistedCache, test_clear_resets_stats(), test_constructor_rejects_bad_max_size(), test_contains_respects_expiry(), test_get_returns_none_on_miss(), test_items_skips_expired(), test_load_handles_corrupt_file() (+14 more)
+### Community 202 - "_PersistedCache"
+Cohesion: 0.19
+Nodes (8): _PersistedCache, test_load_handles_corrupt_file(), test_load_if_present_idempotent(), test_load_if_present_restores(), test_load_skips_expired_entries(), test_save_skips_when_no_path(), test_save_writes_json(), test_serialize_deserialize_hooks()
 
 ### Community 203 - "Scheduler Reliability Layer (Phase 6.3)"
 Cohesion: 0.14
@@ -1197,87 +1180,83 @@ Cohesion: 0.07
 Nodes (23): costs_by_model(), costs_by_provider(), costs_summary(), costs_timeline(), get_cost_summary(), get_costs_by_model(), get_daily_timeline(), _get_db() (+15 more)
 
 ### Community 205 - "Phase 6.1: Skill Sandboxing Integration"
-Cohesion: 0.22
-Nodes (9): Detailed Task Breakdown, Objective and Success Criteria, Phase 6.1: Skill Sandboxing Integration, Risks and Mitigations, Step-by-Step Strategy, Subtask 6.1-02: Integrate Sandbox with Skill Execution, Subtask 6.1-04: Write Tests for Sandbox Integration, Technical Approach (+1 more)
+Cohesion: 0.17
+Nodes (12): Detailed Task Breakdown, Files to Modify, Objective and Success Criteria, Phase 6.1: Skill Sandboxing Integration, Risks and Mitigations, Step-by-Step Strategy, Subtask 6.1-01: Add Sandbox Configuration, Subtask 6.1-02: Integrate Sandbox with Skill Execution (+4 more)
 
 ### Community 206 - "Any"
 Cohesion: 0.19
 Nodes (3): _HookEmitter, _MemoryProvider, _TaskTimer
 
 ### Community 207 - "embed_notes"
-Cohesion: 0.16
-Nodes (14): backfill_embeddings(), _connect(), _db_path(), embed_notes(), write(), embedding_status(), ensure_schema(), _has_tables() (+6 more)
+Cohesion: 0.15
+Nodes (15): backfill_embeddings(), _connect(), _db_path(), embed_notes(), write(), embedding_status(), ensure_schema(), _has_tables() (+7 more)
 
 ### Community 208 - "docs/README.md"
-Cohesion: 0.10
-Nodes (5): config.py additions, Archive, Strategic Plan: ZenSynora Transformation, Variant A: Federated Personal Intelligence, Variant B: Enterprise Agent Swarm
+Cohesion: 0.05
+Nodes (18): Dead‑code report (auto‑generated), config.py additions, Linux install check — 2026-10-12, Result, Step-by-step results, Web UI update (2026-10-12, evening), Archive, Strategic Plan: ZenSynora Transformation (+10 more)
 
 ### Community 209 - "backup_api.py"
 Cohesion: 0.18
 Nodes (10): auto_backup_tick(), create_backup(), CreateIn, delete_backup(), download_backup(), import_backup(), _not_found(), restore_backup() (+2 more)
 
-### Community 210 - "os"
-Cohesion: 0.12
-Nodes (8): differences(), folder_size(), inventory(), restore(), _skip(), snapshot(), _filter(), apply()
+### Community 210 - "app_backup.py"
+Cohesion: 0.24
+Nodes (7): differences(), folder_size(), inventory(), restore(), _skip(), snapshot(), _filter()
 
 ### Community 211 - "api.py"
-Cohesion: 0.04
-Nodes (33): 2026-04-19 — Task #11: Performance Dashboard, record_response_time(), register_websocket_session(), unregister_websocket_session(), update_session_activity(), add_member(), check_permission(), _get_db() (+25 more)
-
-### Community 212 - "FastEmbedEmbedder"
-Cohesion: 0.18
-Nodes (6): _create_embedder(), FastEmbedEmbedder, _load(), models_dir(), test_fastembed_embedder_is_imported_lazily(), test_fastembed_real_model_if_available()
+Cohesion: 0.03
+Nodes (42): 2026-04-19 — Task #11: Performance Dashboard, record_response_time(), register_websocket_session(), unregister_websocket_session(), update_session_activity(), add_member(), check_permission(), create_space() (+34 more)
 
 ### Community 213 - "test_observability.py"
-Cohesion: 0.16
-Nodes (11): `myclaw/logging_config.py` (Sprint 2 additions), PIIScrubFilter, scrub_pii(), _async_op(), _sync_op(), test_pii_scrub_filter_redacts_log_message(), test_scrub_pii_handles_empty(), test_scrub_pii_hashes_user_id() (+3 more)
+Cohesion: 0.09
+Nodes (17): `myclaw/logging_config.py` (Sprint 2 additions), Sprint 2 — Observability & resilience primitives, PIIScrubFilter, scrub_pii(), init_tracing(), traced(), traced_async(), decorator() (+9 more)
 
 ### Community 214 - "LAST Implementation Plan - Detailed Technical Roadmap"
 Cohesion: 0.04
 Nodes (48): 2.1 Plugin System v1 [HIGH], 2.2 Multimodal Support [MEDIUM], 2.3 Enhanced Memory System [MEDIUM], 3.1 Voice I/O [MEDIUM], 3.2 Email Integration [HIGH], 3.3 Web Dashboard MVP [MEDIUM], 4.1 Advanced Security [HIGH], 4.2 Performance Optimization [MEDIUM] (+40 more)
 
 ### Community 215 - "api.ts"
-Cohesion: 0.09
-Nodes (33): AgentInfo, ago(), Channel, ChatMsg, Diagnosis, fmtTime(), Job, JobRun (+25 more)
+Cohesion: 0.08
+Nodes (43): AgentInfo, ago(), Channel, ChatMsg, Diagnosis, fmtTime(), Job, JobRun (+35 more)
 
-### Community 216 - "migrations/__init__.py"
-Cohesion: 0.27
-Nodes (10): test_migration_0003_stores_title_links_and_is_idempotent(), test_migration_0003_without_knowledge_folder_does_nothing(), test_migrations_run_once_and_are_recorded(), discover(), _ledger_path(), MigrationContext, pending(), read_ledger() (+2 more)
+### Community 216 - "test_updater.py"
+Cohesion: 0.14
+Nodes (15): test_migration_0003_stores_title_links_and_is_idempotent(), test_migration_0003_without_knowledge_folder_does_nothing(), test_migrations_run_once_and_are_recorded(), test_version_helpers(), default_data_dir(), read_version(), version_tuple(), cmd_migrate() (+7 more)
 
-### Community 217 - "AgentMessage"
-Cohesion: 0.13
-Nodes (10): AgentMessage, MessageEnvelopeError, MessageType, worker_handler(), test_envelope_rejects_invalid_json(), test_envelope_rejects_missing_fields(), test_envelope_rejects_unknown_type(), test_envelope_roundtrip_via_dict() (+2 more)
+### Community 217 - "build_dashboard_data"
+Cohesion: 0.14
+Nodes (8): build_dashboard_data(), get_active_session_count(), get_avg_response_time(), get_kb_stats(), get_provider_health(), get_recent_routing_decisions(), get_tool_stats(), admin_dashboard()
 
 ### Community 218 - "asyncio"
-Cohesion: 0.10
-Nodes (31): download_report(), errors(), get_report(), _hours(), _base(), categories(), conflicts(), duplicates() (+23 more)
+Cohesion: 0.09
+Nodes (30): Distillation: facts, scenarios, a persona, mfa_status(), serve_spa(), errors(), get_report(), _hours(), _base(), categories() (+22 more)
 
-### Community 220 - "evals/__init__.py"
-Cohesion: 0.15
-Nodes (11): Sprint 7 — Developer ergonomics (44 tests), contains(), json_subset(), length_within(), regex_match(), test_contains_single_and_list(), test_json_subset_dict_input(), test_json_subset_string_input() (+3 more)
+### Community 219 - "agent.py"
+Cohesion: 0.05
+Nodes (12): Implementation Notes, Optimization #2: Semantic LLM Caching - ✅ IMPLEMENTED, Optimization #4: Proactive Skill Pre-loading - ✅ IMPLEMENTED, myclaw/skill_preloader.py, looks_like_text_tool_call(), get_semantic_cache(), get_skill_preloader(), preload_skills_for_context() (+4 more)
 
-### Community 222 - "TestSearchKnowledgeEnhancement"
-Cohesion: 0.12
-Nodes (3): `tests/test_tools/` (Enhanced), TestBackwardCompatibility, TestSearchKnowledgeEnhancement
+### Community 220 - "test_evals.py"
+Cohesion: 0.09
+Nodes (19): Sprint 7 — Developer ergonomics (44 tests), _CaseResult, EvalReport, load_jsonl(), _percentile(), save_report(), contains(), json_subset() (+11 more)
 
 ### Community 223 - "react"
-Cohesion: 0.13
-Nodes (23): Where to Add Things, Phase 4: Web UI Hardening & UX (Week 3), User Interface / Experience (Score: C+), react, getWsBase(), copyText(), agentColor(), COLORS (+15 more)
+Cohesion: 0.18
+Nodes (19): Phase 4: Web UI Hardening & UX (Week 3), User Interface / Experience (Score: C+), react, getApiBase(), getWsBase(), copyText(), Avatar(), ChatView() (+11 more)
 
 ### Community 224 - "HttpRegistrySource"
-Cohesion: 0.11
-Nodes (12): Added — `myclaw/marketplace/` — multi-source plugin marketplace (40 tests), HttpRegistrySource, OpenClawSource, _require_httpx(), _FakeAsyncClient, _FakeResp, test_github_releases_synthesizes_manifest_from_release(), test_http_registry_404_raises() (+4 more)
+Cohesion: 0.17
+Nodes (7): HttpRegistrySource, _FakeAsyncClient, _FakeResp, test_github_releases_synthesizes_manifest_from_release(), test_http_registry_404_raises(), test_http_registry_manifest_envelope_with_signature(), test_http_registry_search_round_trip()
 
 ### Community 225 - "repair_json"
-Cohesion: 0.17
-Nodes (10): 2.1 High-Level Flow, 2.2 Module Map, 2. Architecture Overview, Sprint 3 — Capability expansion, repair_json(), test_repair_fixes_invalid_via_llm(), test_repair_gives_up_after_max_attempts(), test_repair_handles_llm_call_failure() (+2 more)
+Cohesion: 0.18
+Nodes (9): Sprint 3 — Capability expansion, _build_repair_messages(), _format_schema(), repair_json(), test_repair_fixes_invalid_via_llm(), test_repair_gives_up_after_max_attempts(), test_repair_handles_llm_call_failure(), test_repair_succeeds_when_input_already_valid() (+1 more)
 
 ### Community 226 - "1.1 REST API Enhancement [CRITICAL]"
 Cohesion: 0.18
 Nodes (11): 1.1 REST API Enhancement [CRITICAL], 1.2 Streaming Tool Execution [HIGH], 1.3 Discord Bot (Basic) [HIGH], Current Limitation, Implementation Architecture, Implementation Steps, Phase 1: Foundation & Quick Wins (2-3 weeks), Success Criteria (+3 more)
 
 ### Community 227 - "🧩 Development Phases (Milestones)"
-Cohesion: 0.18
+Cohesion: 0.20
 Nodes (10): 🧩 Development Phases (Milestones), 🎯 General Objective, 📌 Important Notes, **Phase 1.5 – Intelligence & Hardening (June 2026)**, **Phase 1 – Core Upgrade (May – June 2026)**, **Phase 2.1 – Ecosystem & Experience (Oct 2026 – March 2027)**, **Phase 2.2 – Monetization & Enterprise (2027)**, **Phase 2 – Security & Observability (July – Sept 2026)** (+2 more)
 
 ### Community 228 - "Multi-Agent Coordinator Agent"
@@ -1290,15 +1269,15 @@ Nodes (10): Code Reviewer Agent, Comment Format, Correctness, Maintainability, M
 
 ### Community 231 - "ingest/sources.py"
 Cohesion: 0.06
-Nodes (35): kind_of(), IngestError, TreeEntry, usable(), allowed_roots(), check_local_path(), check_policy(), clean_url() (+27 more)
+Nodes (33): TreeEntry, usable(), allowed_roots(), check_local_path(), check_policy(), clean_url(), _existing(), GitIgnore (+25 more)
 
-### Community 232 - "validator.py"
-Cohesion: 0.16
-Nodes (6): _build_repair_messages(), _format_schema(), schema_for(), ValidationResult, test_schema_for_pydantic_model(), test_schema_for_rejects_non_pydantic()
+### Community 232 - "Incidents and lessons learned"
+Cohesion: 0.13
+Nodes (15): 1.1 The bot never answered (2026-10-18, PR #26), 1.2 "Token is wrong" — whitespace in the token (2026-10-18, PR #27), 1.3 Gateway crash loop under systemd (2026-10-18, PR #28/#29), 1.4 False "conflict" right after a restart (2026-10-18, PR #28/#29), 1.5 Persistent conflict: Hermes used the same bot token (2026-10-18), 1.6 Agents built their own Telegram tool with placeholder tokens (2026-10-18, PR #28/#29), 1. Telegram, 5.2 Shell refused every `|` and `&&` (2026-10-23, branch fix/report-20261023) (+7 more)
 
-### Community 233 - "MockConfig"
-Cohesion: 0.18
-Nodes (10): MockConfig, AgentsConfig, DefaultsConfig, BackendsConfig, SSHConfig, _Password, IntelligenceConfig, RoutingConfig (+2 more)
+### Community 233 - "test_context_budget.py"
+Cohesion: 0.15
+Nodes (7): _find_ctx(), test_config_field_and_agent_lookup(), test_estimate_api(), test_estimate_grows_with_the_prompt_and_min_below_recommended(), test_find_ctx_reads_known_fields(), test_model_max_falls_back_to_library_then_unknown(), test_model_max_from_openai_compatible_list()
 
 ### Community 234 - "uninstall.sh"
 Cohesion: 0.33
@@ -1307,6 +1286,10 @@ Nodes (10): confirm_data_removal(), dry_run(), header(), info(), prompt_yes(), r
 ### Community 236 - "bug_report.md"
 Cohesion: 0.18
 Nodes (10): Actual Behavior, Additional Context, Bug Description, Configuration, Environment, Expected Behavior, Health report, Logs (+2 more)
+
+### Community 237 - "PreferenceLearner"
+Cohesion: 0.19
+Nodes (3): Feature 7: Semantic Memory (preference learning), PreferenceLearner, SemanticMemory
 
 ### Community 238 - "LLM Architect Agent"
 Cohesion: 0.20
@@ -1318,59 +1301,59 @@ Nodes (9): Async Context Manager, Checklist, Code Patterns, Core Competencies, D
 
 ### Community 240 - "eval_agent_skills.py"
 Cohesion: 0.07
-Nodes (33): connect(), excluded(), fail(), header(), main(), run_remote(), success(), upload_tree() (+25 more)
+Nodes (32): connect(), excluded(), fail(), header(), main(), run_remote(), success(), upload_tree() (+24 more)
 
-### Community 242 - "admin_dashboard.py"
-Cohesion: 0.06
-Nodes (15): 2026-04-19 — Task #3: Prometheus `/metrics` Endpoint, build_dashboard_data(), get_active_session_count(), get_avg_response_time(), get_kb_stats(), get_provider_health(), get_recent_routing_decisions(), get_tool_stats() (+7 more)
-
-### Community 243 - "gdpr.py"
+### Community 241 - "tracing.py"
 Cohesion: 0.18
-Nodes (7): 2026-04-19 — Task #9: GDPR Compliance Helpers (Opt-in), gdpr(), delete_user_data(), export_user_data(), _get_audit_log_path(), _get_user_knowledge_dir(), _get_user_memory_db()
+Nodes (3): get_tracer(), _NoopSpan, _NoopTracer
 
-### Community 244 - "enabled"
-Cohesion: 0.17
-Nodes (11): _embedder(), enabled(), get_embedder(), library_installed(), queue_known_bases(), _reset_caches(), set_options(), wants_updates() (+3 more)
+### Community 242 - "get_metrics"
+Cohesion: 0.05
+Nodes (11): Phase 3: P2 -- Performance and Dependencies (Week 3), 2026-04-19 — Task #3: Prometheus `/metrics` Endpoint, get_metrics(), MetricsMiddleware, _NoopMetrics, PrometheusMetrics, reset_metrics(), setup_metrics_endpoint() (+3 more)
+
+### Community 243 - "Implementation Log"
+Cohesion: 0.09
+Nodes (18): 2026-04-19 — Task #12: LLM Cost Tracking, 2026-04-19 — Task #13: Collaborative Knowledge Spaces, 2026-04-19 — Task #1: Web UI Response Streaming, 2026-04-19 — Task #2: Streaming Tool Calls, 2026-04-19 — Task #6: Fully Replace apscheduler with AsyncScheduler, 2026-04-19 — Task #9: GDPR Compliance Helpers (Opt-in), 2026-04-20 — Task #14: MFA / TOTP for Web UI, 2026-04-20 — Task #16: Usage-Based Metering (+10 more)
+
+### Community 244 - "ZenSynora Personal — Recommended LLM Configuration"
+Cohesion: 0.15
+Nodes (13): Alternative Models Worth Considering, Context Window Budget for ZenSynora, Dual-Provider Fallback Strategy, Executive Summary, Ollama Tuning for ZenSynora, Summary, Tier 1: High-End Workstation (RTX 4090 / 48GB+ VRAM), Tier 2: Mid-Range Gaming GPU (RTX 3060 12GB / RTX 4060 Ti 16GB / RX 6800 XT) (+5 more)
 
 ### Community 245 - "test_provider_selection.py"
-Cohesion: 0.18
-Nodes (6): _cfg(), _RejectingCompletions, test_agent_does_not_silently_switch_to_ollama(), test_fallback_never_reuses_failed_primary(), test_openai_compat_retries_without_tools(), test_probe_reports_missing_sdk()
+Cohesion: 0.15
+Nodes (8): Fixed, ProviderUnavailableError, _cfg(), _RejectingCompletions, test_agent_does_not_silently_switch_to_ollama(), test_fallback_never_reuses_failed_primary(), test_openai_compat_retries_without_tools(), test_probe_reports_missing_sdk()
 
 ### Community 246 - "ZenSynora Diagram Palette"
 Cohesion: 0.22
 Nodes (8): Accent, Backwards-compatible aliases, Mermaid themeVariables (for auto-rendered diagrams), Semantic categories, Surfaces (dark theme), Text, When to use which color, ZenSynora Diagram Palette
 
 ### Community 247 - "Checkpoint"
-Cohesion: 0.22
-Nodes (6): Checkpoint, clear_checkpoint(), get_checkpoint(), test_checkpoint_clear(), test_checkpoint_sanitises_unsafe_ids(), test_checkpoint_save_and_load()
-
-### Community 248 - "medic.py"
-Cohesion: 0.16
-Nodes (10): _agents(), apply_fix(), _clean(), code_fix_job(), _context(), diagnose(), _parse(), rule_diagnosis() (+2 more)
+Cohesion: 0.24
+Nodes (6): Files, Checkpoint, get_checkpoint(), test_checkpoint_clear(), test_checkpoint_sanitises_unsafe_ids(), test_checkpoint_save_and_load()
 
 ### Community 249 - "DoctorReport.tsx"
-Cohesion: 0.14
-Nodes (15): Card(), DoctorReport(), ErrorGroup, ErrorView, Level, LEVEL_CLASS, LEVELS, PERIODS (+7 more)
+Cohesion: 0.11
+Nodes (21): Proposal, Card(), DoctorReport(), ErrorGroup, ErrorView, fetchReport(), Level, LEVEL_CLASS (+13 more)
 
 ### Community 250 - "JobRunner"
 Cohesion: 0.13
 Nodes (5): JobRunner, one(), parse_judgement(), test_failed_job_runs_are_marked_error(), _get_memory()
 
-### Community 251 - ".generate_skill"
-Cohesion: 0.14
-Nodes (3): auto_generate_skill(), SkillSpec, ValidationResult
-
 ### Community 252 - "3. Core Systems Deep Dive"
 Cohesion: 0.20
 Nodes (10): 3.10 Vector Store (`vector/`), 3.11 Web UI (`webui/`), 3.1 Agent Engine (`agent.py` ~71KB), 3.2 Provider Layer (`provider.py` ~53KB), 3.3 Memory System (`memory.py` ~26KB), 3.4 Knowledge Base (`knowledge/`), 3.6 Resilience (`resilience/`), 3.7 Auth & Multi-Tenancy (`auth/`, `tenancy/`) (+2 more)
+
+### Community 253 - "SSHBackend"
+Cohesion: 0.10
+Nodes (6): SSHBackend, SSHBackendConfig, _prompt_ssh_password(), ssh_command(), ssh_get_file(), ssh_put_file()
 
 ### Community 254 - "MyClaw Todo List - Non-Implemented Items"
 Cohesion: 0.04
 Nodes (54): Advanced AI Capabilities, Advanced Features, API Key Management, Async Subprocess for Shell, Background Knowledge Extraction, Cache Integration, Channel Integrations, Code Quality & Testing (+46 more)
 
-### Community 255 - "group"
-Cohesion: 0.08
-Nodes (22): 2026-04-19 — Task #12: LLM Cost Tracking, 2026-04-19 — Task #13: Collaborative Knowledge Spaces, 2026-04-19 — Task #2: Streaming Tool Calls, 2026-04-19 — Task #5: Offline Mode (Local Model Fallback), 2026-04-19 — Task #6: Fully Replace apscheduler with AsyncScheduler, 2026-04-19 — Task #8: Audit Log CLI Commands, 2026-04-20 — Task #14: MFA / TOTP for Web UI, 2026-04-20 — Task #16: Usage-Based Metering (+14 more)
+### Community 255 - "recover_file"
+Cohesion: 0.12
+Nodes (15): 1. The doctor, 2. Medic tools (for agents), 3. Configuration, 5. Troubleshooting, 6. Self-update proposals, Adding a check, Diagnosis after an unexpected error, Diagnostics report (+7 more)
 
 ### Community 256 - "ZenSynora Architecture — Visual Guide"
 Cohesion: 0.12
@@ -1396,28 +1379,20 @@ Nodes (8): API Versioning, Backend Developer Agent, Checklist, Code Patterns, Co
 Cohesion: 0.22
 Nodes (8): Checklist, Code Patterns, Core Competencies, CSS Custom Properties, Frontend Developer Agent, Guidelines, Model Routing, React Component Structure
 
-### Community 262 - "Phase 4.1: Unit Tests Enhancement"
-Cohesion: 0.20
-Nodes (10): Detailed Task Breakdown, Files to Modify, Objective and Success Criteria, Phase 4.1: Unit Tests Enhancement, Risks and Mitigations, Step-by-Step Strategy, Subtask 4.1-01: Enhance test_medic_agent.py, Subtask 4.1-03: Enhance test_skill_adapter.py (+2 more)
-
 ### Community 264 - "UserProfile"
-Cohesion: 0.18
-Nodes (3): myclaw/semantic_memory.py, Preference, UserProfile
+Cohesion: 0.16
+Nodes (5): Core Modules, myclaw/provider.py, myclaw/semantic_memory.py, Preference, UserProfile
 
 ### Community 265 - "scheduler.py"
 Cohesion: 0.07
-Nodes (30): Added, 13. Jobs, 3.5 Tool Ecosystem (`tools/`), 1.3 Natural Language Scheduling (~3 hours) ✅, Added, Modified, ChannelsConfig, WhatsAppConfig (+22 more)
-
-### Community 266 - "_get_db"
-Cohesion: 0.14
-Nodes (7): check_quota(), _get_db(), get_quota(), get_usage(), get_user_summary(), record_call(), metering_status()
+Nodes (32): Added, `myclaw/tools/scheduler.py` — five new agent-callable tools, 13. Jobs, 3.5 Tool Ecosystem (`tools/`), Added, Modified, ChannelsConfig, WhatsAppConfig (+24 more)
 
 ### Community 267 - "context_budget.py"
-Cohesion: 0.07
-Nodes (23): prompt_section(), agent_context_length(), _ask_provider(), estimate_context(), estimate_tokens(), _find_ctx(), fit_messages(), _library_max() (+15 more)
+Cohesion: 0.20
+Nodes (11): prompt_section(), _ask_provider(), estimate_context(), estimate_tokens(), fit_messages(), _library_max(), message_tokens(), model_context_max() (+3 more)
 
 ### Community 269 - "load_config"
-Cohesion: 0.05
+Cohesion: 0.04
 Nodes (47): Phase 2: Packaging & Installation, 13. `deploy.py` hardcoded credentials (see #1 above — primary finding), 14. `config.py` `_apply_env_overrides` — secrets silently accepted with no startup warning, 15. CORS fallback to dev origin not guarded against empty configuration, Security, P0 / P1 — High Priority, create_agent(), _describe() (+39 more)
 
 ### Community 270 - "CostDashboard.tsx"
@@ -1425,36 +1400,32 @@ Cohesion: 0.31
 Nodes (8): CostDashboard(), formatInt(), formatUSD(), ModelRow, Props, ProviderRow, SummaryRow, TimelineRow
 
 ### Community 271 - "search_knowledge"
-Cohesion: 0.03
-Nodes (79): Bug Fixes (2026-04-13), Error Handling Enhancements, Import Error in Knowledge Researcher (`myclaw/knowledge/researcher.py`), Knowledge Researcher Indentation Fix (`myclaw/knowledge/researcher.py`), OpenAI Tool Message Validation (`myclaw/provider.py`, `myclaw/agent.py`), Sprint 8 — Review cleanup (6 tests), UnboundLocalError in Agent (`myclaw/agent.py`), Sprint 8 — Original-review cleanup (+71 more)
+Cohesion: 0.05
+Nodes (40): [0.7.5] - 2026-10-14, Error Handling Enhancements, Fixed, 1. Core Implementation Files, 3. Documentation Files, `CHANGELOG.md`, `docs/architecture_diagram.md`, `docs/architecture_with_optimizations.md` (+32 more)
 
-### Community 273 - "init_app"
-Cohesion: 0.14
-Nodes (14): Optimization audit — Changeset 1 (2026-05-17), 10. Prioritized Action Plan (high to low), 1. Package & Dependency Management, 2. Code Structure & Modularity, 3. Performance Hotspots, 5. Logging & Error Handling, 6. Testing & Coverage, 7. Security (+6 more)
+### Community 273 - "🚀 Proposed Improvements & Additions"
+Cohesion: 0.20
+Nodes (10): 1. Enhanced Intelligence & Reasoning, 2. Architecture & Scalability, 3. User Experience (Web UI), 4. Security & Governance, 5. New Specialized Features, 🔍 Codebase Overview, 📄 Documentation Gaps, 🛠️ Implementation Priority (+2 more)
 
-### Community 274 - "harness.py"
-Cohesion: 0.13
-Nodes (7): _CaseResult, EvalReport, load_jsonl(), _percentile(), save_report(), test_load_jsonl_rejects_invalid_json(), test_load_jsonl_roundtrip()
+### Community 274 - "MessageToken"
+Cohesion: 0.20
+Nodes (5): 2.1 Hot-Path Analysis, 2.2 Resource Utilization, 2.3 Known Bottlenecks, 2. Performance, MessageToken
 
 ### Community 275 - "How to Run MyClaw"
-Cohesion: 0.25
+Cohesion: 0.29
 Nodes (7): Console Mode, How to Run MyClaw, Linux Auto-Start (systemd), Running, Setup, Telegram Gateway, WhatsApp Gateway
 
 ### Community 277 - "test_agent.py"
-Cohesion: 0.21
-Nodes (8): cleanup_agent(), create_mock_agent(), mock_agent(), mock_agent_for_hooks(), mock_agent_with_cache(), mock_agent_with_clean_gaps(), test_agent_think(), TestKnowledgeGapLogging
+Cohesion: 0.06
+Nodes (23): `tests/test_agent.py` (Enhanced), KnowledgeSearchResult, cleanup_agent(), create_mock_agent(), mock_agent(), mock_agent_for_hooks(), mock_agent_with_cache(), mock_agent_with_clean_gaps() (+15 more)
 
 ### Community 278 - "SourceError"
-Cohesion: 0.18
-Nodes (6): LocalHubSource, SourceError, test_local_hub_get_manifest_and_fetch(), test_local_hub_missing_plugin_raises(), test_local_hub_search_filters_and_orders(), _write_local_hub()
+Cohesion: 0.16
+Nodes (7): LocalHubSource, _require_httpx(), SourceError, test_local_hub_get_manifest_and_fetch(), test_local_hub_missing_plugin_raises(), test_local_hub_search_filters_and_orders(), _write_local_hub()
 
 ### Community 279 - "KnowledgeDistilled.tsx"
 Cohesion: 0.24
 Nodes (11): Conf(), confColor(), Drill, DrillView(), Evidence, KnowledgeDistilled(), Persona, PersonaItem (+3 more)
-
-### Community 280 - "ComplexityAnalyzer"
-Cohesion: 0.23
-Nodes (10): `myclaw/tools/scheduler.py` — five new agent-callable tools, Files, ComplexityAnalyzer, estimate_complexity(), list_checkpoints(), test_complexity_multi_step_keywords_trigger_decompose(), test_complexity_numbered_list_detected(), test_complexity_simple_task_is_simple() (+2 more)
 
 ### Community 281 - "_Scheduler"
 Cohesion: 0.11
@@ -1477,36 +1448,32 @@ Cohesion: 0.10
 Nodes (20): 1. Change Plan Creation, 2. Approval Workflow, 3. Safe Execution with Rollback, 4. Log Analysis and Anomaly Detection, 5. Continuous Monitoring, 6. Pending Changes Management, Automated Monitoring, Configuration (+12 more)
 
 ### Community 287 - "Telegram Guide — chat with your agents from your phone"
-Cohesion: 0.09
-Nodes (21): 1.1 The bot never answered (2026-10-18, PR #26), 1.2 "Token is wrong" — whitespace in the token (2026-10-18, PR #27), 1.3 Gateway crash loop under systemd (2026-10-18, PR #28/#29), 1.4 False "conflict" right after a restart (2026-10-18, PR #28/#29), 1.5 Persistent conflict: Hermes used the same bot token (2026-10-18), 1.6 Agents built their own Telegram tool with placeholder tokens (2026-10-18, PR #28/#29), 1. Telegram, Advanced: your own Telegram Bot API server (+13 more)
+Cohesion: 0.13
+Nodes (14): Advanced: your own Telegram Bot API server, Agents and @mentions, Commands, Groups, Inside the Web UI or `zensynora gateway`, Knowledge, Privacy: who may use the bot, Reminders (+6 more)
 
-### Community 289 - "BaseLLMProvider"
-Cohesion: 0.19
-Nodes (4): _check_provider_alive(), wrap_provider_with_fallback(), BaseLLMProvider, _build_custom_provider()
+### Community 289 - "provider.py"
+Cohesion: 0.06
+Nodes (16): 2026-04-19 — Task #5: Offline Mode (Local Model Fallback), _check_provider_alive(), FallbackChatWrapper, wrap_provider_with_fallback(), BaseLLMProvider, _build_custom_provider(), complete_text(), _configure_semantic_cache() (+8 more)
 
 ### Community 290 - "multi-agent-coordinator/SKILL.md"
 Cohesion: 0.20
 Nodes (9): Best Practices, Checklist, Coordination Patterns, Core Competencies, Hierarchical, How to Coordinate, Model Routing, Parallel Execution (+1 more)
 
-### Community 291 - "fastapi"
-Cohesion: 0.07
-Nodes (4): dashboard_app(), DashboardState, create_dashboard_app(), client()
-
-### Community 292 - "skills_api.py"
-Cohesion: 0.22
-Nodes (8): AgentsIn, copy_skill(), delete_skill(), import_skill(), ImportIn, _reload_agents(), save_skill(), SkillIn
+### Community 292 - "delete_skill"
+Cohesion: 0.24
+Nodes (7): copy_skill(), delete_skill(), import_skill(), ImportIn, _reload_agents(), save_skill(), SkillIn
 
 ### Community 293 - "Exception Handling Implementation"
-Cohesion: 0.20
-Nodes (10): 1. Enhanced Exception Hierarchy (`myclaw/exceptions.py`), 2. Enhanced Exception Features, Benefits, Catching Specific Exceptions, Changes Made, Exception Handling Implementation, Overview, Raising Exceptions with Details (+2 more)
+Cohesion: 0.15
+Nodes (12): 1. Enhanced Exception Hierarchy (`myclaw/exceptions.py`), 2. Enhanced Exception Features, Backward Compatibility, Benefits, Catching Specific Exceptions, Changes Made, Exception Handling Implementation, Overview (+4 more)
 
 ### Community 295 - "DevOps Engineer Agent"
 Cohesion: 0.29
 Nodes (6): Checklist, Common Tools, Core Competencies, DevOps Engineer Agent, Guidelines, Model Routing
 
-### Community 296 - "OpenAICompatProvider"
-Cohesion: 0.18
-Nodes (4): GroqProvider, OpenAICompatProvider, OpenAIProvider, OpenRouterProvider
+### Community 296 - "cosine_similarity"
+Cohesion: 0.20
+Nodes (5): cosine_similarity(), test_cosine_handles_zero_vector(), test_cosine_identical_is_one(), test_cosine_mismatched_length_returns_zero(), test_cosine_orthogonal_is_zero()
 
 ### Community 297 - "Bootstrap Profile"
 Cohesion: 0.29
@@ -1517,28 +1484,36 @@ Cohesion: 0.29
 Nodes (6): Maintenance, Memory Management, Memory Profile, Memory Types, Operations, Priorities
 
 ### Community 299 - "Optimization Plan (planx1.md)"
-Cohesion: 0.25
+Cohesion: 0.22
 Nodes (8): 1. Python Codebase, 2️⃣ Frontend (React / TypeScript), 3️⃣ CI / DevOps, 4️⃣ Documentation & Knowledge Graph, 5️⃣ Security & Hygiene, 6️⃣ Performance Hotspots (Profiling), Optimization Plan (planx1.md), 📍 Prioritized Quick‑Win Action Plan
 
 ### Community 300 - "chat/store.py"
 Cohesion: 0.10
 Nodes (29): add_message(), all_messages(), canonical_members(), _channel(), clean_name(), clear_messages(), _conn(), create_channel() (+21 more)
 
-### Community 301 - "📂 Module & Function Registry"
-Cohesion: 0.10
-Nodes (12): Fixed, 1. User Query Processing (`Agent.think`), 2. Specialized Medic Self-Healing Loop, 3. Agent Swarm Execution, 🛠️ Functional Logic Flows, 🗺️ Master Component Map, 📂 Module & Function Registry, ZenSynora Comprehensive System Diagram (+4 more)
+### Community 301 - "🛠️ Functional Logic Flows"
+Cohesion: 0.33
+Nodes (6): 1. User Query Processing (`Agent.think`), 2. Specialized Medic Self-Healing Loop, 3. Agent Swarm Execution, 🛠️ Functional Logic Flows, 🗺️ Master Component Map, ZenSynora Comprehensive System Diagram
 
 ### Community 302 - "knowledge_semantic_api.py"
-Cohesion: 0.26
-Nodes (9): install_command(), _install_view(), _job_view(), _run_backfill(), semantic_backfill(), semantic_backfill_stop(), semantic_install(), semantic_status() (+1 more)
+Cohesion: 0.22
+Nodes (11): library_installed(), _install_view(), _job_view(), _run_backfill(), _run_install(), semantic_backfill(), semantic_backfill_stop(), semantic_install() (+3 more)
 
 ### Community 303 - "Category Summary"
 Cohesion: 0.25
 Nodes (8): Agent Architecture, Category Summary, Ecosystem, Memory & Knowledge Management, Scheduling & Automation, Self-Improvement & Learning Loop, Skill & Tool System, User Experience
 
+### Community 304 - "Added — `myclaw/marketplace/` — multi-source plugin marketplace (40 tests)"
+Cohesion: 0.22
+Nodes (6): Added — `myclaw/marketplace/` — multi-source plugin marketplace (40 tests), Documentation, Sprint 9 — Plugin marketplace + decomposition phase 2 (2026-04-30), OpenClawSource, test_openclaw_default_base_url_and_headers(), test_openclaw_supports_custom_base_url_for_air_gap()
+
 ### Community 305 - "llm-architect/SKILL.md"
 Cohesion: 0.22
 Nodes (8): Architecture Patterns, Checklist, Considerations, Core Competencies, Guidelines, Model Routing, Prompt Template Structure, RAG Architecture
+
+### Community 306 - "InMemoryBackend"
+Cohesion: 0.22
+Nodes (3): Sprint 4 — Vector store + structured-output integration, InMemoryBackend, backend()
 
 ### Community 307 - "Heartbeat Profile"
 Cohesion: 0.33
@@ -1552,21 +1527,17 @@ Nodes (5): Boundaries, Communication Style, Identity Profile, Personality Traits
 Cohesion: 0.33
 Nodes (5): Common Tasks, Important Context, Notes, User Preferences, User Profile Template
 
+### Community 310 - "configured_max_timeout"
+Cohesion: 0.22
+Nodes (8): 4.1 Rate limits and timeouts treated as crashes (2026-10-18, PR #31), 4.2 Log noise hid real problems (2026-10-18, PR #31), 4.3 "I needed more tool steps than allowed for one message" (2026-10-21, PR #33), 4.4 Fixed 300-second task limit (2026-10-23, branch fix/report-20261023), 4. Models and agent turns, Configuration, configured_max_timeout(), test_task_limit_comes_from_settings_and_jobs()
+
 ### Community 311 - "python-pro/SKILL.md"
 Cohesion: 0.22
 Nodes (8): Async Context Manager, Checklist, Code Patterns, Core Competencies, Dataclass, Guidelines, Model Routing, Type Hints
 
-### Community 312 - "devDependencies"
-Cohesion: 0.15
-Nodes (13): devDependencies, eslint, @eslint/js, eslint-plugin-react-hooks, eslint-plugin-react-refresh, globals, @types/node, @types/react (+5 more)
-
-### Community 313 - "Distillation: facts, scenarios, a persona"
-Cohesion: 0.21
-Nodes (8): Distillation: facts, scenarios, a persona, distill_knowledge(), _distill_off_hint(), _fmt_fact(), get_persona(), list_facts(), list_scenarios(), test_tools()
-
-### Community 314 - "myclaw/plugin_system.py"
-Cohesion: 0.40
-Nodes (3): myclaw/plugin_system.py, get_plugin_system(), register_plugin_hook()
+### Community 313 - "kb.py"
+Cohesion: 0.09
+Nodes (19): shorten_text(), for_tool(), _scoped(), wrapper(), distill_knowledge(), _distill_off_hint(), drill_down(), _exclude() (+11 more)
 
 ### Community 315 - "ZenSynora Documentation"
 Cohesion: 0.40
@@ -1580,17 +1551,13 @@ Nodes (3): CircuitBreakerError, CircuitState, FallbackExhausted
 Cohesion: 0.60
 Nodes (3): error(), info(), install-online.sh script
 
-### Community 319 - "advanced_search.py"
-Cohesion: 0.20
-Nodes (4): _build_entity_text(), compute_embedding(), cosine_similarity(), SearchResult
-
 ### Community 320 - "backend-developer/SKILL.md"
 Cohesion: 0.25
 Nodes (7): API Versioning, Checklist, Code Patterns, Core Competencies, Error Response Format, Guidelines, Model Routing
 
 ### Community 321 - "medic_agent.py"
-Cohesion: 0.07
-Nodes (24): 3. Configuration, _cfg(), check_file_virustotal(), create_backup(), detect_errors_in_file(), enable_hash_check(), get_task_analytics(), list_backups() (+16 more)
+Cohesion: 0.08
+Nodes (22): Subtask 4.1-01: Enhance test_medic_agent.py, _cfg(), check_file_virustotal(), create_backup(), detect_errors_in_file(), enable_hash_check(), get_task_analytics(), record_task_execution() (+14 more)
 
 ### Community 322 - "Agent Profile"
 Cohesion: 0.40
@@ -1600,9 +1567,9 @@ Nodes (4): Agent Profile, Available Tools, Behavior Guidelines, Core Functions
 Cohesion: 0.40
 Nodes (4): Mantra, Principles, Purpose, Soul Profile
 
-### Community 324 - "shortest_path"
-Cohesion: 0.25
-Nodes (3): Sprint 7 — Developer ergonomics, GraphPath, shortest_path()
+### Community 324 - "path_reasoning.py"
+Cohesion: 0.17
+Nodes (5): a_find_paths(), find_paths(), GraphPath, PathStep, shortest_path()
 
 ### Community 325 - "frontend-developer/SKILL.md"
 Cohesion: 0.25
@@ -1610,11 +1577,7 @@ Nodes (7): Checklist, Code Patterns, Core Competencies, CSS Custom Properties, G
 
 ### Community 326 - "test_kb_phase0_surfaces.py"
 Cohesion: 0.11
-Nodes (12): call_registered_tool(), cfg_env(), cli_home(), _sample_tool(), test_config_knowledge_dir_never_breaks_loading(), test_mcp_coerces_string_arguments(), test_mcp_schema_uses_annotations(), test_mcp_search_knowledge_with_string_limit() (+4 more)
-
-### Community 327 - "Implemented Features Detail"
-Cohesion: 0.18
-Nodes (4): Feature 10: Web Dashboard (admin UI), Feature 7: Semantic Memory (preference learning), Implemented Features Detail, SemanticMemory
+Nodes (11): call_registered_tool(), cfg_env(), cli_home(), _sample_tool(), test_config_knowledge_dir_never_breaks_loading(), test_mcp_coerces_string_arguments(), test_mcp_schema_uses_annotations(), test_mcp_search_knowledge_with_string_limit() (+3 more)
 
 ### Community 328 - "2.1 High Priority"
 Cohesion: 0.29
@@ -1625,144 +1588,136 @@ Cohesion: 0.18
 Nodes (4): Subtask 4.1-04: Enhance test_backends.py, BackendRegistry, execute_with_backend(), get_backend_info()
 
 ### Community 330 - "run_async"
-Cohesion: 0.22
-Nodes (4): share_proposal(), _has_running_loop(), run_async(), _run_in_new_loop()
+Cohesion: 0.28
+Nodes (3): _has_running_loop(), run_async(), _run_in_new_loop()
 
 ### Community 331 - "_Worker"
 Cohesion: 0.13
-Nodes (3): known_db_paths(), _log_once(), _Worker
+Nodes (3): _log_once(), _matrix(), _Worker
 
 ### Community 332 - "FallbackChain"
-Cohesion: 0.16
-Nodes (6): FallbackChain, test_fallback_falls_through_on_failure(), test_fallback_returns_first_success(), primary(), secondary(), test_open_breaker_skips_provider_without_calling()
+Cohesion: 0.10
+Nodes (14): Where Sprint 2-4 modules plug in, FallbackChain, test_breaker_half_open_recovers_on_success(), test_breaker_starts_closed_and_passes_calls_through(), ok(), test_breaker_trips_after_threshold(), boom(), test_excluded_exceptions_do_not_trip_breaker() (+6 more)
 
 ### Community 333 - "ContextWindow"
-Cohesion: 0.09
-Nodes (10): 3.1 Structure & Modularity, 3.2 Code Patterns, 3.3 Anti-Patterns Observed, 3.4 Type Hinting, 3. Code Quality, ContextWindow, _get_limit_for_model(), get_model_context_limit() (+2 more)
+Cohesion: 0.14
+Nodes (8): 3.1 Structure & Modularity, 3.2 Code Patterns, 3.3 Anti-Patterns Observed, 3.4 Type Hinting, 3. Code Quality, ContextWindow, _get_limit_for_model(), get_model_context_limit()
 
-### Community 335 - "ResultCache"
-Cohesion: 0.08
-Nodes (10): Added, Source: remaining_optimizations.md, Added, _load_main(), _get_profile_cache_key(), _load_profile_cached(), _load_profile_cached_async(), clear_note_cache() (+2 more)
+### Community 335 - "SQLitePool"
+Cohesion: 0.11
+Nodes (3): Source: remaining_optimizations.md, SQLitePool, ResultCache
 
 ### Community 336 - "knowledge/storage.py"
 Cohesion: 0.04
-Nodes (65): Performance, myclaw/knowledge/parser.py, myclaw/knowledge/storage.py, 8. Compatibility Guarantees, Contracts (already stubbed in the code), 2.3 266 notes, but no tags, facts or links (2026-10-23), _body_lines(), generate_markdown() (+57 more)
+Nodes (45): Import Error in Knowledge Researcher (`myclaw/knowledge/researcher.py`), 1. Knowledge Researcher Import Error, Contracts (already stubbed in the code), parse_note(), parse_note_text(), for_turn(), is_internal(), kb_user() (+37 more)
 
-### Community 337 - "check_system_health"
-Cohesion: 0.08
-Nodes (20): Phase 2: Medic Agent ✅ COMPLETE, 1. The doctor, 2. Medic tools (for agents), 5. Troubleshooting, 6. Self-update proposals, Adding a check, Diagnosis after an unexpected error, Diagnostics report (+12 more)
+### Community 337 - "MedicAgent"
+Cohesion: 0.06
+Nodes (29): 1. Function Name Consistency, 1. Mermaid Diagram Syntax & Logic, 2. Branding/Naming, 2. Completeness, big_diagram.md Issues, Discrepancy Report: README.md and big_diagram.md, README.md Issues, Phase 2: Medic Agent ✅ COMPLETE (+21 more)
 
 ### Community 338 - "retry_locked"
-Cohesion: 0.20
-Nodes (3): is_locked_error(), retry_locked(), test_retry_locked_only_on_locked()
+Cohesion: 0.15
+Nodes (6): is_locked_error(), retry_locked(), test_retry_locked_only_on_locked(), broken(), flaky(), test_review_distill_failure_releases_the_slot()
 
-### Community 339 - "Path"
-Cohesion: 0.22
-Nodes (5): background_sync(), _get_cached_note(), _is_indexable(), _should_ignore_path(), _default_reindex()
-
-### Community 340 - "status"
-Cohesion: 0.25
-Nodes (8): _connect(), db_path_for(), get_persona(), _has_columns(), _has_tables(), list_scenarios(), _open(), status()
+### Community 339 - "watch.py"
+Cohesion: 0.12
+Nodes (15): canonical(), classify(), _default_reindex(), _file_md5(), _ignored_name(), _index_has_folder(), is_self_write(), maybe_relevant() (+7 more)
 
 ### Community 342 - "broker.py"
-Cohesion: 0.15
-Nodes (3): Broker, _MailboxRunner, _Shutdown
+Cohesion: 0.09
+Nodes (5): Broker, BrokerError, _MailboxRunner, _Shutdown, MessageType
+
+### Community 343 - ".listen_stream"
+Cohesion: 0.17
+Nodes (3): [0.4.1] - 2026-04-14, Added, Fixed
 
 ### Community 344 - "ZenSynora (MyClaw) Implementation Plan"
-Cohesion: 0.17
-Nodes (12): 1.1 Plugin Lifecycle Hooks (~2 hours) ✅, 1.2 Trajectory Compression Enhancement (~1 hour) ✅, 1.4 Enhanced Cross-Session Recall (~2 hours) ✅, 2.1 Skill Metadata Structure (~2 hours) ✅, 2.2 Skill Evaluation Harness (~4 hours) ✅, 2.3 Skill Self-Improvement (~6 hours) ✅, ✅ ALL PHASES COMPLETED, New Tools Added (Total: ~35 new functions) (+4 more)
+Cohesion: 0.13
+Nodes (15): 1.1 Plugin Lifecycle Hooks (~2 hours) ✅, 1.2 Trajectory Compression Enhancement (~1 hour) ✅, 1.3 Natural Language Scheduling (~3 hours) ✅, 1.4 Enhanced Cross-Session Recall (~2 hours) ✅, 2.1 Skill Metadata Structure (~2 hours) ✅, 2.2 Skill Evaluation Harness (~4 hours) ✅, 2.3 Skill Self-Improvement (~6 hours) ✅, 3.1 Periodic Session Reflection (~3 hours) ✅ (+7 more)
 
 ### Community 346 - "SecuritySandbox"
-Cohesion: 0.08
-Nodes (8): 1. `scan_on_startup` — Wired in gateway startup, 2. GitHub Issue creation — Configurable owner/repo, 3. Proactive Latency Optimization — **Skill preloader wired, but NOT integrated as a startup warm-up**, 4. Sandbox integration, 5. Audit Logging and Rotation, ⚠️ Partially Implemented / Incomplete, Subtask 6.2-03: Integrate with Sandbox Audit Log, SecuritySandbox
+Cohesion: 0.12
+Nodes (7): 1. `scan_on_startup` — Wired in gateway startup, 3. Proactive Latency Optimization — **Skill preloader wired, but NOT integrated as a startup warm-up**, 4. Sandbox integration, 5. Audit Logging and Rotation, ⚠️ Partially Implemented / Incomplete, Subtask 6.2-03: Integrate with Sandbox Audit Log, SecuritySandbox
 
 ### Community 348 - "KnowledgeImport.tsx"
 Cohesion: 0.17
 Nodes (12): dialog, errorText(), ImportJob, ImportNote, ImportResult, KINDS, KnowledgeImport(), KnowledgeImportProps (+4 more)
 
-### Community 349 - "_with_v1"
-Cohesion: 0.22
-Nodes (4): LlamaCppProvider, LMStudioProvider, _with_v1(), test_lmstudio_url_gets_v1()
+### Community 349 - "Web UI Guide — chat, models, jobs, backups"
+Cohesion: 0.25
+Nodes (8): Backups: settings, API keys, knowledge, Doctor: change proposals, Doctor: report, errors and download, Models: switch, rotate, add providers, Several keys for one provider, Telegram bot (Settings → Channels), Updates: check, update, roll back, restart, Web UI Guide — chat, models, jobs, backups
 
 ### Community 351 - "test_log_fixes_20261018.py"
-Cohesion: 0.05
-Nodes (29): graphify, Rules learned from incidents, 3.1 Broken relative imports after `myclaw/tools` became a package (2026-10-18, PR #31), 3.2 `SQLitePool._get_lock` missing (2026-10-18, PR #31), 3. Code structure, 4.1 Rate limits and timeouts treated as crashes (2026-10-18, PR #31), 4.2 Log noise hid real problems (2026-10-18, PR #31), 4.3 "I needed more tool steps than allowed for one message" (2026-10-21, PR #33) (+21 more)
-
-### Community 362 - ".transcribe_stream"
-Cohesion: 0.33
-Nodes (3): [0.4.1] - 2026-04-14, Added, Fixed
+Cohesion: 0.11
+Nodes (9): graphify, Rules learned from incidents, _defined_names(), home(), _lazy_names(), test_every_relative_import_points_at_a_real_module_and_name(), test_extract_user_preferences_imports_memory(), test_medic_diagnosis_runs() (+1 more)
 
 ### Community 374 - "ContextLength.tsx"
 Cohesion: 0.50
 Nodes (7): ContextLength(), CONTEXT_FLOOR, ContextEstimate, contextLevel(), fmtTokens(), OLLAMA_DEFAULT_CTX, snapTokens()
 
 ### Community 376 - "semantic.py"
-Cohesion: 0.10
-Nodes (14): _has_boolean_syntax(), chunk_note(), _fts_only_syntax(), _Holder, ModelInfo, _pack_lines(), _paragraphs(), _sha() (+6 more)
+Cohesion: 0.07
+Nodes (21): _has_boolean_syntax(), chunk_note(), _fts_only_syntax(), _Holder, install_command(), known_db_paths(), _pack_lines(), _paragraphs() (+13 more)
 
-### Community 377 - "myclaw/voice_channel.py"
-Cohesion: 0.36
-Nodes (4): myclaw/voice_channel.py, STTProvider, VoiceConfig, VoskSTTProvider
+### Community 377 - "voice_channel.py"
+Cohesion: 0.27
+Nodes (3): create_voice_channel(), VoiceConfig, VoskSTTProvider
 
-### Community 378 - "_load_index"
-Cohesion: 0.24
-Nodes (6): _ensure_hub_dirs(), hub_list(), hub_search(), _load_index(), SK-10.1 — `hub_search`, SK-10.2 — `hub_list`
+### Community 378 - "hub/__init__.py"
+Cohesion: 0.23
+Nodes (9): 4.1 ZenHub Local Registry (~5 hours) ✅, _ensure_hub_dirs(), hub_install(), hub_list(), hub_publish(), hub_remove(), _load_index(), _save_index() (+1 more)
 
-### Community 379 - "1. Function Name Consistency"
-Cohesion: 0.25
-Nodes (7): 1. Function Name Consistency, 1. Mermaid Diagram Syntax & Logic, 2. Branding/Naming, 2. Completeness, big_diagram.md Issues, Discrepancy Report: README.md and big_diagram.md, README.md Issues
+### Community 379 - "Sprint 4 — Vector Store + Structured-Output Integration (2026-04-30)"
+Cohesion: 0.29
+Nodes (7): Added — `Agent.complete_structured(messages, schema, ...)`, Added — Documentation pass, Added — `myclaw/vector/` — pluggable vector backends, Added — `pyproject.toml` optional-extras for new sprints, Deferred (4th time, now explicitly tracked), Sprint 4 — Vector Store + Structured-Output Integration (2026-04-30), Tests added
 
 ### Community 381 - "test_marketplace.py"
-Cohesion: 0.08
-Nodes (22): MarketplaceClient, canonical_manifest_bytes(), sign_manifest(), verify_manifest(), _FakeSource, _sample_manifest(), test_canonical_bytes_are_deterministic(), test_canonical_bytes_use_sorted_keys() (+14 more)
+Cohesion: 0.15
+Nodes (15): canonical_manifest_bytes(), sign_manifest(), verify_manifest(), _sample_manifest(), test_canonical_bytes_are_deterministic(), test_canonical_bytes_use_sorted_keys(), test_client_install_accepts_signed_manifest(), test_client_install_rejects_bad_artifact_hash() (+7 more)
 
-### Community 382 - "❌ Not Implemented At All"
-Cohesion: 0.25
-Nodes (7): ❌ Not Implemented At All, Phase 3.2 — Additional News Sources, Phase 4 — Unit & Integration Tests (incomplete), Phase 5.1 — Redis-like LLM Response Caching, Phase 5.2 — Worker Pool Management, Summary Table, ZenSynora – Implementation Gap Report
+### Community 382 - "analyze_external_skill"
+Cohesion: 0.29
+Nodes (5): API Reference, SkillAdapter Class, Tool Functions, analyze_external_skill(), register_external_skill()
 
 ### Community 385 - "Future Updates Proposal: MyClaw Architecture Evolution"
-Cohesion: 0.20
+Cohesion: 0.22
 Nodes (9): 1. Event-Driven Core, 3. Advanced Reasoning Trajectories, 4. Multi-Tenant Memory Isolation, 5. Plugin Marketplace (ZenHub), Benefits, Future Updates Proposal: MyClaw Architecture Evolution, Implementation Timeline, Overview (+1 more)
-
-### Community 387 - "Performance & Optimization Overhaul (2026-04-06)"
-Cohesion: 0.20
-Nodes (6): Code Quality, Concurrency & Thread Safety, Core Performance Improvements, Documentation & Testing, Performance & Optimization Overhaul (2026-04-06), ✅ C. Semantic Cache - Embedding Model Memory Optimization
 
 ### Community 388 - "devops-engineer/SKILL.md"
 Cohesion: 0.33
 Nodes (5): Checklist, Common Tools, Core Competencies, Guidelines, Model Routing
 
-### Community 389 - "myclaw/cli.py"
-Cohesion: 0.07
-Nodes (17): What it checks, skills_for(), backup_list(), cli(), gateway(), list_skills(), metering_set_quota(), onboard() (+9 more)
+### Community 389 - "Any"
+Cohesion: 0.15
+Nodes (17): [0.6.0] - 2026-10-13, Added, Changed, auto_backup_due(), _auto_backups(), backup_dir(), default_parts(), delete_backup() (+9 more)
 
 ### Community 390 - "CLAUDE.md"
 Cohesion: 0.17
 Nodes (11): Building & Packaging (Future), Common Commands (CLI), Development Workflow, Guidelines for Future Developers, High‑Level Architecture (from README), Installation, Linting & Formatting, Prerequisites (+3 more)
 
-### Community 391 - "env"
-Cohesion: 0.17
-Nodes (4): _reexec(), _Agent, _Chat, env()
+### Community 391 - "Skill Group 10: ZenHub Registry (NEW)"
+Cohesion: 0.29
+Nodes (6): hub_search(), SK-10.1 — `hub_search`, SK-10.3 — `hub_publish`, SK-10.4 — `hub_install`, SK-10.5 — `hub_remove`, Skill Group 10: ZenHub Registry (NEW)
 
 ### Community 392 - "ZenSynora"
-Cohesion: 0.15
-Nodes (13): Architecture, Configuration, Development, Install, License, Other ways to run, Quick start, Requirements (+5 more)
+Cohesion: 0.17
+Nodes (12): Architecture, Configuration, Development, Install, License, Other ways to run, Quick start, Requirements (+4 more)
 
 ### Community 393 - "ZenSynora Web UI"
 Cohesion: 0.50
 Nodes (4): Conventions, Development, Pages, ZenSynora Web UI
 
 ### Community 394 - "3. New modules — quick reference"
-Cohesion: 0.18
-Nodes (11): 1. Top-level layout, 2. Request lifecycle, 3. New modules — quick reference, 6. Test inventory, `myclaw/http_session.py` + `myclaw/aiohttp_session.py` (2026-05-17), `myclaw/observability/`, `myclaw/resilience/`, `myclaw/structured_output/` (+3 more)
+Cohesion: 0.17
+Nodes (12): 1. Top-level layout, 2. Request lifecycle, 3. New modules — quick reference, 6. Test inventory, 7. Where to look next, `myclaw/http_session.py` + `myclaw/aiohttp_session.py` (2026-05-17), `myclaw/observability/`, `myclaw/resilience/` (+4 more)
 
 ### Community 397 - "PowerShell scripting"
 Cohesion: 0.40
 Nodes (4): Deliver, PowerShell scripting, Safety, Style
 
-### Community 398 - "HashEmbedder"
+### Community 398 - "get_embedder"
 Cohesion: 0.10
-Nodes (13): _embed_passages(), Embedder, HashEmbedder, _normalise(), set_embedder_factory(), wait_idle(), sem(), factory() (+5 more)
+Nodes (10): _create_embedder(), _embed_passages(), Embedder, FastEmbedEmbedder, get_embedder(), _load(), models_dir(), _normalise() (+2 more)
 
 ### Community 399 - "test_gateway_bot_runs_without_a_current_event_loop"
 Cohesion: 0.25
@@ -1772,17 +1727,17 @@ Nodes (3): serve(), test_gateway_bot_runs_without_a_current_event_loop(), test_r
 Cohesion: 0.33
 Nodes (6): 5.1 High Priority, 5.2 Medium Priority, 5. Concurrency Improvements, ✅ A. Async Task Reference Storage - ALREADY IMPLEMENTED, ✅ B. Synchronous File I/O in Async Context - Async Loading, ✅ C. ThreadPoolExecutor Cleanup - Non-blocking Shutdown
 
-### Community 401 - "watcher"
-Cohesion: 0.25
-Nodes (4): _reset_for_tests(), _Clock, home(), watcher()
+### Community 401 - "start_background"
+Cohesion: 0.20
+Nodes (9): _reset_for_tests(), start_background(), status(), stop_background(), _start_file_watcher(), home(), test_doctor_watcher(), test_no_watcher_thread_while_off() (+1 more)
 
 ### Community 402 - "_logs_to_stderr"
 Cohesion: 0.22
 Nodes (5): _logs_to_stderr(), start_mcp_server(), call_tool(), list_tools(), test_mcp_server_logs_go_to_stderr()
 
-### Community 403 - "start_background_extraction"
-Cohesion: 0.29
-Nodes (3): _start_kb_sync(), _background_extraction_loop(), start_background_extraction()
+### Community 403 - "SwarmStorage"
+Cohesion: 0.05
+Nodes (10): Optimized, Optimized, memory(), _start_kb_sync(), is_background_extraction_running(), start_background_extraction(), stop_background_extraction(), ActiveExecution (+2 more)
 
 ### Community 404 - "Phase 4.2: Integration Tests Implementation"
 Cohesion: 0.22
@@ -1800,13 +1755,17 @@ Nodes (8): Backends (myclaw/backends/), myclaw/backends/base.py, myclaw/backends
 Cohesion: 0.40
 Nodes (5): Phase 1: Quick Wins, Phase 2: Skill System Evolution, Phase 3: Memory & Learning, Phase 4: ZenHub Ecosystem, Summary of Implemented Features
 
-### Community 409 - "mcp_server"
-Cohesion: 0.29
-Nodes (4): 2026-04-19 — Task #1: Web UI Response Streaming, _build_registry(), mcp_server(), ChatMessage
+### Community 408 - "_store_note"
+Cohesion: 0.33
+Nodes (4): save(), note_kind(), note_origin(), _store_note()
 
-### Community 410 - "1.1 High Priority"
+### Community 409 - "make_backend"
 Cohesion: 0.29
-Nodes (7): 1.1 High Priority, 1.2 Medium Priority, 1. Performance Optimizations, ✅ A. Memory Class - Missing `_initialized` Attribute (Bug) - ALREADY IMPLEMENTED, ✅ B. LRU Cache with TTL - Custom Implementation with Improvements, ✅ D. AsyncSQLitePool - Lock Contention Reduction, ✅ F. String Operations in Loops
+Nodes (4): make_backend(), is_qdrant_available(), test_factory_memory(), test_factory_unknown_name()
+
+### Community 410 - "Code Analysis Complete - Summary"
+Cohesion: 0.33
+Nodes (6): Architecture Overview, Code Analysis Complete - Summary, Documentation, Features (12 Total), Skills Review Summary, Top Optimizations Identified
 
 ### Community 411 - ".cleanup_idle"
 Cohesion: 0.25
@@ -1820,35 +1779,47 @@ Nodes (8): 5.1 Caching & Performance (~6 hours), 5.2 Database Optimizations (~4 
 Cohesion: 0.18
 Nodes (11): memopad pitfalls to avoid (from its history), Not porting, Optional, Phase 1 — note tools agents are missing, Phase 2 — quality layer (memopad "MemGraphRAG"), Phase 3 — semantic search, Phase 4 — L0–L3 distillation, Phase 5 — ingestion (+3 more)
 
-### Community 418 - "Knowledge System (myclaw/knowledge/)"
+### Community 415 - "Implementation Details"
 Cohesion: 0.33
-Nodes (5): Knowledge System (myclaw/knowledge/), myclaw/knowledge/db.py, myclaw/knowledge/graph.py, myclaw/knowledge/sync.py, EntityWithData
+Nodes (6): Agent Routing, Implementation Details, Message Flow, Notification System, Supported Commands, WhatsAppChannel Class
 
-### Community 421 - "scope.py"
-Cohesion: 0.15
-Nodes (10): for_tool(), for_turn(), is_internal(), kb_user(), _scoped(), wrapper(), _scoped(), wrapper() (+2 more)
+### Community 418 - "db.py"
+Cohesion: 0.07
+Nodes (11): Runtime bugs found after install (all fixed), _as_str_list(), EntityWithData, _fold(), _link_candidates(), _link_keys(), _sanitize_boolean_query(), _slug() (+3 more)
 
-### Community 424 - "Current State Assessment"
-Cohesion: 0.22
-Nodes (8): Architecture (Score: B+), Completed Work, Conclusion, Current State Assessment, Executive Summary, Future Improvements & Optimization Recommendations, Test Coverage (Score: C), ZenSynora (MyClaw) — Comprehensive Code Review & Optimization Strategy
+### Community 422 - "ZenSynora — Remaining Tasks (from planx.md)"
+Cohesion: 0.40
+Nodes (5): Implementation Order Recommendation, P3 / Business — Lower Priority, Quick Wins (≤ 2 hours each), Test Coverage Gaps, ZenSynora — Remaining Tasks (from planx.md)
 
-### Community 425 - "hub_publish"
-Cohesion: 0.17
-Nodes (12): Phase 4: ZenHub Ecosystem, 4.1 ZenHub Local Registry (~5 hours) ✅, 4.2 External Skill Directory Support (~3 hours) ✅, PHASE 4: ZenHub Ecosystem (8 hours) ✅ COMPLETED, discover_external_skills(), hub_publish(), hub_remove(), SK-10.3 — `hub_publish` (+4 more)
+### Community 424 - "ZenSynora (MyClaw) — Comprehensive Code Review & Optimization Strategy"
+Cohesion: 0.40
+Nodes (5): Completed Work, Conclusion, Executive Summary, Future Improvements & Optimization Recommendations, ZenSynora (MyClaw) — Comprehensive Code Review & Optimization Strategy
+
+### Community 425 - "Phase 4: ZenHub Ecosystem"
+Cohesion: 0.33
+Nodes (5): Phase 4: ZenHub Ecosystem, 4.2 External Skill Directory Support (~3 hours) ✅, PHASE 4: ZenHub Ecosystem (8 hours) ✅ COMPLETED, discover_external_skills(), SK-10.6 — `discover_external_skills`
 
 ### Community 426 - "3.1 High Priority"
 Cohesion: 0.33
 Nodes (6): 3.1 High Priority, 3.2 Medium Priority, 3. Memory Management, ✅ A. Message History Memory Leak - ALREADY IMPLEMENTED, ✅ B. Profile Cache Unbounded Growth - LRU Implementation, ✅ C. Streaming Response Memory - List Append Pattern
 
 ### Community 427 - "._create_issue"
-Cohesion: 0.09
-Nodes (23): High Priority (Completed), Implemented Features ✅, Low Priority (Completed), Medium Priority (Completed), 5.3 Config Integration, ✅ Truly Implemented (confirmed in code), Detailed Task Breakdown, Files to Modify (+15 more)
+Cohesion: 0.08
+Nodes (24): 2. GitHub Issue creation — Configurable owner/repo, ❌ Not Implemented At All, Phase 3.2 — Additional News Sources, Phase 4 — Unit & Integration Tests (incomplete), Phase 5.1 — Redis-like LLM Response Caching, Phase 5.2 — Worker Pool Management, Summary Table, ✅ Truly Implemented (confirmed in code) (+16 more)
 
 ### Community 428 - "Sprint Summary — 12 Sprints (2026-04-29 → 2026-04-30)"
-Cohesion: 0.14
-Nodes (11): 1. Infinite recursion in `Agent._track_preload`, Fix, Fixes from 2026-04-29, Root cause, Test plan, Cumulative impact, Pre-sprint: Critical-bug audit round, Reading order for new contributors (+3 more)
+Cohesion: 0.09
+Nodes (20): 2026-04-29 Audit Round (resolved), Critical Path, File-by-File Implementation Guide, Implementation Roadmap, Legend, Phase 1: P0 -- Stop Crashes and Breaches (Week 1), Rollback Procedures, Success Criteria (+12 more)
 
-### Community 431 - "kb_phase0_contracts.md"
+### Community 429 - "Implementation Summary"
+Cohesion: 0.40
+Nodes (5): Files Modified, Implementation Summary, Performance Improvements, Stats, Test Files Created
+
+### Community 430 - "Implemented Features Detail"
+Cohesion: 0.25
+Nodes (4): Feature 10: Web Dashboard (admin UI), Feature 5: Auto-Skill Generation (from descriptions), Implemented Features Detail, GeneratedSkill
+
+### Community 431 - "memopad_port_plan.md"
 Cohesion: 0.29
 Nodes (5): Knowledge base — Phase 0 (memopad port): shared rules and contracts, Rules for everyone, Knowledge base — Phases 2–6 (memopad port): working rules, Lessons from memopad's history to respect, Rules for every agent
 
@@ -1860,57 +1831,69 @@ Nodes (4): close_interrupted(), set_registry_getter(), test_answers_cut_off_by_a
 Cohesion: 0.33
 Nodes (3): list_tool_definitions(), test_mcp_lists_real_knowledge_tools_with_types(), test_mcp_user_id_hidden_only_for_knowledge_tools()
 
-### Community 435 - "hub/__init__.py"
-Cohesion: 0.27
-Nodes (5): _generate_schemas_from_tools(), hub_install(), hub_install_from_external(), _save_index(), SK-10.7 — `hub_install_from_external`
+### Community 434 - "7. Install, update and CI"
+Cohesion: 0.40
+Nodes (5): 7.1 Removing another app removed Node.js; updates reused the old web UI (2026-10-21, PR #35), 7.2 An update was killed when the desktop session restarted (2026-10-21), 7.3 Docs CI failed after adding diagrams (2026-10-18, PR #32), 7.4 CI checks that were missing or wrong (2026-10-18, PR #29), 7. Install, update and CI
 
-### Community 436 - "2.2 Stale or invented "crash loop" notes written by agents (2026-10-23, branch fix/report-20261023)"
-Cohesion: 0.25
-Nodes (6): 2.1 Background extraction NameError (2026-10-18, PR #26), 2.2 Stale or invented "crash loop" notes written by agents (2026-10-23, branch fix/report-20261023), 2.4 Links never reached the index; edits erased backlinks (2026-10-24, KB phase 0), 2.5 An independent review of the fix found data loss (2026-10-24, KB phase 0), 2. Knowledge base, test_transient_tool_output_is_not_saved_as_knowledge()
+### Community 435 - "hub_install_from_external"
+Cohesion: 0.40
+Nodes (3): _generate_schemas_from_tools(), hub_install_from_external(), SK-10.7 — `hub_install_from_external`
 
-### Community 438 - "test_tenancy_scoping.py"
-Cohesion: 0.09
-Nodes (16): Sprint 11 — Multi-tenancy + shared cache + WebUI streaming, effective_user_id(), _hash_user_id(), require_authenticated_user(), scope_audit_event(), test_effective_empty_string_treated_as_unset(), test_effective_falls_back_to_context(), test_effective_returns_default_when_unscoped() (+8 more)
+### Community 436 - "Troubleshooting"
+Cohesion: 0.40
+Nodes (5): Error: File not found, Error: Invalid JSON, Error: Invalid Python syntax, Error: Permission denied, Troubleshooting
+
+### Community 437 - "New Files:"
+Cohesion: 0.40
+Nodes (4): Files Added/Modified, Modified Files:, New Files:, Colors
 
 ### Community 441 - "6. Configuration & Logging"
 Cohesion: 0.40
 Nodes (5): 6.1 High Priority, 6.2 Medium Priority, 6. Configuration & Logging, ✅ A. Config Auto-Reload with Watchdog - ALREADY IMPLEMENTED, ✅ B. Input Sanitization for Knowledge Search
 
-### Community 442 - "Phase 6.2: Tamper-Evident Audit Logging"
-Cohesion: 0.20
-Nodes (10): Detailed Task Breakdown, Files to Modify, Objective and Success Criteria, Phase 6.2: Tamper-Evident Audit Logging, Risks and Mitigations, Step-by-Step Strategy, Subtask 6.2-01: Create TamperEvidentAuditLog Class, Subtask 6.2-05: Write Tests for Tamper-Evident Logging (+2 more)
-
-### Community 444 - "Linux install check — 2026-10-12"
-Cohesion: 0.50
-Nodes (4): Linux install check — 2026-10-12, Result, Step-by-step results, Web UI update (2026-10-12, evening)
+### Community 442 - "ToolAuditLogger"
+Cohesion: 0.11
+Nodes (9): Deferred from Sprint 1, Memory & bounds, Observability, Sprint 1 — Performance & Quality Quick Wins (2026-04-29), Detailed Task Breakdown, Subtask 6.2-01: Create TamperEvidentAuditLog Class, Subtask 6.2-02: Integrate Tamper-Evident Log with Tool Audit, Subtask 6.2-05: Write Tests for Tamper-Evident Logging (+1 more)
 
 ### Community 445 - "7. Caching & Performance"
 Cohesion: 0.40
 Nodes (5): 7.1 High Priority, 7.2 Medium Priority, 7. Caching & Performance, ✅ A. Provider Initialization Race Condition - Thread-safe Cache, ✅ B. Config Reload Race Condition - Thread-safe Loading
 
-### Community 449 - "test_review10_one_inference_at_a_time_and_queries_first"
-Cohesion: 0.83
-Nodes (4): test_review10_one_inference_at_a_time_and_queries_first(), embed_passages(), embed_query(), _track()
+### Community 449 - "Agent System (myclaw/agents/)"
+Cohesion: 0.50
+Nodes (4): Agent System (myclaw/agents/), myclaw/agents/medic_agent.py, myclaw/agents/newtech_agent.py, myclaw/agents/skill_adapter.py
+
+### Community 450 - "Changelog"
+Cohesion: 0.50
+Nodes (4): [0.0.1] - 2026-03-08, Added, Changelog, [Unreleased]
+
+### Community 451 - "Knowledge Integration Plan"
+Cohesion: 0.50
+Nodes (4): Diagram, Knowledge Integration Plan, Overview, Status
+
+### Community 452 - "Examples"
+Cohesion: 0.50
+Nodes (4): Example 1: Fetch and Convert from URL, Example 2: Batch Import from Directory, Example 3: Check Skill Compatibility, Examples
 
 ## Knowledge Gaps
 - **6 isolated node(s):** `HOME`, `zensynora`, `@types/node`, `@types/react`, `@types/react-dom` (+1 more)
-  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 4615 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **95 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges or undocumented components. (Counts symbols only; 4637 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **109 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `load_config()` connect `load_config` to `test_telegram_webui.py`, `Performance & Optimization Overhaul (2026-04-06)`, `typing`, `myclaw/cli.py`, `context_budget.py`, `command`, `test_doctor_report.py`, `search_knowledge`, `test_kb_phase3_semantic.py`, `test_gateway_bot_runs_without_a_current_event_loop`, `SwarmStorage`, `test_telegram_channel.py`, `mcp_server`, `test_kb_phase4_distill.py`, `config.py`, `skills_api.py`, `config_encryption.py`, `test_report_fixes_20261023.py`, `MCPClientManager`, `models_api.py`, `jobs_api.py`, `test_agent_classes.py`, `_get_swarm_orchestrator`, `task_timer.py`, `test_v073_reliability.py`, `test_agent_jobs.py`, `test_stream_runs_a_tool_call_written_as_text`, `m_0003_knowledge_reindex_links.py`, `settings_api.py`, `myclaw/backup.py`, `7. Caching & Performance`, `medic_agent.py`, `provider_keys_api.py`, `kb.py`, `report.py`, `telegram_api.py`, `checks.py`, `integrity.py`, `backup_api.py`, `time`, `api.py`, `asyncio`, `knowledge_api.py`, `run_checks`, `json`, `GapResearcher`, `admin_dashboard.py`, `test_v075_channels_medic_skills.py`, `medic.py`, `selfupdate.py`, `JobRunner`, `function_list.md`, `execute_tools`?**
-  _High betweenness centrality (0.050) - this node is a cross-community bridge._
+- **Why does `load_config()` connect `load_config` to `test_telegram_webui.py`, `typing`, `Any`, `write_to_knowledge`, `myclaw/cli.py`, `test_doctor_report.py`, `search_knowledge`, `test_kb_phase3_semantic.py`, `test_gateway_bot_runs_without_a_current_event_loop`, `test_telegram_channel.py`, `SemanticCache`, `test_agent_internals.py`, `config.py`, `test_kb_phase4_distill.py`, `config_encryption.py`, `models_api.py`, `start`, `Memory`, `swarm.py`, `test_agent_jobs.py`, `test_stream_runs_a_tool_call_written_as_text`, `configured_max_timeout`, `settings_api.py`, `myclaw/backup.py`, `7. Caching & Performance`, `medic_agent.py`, `telegram_api.py`, `report.py`, `install_root`, `knowledge/storage.py`, `backup_api.py`, `api.py`, `core.py`, `build_dashboard_data`, `_load_profile_cached`, `agent.py`, `knowledge_api.py`, `run_checks`, `test_v075_channels_medic_skills.py`, `selfupdate.py`, `JobRunner`?**
+  _High betweenness centrality (0.048) - this node is a cross-community bridge._
 - **Are the 13 inferred relationships involving `write_note()` (e.g. with `Rules learned from incidents` and `Import Error in Knowledge Researcher (`myclaw/knowledge/researcher.py`)`) actually correct?**
   _`write_note()` has 13 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `HOME`, `zensynora`, `@types/node` to the rest of the system?**
   _6 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `test_telegram_webui.py` be split into smaller, more focused modules?**
-  _Cohesion score 0.09659090909090909 - nodes in this community are weakly interconnected._
-- **Why does `KnowledgeDB` connect `KnowledgeDB` to `test_kb_phase2_quality.py`, `test_kb_phase5_ingest.py`, `typing`, `search_knowledge`, `test_kb_phase3_semantic.py`, `SwarmStorage`, `write_note`, `Knowledge base guide`, `TestDatabase`, `Knowledge System (myclaw/knowledge/)`, `test_kb_phase0_index.py`, `📂 Module & Function Registry`, `2.2 Stale or invented "crash loop" notes written by agents (2026-10-23, branch fix/report-20261023)`, `test_kb_phase6_robust.py`, `settings_api.py`, `advanced_search.py`, `kb.py`, `distill.py`, `[0.5.0] - 2026-10-13`, `embed_notes`, `knowledge/storage.py`, `status`, `migrations/__init__.py`, `knowledge_api.py`, `GapResearcher`, `admin_dashboard.py`, `gdpr.py`, `semantic.py`, `function_list.md`?**
-  _High betweenness centrality (0.038) - this node is a cross-community bridge._
-- **Are the 23 inferred relationships involving `KnowledgeDB` (e.g. with `Explicit deferrals (explicitly tracked, not silently skipped)` and `Import Error in Knowledge Researcher (`myclaw/knowledge/researcher.py`)`) actually correct?**
-  _`KnowledgeDB` has 23 INFERRED edges - model-reasoned connections that need verification._
-- **Should `test_kb_phase2_quality.py` be split into smaller, more focused modules?**
-  _Cohesion score 0.03065883887801696 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.0907563025210084 - nodes in this community are weakly interconnected._
+- **Why does `Agent` connect `Agent` to `quality.py`, `typing`, `test_report_fixes_20261023.py`, `parser.py`, `load_config`, `myclaw/cli.py`, `search_knowledge`, `test_kb_phase3_semantic.py`, `test_agent.py`, `write_note`, `provider.py`, `test_agent_internals.py`, `test_kb_phase4_distill.py`, `models_api.py`, `start`, `IntelligentRouter`, `test_agent_classes.py`, `Sprint Summary — 12 Sprints (2026-04-29 → 2026-04-30)`, `Memory`, `CircuitBreaker`, `agent_skills.py`, `New Files:`, `test_sprint8_perf_quality.py`, `AsyncScheduler`, `KnowledgeGapCache`, `test_sprint10_integrations.py`, `MedicAgent`, `api.py`, `core.py`, `agent.py`, `test_log_fixes_20261018.py`, `ZenSynora (MyClaw) — Comprehensive Application Review`, `trigger_hook`, `describe_llm_error`, `test_v075_channels_medic_skills.py`, `test_provider_selection.py`, `JobRunner`?**
+  _High betweenness centrality (0.041) - this node is a cross-community bridge._
+- **Are the 24 inferred relationships involving `KnowledgeDB` (e.g. with `Explicit deferrals (explicitly tracked, not silently skipped)` and `Import Error in Knowledge Researcher (`myclaw/knowledge/researcher.py`)`) actually correct?**
+  _`KnowledgeDB` has 24 INFERRED edges - model-reasoned connections that need verification._
+- **Should `quality.py` be split into smaller, more focused modules?**
+  _Cohesion score 0.04675846242111302 - nodes in this community are weakly interconnected._

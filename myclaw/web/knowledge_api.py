@@ -418,8 +418,11 @@ async def save_note(permalink: str, req: NoteContent, base: str | None = None):
         raise HTTPException(status_code=413, detail="The note is too large (1 MB max).")
     from myclaw.knowledge.watch import remember_self_write
 
-    remember_self_write(f, req.content)  # 2026-10-25 (KB phase 6): not a change by hand
-    f.write_text(req.content, encoding="utf-8")
+    # 2026-10-25 (KB phase 6): not a change by hand; 2026-10-27 (review): the
+    # exact bytes written (binary — no newline translation on Windows)
+    data = req.content.encode("utf-8")
+    remember_self_write(f, data)
+    f.write_bytes(data)
     await asyncio.to_thread(_resync, b, f)
     return await asyncio.to_thread(_note_detail, b, permalink)
 

@@ -25,7 +25,9 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_CHECKSUMS = 200        # files whose checksum is compared at most (changed time/size first)
 SAMPLE_UNCHANGED = 25         # …plus this many files that look unchanged (edits that kept the time)
-PENDING_WARN = 25             # waiting links from this many on are a warning
+PENDING_WARN = 25             # waiting links from this many on are a warning …
+PENDING_RATIO = 0.2           # … and only when they are more than this share of all links
+                              # (2026-10-27, review: wiki-style forward links are normal)
 TRASH_WARN_BYTES = 500 * 1024 * 1024
 TRASH_WARN_FILES = 10_000
 TRASH_MAX_WALK = 50_000
@@ -412,9 +414,11 @@ def warnings_for(h: Dict[str, Any]) -> List[Dict[str, str]]:
               "Run zensynora knowledge sync (or ↻ Re-index on this page); "
               "zensynora knowledge sync --force rebuilds the whole index.")
     ln = h.get("links") or {}
-    if ln.get("pending", 0) >= PENDING_WARN:
+    pend = ln.get("pending", 0)
+    if pend >= PENDING_WARN and pend > PENDING_RATIO * (pend + ln.get("relations", 0)):
         top = ", ".join(f"{t['target']} ({t['links']})" for t in ln.get("top", [])[:3])
-        _warn(w, "links", f"{ln['pending']} links point to notes that do not exist (most: {top})",
+        _warn(w, "links", f"{pend} of {pend + ln.get('relations', 0)} links point to notes that "
+              f"do not exist (most: {top})",
               "Create those notes or correct the link text — they show as dashed dots in the graph.")
     c = h.get("conflicts") or {}
     if c.get("open"):

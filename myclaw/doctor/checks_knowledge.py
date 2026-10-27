@@ -122,7 +122,10 @@ def _fix_knowledge_index(ctx):
 
     done = []
     added = updated = deleted = 0
-    for base in _drifted(ctx) or ["default"]:
+    bases = _drifted(ctx)
+    if not bases:   # 2026-10-27 (review)
+        return "nothing needed re-indexing"
+    for base in bases:
         s = background_sync(base, "doctor --fix")
         added += s.get("added", 0)
         updated += s.get("updated", 0)
@@ -211,6 +214,8 @@ def _kb_watcher(ctx):
 def _kb_ingest(ctx):
     from ..knowledge import health
 
+    if not _kb_on(ctx):
+        return OK, "knowledge base turned off"
     ig = _cached(ctx, "ingest", health.ingest_errors)
     ws = [w["text"] + "\0" + w["fix"] for w in health.warnings_for({"ingest": ig})]
     return _result(ws, f"{ig.get('runs', 0)} import(s) in the last {health.INGEST_HOURS} h, none failed")
@@ -220,6 +225,8 @@ def _kb_ingest(ctx):
 def _kb_trash(ctx):
     from ..knowledge import health
 
+    if not _kb_on(ctx):
+        return OK, "knowledge base turned off"
     per = _per_base(ctx, "trash")
     files = sum(d.get("files", 0) for d in per.values())
     size = sum(d.get("bytes", 0) for d in per.values())

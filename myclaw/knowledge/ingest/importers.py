@@ -981,9 +981,11 @@ def import_markdown(source: Path, base: str, budget: Budget, result: IngestResul
     if may_write(budget):
         budget.report("indexing the imported notes")
         try:
-            from myclaw.knowledge import budget  # 2026-10-25 (KB phase 6): shared write budget
+            # 2026-10-25 (KB phase 6): shared write budget (2026-10-27, review: not
+            # named "budget" — that is this function's time budget)
+            from myclaw.knowledge import budget as write_budget
 
-            with budget.background(base, "import", budget.PRIO_INGEST):
+            with write_budget.background(base, "import", write_budget.PRIO_INGEST):
                 stats = sync_knowledge(base)
             if stats.get("errors"):
                 result.errors.append(f"{stats['errors']} notes could not be indexed — see the doctor "

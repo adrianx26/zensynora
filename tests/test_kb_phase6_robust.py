@@ -351,7 +351,8 @@ def test_watcher_classify_and_db_files(home):
     assert classify(root / "default" / "a.md", root) == ("default", "note")
     assert classify(root / "default" / "sub" / "a.md", root) == ("default", "note")
     assert classify(root / "default" / ".bmignore", root) == ("default", "rescan")
-    assert classify(root / "default" / "gone-folder", root) == ("default", "rescan")
+    assert classify(root / "default" / "gone-folder", root) is None        # unknown: a file
+    assert classify(root / "default" / "gone-folder", root, was_dir=lambda b, p: True) == ("default", "rescan")
     for p in (root / "a.md", root / "knowledge_default.db-wal", root / "default" / "x.log",
               root / "default" / ".trash" / "a.md", root / ".git" / "a.md", root / "default" / "a.md.tmp",
               root / "default" / "#a.md#", home / "elsewhere" / "a.md", root / "default" / "watch-status.json"):
@@ -554,7 +555,7 @@ def test_doctor_waiting_links_conflicts(home, monkeypatch):
     write_note("Hub", content="x", relations=[Relation("relates_to", t) for t in ("Ghost", "Phantom", "Spirit")])
     write_note("Hub2", content="x", relations=[Relation("relates_to", "Ghost")])
     r = _check("kb_links")
-    assert r.status == "warn" and "4 links" in r.detail and "Ghost (2)" in r.detail and "Create" in r.hint
+    assert r.status == "warn" and "4 of 4 links" in r.detail and "Ghost (2)" in r.detail and "Create" in r.hint
     assert _check("kb_conflicts").status == "ok"
     con = sqlite3.connect(_db(home))
     con.execute("INSERT INTO conflicts (permalink, category, obs_a, obs_b, kind, status, created_at, pair_hash) "
@@ -731,3 +732,240 @@ def test_settings_switch_and_config(home):
     assert KnowledgeConfig().watch_files is False
     src = (Path(__file__).resolve().parent.parent / "webui" / "src" / "components" / "SettingsView.tsx").read_text()
     assert "knowledge.watch_files" in src
+
+
+# ── review fixes (2026-10-27) ───────────────────────────────────────────────
+
+def test_review_dotted_folder_moved_or_deleted_rescans(home, watcher):
+    """1: Linux reports only the folder of a move; a dot in its name is no file."""
+    from myclaw.knowledge import watch
+
+    k = _kdir(home)
+    for i, name in enumerate(("f.v1", "2024.10", "notes.old")):
+        (k / name).mkdir()
+        (k / name / f"inside{i}.md").write_text(_note(f"Inside{i}", "x"))
+    watcher.scan()
+    assert watcher.flush(force=True)["default"]["added"] == 3
+    eids = {e.permalink: e.id for e in __import__("myclaw.knowledge.db", fromlist=["x"]).KnowledgeDB("default").list_all_entities()}
+    os.rename(k / "f.v1", k / "f.v2")
+    root = home / ".myclaw" / "knowledge"
+    w = watch.Watcher(clock=_Clock(), use_watchfiles=False)
+    w.known_dirs = set(watcher.known_dirs)
+    # what watchfiles reports on Linux: the old and the new folder path only
+    assert w.push([k / "f.v1", k / "f.v2"]) == 2 and w.pending == {"default": None}
+    st = w.flush(force=True)["default"]
+    assert st["updated"] == 1 and st["deleted"] == 0
+    moved = [e for e in __import__("myclaw.knowledge.db", fromlist=["x"]).KnowledgeDB("default").list_all_entities()
+             if "f.v2" in e.file_path]
+    assert len(moved) == 1 and moved[0].id in eids.values()
+    # a deleted folder known only from the index (watchfiles mode, no listing)
+    import shutil
+    shutil.rmtree(k / "2024.10")
+    w2 = watch.Watcher(clock=_Clock(), use_watchfiles=False)
+    assert w2.push([k / "2024.10"]) == 1
+    assert w2.flush(force=True)["default"]["deleted"] == 1
+    assert watch.classify(root / "default" / "notes.old", root) == ("default", "rescan")   # exists: a folder
+
+
+def test_review_hash_tilde_backup_named_notes_and_folders_are_watched(home, watcher):
+    """2: the sync indexes #inbox/, ~old.md, x.bak/ — the watcher must too."""
+    from myclaw.knowledge.sync import scan_markdown_files
+    from myclaw.knowledge.watch import classify
+
+    k = _kdir(home)
+    root = home / ".myclaw" / "knowledge"
+    (k / "#inbox").mkdir()
+    (k / "#inbox" / "idea.md").write_text(_note("Idea", "from the inbox"))
+    (k / "~old.md").write_text(_note("Old tilde", "x"))
+    (k / "archive.bak").mkdir()
+    (k / "archive.bak" / "kept.md").write_text(_note("Kept", "x"))
+    (k / "draft.orig.md").write_text(_note("Orig", "x"))
+    for f in ("#inbox/idea.md", "~old.md", "archive.bak/kept.md", "draft.orig.md"):
+        assert classify(k / f, root) == ("default", "note"), f
+    indexed = {p.name for p in scan_markdown_files("default")}
+    assert {"idea.md", "~old.md", "kept.md", "draft.orig.md"} <= indexed
+    assert watcher.scan() == 4
+    assert watcher.flush(force=True)["default"]["added"] == 4
+    # temporary / swap / backup files are still ignored (not .md)
+    for name in ("x.md.tmp", "x.md~", "x.md.bak", ".#x.md", "x.md.orig", "#x.md#", "x.swp"):
+        assert classify(k / name, root) is None, name
+
+
+def test_review_deleted_probe_file_does_not_rescan(home, watcher):
+    """3: vim writes and deletes "4913"; an unknown gone path is ignored."""
+    from myclaw.knowledge import watch
+
+    k = _kdir(home)
+    w = watch.Watcher(clock=_Clock(), use_watchfiles=False)
+    (k / "4913").write_text("")
+    assert w.push([k / "4913"]) == 0          # existing non-note file
+    os.remove(k / "4913")
+    assert w.push([k / "4913"]) == 0 and w.pending == {}
+    assert watch.maybe_relevant(k / "4913", home / ".myclaw" / "knowledge")   # still passes the raw filter
+
+
+def test_review_symlinked_root(home, tmp_path):
+    """4: events and own writes spelled through the real path still match."""
+    from myclaw.knowledge import storage, watch, write_note
+    from myclaw.knowledge.sync import sync_knowledge
+
+    real = tmp_path / "real-notes"
+    (real / "default").mkdir(parents=True)
+    link = tmp_path / "linked-notes"
+    link.symlink_to(real, target_is_directory=True)
+    storage.set_knowledge_root(link)
+    try:
+        write_note("Hub", content="x")
+        f_real = real / "default" / "fresh.md"
+        f_real.write_text(_note("Fresh", "x"))
+        assert watch.classify(f_real, link) == ("default", "note")
+        assert watch.canonical(f_real, link) == str(link / "default" / "fresh.md")
+        assert sync_knowledge("default", paths=[f_real])["added"] == 1      # sync maps it too
+        assert watch.is_self_write(real / "default" / "hub.md")             # own write, other spelling
+        w = watch.Watcher(clock=_Clock(), use_watchfiles=False)
+        assert w.push([real / "default" / "hub.md"]) == 0
+    finally:
+        storage.set_knowledge_root(None)
+
+
+def test_review_failed_reindex_is_retried(home, watcher):
+    """5: the batch goes back with a backoff; bounded attempts."""
+    from myclaw.knowledge import watch
+
+    clock = _Clock()
+    fails = [2]
+    seen = []
+
+    def flaky(base, paths):
+        seen.append(paths)
+        if fails[0]:
+            fails[0] -= 1
+            raise sqlite3.OperationalError("database is locked")
+        return watch._default_reindex(base, paths)
+
+    w = watch.Watcher(clock=clock, reindex=flaky, use_watchfiles=False)
+    (_kdir(home) / "r.md").write_text(_note("R", "x"))
+    w.push([_kdir(home) / "r.md"])
+    assert w.flush(force=True) == {} and w.pending and w.retries == {"default": 1}
+    clock.t += watch.DEBOUNCE_SECONDS + 0.1
+    assert not w.due()                                   # backoff
+    clock.t += watch.RETRY_MIN_SECONDS
+    assert w.due() and w.flush() == {}                   # second failure
+    clock.t += watch.RETRY_MIN_SECONDS * 2 + 0.1
+    assert w.flush()["default"]["added"] == 1 and _entity("r") is not None and w.retries == {}
+    assert len(seen) == 3 and all(p == seen[0] for p in seen)
+    # bounded: gives up after MAX_RETRIES
+    w2 = watch.Watcher(clock=clock, reindex=lambda b, p: 1 / 0, use_watchfiles=False)
+    w2.push([_kdir(home) / "r.md"])
+    for _ in range(watch.MAX_RETRIES + 1):
+        w2.flush(force=True)
+    assert w2.pending == {} and w2.retries == {}
+
+
+def test_review_distill_failure_releases_the_slot(home, monkeypatch):
+    """6: _connect failing must not keep the slot or _RUNNING."""
+    from myclaw.knowledge import budget, distill, write_note
+
+    write_note("A", content="x")
+
+    def broken(path):
+        raise sqlite3.OperationalError("unable to open database file")
+
+    monkeypatch.setattr(distill, "_connect", broken)
+    r = distill.distill(wait_lock=0.5)
+    assert not r["ok"] and "unable to open" in r["message"]
+    assert not budget.busy("default") and not distill._RUNNING
+    monkeypatch.undo()
+
+
+def test_review_slots_do_not_nest_across_bases(home, monkeypatch):
+    """7: a second base's slot while holding one is refused (raises in tests)."""
+    from myclaw.knowledge import budget
+
+    with budget.background("default", "outer"):
+        with pytest.raises(budget.NestedSlotError):
+            budget.acquire(budget.key_for("work"), "inner")
+        monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+        monkeypatch.delenv("ZENSYNORA_DEV", raising=False)
+        assert budget.acquire(budget.key_for("work"), "inner", timeout=0) is False
+        with budget.background("work", "inner") as got:       # proceeds without the slot
+            assert got is False
+        assert budget.acquire(budget.key_for("default"), "same base")      # re-entrant is fine
+        budget.release(budget.key_for("default"))
+    assert not budget.busy()
+
+
+def test_review_self_write_checksum_is_of_the_bytes_written(home, watcher):
+    """8: binary writes — the remembered checksum is the file's checksum."""
+    import hashlib
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from myclaw.knowledge import watch, write_note
+    from myclaw.web import knowledge_api
+
+    write_note("Lines", content="one\ntwo\nthree")
+    f = _kdir(home) / "lines.md"
+    assert watch.is_self_write(f)
+    assert b"\r\n" not in f.read_bytes()
+    app = FastAPI()
+    app.include_router(knowledge_api.router)
+    body = "---\ntitle: Lines\npermalink: lines\n---\n\n# Lines\n\nsaved in the Web UI\n"
+    assert TestClient(app).put("/api/knowledge/note/lines", json={"content": body}).status_code == 200
+    assert f.read_bytes() == body.encode("utf-8") and watch.is_self_write(f)
+    assert watch._SELF[watch._real(f)][0] == hashlib.md5(f.read_bytes()).hexdigest()
+
+
+def test_review_doctor_links_ratio_kb_off_fix_message(home, monkeypatch):
+    """9: wiki-style forward links are no warning; checks respect the switch;
+    --fix says when nothing was needed; distill names a foreground write."""
+    from myclaw.doctor import apply_fixes, run_checks
+    from myclaw.doctor.registry import DoctorContext
+    from myclaw.knowledge import budget, distill, write_note
+    from myclaw.knowledge.parser import Relation
+
+    for i in range(40):     # 40 real links, 30 waiting (43 %) → warn; then 200 real → ok
+        write_note(f"N{i}", content="x", relations=[Relation("relates_to", f"N{(i + 1) % 40}")]
+                   + ([Relation("relates_to", f"Future {i}")] if i < 30 else []))
+    assert _check("kb_links").status == "warn"
+    for i in range(40):
+        write_note(f"N{i}", content="x", relations=[Relation("relates_to", f"N{(i + j) % 40}") for j in (1, 2, 3, 4)]
+                   + ([Relation("relates_to", f"Future {i}")] if i < 30 else []))
+    r = _check("kb_links")
+    assert r.status == "ok" and "30 link(s)" in r.detail          # 30 of 190: wiki-style
+    # knowledge.enabled off: imports / trash are not checked
+    log = home / ".myclaw" / "logs" / "knowledge_ingest.jsonl"
+    log.parent.mkdir(parents=True)
+    log.write_text(json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "base": "default",
+                               "source": "x", "errors": ["boom"]}) + "\n")
+    assert _check("kb_ingest").status == "warn"
+
+    class Cfg:
+        class knowledge:
+            enabled = False
+    ctx = DoctorContext(offline=True, config=Cfg())
+    rep = run_checks(offline=True, only=["kb_ingest", "kb_trash"], ctx=ctx)
+    assert all(x.status == "ok" and "turned off" in x.detail for x in rep.results)
+    # --fix with nothing to do
+    from myclaw.doctor import checks_knowledge
+    assert checks_knowledge._fix_knowledge_index(DoctorContext(offline=True)) == "nothing needed re-indexing"
+    rep = run_checks(offline=True, only=["knowledge_index"])
+    assert rep.results[0].status == "ok" and apply_fixes(rep) == []
+    # distillation refused by a foreground write
+    monkeypatch.setitem(distill._OPTIONS, "distill", True)
+    with budget.foreground("default"):
+        r = distill.distill(wait_lock=0.1)
+    assert r["busy"] and "being saved" in r["message"]
+
+
+def test_review_import_sync_keeps_its_time_budget(home, tmp_path):
+    """10: the Markdown importer still uses its own time budget after the sync."""
+    from myclaw.knowledge.ingest.run import import_file
+
+    src = tmp_path / "vault"
+    src.mkdir()
+    (src / "one.md").write_text("# One\n\nimported note\n")
+    r = import_file(str(src), base="default", kind="markdown")
+    assert not r.errors, r.errors
+    assert _entity("one") is not None

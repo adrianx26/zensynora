@@ -403,7 +403,7 @@ class SyncEngine:
         reparse_all = db.get_sync_meta(REPARSE_ALL_KEY) == "1"
 
         if paths is not None and not reparse_all:
-            wanted = {os.path.normpath(str(x)) for x in paths}
+            wanted = _wanted_paths(paths, knowledge_dir)
             candidates = sorted(f for f in all_files if os.path.normpath(str(f)) in wanted
                                 or str(f) not in by_path or by_path[str(f)].title is None)
         elif since is None or reparse_all:
@@ -675,6 +675,31 @@ def _is_indexable(path: Path, knowledge_dir: Path, patterns: List[str]) -> bool:
         except (OSError, ValueError):
             return False
     return not _should_ignore_path(path, knowledge_dir, patterns)
+
+
+def _wanted_paths(paths: Iterable[Any], knowledge_dir: Path) -> Set[str]:
+    """Paths to re-read, spelled like the listing of ``knowledge_dir``.
+
+    2026-10-27 (KB phase 6 review): a symlinked knowledge folder (or macOS's
+    /var → /private/var) gives the same file another spelling — each path is
+    also mapped through the real path of the folder."""
+    kd = os.path.normpath(str(knowledge_dir))
+    try:
+        kd_real = os.path.realpath(kd)
+    except (OSError, ValueError):
+        kd_real = kd
+    out: Set[str] = set()
+    for x in paths:
+        n = os.path.normpath(str(x))
+        out.add(n)
+        try:
+            r = os.path.realpath(n)
+            rel = os.path.relpath(r, kd_real)
+        except (OSError, ValueError):
+            continue
+        if rel != ".." and not rel.startswith(".." + os.sep) and rel != ".":
+            out.add(os.path.normpath(os.path.join(kd, rel)))
+    return out
 
 
 def _filter_since(files: Set[Path], since_timestamp: Optional[float]) -> Set[Path]:

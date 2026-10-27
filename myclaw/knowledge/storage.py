@@ -87,10 +87,13 @@ def _write_atomic(file_path: Path, text: str) -> None:
     # 2026-10-25 (KB phase 6): our own write — the file watcher ignores it
     from .watch import remember_self_write
 
-    remember_self_write(file_path, text)
+    # 2026-10-27 (review): the bytes written are exactly the bytes remembered
+    # (binary: no newline translation on Windows)
+    data = text.encode("utf-8")
+    remember_self_write(file_path, data)
     try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write(text)
+        with open(tmp, "wb") as f:
+            f.write(data)
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, file_path)

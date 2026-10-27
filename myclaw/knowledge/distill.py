@@ -1701,12 +1701,20 @@ def distill(base: str = "default", db_path: Optional[Path] = None, full: bool = 
 
     if not budget.acquire(budget.key_for(path), "distillation", budget.PRIO_DISTILL,
                           timeout=max(0.0, wait_lock)):
-        return {"ok": False, "busy": True,
-                "message": "Another background job is writing this knowledge base (a distillation, "
-                           "an import or embeddings) — try again in a minute."}
+        st = (budget.status(path).get("bases") or {}).get(Path(key).name) or {}
+        if not st.get("writer") and st.get("foreground"):   # 2026-10-27 (review)
+            msg = "A note is being saved right now — try again in a moment."
+        else:
+            msg = (f"Another background job is writing this knowledge base "
+                   f"({st.get('writer') or 'a distillation, an import or embeddings'}) — "
+                   "try again in a minute.")
+        return {"ok": False, "busy": True, "message": msg}
     _RUNNING.add(key)
-    conn = _connect(path)
+    conn: Optional[sqlite3.Connection] = None
     try:
+        # 2026-10-27 (review): opened inside the try — a failure here released
+        # neither the write slot nor _RUNNING
+        conn = _connect(path)
         if not _has_tables(conn) or not _has_columns(conn):
             ensure_schema(conn)
             conn.commit()
@@ -1724,7 +1732,8 @@ def distill(base: str = "default", db_path: Optional[Path] = None, full: bool = 
         logger.warning("Knowledge: distilling %s failed: %s", base, msg)
         return {"ok": False, "message": f"Distillation failed: {msg}"}
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
         _RUNNING.discard(key)
         budget.release(budget.key_for(path))
 

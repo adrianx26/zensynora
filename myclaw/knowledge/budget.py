@@ -17,6 +17,12 @@ over SQLite's single write lock. Here they share one budget:
   which hands the base over to foreground writes and to waiting writers of a
   higher priority first. A foreground write therefore waits at most for one
   background batch (SQLite's own lock, ``busy_timeout``).
+* **Slots never nest across bases.** A thread that holds the slot of one base
+  must not take another base's slot (two threads doing that in opposite order
+  would wait for each other until the timeout). Such a request is refused: it
+  is logged and treated like a timeout (``"proceed"`` without the slot or
+  :class:`Busy`); under pytest or with ``ZENSYNORA_DEV=1`` it raises
+  :class:`NestedSlotError` so the mistake is found.
 * **Never a deadlock.** A slot is re-entrant in its thread; a writer that waited
   ``timeout`` seconds either gives up (``on_timeout="raise"`` → :class:`Busy`) or
   goes ahead anyway (``"proceed"``, logged once) — SQLite still serialises the
@@ -57,6 +63,16 @@ T = TypeVar("T")
 
 class Busy(Exception):
     """The base's write slot could not be taken in time."""
+
+
+class NestedSlotError(RuntimeError):
+    """A thread asked for a second base's slot while holding one (a bug)."""
+
+
+def _strict() -> bool:
+    import os
+
+    return bool(os.environ.get("PYTEST_CURRENT_TEST")) or os.environ.get("ZENSYNORA_DEV") == "1"
 
 
 @dataclass
@@ -171,6 +187,14 @@ def acquire(key: str, who: str, prio: int = PRIO_SYNC, timeout: Optional[float] 
         with _CV:
             _SLOTS[key].depth += 1
         return True
+    if held:  # 2026-10-27 (review): slots must not nest across bases
+        other = next(iter(held))
+        msg = (f"{who} asked for the write slot of {Path(key).name} while holding "
+               f"{Path(other).name} — slots must not nest across bases")
+        if _strict():
+            raise NestedSlotError(msg)
+        _log_once(f"nested:{who}:{key}", logging.WARNING, "Knowledge: %s; refused", msg)
+        return False
     t = _Ticket(key=key, who=who, prio=int(prio), seq=next(_SEQ), thread=threading.get_ident())
     with _CV:
         ok = _take(key, t, timeout)

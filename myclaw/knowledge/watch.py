@@ -48,7 +48,9 @@ SELF_WRITE_MAX = 4_000
 INSTALL_SPEC = "watchfiles>=0.21,<2.0"
 INSTALL_HINT = f"pip install '{INSTALL_SPEC}' (or pip install 'zensynora[watch]')"
 
-_TEMP_SUFFIXES = (".tmp", "~", ".swp", ".swo", ".swx", ".swn", ".bak", ".part", ".crdownload", ".orig")
+MAX_RETRIES = 5               # a failed re-index of a batch is tried again this often
+RETRY_MIN_SECONDS = 2.0
+RETRY_MAX_SECONDS = 60.0
 
 _OPTIONS: Dict[str, Any] = {"watch_files": False, "kb_enabled": True}
 
@@ -61,6 +63,15 @@ _SELF_LOCK = threading.Lock()
 
 def _norm(path: Any) -> str:
     return os.path.normpath(str(path))
+
+
+def _real(path: Any) -> str:
+    """2026-10-27 (review): symlinked / macOS (/private/var) roots — own writes
+    and events are compared by their real path."""
+    try:
+        return os.path.realpath(str(path))
+    except (OSError, ValueError):
+        return _norm(path)
 
 
 def _md5(data: bytes) -> str:
@@ -78,7 +89,7 @@ def remember_self_write(path: Any, data: Optional[Any] = None) -> None:
             checksum = _md5(raw)
         now = time.monotonic()
         with _SELF_LOCK:
-            key = _norm(path)
+            key = _real(path)
             _SELF.pop(key, None)
             _SELF[key] = (checksum, now)
             while _SELF and (len(_SELF) > SELF_WRITE_MAX or next(iter(_SELF.values()))[1] < now - SELF_WRITE_TTL):
@@ -100,7 +111,7 @@ def _file_md5(path: str) -> Optional[str]:
 
 def is_self_write(path: Any) -> bool:
     """Is the file now exactly as ZenSynora wrote (or removed) it moments ago?"""
-    key = _norm(path)
+    key = _real(path)
     with _SELF_LOCK:
         hit = _SELF.get(key)
     if hit is None or hit[1] < time.monotonic() - SELF_WRITE_TTL:
@@ -113,28 +124,50 @@ def is_self_write(path: Any) -> bool:
 
 # ── What is watched ─────────────────────────────────────────────────────────
 
-def _rel_parts(path: Any, root: Path) -> Optional[Tuple[str, ...]]:
+def _rel_one(path: str, root: str) -> Optional[Tuple[str, ...]]:
     try:
-        rel = os.path.relpath(_norm(path), _norm(root))
+        rel = os.path.relpath(path, root)
     except ValueError:      # another drive (Windows)
         return None
-    if rel == "." or rel.startswith(".." + os.sep) or rel == "..":
+    if rel == "." or rel == ".." or rel.startswith(".." + os.sep):
         return None
     return tuple(Path(rel).parts)
 
 
+def _rel_parts(path: Any, root: Path) -> Optional[Tuple[str, ...]]:
+    """Path parts below the root — by spelling, else by real path (2026-10-27,
+    review: a symlinked root or macOS's /private/var reports other paths)."""
+    parts = _rel_one(_norm(path), _norm(root))
+    if parts is None:
+        parts = _rel_one(_real(path), _real(root))
+    return parts
+
+
 def _ignored_name(name: str) -> bool:
-    low = name.lower()
-    return (name.startswith(".") or name.startswith("#") or name.startswith("~")
-            or low.endswith(_TEMP_SUFFIXES))
+    """Folders and notes are skipped by the same rule as the sync: a leading dot
+    (2026-10-27, review: ``#inbox/``, ``~old.md`` and ``x.bak/`` are indexed by the
+    sync and were dropped here). Temporary / swap / backup files never end in
+    ``.md``, so they are ignored as non-notes."""
+    return name.startswith(".")
 
 
-def classify(path: Any, root: Path) -> Optional[Tuple[str, str]]:
+def canonical(path: Any, root: Path) -> Optional[str]:
+    """The path spelled below ``root`` as the sync lists it (None: outside)."""
+    parts = _rel_parts(path, root)
+    return os.path.join(_norm(root), *parts) if parts else None
+
+
+def classify(path: Any, root: Path,
+             was_dir: Optional[Callable[[str, str], bool]] = None) -> Optional[Tuple[str, str]]:
     """``(base, kind)`` for a path worth reacting to, else None.
 
     kind ``"note"``: a ``.md`` note in a base folder; ``"rescan"``: something
-    that can hide notes (a folder moved or deleted, ``.bmignore`` changed) —
-    the base is synced as a whole (still incremental)."""
+    that can hide or reveal notes — a folder that appeared, or a folder that
+    disappeared (moved / deleted; Linux reports only the folder), ``.bmignore``
+    changed — the base is synced as a whole (still incremental). A path that is
+    gone counts as a folder only when ``was_dir(base, path)`` says it was one
+    (2026-10-27, review: vim's ``4913`` probe file triggered full rescans; a
+    folder named ``notes.v1`` was taken for a file)."""
     parts = _rel_parts(path, root)
     if not parts or len(parts) < 2:
         return None                         # the root itself, or a file in it (DB, logs …)
@@ -145,12 +178,53 @@ def classify(path: Any, root: Path) -> Optional[Tuple[str, str]]:
         return base, "rescan"
     if any(_ignored_name(p) for p in parts[1:]):
         return None
-    name = parts[-1]
-    if name.endswith(".md"):
+    full = os.path.join(_norm(root), *parts)
+    if os.path.isdir(full):
+        return base, "rescan"               # a folder appeared (moved in / created)
+    if parts[-1].endswith(".md"):
         return base, "note"
-    if "." not in name and not os.path.isfile(_norm(path)):
-        return base, "rescan"               # a folder (moved / deleted / created)
+    if os.path.lexists(full):
+        return None                         # another kind of file
+    if was_dir is not None and was_dir(base, full):
+        return base, "rescan"               # a known folder disappeared
     return None
+
+
+def maybe_relevant(path: Any, root: Path) -> bool:
+    """Cheap first filter of raw events: notes, folders, and paths that are gone
+    (a gone folder is decided later); existing non-note files are dropped."""
+    parts = _rel_parts(path, root)
+    if not parts or len(parts) < 2 or any(p.startswith(".") for p in parts[:-1]):
+        return False
+    name = parts[-1]
+    if name == ".bmignore" and len(parts) == 2:
+        return True
+    if name.startswith("."):
+        return False
+    full = os.path.join(_norm(root), *parts)
+    return name.endswith(".md") or os.path.isdir(full) or not os.path.lexists(full)
+
+
+def _index_has_folder(base: str, folder: str) -> bool:
+    """Does the index know a note below this folder?"""
+    import sqlite3
+
+    from .budget import key_for
+
+    db = key_for(base)
+    if not os.path.isfile(db):
+        return False
+    prefix = folder.rstrip(os.sep) + os.sep
+    try:
+        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True, timeout=2)
+        try:
+            row = con.execute("SELECT 1 FROM entities WHERE substr(file_path, 1, ?) = ? LIMIT 1",
+                              (len(prefix), prefix)).fetchone()
+        finally:
+            con.close()
+        return row is not None
+    except sqlite3.Error:
+        return False
 
 
 def watchfiles_installed() -> bool:
@@ -199,6 +273,9 @@ class Watcher:
         self.first_event = 0.0
         self.last_event = 0.0
         self.snapshot: Optional[Dict[str, Tuple[int, int]]] = None
+        self.known_dirs: Set[str] = set()       # folders seen by the last listing / events
+        self.retries: Dict[str, int] = {}       # base → failed re-indexes in a row
+        self.not_before = 0.0                    # after a failed re-index: wait until then
         self.thread: Optional[threading.Thread] = None
         self.stop_event = threading.Event()
         self.wanted = False
@@ -215,23 +292,29 @@ class Watcher:
         root = Path(self.root_fn())
         n = 0
         now = self.clock()
+        found: List[Tuple[str, str, str]] = []
+        for p in paths:      # outside the lock: may stat / read the index
+            c = classify(p, root, was_dir=self._was_dir)
+            if c is None:
+                self.stats["ignored"] += 1
+                continue
+            base, kind = c
+            full = canonical(p, root) or _norm(p)
+            if kind == "note" and is_self_write(full):
+                self.stats["ignored_self"] += 1
+                continue
+            if kind == "rescan" and os.path.isdir(full):
+                self.known_dirs.add(_real(full))
+            found.append((base, kind, full))
         with self.cv:
-            for p in paths:
-                c = classify(p, root)
-                if c is None:
-                    self.stats["ignored"] += 1
-                    continue
-                base, kind = c
-                if kind == "note" and is_self_write(p):
-                    self.stats["ignored_self"] += 1
-                    continue
+            for base, kind, full in found:
                 if not self.pending and n == 0:
                     self.first_event = now
                 cur = self.pending.get(base, set())
                 if kind == "rescan" or cur is None:
                     self.pending[base] = None
                 else:
-                    cur.add(_norm(p))
+                    cur.add(full)
                     self.pending[base] = None if len(cur) > MAX_PENDING else cur
                 n += 1
             if n:
@@ -240,9 +323,16 @@ class Watcher:
                 self.cv.notify_all()
         return n
 
+    def _was_dir(self, base: str, path: str) -> bool:
+        """Was this (now gone) path a folder? Seen as one, or notes are indexed below it."""
+        return _real(path) in self.known_dirs or _norm(path) in self.known_dirs \
+            or _index_has_folder(base, path)
+
     def _listing(self, root: Path) -> Dict[str, Tuple[int, int]]:
-        """mtime/size of every note file under the base folders (bounded)."""
+        """mtime/size of every note file under the base folders (bounded);
+        also refreshes the known folders."""
         out: Dict[str, Tuple[int, int]] = {}
+        dirs_seen: Set[str] = set()
         truncated = False
         try:
             bases = sorted(e.name for e in os.scandir(root) if e.is_dir(follow_symlinks=False)
@@ -252,6 +342,8 @@ class Watcher:
         for base in bases:
             for dirpath, dirs, names in os.walk(os.path.join(str(root), base), followlinks=False):
                 dirs[:] = [d for d in dirs if not _ignored_name(d)]
+                if len(dirs_seen) < MAX_FILES:
+                    dirs_seen.add(_real(dirpath))
                 for name in names:
                     if not name.endswith(".md") or _ignored_name(name):
                         continue
@@ -272,6 +364,9 @@ class Watcher:
             logger.info("Knowledge watcher: more than %d note files; only the first are polled "
                         "(install watchfiles for events: %s)", MAX_FILES, INSTALL_HINT)
         self.stats["truncated"] = truncated
+        self.known_dirs = dirs_seen | {d for d in self.known_dirs if os.path.isdir(d)}
+        if len(self.known_dirs) > MAX_FILES:
+            self.known_dirs = dirs_seen
         return out
 
     def scan(self) -> int:
@@ -289,7 +384,7 @@ class Watcher:
     def due(self, now: Optional[float] = None) -> bool:
         now = self.clock() if now is None else now
         with self.cv:
-            if not self.pending:
+            if not self.pending or now < self.not_before:
                 return False
             return (now - self.last_event >= DEBOUNCE_SECONDS
                     or now - self.first_event >= MAX_DELAY_SECONDS)
@@ -319,11 +414,39 @@ class Watcher:
                 self.stats.update(last_reindex=time.time(), last_base=base, last_stats=st, last_error=None)
                 if any(st.get(k) for k in ("added", "updated", "deleted")):
                     logger.info("Knowledge: re-indexed notes changed on disk in %s: %s", base, st)
+                self.retries.pop(base, None)
             except Exception as e:  # never let the thread die
                 self.stats["errors"] += 1
                 self.stats["last_error"] = f"{type(e).__name__}: {e}"
-                logger.warning("Knowledge watcher: re-indexing %s failed: %s", base, e)
+                self._retry_later(base, paths, e)
         return done
+
+    def _retry_later(self, base: str, paths: Optional[Set[str]], error: Exception) -> None:
+        """2026-10-27 (review): a failed re-index is not lost — the batch goes back
+        (merged with newer changes, bounded) and is tried again with a backoff;
+        after MAX_RETRIES the next manual or periodic sync picks the files up."""
+        n = self.retries.get(base, 0) + 1
+        if n > MAX_RETRIES:
+            self.retries.pop(base, None)
+            logger.warning("Knowledge watcher: re-indexing %s failed %d times (%s); giving up — "
+                           "run zensynora knowledge sync", base, MAX_RETRIES, error)
+            return
+        self.retries[base] = n
+        delay = min(RETRY_MAX_SECONDS, RETRY_MIN_SECONDS * 2 ** (n - 1))
+        logger.warning("Knowledge watcher: re-indexing %s failed (%s); trying again in %.0f s",
+                       base, error, delay)
+        with self.cv:
+            cur = self.pending.get(base, set())
+            if paths is None or cur is None:
+                self.pending[base] = None
+            else:
+                merged = set(cur) | set(paths)
+                self.pending[base] = None if len(merged) > MAX_PENDING else merged
+            now = self.clock()
+            if not self.first_event or len(self.pending) == 1:
+                self.first_event = now
+            self.not_before = now + delay
+            self.cv.notify_all()
 
     # -- thread ----------------------------------------------------------
     def _mode(self) -> str:
@@ -389,6 +512,7 @@ class Watcher:
                     continue
                 now = self.clock()
                 wait = min(self.last_event + DEBOUNCE_SECONDS, self.first_event + MAX_DELAY_SECONDS) - now
+                wait = max(wait, self.not_before - now)
             if wait > 0:
                 stop.wait(min(wait, 1.0))
                 continue
@@ -424,7 +548,9 @@ class Watcher:
         root.mkdir(parents=True, exist_ok=True)
 
         def keep(_change: Any, path: str) -> bool:     # cheap filter of the raw changes
-            return classify(path, root) is not None
+            return maybe_relevant(path, root)
+
+        self._listing(root)                            # the known folders (moved / deleted later)
 
         for changes in watchfiles.watch(str(root), watch_filter=keep, stop_event=stop,
                                         debounce=400, step=50, rust_timeout=1000,

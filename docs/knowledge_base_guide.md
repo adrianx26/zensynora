@@ -447,11 +447,11 @@ collected into one re-index (at most ~2 s after the first).
   folder is checked every 5 seconds instead.
 * **Ignored:** anything that is not a `.md` note inside a knowledge base
   folder; `.trash`, `.git`, `.obsidian` and every other folder or file whose name
-  starts with `.`; temporary and swap files (`*.tmp`, `*~`, `.#*`, `*.swp`, `*.bak`);
+  starts with `.` (other names — `#inbox/`, `~old.md` — are watched, like the re-index reads them); temporary and swap files (`*.tmp`, `*~`, `.#*`, `*.swp`, `*.bak`);
   the index databases, logs and status files (memopad's watcher re-indexed its
   own log forever); and ZenSynora's own writes (a note saved by an agent, the
   Web UI or an import is not re-indexed a second time). Changing `.bmignore`
-  or moving a whole folder re-indexes that base.
+  or moving / deleting a whole folder (also `notes.v1`) re-indexes that base.
 * Works with another notes folder (`knowledge.knowledge_dir`) and follows it
   when it changes; nothing is watched while `knowledge.enabled` is off. A base
   folder created by hand is picked up after its first `zensynora knowledge sync`.
@@ -475,7 +475,7 @@ under a second):
 | Check | Warns when | What to do |
 |---|---|---|
 | Knowledge index | notes not indexed, index entries without a file, notes changed since indexing (checksums of a sample) | `zensynora knowledge sync` (`--force` rebuilds); `zensynora doctor --fix` re-indexes |
-| Waiting links | 25 or more links to notes that do not exist (the most wanted are named) | create those notes or correct the link text |
+| Waiting links | 25 or more links to notes that do not exist, and more than 20 % of all links (the most wanted are named) | create those notes or correct the link text |
 | Conflicts | open ⚠ conflicts | open the note, keep one fact |
 | Semantic search (when on) | fastembed missing, the model cannot load, notes waiting for vectors | *Install* / *Backfill* on the Knowledge page, `zensynora knowledge embed` |
 | Distillation (when on) | the last run failed, notes not distilled for a day (shows the lease) | *Distil now*, `zensynora knowledge distill` |
