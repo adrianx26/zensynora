@@ -1157,3 +1157,6 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .ctx-status.low, .ctx-status.over { color: var(--danger-color); }
 .ctx-status.mid { color: #d29922; }
 .ctx-breakdown { line-height: 1.5; }
+
+/* Jobs: inline delete confirmation (2026-10-27) */
+.inline-confirm { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }

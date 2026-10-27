@@ -118,6 +118,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
   const [benchInput, setBenchInput] = useState<ModelChoice>({ provider: '', model: '' });
   const [tab, setTab] = useState<'runs' | 'bench'>('runs');
   const [medicBusy, setMedicBusy] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null); // job id waiting for “Delete?” (2026-10-27)
 
   const loadJobs = useCallback(async () => {
     try {
@@ -184,10 +185,23 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
 
   const runNow = (id: string) => act(() => api(`/api/jobs/${id}/run`, { method: 'POST' }), 'Started — the result appears below.');
   const toggle = (j: Job) => act(() => api(`/api/jobs/${j.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !j.enabled }) }));
-  const remove = (j: Job) => {
-    if (!window.confirm(`Delete job “${j.name}” and its history?`)) return;
-    act(async () => { await api(`/api/jobs/${j.id}`, { method: 'DELETE' }); setSelected(null); }, 'Job deleted.');
-  };
+  // 2026-10-27: delete from the list too, with an inline confirmation instead of a browser dialog.
+  const remove = (j: Job) => act(async () => {
+    await api(`/api/jobs/${j.id}`, { method: 'DELETE' });
+    setConfirmDelete(null);
+    if (selected === j.id) setSelected(null);
+    if (editingId === j.id) { setDraft(null); setEditingId(null); }
+  }, `Job “${j.name}” deleted.`);
+  const deleteButtons = (j: Job) => confirmDelete === j.id ? (
+    <span className="inline-confirm" role="alertdialog" aria-label={`Delete job ${j.name}`}>
+      <span className="muted">Delete it and its run history?</span>
+      <button className="ghost-btn danger" onClick={() => remove(j)}>Delete</button>
+      <button className="ghost-btn" onClick={() => setConfirmDelete(null)}>Cancel</button>
+    </span>
+  ) : (
+    <button className="ghost-btn danger" disabled={j.running} onClick={() => setConfirmDelete(j.id)}
+      title={j.running ? 'The job is running — wait for it to finish (or cancel the run) before deleting it' : 'Delete this job and its run history'}>🗑 Delete</button>
+  );
   const evaluate = (r: JobRun) => act(() => api(`/api/jobs/runs/${r.id}/evaluate`, { method: 'POST', body: '{}' }), 'Evaluated with the main model.');
   const askMedic = async (r: JobRun) => {
     setOpenRun(r.id);
@@ -333,6 +347,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                       <button className="ghost-btn" disabled={j.running} onClick={() => runNow(j.id)}>▶ Run</button>
                       <button className="ghost-btn" onClick={() => toggle(j)}>{j.enabled ? 'Pause' : 'Resume'}</button>
                       <button className="ghost-btn" onClick={() => { setDraft({ ...j }); setEditingId(j.id); }}>Edit</button>
+                      {deleteButtons(j)}
                     </td>
                   </tr>
                 ))}
@@ -350,7 +365,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
               <div className="row-actions">
                 <button className="ghost-btn" disabled={job.running} onClick={() => runNow(job.id)}>▶ Run now</button>
                 <button className="ghost-btn" onClick={() => { setDraft({ ...job }); setEditingId(job.id); }}>Edit</button>
-                <button className="ghost-btn danger" onClick={() => remove(job)}>Delete</button>
+                {deleteButtons(job)}
               </div>
             </div>
             <p className="muted pre">{job.prompt}</p>
