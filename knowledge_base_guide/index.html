@@ -452,6 +452,61 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#quality-fact-sources-categories-conflicts-duplicates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality: fact sources, categories, conflicts, duplicates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#importing-web-pages-repositories-documents-chat-exports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Importing: web pages, repositories, documents, chat exports
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#semantic-search-finding-notes-by-meaning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Semantic search (finding notes by meaning)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#distillation-facts-scenarios-a-persona" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distillation: facts, scenarios, a persona
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live-sync-background-work-and-health-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Live sync, background work and health checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#plans" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1183,6 +1238,61 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#quality-fact-sources-categories-conflicts-duplicates" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quality: fact sources, categories, conflicts, duplicates
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#importing-web-pages-repositories-documents-chat-exports" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Importing: web pages, repositories, documents, chat exports
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#semantic-search-finding-notes-by-meaning" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Semantic search (finding notes by meaning)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#distillation-facts-scenarios-a-persona" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Distillation: facts, scenarios, a persona
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#live-sync-background-work-and-health-checks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Live sync, background work and health checks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#plans" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1353,8 +1463,8 @@ words. Tag search matches whole tags (<code>py</code> does not find <code>python
 </thead>
 <tbody>
 <tr>
-<td><code>search_knowledge(query, limit)</code></td>
-<td>Search (syntax above); one-line snippet per result</td>
+<td><code>search_knowledge(query, limit, mode)</code></td>
+<td>Search (syntax above); one-line snippet per result. <code>mode</code>: <code>auto</code> (default), <code>fts</code>, <code>semantic</code>, <code>hybrid</code> — see <em>Semantic search</em></td>
 </tr>
 <tr>
 <td><code>read_knowledge(permalink)</code></td>
@@ -1366,7 +1476,7 @@ words. Tag search matches whole tags (<code>py</code> does not find <code>python
 </tr>
 <tr>
 <td><code>get_knowledge_context(permalink, depth)</code></td>
-<td>The note with its text plus the notes around it (snippets, <em>Linked from</em>)</td>
+<td>The note with its text plus the notes around it (snippets, <em>Linked from</em>); hub notes are not walked through</td>
 </tr>
 <tr>
 <td><code>list_knowledge</code>, <code>get_related_knowledge</code>, <code>list_knowledge_tags</code>, <code>sync_knowledge_base</code></td>
@@ -1393,10 +1503,13 @@ zensynora<span class="w"> </span>knowledge<span class="w"> </span>list
 zensynora<span class="w"> </span>knowledge<span class="w"> </span>tags
 zensynora<span class="w"> </span>knowledge<span class="w"> </span>sync<span class="w">            </span><span class="c1"># re-read files you edited by hand</span>
 zensynora<span class="w"> </span>knowledge<span class="w"> </span>sync<span class="w"> </span>--force<span class="w">    </span><span class="c1"># rebuild the whole index from the files</span>
+zensynora<span class="w"> </span>knowledge<span class="w"> </span>embed<span class="w">           </span><span class="c1"># vectors for semantic search (--all: check every note)</span>
+zensynora<span class="w"> </span>knowledge<span class="w"> </span>search<span class="w"> </span><span class="s2">"my car"</span><span class="w"> </span>--mode<span class="w"> </span>hybrid<span class="w">   </span><span class="c1"># fts (default) | semantic | hybrid | auto</span>
 </code></pre></div>
 <h2 id="editing-by-hand-folders-bmignore">Editing by hand, folders, <code>.bmignore</code><a class="headerlink" href="#editing-by-hand-folders-bmignore" title="Permanent link">&para;</a></h2>
 <p>Edit the files with any editor (Obsidian works). Run <em>↻ Re-index</em> on the
-Knowledge page or <code>zensynora knowledge sync</code> afterwards. Moving or renaming a
+Knowledge page or <code>zensynora knowledge sync</code> afterwards — or turn on <em>Live
+sync</em> (below) and the Web UI does it by itself. Moving or renaming a
 file keeps its links. Folders whose name starts with <code>.</code> (<code>.trash</code>, <code>.git</code>,
 <code>.obsidian</code>) are never indexed. A <code>.bmignore</code> file in the base folder can
 exclude more, one pattern per line: <code>drafts/</code>, <code>*.tmp</code>, <code>archive/**</code>.</p>
@@ -1404,10 +1517,524 @@ exclude more, one pattern per line: <code>drafts/</code>, <code>*.tmp</code>, <c
 <p><code>zensynora mcp-server</code> offers the agent tools — the knowledge tools included —
 to other MCP clients. Parameters have real types (numbers, true/false), and
 the tools always use the shared <code>default</code> knowledge base there.</p>
+<h2 id="quality-fact-sources-categories-conflicts-duplicates">Quality: fact sources, categories, conflicts, duplicates<a class="headerlink" href="#quality-fact-sources-categories-conflicts-duplicates" title="Permanent link">&para;</a></h2>
+<p>Added 2026-10-24 (KB phase 2). Everything below is worked out from the files
+and kept in the index; a note file only changes when you (or an agent
+resolving one conflict) choose so, and the previous version is kept in
+<code>.trash/</code>.</p>
+<p><strong>Where a fact comes from.</strong> A fact line may end with its source:</p>
+<div class="highlight"><pre><span></span><code><span class="k">-</span><span class="w"> </span>[spec] 32 GB RAM <span class="ni">#hardware</span> (source: tool shell free -g)
+<span class="k">-</span><span class="w"> </span>[url] Ollama docs (source: tool browse https://ollama.com/docs)
+<span class="k">-</span><span class="w"> </span>[preference] Answers in English (source: chat 2026-10-24)
+</code></pre></div>
+<p>Only a <code>(source: …)</code> that closes at the very end of the line (only <code>#tags</code>
+may follow) is special; any other <code>(…)</code> stays part of the fact. The same fact
+from two sources is kept twice. Facts saved automatically get their source
+(<code>chat &lt;date&gt;</code> from a conversation, <code>tool &lt;name&gt; &lt;URL or path&gt;</code> from a tool
+result; shell commands are not written, and URLs lose passwords, <code>?query</code>
+and <code>#fragment</code>). Agents can give one as a third field marked as a source:
+<code>spec | 32 GB RAM | source: output of free -g</code> (a URL, <code>tool …</code> or <code>chat …</code>
+needs no <code>source:</code>; any other <code>|</code> stays part of the fact, e.g. <code>tip | ps aux
+| grep python</code>). <code>read_knowledge</code> and the note panel show it.</p>
+<p><strong>Categories.</strong> <code>[Specs]</code>, <code>[spec]</code> and <code>[specification]</code> are counted as one
+category, <code>spec</code>: lower case, singular, and common synonyms (<code>config</code> /
+<code>settings</code> → <code>setting</code>, <code>prefs</code> → <code>preference</code>, <code>link</code> → <code>url</code>, <code>howto</code> →
+<code>how-to</code>). The file keeps what you wrote. <em>Tags &amp; types</em> lists the
+categories with their counts (click one to filter) and suggests merging a
+rare spelling (used 1–2 times) into a common one (3+), e.g. <code>Specs → spec</code>
+or the typo <code>preferance → preference</code>. <em>Preview…</em> shows every fact that
+would change; <em>Apply</em> rewrites those notes.</p>
+<p><strong>Conflicts.</strong> When a note is saved or re-indexed, facts of the categories
+that hold one current value — <code>setting</code> (also <code>config</code>), <code>spec</code>,
+<code>preference</code> — on that note are compared. Only clear contradictions are
+flagged ⚠: the same words with another number, or the same "subject key" (two
+words or more) with another value.</p>
+<table>
+<thead>
+<tr>
+<th>Flagged</th>
+<th>Not flagged</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mindy01 has 32 GB RAM</code> / <code>mindy01 has 64 GB RAM</code></td>
+<td>the same fact twice, <code>32GB RAM</code> / <code>32 GB RAM</code>, one fact containing the other</td>
+</tr>
+<tr>
+<td><code>Ollama listens on port 11434</code> / <code>… port 8080</code></td>
+<td>names with digits: <code>mindy01</code> / <code>mindy02</code>, <code>slot A1</code> / <code>A2</code>, <code>sda1</code>, <code>eth0</code>; <code>Server 1</code> / <code>Server 2</code></td>
+</tr>
+<tr>
+<td><code>Ollama port: 11434</code> / <code>Ollama port: 8080</code></td>
+<td>a one-word key (<code>Port: 80</code> / <code>Port: 8080</code>, <code>Model: …</code>, <code>Sister: …</code>): usually a list</td>
+</tr>
+<tr>
+<td><code>Default model is llama3</code> / <code>Default model is qwen2.5</code></td>
+<td>readings, counters, statuses, versions, errors, people: temperature, usage, tests, status, version, error, exit code, owner …</td>
+</tr>
+<tr>
+<td></td>
+<td>dates, times, years; other categories (<code>fact</code>, <code>how-to</code>, <code>url</code>, <code>person</code> …)</td>
+</tr>
+</tbody>
+</table>
+<p>With <code>knowledge.detect_conflicts</code> off, nothing new is flagged and existing
+flags are hidden (they come back when it is turned on again).
+Open the note (notes with conflicts have an amber dot in the graph):
+<strong>Keep A</strong> or <strong>Keep B</strong> removes the other fact from the note file; <strong>Both
+are fine</strong> dismisses the pair for good. A conflict closes by itself when you
+edit one of the two facts away.</p>
+<p><strong>Duplicate notes.</strong> <em>⧉ Find duplicates</em> lists pairs with the same title, a
+title that is the other note's alias, the same text, or nearly the same
+short text with similar titles and the same numbers (notes made from one
+template — daily weather, session summaries — are not duplicates). On very
+large bases the check stops after a while and says the list is not
+complete. Nothing is merged automatically: pick a pair, check the preview
+(tags, aliases, facts and links of both; the other note's text under
+<code>## Merged from &lt;title&gt;</code>), then <em>Merge</em>. The merged note's title, aliases and
+file name become aliases of the kept note, so <code>[[links]]</code> to it keep working;
+its file goes to <code>.trash/</code>.</p>
+<p><strong>Hub notes.</strong> A note with more than 25 links (a "hub" such as <em>Homelab</em>)
+matches many questions but says little about each one. In the automatic
+<em>Relevant Knowledge</em> it is ranked lower (never left out on purpose), and
+<code>get_knowledge_context</code> with depth 2 or more lists it without following its
+links.</p>
+<p><strong>Agent tools:</strong> <code>knowledge_conflicts(permalink)</code>,
+<code>resolve_knowledge_conflict(conflict_id, keep)</code> (<code>"a"</code>, <code>"b"</code> or <code>"both"</code>),
+<code>knowledge_categories()</code>, <code>find_duplicate_notes()</code> (a list only). Merging
+notes or categories is left to you on the Knowledge page.</p>
+<p><strong>Settings → Features</strong> (<code>~/.myclaw/config.json</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Setting</th>
+<th>Default</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>knowledge.detect_conflicts</code></td>
+<td><code>true</code></td>
+<td>flag contradicting facts (only flags)</td>
+</tr>
+<tr>
+<td><code>knowledge.hub_penalty</code></td>
+<td><code>true</code></td>
+<td>rank hub notes lower, do not walk through them</td>
+</tr>
+<tr>
+<td><code>knowledge.hub_degree</code></td>
+<td><code>25</code></td>
+<td>links above which a note is a hub</td>
+</tr>
+</tbody>
+</table>
+<h2 id="importing-web-pages-repositories-documents-chat-exports">Importing: web pages, repositories, documents, chat exports<a class="headerlink" href="#importing-web-pages-repositories-documents-chat-exports" title="Permanent link">&para;</a></h2>
+<p><strong>Assimilate</strong> reads one source into linked notes: an <em>overview</em> note (summary,
+contents, facts <code>source</code> / <code>kind</code> / <code>size</code> / <code>date</code>, tags <code>assimilated</code> + the
+kind, and a Mermaid diagram of the structure) plus one note per part, each
+with <code>part_of [[overview]]</code>. Links between parts are kept (Markdown links
+between files, imports between code files).</p>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>What you get</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Web page (<code>https://…</code>)</td>
+<td>main text split at headings, the page's links; a PDF/Word/Excel URL is read as that document</td>
+</tr>
+<tr>
+<td>GitHub repository (<code>https://github.com/owner/repo</code>, also <code>/tree/branch/folder</code>)</td>
+<td>architecture overview: languages, folders, entry points, dependencies, a diagram of the packages and their imports; one note per file read: README, manifests, entry points and the most-imported source files first, docs at most a quarter of the notes, archives / plans / changelogs / tests last (the overview says what was left out). No git needed; set <code>GITHUB_TOKEN</code> for private repositories or a higher rate limit</td>
+</tr>
+<tr>
+<td>Folder or file on this computer</td>
+<td>the same analysis for code folders (<code>.gitignore</code> honoured); documents: PDF, Word (.docx), Excel (.xlsx: one table per sheet, column names as facts), text, Markdown, HTML, CSV, JSON; images: file details only (no OCR)</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Import</strong> reads exports: ChatGPT (<code>.zip</code> or <code>conversations.json</code>), Claude.ai
+(<code>.zip</code>, <code>conversations.json</code>, <code>projects.json</code>), an MCP memory file
+(<code>memory.json</code> / <code>.jsonl</code>: entities → notes with facts, relations → links) and
+Markdown folders / Obsidian vaults (folder or <code>.zip</code>). Each conversation becomes
+one note (date, short transcript, tags <code>imported</code> + <code>chatgpt</code>/<code>claude</code>), grouped
+under one note per month; the note's name comes from the conversation's id,
+so a renamed conversation updates the same note. Markdown notes are <strong>copied</strong>
+into <code>&lt;base&gt;/imported/&lt;folder-name&gt;/</code> with their frontmatter and text (symbolic
+links are not followed, attachments are not copied). Importing the folder
+again updates ZenSynora's own copy of a changed note (the old version goes to
+<code>.trash/</code>); if you edited that copy, the new version is saved beside it once
+(<code>name-2.md</code>, updated by later imports). A note whose permalink is already
+taken gets <code>permalink: &lt;folder&gt;-…</code>.</p>
+<ul>
+<li><strong>Run it again</strong> on the same source: the same notes are updated (unchanged
+  ones are not rewritten; a version that loses text goes to <code>.trash/</code> first).
+  A note you <strong>edited by hand</strong> since it was imported is kept as it is ("kept
+  your edits"). A note <strong>you wrote</strong> that happens to have the same name is
+  never replaced — the import is saved as <code>…-imported</code> and says so.</li>
+<li><strong>Limits:</strong> 40 notes per assimilate by default (<code>max_notes</code>, at most 500;
+  one note per file of a repository), 12 000 characters per note (longer parts
+  are split), a byte and time limit per run; an import takes up to 10 000
+  notes (<code>--max-notes</code>). At a limit you get what was done so far; running the
+  same call again <strong>continues</strong> with the next files or parts (the progress is
+  kept in <code>&lt;base&gt;/.ingest/</code>). After <em>Stop</em> or a timeout nothing more is written.
+  Two imports can run at a time; a stuck Web UI import is stopped after
+  30 minutes.</li>
+<li><strong>Big files:</strong> Markdown notes over 2 MB and Word/Excel files that unpack to
+  more than 300 MB are skipped; an export's <code>conversations.json</code> over 150 MB
+  needs the optional <code>ijson</code> package (<code>pip install ijson</code>), which reads it
+  piece by piece.</li>
+<li><strong>Never imported:</strong> hidden files and folders (<code>~/.ssh</code>, ZenSynora's
+  settings, also inside the agent workspace), <code>.env</code>, key and credential
+  files (<code>*.pem</code>, <code>id_rsa*</code>, <code>credentials*</code>, <code>*.tfvars</code>, <code>kubeconfig</code>,
+  <code>wp-config.php</code>, <code>appsettings*.json</code>…) — the same rules for agents, the Web
+  UI and the command line. Tokens, API keys and passwords in the text (also
+  <code>NAME_PASSWORD: "…"</code>-style settings and <code>?token=</code> in URLs) become
+  <code>[redacted]</code>; a URL's <code>user:password@</code> and secret query parameters are never
+  stored or logged. Agents may only read files in your home folder and the
+  agent workspace. Web addresses must be public: every address of the name is
+  checked, and the connection goes to exactly the checked address. Behind an
+  HTTP(S) proxy the proxy resolves the name itself, so what it connects to
+  cannot be checked from here.</li>
+<li>PDF, Word and Excel need an optional package:
+  <code>pip install 'zensynora[ingest]'</code> (or, in ZenSynora's virtual environment,
+  <code>python -m pip install pypdf python-docx openpyxl</code>). Without it you get a
+  message saying exactly that; everything else works.</li>
+<li>Every run is logged as one line in <code>~/.myclaw/logs/knowledge_ingest.jsonl</code>.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Where</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Agent</td>
+<td><code>assimilate(source, max_notes)</code> — e.g. "analyze https://github.com/owner/repo and make a diagram" (returns the overview note and the diagram); <code>import_knowledge(path, kind)</code></td>
+</tr>
+<tr>
+<td>Web UI</td>
+<td>Knowledge page → <em>Import</em>: a link or folder, or upload a file (up to 200 MB)</td>
+</tr>
+<tr>
+<td>Command line</td>
+<td><code>zensynora knowledge assimilate SOURCE [--max-notes 40] [-b BASE]</code>, <code>zensynora knowledge import FILE [--kind auto\|chatgpt\|claude\|mcp_memory\|markdown\|document] [-b BASE]</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="semantic-search-finding-notes-by-meaning">Semantic search (finding notes by meaning)<a class="headerlink" href="#semantic-search-finding-notes-by-meaning" title="Permanent link">&para;</a></h2>
+<p>Added 2026-10-24 (KB phase 3). Word search finds notes that contain the words
+you typed. Semantic search also finds notes that <em>mean</em> the same: "my car"
+finds a note about an <em>automobile</em>, "backup of the photos" finds <em>Picture
+archive copies</em>. Both are combined: the two best word matches always come
+first, in their order (a note with the exact error code or name is never
+pushed out); then the rest of the word matches and the notes found by
+meaning, by a weighted rank fusion in which words count more than meaning. A
+note found only by meaning is added only when it is similar enough (the
+floor below).</p>
+<p><strong>Turn it on</strong></p>
+<ol>
+<li><em>Settings → Features → Semantic search</em> (<code>knowledge.semantic_search</code>,
+   default off).</li>
+<li>Knowledge page → <em>Tags &amp; types</em> → <em>Semantic search</em> card → <strong>Install</strong>
+   (installs the optional package <code>fastembed</code> into ZenSynora's virtual
+   environment; with ONNX Runtime about 150 MB on disk). The packages
+   ZenSynora already has keep their versions — the install only adds new
+   ones. By hand: <code>python -m pip install "fastembed&gt;=0.5,&lt;1.0"</code> in that
+   environment, or <code>pip install 'zensynora[semantic]'</code>. Updates keep it
+   installed (with the version range of the new release).</li>
+<li><strong>Backfill</strong> on the same card (or <code>zensynora knowledge embed</code>) computes
+   the vectors of the existing notes. The first time, the model is
+   downloaded once from Hugging Face into <code>~/.myclaw/models</code>.</li>
+</ol>
+<p>From then on every note that is written, edited, imported or re-indexed is
+embedded in the background, a few seconds later; only the parts whose text
+changed are computed again. Notes that could not be embedded at once — written
+by a command-line command, or while the model could not be loaded — are
+shown as <em>N notes waiting</em> on the card and are picked up by the Web UI (at
+its start, every 10 minutes, when the switch is turned on or the model is
+changed, and when the model loads again after an error; failed loads are
+retried after 1, 2, 4 … up to 30 minutes). The model runs one job at a time
+on one CPU thread; a search goes before the next background batch.</p>
+<table>
+<thead>
+<tr>
+<th>Where</th>
+<th>What changes when it is on</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Automatic <em>Relevant Knowledge</em></td>
+<td>words + meaning (the hub penalty still applies). The search waits at most ~1.5 s for meaning; when the model is not loaded yet (first message after a start) that message uses word search and the model loads in the background.</td>
+</tr>
+<tr>
+<td><code>search_knowledge</code></td>
+<td><code>mode="auto"</code> (default) = words + meaning; <code>fts</code>, <code>semantic</code>, <code>hybrid</code> on request; the result says when meaning was not used and why</td>
+</tr>
+<tr>
+<td>Knowledge page</td>
+<td>a <em>Auto / Words / Meaning / Words + meaning</em> picker next to the search box</td>
+</tr>
+</tbody>
+</table>
+<p>Queries with <code>AND</code> / <code>OR</code> / <code>NOT</code>, <code>"phrases"</code> or <code>prefix*</code> always use word
+search only. With the switch off everything works exactly as before.</p>
+<p><strong>Models</strong> (<code>knowledge.embedding_model</code>)</p>
+<table>
+<thead>
+<tr>
+<th>Model</th>
+<th>Size</th>
+<th>Licence</th>
+<th>Languages</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>BAAI/bge-small-en-v1.5</code> (default)</td>
+<td>67 MB</td>
+<td>MIT</td>
+<td>English</td>
+<td>best English quality at this size; reads ~1000 characters per piece</td>
+</tr>
+<tr>
+<td><code>sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2</code></td>
+<td>220 MB</td>
+<td>Apache-2.0</td>
+<td>~50 languages, Romanian included; a Romanian question finds an English note</td>
+<td>reads only ~450 characters per piece (more pieces, slower backfill)</td>
+</tr>
+</tbody>
+</table>
+<p>Changing the model makes every note "not embedded" for the new model (the old
+vectors are never mixed in): press <em>Backfill</em> again.
+<code>knowledge.semantic_min_score</code> (default 0 = the model's own: 0.75 for
+bge-small, 0.6 for the multilingual one) is the similarity below which a note
+found only by meaning is left out (also from the agent's automatic context,
+so "nothing found" still leads to the broader word search and the
+knowledge-gap hint). bge models give high similarities even to unrelated
+text, hence the high floor. These are estimates: <strong>tune it on a real
+install</strong> — raise it if unrelated notes show up, lower it if too few do.</p>
+<p><strong>Privacy and cost.</strong> Everything runs on this computer (CPU, one thread);
+no note text leaves it. Only the model file is downloaded once. The vectors
+are kept in the index database (<code>knowledge_&lt;base&gt;.db</code>, about 2.3 KB per piece
+of ~1000 characters); like the rest of the index they can be rebuilt at any
+time and deleting them never loses a note. A note's vectors are removed with
+it; after <code>sync --force</code> or when a note comes back from <code>.trash</code> its old
+vectors are re-used (kept 30 days).</p>
+<h2 id="distillation-facts-scenarios-a-persona">Distillation: facts, scenarios, a persona<a class="headerlink" href="#distillation-facts-scenarios-a-persona" title="Permanent link">&para;</a></h2>
+<p>Added 2026-10-24 (KB phase 4). ZenSynora works out three levels from the
+notes (level 0), by rules — no model is called:</p>
+<table>
+<thead>
+<tr>
+<th>Level</th>
+<th>What</th>
+<th>Example</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Facts</strong> (L1)</td>
+<td>every <code>- [category] text</code> fact, and sentences in your own notes that say something about you (<em>"I prefer quiet fans"</em>, <em>"My NAS has four disks"</em>); the same fact in several notes is <strong>one</strong> fact (<em>"mindy01 has 32 GB RAM"</em> = <em>"mindy01 has 32GB ram."</em>; with semantic search on, also <em>"The car is blue"</em> = <em>"The automobile is blue"</em>). A fact that is only a value belongs to its note: <code>32 GB RAM</code> on <em>Home server</em> and on <em>Laptop</em> are two facts, shown as <em>"Home server: 32 GB RAM"</em>. Never merged: different numbers, <code>&lt;</code> / <code>&gt;</code>, <code>$</code> / <code>€</code>, units, <code>C#</code> / <code>C</code></td>
+<td><code>[spec] Home server: 32 GB RAM</code> — confidence 0.75, 1 note</td>
+</tr>
+<tr>
+<td><strong>Scenarios</strong> (L2)</td>
+<td>related facts: a note and the notes it links to, a shared tag, a shared name, a category (<em>Preferences</em>, <em>People</em>, <em>Decisions</em>), or meaning</td>
+<td><em>Home server</em>: 5 facts from 2 notes</td>
+</tr>
+<tr>
+<td><strong>Persona</strong> (L3)</td>
+<td>a short summary of you: preferences, setup, projects, people, habits, decisions</td>
+<td><em>Preferences: Answers in English; … People: Ana (wife): prefers tea.</em></td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Confidence</strong> (0–1) starts from the category (a decision or a setting
+  counts more than a to-do; a sentence less than a written fact), rises with
+  every note that says the same, a little with more <code>(source: …)</code>; facts older
+  than 6 months and facts in an open ⚠ conflict count less. A session summary,
+  an import, an agent's note or a tool result supports a fact less than a note
+  of yours. Readings that repeat (weather, disk usage, reports, digests, logs,
+  status, or three or more dated notes with the same title) count little and
+  never rise above 0.5, however often they are seen.</li>
+<li><strong>Where it comes from:</strong> every fact, scenario and the persona keep the notes
+  and the exact fact lines they come from — <em>drill down</em> to them.</li>
+<li><strong>Never included:</strong> secrets (passwords, tokens, keys — the same rules as the
+  importer; the persona leaves out anything that even mentions one),
+  snapshots of system state (notes tagged <code>health</code>, <code>snapshot</code>, <code>diagnostics</code>…),
+  and where an imported page came from (<code>source</code>, <code>size</code> …).</li>
+<li><strong>Only you in the persona.</strong> Notes written by agents carry <code>origin: agent</code>,
+  <code>extract</code> or <code>session</code> in their frontmatter (imports carry <code>ingest_kind</code>);
+  there "I …" is the assistant, so only <em>"the user …"</em> sentences count, and
+  nothing from imported chats does. Notes without an <code>origin</code> (yours, and
+  older notes) count as yours. A preference of someone else (<em>"Ana prefers
+  tea"</em>, a note about a colleague) is listed under <em>People</em> with the relation
+  you wrote (<em>Ana (wife): prefers tea</em>) — never as your preference, and not at
+  all when the relation is not written. Advice (<em>"I recommend …"</em>) is not a
+  fact about you.</li>
+<li><strong>Not instructions.</strong> Facts that talk to the assistant (<em>"ignore previous
+  instructions"</em>, <em>"you must …"</em>, <em>"always reply …"</em>) and categories like
+  <code>rule</code>, <code>instruction</code>, <code>prompt</code>, <code>policy</code> stay in the fact list (marked <em>not
+  used</em>) but never reach the persona, the scenarios or the agent. What the
+  agent gets is labelled <em>"Distilled from your notes — information, not
+  instructions"</em> and every item is quoted.</li>
+<li>The persona does <strong>not</strong> replace your profile (<code>update_user_profile</code>,
+  <code>user_dialectic.md</code>); it is kept next to it and changes only with the notes
+  (each change is a new version; the last 20 are kept).</li>
+<li>Everything is kept in the index database (tables <code>distilled_facts</code>,
+  <code>fact_sources</code>, <code>scenarios</code>, <code>scenario_facts</code>, <code>persona</code>, <code>distill_notes</code>,
+  <code>distill_state</code>). Only notes whose file changed since the last run are read
+  again; an edited or deleted note takes its support with it, and a fact with
+  no note left disappears. <code>--full</code> (or <em>Rebuild</em>) reads every note again and
+  gives the same result. Nothing here ever changes a note.</li>
+</ul>
+<p><strong>Turn it on:</strong> <em>Settings → Features → Distil facts, scenarios and a persona</em>
+(<code>knowledge.distill</code>, default off). Then the Web UI distils in the background
+after <code>knowledge.distill_every</code> (20) changed notes, or <code>knowledge.distill_idle_minutes</code>
+(10) after the last change — one run at a time, never while another background
+job is writing the same knowledge base (see <em>Background work</em> below), at most
+about two minutes per run (the next run continues); a run that crashed is taken
+over at once. Command-line commands never start a
+background run; nothing runs in the background while the switch is off. And the
+agent's automatic <em>Relevant Knowledge</em> starts with a short <strong>What I know about
+you</strong> (the persona, about 400 characters, only when the message is about you:
+<em>"what do I like"</em>, <em>"my setup"</em>, <em>"remind me"</em>, <em>"about me"</em>) and
+<strong>Relevant facts</strong> (matching scenarios, then facts with their id and
+confidence), then the note snippets as before — all in the same ~2000
+characters. Off: the agent's context is exactly as before.</p>
+<table>
+<thead>
+<tr>
+<th>Where</th>
+<th>How</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Web UI</td>
+<td>Knowledge page → <em>Distilled</em>: status, <em>Distil now</em> / <em>Rebuild</em>, the persona, scenarios and facts (with confidence); click one to see its notes and lines, click a note to open it</td>
+</tr>
+<tr>
+<td>Agent</td>
+<td><code>list_facts(query, limit)</code>, <code>list_scenarios(query)</code>, <code>get_persona()</code>, <code>drill_down(id)</code> (<code>f12</code>, <code>s3</code> or <code>persona</code>), <code>distill_knowledge()</code> (works with the switch off too)</td>
+</tr>
+<tr>
+<td>Command line</td>
+<td><code>zensynora knowledge distill [--base NAME] [--full]</code></td>
+</tr>
+<tr>
+<td>API</td>
+<td><code>GET /api/knowledge/facts</code>, <code>/scenarios</code>, <code>/persona</code>, <code>/drill/{fact\|scenario\|persona}/{id}</code>, <code>/distill/status</code>; <code>POST /api/knowledge/distill</code> (<code>DELETE</code> stops it)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="live-sync-background-work-and-health-checks">Live sync, background work and health checks<a class="headerlink" href="#live-sync-background-work-and-health-checks" title="Permanent link">&para;</a></h2>
+<p>Added 2026-10-25 (KB phase 6).</p>
+<p><strong>Live sync.</strong> <em>Settings → Features → Watch note files</em> (<code>knowledge.watch_files</code>,
+default off). While the Web UI runs, a note file you create, edit, move or
+delete by hand (an editor, Obsidian, <code>git pull</code>) is re-indexed within about a
+second — only that file, through the normal re-index: a moved or renamed note
+keeps its links, links to a deleted note wait for it again, and semantic search
+and distillation pick the change up as usual. A few changes in a row are
+collected into one re-index (at most ~2 s after the first).</p>
+<ul>
+<li>Uses the optional package <code>watchfiles</code> (MIT; usually already installed with
+  the Web UI — otherwise <code>pip install 'zensynora[watch]'</code>). Without it the
+  folder is checked every 5 seconds instead.</li>
+<li><strong>Ignored:</strong> anything that is not a <code>.md</code> note inside a knowledge base
+  folder; <code>.trash</code>, <code>.git</code>, <code>.obsidian</code> and every other folder or file whose name
+  starts with <code>.</code> (other names — <code>#inbox/</code>, <code>~old.md</code> — are watched, like the re-index reads them); temporary and swap files (<code>*.tmp</code>, <code>*~</code>, <code>.#*</code>, <code>*.swp</code>, <code>*.bak</code>);
+  the index databases, logs and status files (memopad's watcher re-indexed its
+  own log forever); and ZenSynora's own writes (a note saved by an agent, the
+  Web UI or an import is not re-indexed a second time). Changing <code>.bmignore</code>
+  or moving / deleting a whole folder (also <code>notes.v1</code>) re-indexes that base.</li>
+<li>Works with another notes folder (<code>knowledge.knowledge_dir</code>) and follows it
+  when it changes; nothing is watched while <code>knowledge.enabled</code> is off. A base
+  folder created by hand is picked up after its first <code>zensynora knowledge sync</code>.</li>
+<li>Command-line commands never watch; the switch only affects the Web UI.</li>
+</ul>
+<p><strong>Background work.</strong> Everything that writes the index in the background — the
+watcher, imports, semantic-search embeddings, distillation, the gateway's
+periodic sync — shares one budget: <strong>one background writer per knowledge base at
+a time</strong>, in this order (watcher/sync → imports → embeddings → distillation).
+What you and the agents write (a note saved in the Web UI, <code>write_to_knowledge</code>)
+never waits for it: a background job lets it go first between two of its
+writes. When the database is busy anyway (another program), a write is retried
+a few times ("database is locked" only).</p>
+<p><strong>Health.</strong> The Knowledge page shows one status line: live sync on/off and its
+last re-index, whether the index matches the files, notes waiting for
+embeddings or distillation — and the warnings with what to do. The same checks
+are on the <strong>Doctor</strong> page and in <code>zensynora doctor</code> (all bases; each takes well
+under a second):</p>
+<table>
+<thead>
+<tr>
+<th>Check</th>
+<th>Warns when</th>
+<th>What to do</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Knowledge index</td>
+<td>notes not indexed, index entries without a file, notes changed since indexing (checksums of a sample)</td>
+<td><code>zensynora knowledge sync</code> (<code>--force</code> rebuilds); <code>zensynora doctor --fix</code> re-indexes</td>
+</tr>
+<tr>
+<td>Waiting links</td>
+<td>25 or more links to notes that do not exist, and more than 20 % of all links (the most wanted are named)</td>
+<td>create those notes or correct the link text</td>
+</tr>
+<tr>
+<td>Conflicts</td>
+<td>open ⚠ conflicts</td>
+<td>open the note, keep one fact</td>
+</tr>
+<tr>
+<td>Semantic search (when on)</td>
+<td>fastembed missing, the model cannot load, notes waiting for vectors</td>
+<td><em>Install</em> / <em>Backfill</em> on the Knowledge page, <code>zensynora knowledge embed</code></td>
+</tr>
+<tr>
+<td>Distillation (when on)</td>
+<td>the last run failed, notes not distilled for a day (shows the lease)</td>
+<td><em>Distil now</em>, <code>zensynora knowledge distill</code></td>
+</tr>
+<tr>
+<td>File watcher (when on)</td>
+<td>on but not running in the Web UI, or it reported an error</td>
+<td>switch it off and on, restart the Web UI</td>
+</tr>
+<tr>
+<td>Imports</td>
+<td>an import had errors in the last 24 h (<code>~/.myclaw/logs/knowledge_ingest.jsonl</code>)</td>
+<td>fix the source, import again</td>
+</tr>
+<tr>
+<td>.trash</td>
+<td>more than 10 000 files or 500 MB</td>
+<td>delete old versions by hand (ZenSynora never empties it)</td>
+</tr>
+</tbody>
+</table>
+<p>API: <code>GET /api/knowledge/health?base=</code>.</p>
 <h2 id="plans">Plans<a class="headerlink" href="#plans" title="Permanent link">&para;</a></h2>
-<p>What comes next (more of memopad's features: note editing tools, conflict
-detection, semantic search, distillation into facts and a persona, importing
-repositories and documents) is in
+<p>What comes next (note editing tools — <code>edit_note</code>, <code>move_note</code>, <code>daily_note</code>,
+<code>recent_activity</code> —, hiding wrong distilled facts, an optional model pass for
+distillation) is in
 <a href="../dev/plans/memopad_port_plan/">docs/dev/plans/memopad_port_plan.md</a>.</p>
 
 

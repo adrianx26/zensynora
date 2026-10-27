@@ -1459,7 +1459,8 @@
 
 <h1 id="zensynora-architecture">ZenSynora Architecture<a class="headerlink" href="#zensynora-architecture" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status:</strong> reflects <strong>v0.7.5</strong> (2026-10-14). Updated from the v0.4.1
+<p><strong>Status:</strong> reflects <strong>v0.8.0</strong> (2026-10-27; knowledge base: see the
+<a href="../knowledge_base_guide/">Knowledge base guide</a>). Updated from the v0.4.1
 version: adds the Web UI settings API, provider routing changes, the safe
 updater and the doctor/medic rewrite (0.7.0); chat channels, agent-to-agent
 events, jobs, backups, model rotation, custom providers and approval-gated
@@ -1508,6 +1509,11 @@ fit together. It complements <a href="../architecture_diagram/"><code>docs/archi
 ├── llm_errors.py            # Readable model-server errors + rotation cooldowns [0.7.3]
 ├── knowledge/               # scope.py: one shared knowledge base for internal ids [0.7.5]
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
+│   ├── quality.py           # fact sources, categories, conflicts, hub penalty, duplicates [0.8.0]
+│   ├── semantic.py          # optional embeddings, embed on write, hybrid search [0.8.0]
+│   ├── distill.py           # facts, scenarios, persona, drill_down [0.8.0]
+│   ├── ingest/              # assimilate URL/GitHub/folder/documents, chat &amp; vault importers [0.8.0]
+│   ├── budget.py · watch.py · health.py  # write budget, live re-index, health checks [0.8.0]
 │   ├── path_reasoning.py    # find_paths / shortest_path [Sprint 7]
 │   ├── storage.py           # Batched parallel note reads [Sprint 1 + 8]; write_note keeps text + tags + facts + links [Unreleased]
 │   ├── extract.py           # Model output → notes with tags, facts, links; ✨ enrich [Unreleased]
@@ -1543,7 +1549,8 @@ fit together. It complements <a href="../architecture_diagram/"><code>docs/archi
 │   ├── doctor_api.py        # Doctor report, errors viewer, report download [Unreleased]
 │   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
 │   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [Unreleased]
-│   ├── knowledge_api.py     # Knowledge page: graph, notes, edit, trash, search [Unreleased]
+│   ├── knowledge_api.py     # Knowledge page: graph, notes, edit, trash, search, conflicts, duplicates [0.8.0]
+│   ├── knowledge_{import,semantic,distill,health}_api.py  # import jobs, semantic status/backfill/install, distillation, health [0.8.0]
 │   └── skills_api.py        # Skills page: list, edit, import, assign [0.7.5]
 └── ... (~50 utility modules)
 
@@ -2016,8 +2023,32 @@ silently fall back to Ollama.</p>
 <td>2</td>
 </tr>
 <tr>
+<td><code>test_kb_phase2_quality.py</code></td>
+<td>98</td>
+</tr>
+<tr>
+<td><code>test_kb_phase3_semantic.py</code></td>
+<td>54</td>
+</tr>
+<tr>
+<td><code>test_kb_phase4_distill.py</code></td>
+<td>42</td>
+</tr>
+<tr>
+<td><code>test_kb_phase5_ingest.py</code></td>
+<td>51</td>
+</tr>
+<tr>
+<td><code>test_kb_phase5_wiring.py</code></td>
+<td>1</td>
+</tr>
+<tr>
+<td><code>test_kb_phase6_robust.py</code></td>
+<td>39</td>
+</tr>
+<tr>
 <td><strong>Total</strong></td>
-<td><strong>844</strong></td>
+<td><strong>1129</strong></td>
 </tr>
 </tbody>
 </table>

@@ -1435,6 +1435,13 @@ updates</em> check warns ahead of time. <code>uninstall.sh</code> offers to remo
 ZenSynora's own Node.js; a system Node.js is never touched. Updates run with
 the new updater as soon as it is downloaded (updater protocol 3), so this
 already applies to the first update after this change.</p>
+<p><strong>Optional packages (2026-10-27, updater protocol 4).</strong> Packages you added
+yourself — for example <code>fastembed</code> installed by the Knowledge page's
+<em>Install</em> button for semantic search, or the <code>[ingest]</code> / <code>[watch]</code> extras —
+are installed again into the new release. When such a package belongs to one
+of ZenSynora's optional extras (<code>semantic</code>, <code>ingest</code>, <code>watch</code> in
+<code>pyproject.toml</code>), it is installed with the version range of the <strong>new</strong>
+release, so an update can never pull an incompatible version.</p>
 <h2 id="layout">Layout<a class="headerlink" href="#layout" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>~/.local/share/zensynora/
   source -&gt; releases/0.6.0-20261013T203000   # what everything runs from

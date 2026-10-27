@@ -1037,6 +1037,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#26-reviews-of-kb-phases-26-found-unsafe-defaults-before-release-2026-10-24-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.6 Reviews of KB phases 2–6 found unsafe defaults before release (2026-10-24 … 27)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1588,6 +1599,17 @@
     <span class="md-ellipsis">
       
         2.5 An independent review of the fix found data loss (2026-10-24, KB phase 0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#26-reviews-of-kb-phases-26-found-unsafe-defaults-before-release-2026-10-24-27" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.6 Reviews of KB phases 2–6 found unsafe defaults before release (2026-10-24 … 27)
       
     </span>
   </a>
@@ -2225,6 +2247,38 @@ in short form, in <code>AGENTS.md</code>.</p>
 </tbody>
 </table>
 <hr />
+<h3 id="26-reviews-of-kb-phases-26-found-unsafe-defaults-before-release-2026-10-24-27">2.6 Reviews of KB phases 2–6 found unsafe defaults before release (2026-10-24 … 27)<a class="headerlink" href="#26-reviews-of-kb-phases-26-found-unsafe-defaults-before-release-2026-10-24-27" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>(All found before release, by a separate review agent per phase.) Phase 2: about 12 of 20 "conflicts" on realistic notes were not contradictions (<code>mindy01</code> vs <code>mindy02</code>, temperatures of different days, versions); a <code>|</code> in a fact became its "source"; shell commands could land in fact sources. Phase 5: DNS-rebinding SSRF, symlinks in an imported vault copied <code>/etc/passwd</code> and the config, <code>credentials.json</code> and hidden folders readable inside the workspace, passwords in URLs stored, imports that kept writing after a timeout, re-imports replacing hand-written notes. Phase 3: hybrid ranking pushed the exact keyword hit out. Phase 4: the persona was built from the assistant's and third parties' sentences, a note could inject "ignore previous instructions" into "What I know about you", <code>admin / password</code> pairs reached the agent context, a full rebuild kept facts of deleted notes. Phase 6: renamed folders with a dot and <code>#inbox/</code> folders were not watched.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>Features tested with the author's own examples only: heuristics (conflicts, duplicates, persona) were never run on notes shaped like the real ones; security checks covered the obvious inputs (IPs, <code>~/.ssh</code>) but not the second step (DNS answer at connect time, symlink targets, workspace branch); derived text was put into the prompt as if it were the user's own words.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Each review's findings fixed with regression tests built from the reviewer's corpus and scripts: strict conflict rules (settings/specs only, ids are not values), pinned and re-checked fetches, the same hidden/secret rules on every path, URL credentials stripped everywhere, deadlines/cancel checked before every write, ingest never replaces a note it did not write, keyword hits kept on top, persona only from facts about the user (note <code>origin</code>), distilled context quoted and labelled as information, credential pairs treated as secrets.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td>An independent review agent per phase with a realistic corpus (notes like this user's), fuzzing, old databases from the previous phase, parallel processes, 2 000–10 000-note timings.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Run every heuristic on a realistic corpus and count false positives before shipping. Anything derived from notes that reaches a prompt is quoted and labelled as data, never as instructions. Security checks must cover the step after the check (connect, follow, resolve).</td>
+</tr>
+</tbody>
+</table>
+<hr />
 <h2 id="3-code-structure">3. Code structure<a class="headerlink" href="#3-code-structure" title="Permanent link">&para;</a></h2>
 <h3 id="31-broken-relative-imports-after-myclawtools-became-a-package-2026-10-18-pr-31">3.1 Broken relative imports after <code>myclaw/tools</code> became a package (2026-10-18, PR #31)<a class="headerlink" href="#31-broken-relative-imports-after-myclawtools-became-a-package-2026-10-18-pr-31" title="Permanent link">&para;</a></h3>
 <table>
@@ -2681,6 +2735,10 @@ in short form, in <code>AGENTS.md</code>.</p>
 <li><strong>Ported code:</strong> test the feature end to end, not just that it imports; a full rebuild from the source of truth must equal the step-by-step result.</li>
 <li><strong>User files:</strong> never overwrite or delete a user's file without keeping the previous version (<code>.trash/</code>) when anything would be lost.</li>
 <li><strong>Independent review:</strong> changes to stored user data are reviewed by an agent or person that did not write them, with real experiments, before merge.</li>
+<li><strong>Heuristics:</strong> run them on a realistic corpus (notes shaped like the real ones) and count false positives before shipping; when in doubt, flag less.</li>
+<li><strong>Prompt hygiene:</strong> text derived from notes, imports or web pages that reaches a prompt is quoted and labelled as information, never as instructions; it never speaks as the user.</li>
+<li><strong>Check the next step too:</strong> a URL check must hold at connect time (pin the address, re-check redirects), a path check must hold after following symlinks, and every entry path (agent, CLI, upload) uses the same rules.</li>
+<li><strong>Optional and off by default:</strong> features that change what agents see or run in the background are opt-in; heavy libraries are optional extras; no thread runs while a feature is off.</li>
 </ol>
 
 
