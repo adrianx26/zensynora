@@ -1,0 +1,1344 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+        <link rel="canonical" href="https://adrianx26.github.io/zensynora/dev/plans/memopad_port_plan/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+    
+    
+      
+        <title>Plan: memopad features for the ZenSynora knowledge base - ZenSynora Documentation</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.57a0d79d.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    <body dir="ltr">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#plan-memopad-features-for-the-zensynora-knowledge-base" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="ZenSynora Documentation" class="md-header__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            ZenSynora Documentation
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Plan: memopad features for the ZenSynora knowledge base
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="ZenSynora Documentation" class="md-nav__button md-logo" aria-label="ZenSynora Documentation" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    ZenSynora Documentation
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/adrianx26/zensynora" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    GitHub
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Using ZenSynora
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Using ZenSynora
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../webui_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../knowledge_base_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Knowledge base
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../telegram_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Telegram
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../UPDATING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Updating
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../medic_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic & Doctor
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../llm_recommendations/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Choosing an LLM
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../agent_catalog/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent catalog
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../agent_swarm_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Agent swarms
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../scheduler_features_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler features
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../TASK_TIMER_INTEGRATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Task timer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../backends_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Execution backends
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../scrapling_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Web scraping
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../skill_adapter_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    External skills
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../newtech_agent_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    NewTech agent
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    How it works
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    How it works
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture_diagram/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Visual guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../ARCHITECTURE/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../MEDIC_CHANGE_MGMT/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Medic change management
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../incidents_and_lessons/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Incidents & lessons
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    History
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    History
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../archive/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Archive
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer notes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#phase-0-fix-what-exists-done" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 0 — fix what exists (done)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-1-note-tools-agents-are-missing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 1 — note tools agents are missing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-2-quality-layer-memopad-memgraphrag" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 2 — quality layer (memopad "MemGraphRAG")
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-3-semantic-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 3 — semantic search
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-4-l0l3-distillation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 4 — L0–L3 distillation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-5-ingestion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 5 — ingestion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#phase-6-robustness-and-live-sync" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Phase 6 — robustness and live sync
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#optional" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optional
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#not-porting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not porting
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#memopad-pitfalls-to-avoid-from-its-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        memopad pitfalls to avoid (from its history)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="plan-memopad-features-for-the-zensynora-knowledge-base">Plan: memopad features for the ZenSynora knowledge base<a class="headerlink" href="#plan-memopad-features-for-the-zensynora-knowledge-base" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p>Written 2026-10-23 from a review of <a href="https://github.com/adrianx26/memopad">memopad</a>
+v0.21.6 (HEAD <code>e31a76f</code>, 219 Python files and its full git history) and of
+ZenSynora's <code>myclaw/knowledge/</code>. ZenSynora's knowledge base is a port of
+memopad's Markdown + SQLite design.</p>
+</blockquote>
+<p><strong>Status:</strong> Phase 0 done on branch <code>kb-phase0-fixes</code> (2026-10-24), including
+the fixes from an independent review (see incidents 2.4 and 2.5 in
+<a href="../../../incidents_and_lessons/">incidents_and_lessons.md</a>). Phases 1–6 not
+started; each needs approval.</p>
+<p>Two findings shaped the plan:</p>
+<ul>
+<li>Part of what ZenSynora had already copied from memopad never worked (links
+  by title were dropped, editing a note deleted the links to it, <code>.trash</code> was
+  re-indexed, agents never saw note text). Phase 0 fixes this first, because
+  every later phase relies on the links being stored correctly.</li>
+<li>memopad's release of 2026-08-06 (commit <code>5c3b6c4</code>) was built from an older
+  tree and silently removed persistent embeddings (sqlite-vec),
+  <code>reindex_state</code> and <code>doctor --health</code>. Those must be ported from memopad's
+  git history, not from its current version.</li>
+</ul>
+<h2 id="phase-0-fix-what-exists-done">Phase 0 — fix what exists (done)<a class="headerlink" href="#phase-0-fix-what-exists-done" title="Permanent link">&para;</a></h2>
+<p>Contracts and division of work: <a href="../kb_phase0_contracts/">kb_phase0_contracts.md</a>.
+User documentation: <a href="../../../knowledge_base_guide/">knowledge_base_guide.md</a>.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Fixed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>B1</td>
+<td>Re-indexing a note replaced <em>all</em> its relations (both directions): backlinks vanished</td>
+</tr>
+<tr>
+<td>B2</td>
+<td>Links resolved only by exact permalink: links by title/alias were dropped; no forward links</td>
+</tr>
+<tr>
+<td>B3</td>
+<td><code>.trash</code> (and other dot-folders) re-indexed by <code>rglob</code></td>
+</tr>
+<tr>
+<td>B4/B5</td>
+<td>Agents never got note text (automatic context, <code>read_knowledge</code>, <code>build_context</code>)</td>
+</tr>
+<tr>
+<td>B6</td>
+<td>Checksum / mtime / path / name not updated for existing entries</td>
+</tr>
+<tr>
+<td>B7</td>
+<td><code>sync(since=…)</code> deleted every note not modified recently</td>
+</tr>
+<tr>
+<td>B8</td>
+<td>Circuit breaker reset on every call</td>
+</tr>
+<tr>
+<td>B9</td>
+<td>Detected moves were deleted afterwards</td>
+</tr>
+<tr>
+<td>B11</td>
+<td>Knowledge gaps from the Web UI never logged; greetings logged as gaps</td>
+</tr>
+<tr>
+<td>B12</td>
+<td>Scalar <code>tags:</code> split into characters; task checkboxes parsed as facts</td>
+</tr>
+<tr>
+<td>B13</td>
+<td>Tag search missed frontmatter tags</td>
+</tr>
+<tr>
+<td>B14</td>
+<td><code>__all__</code> listed names that were not imported</td>
+</tr>
+<tr>
+<td>—</td>
+<td>Aliases and metadata never stored; <code>knowledge.enabled</code> and <code>knowledge.knowledge_dir</code> ignored; a session-summary note per turn; MCP tool parameters all typed as string; CLI fixed to the <code>default</code> base; system prompt said "save credentials"; dead <code>Memory.extract_knowledge_candidates</code></td>
+</tr>
+</tbody>
+</table>
+<p>Not fixed in Phase 0 (follow-ups): the knowledge researcher (only scheduled
+by the gateway/CLI, not the Web UI; re-researches the first 5 gaps forever;
+ignores <code>user_id</code> and <code>knowledge.enabled</code>; scrapes Google); <code>Agent._kb_gaps</code>
+is a class-level dict that never shrinks; <code>myclaw/vector/</code> and
+<code>knowledge_spaces</code> are still unused; <code>search_advanced</code> still ranks the
+"semantic" list with the FTS rank (Phase 3); <code>write_note</code> with the same
+title replaces facts and links — the previous version goes to <code>.trash/</code> when
+something is lost (Phase 1 adds <code>edit_note</code>); the hundreds of old
+<code>session-summary-YYYYMMDD-HHMMSS</code> notes on existing installs are left as
+they are (they could be merged into the new one-note-per-day form).</p>
+<h2 id="phase-1-note-tools-agents-are-missing">Phase 1 — note tools agents are missing<a class="headerlink" href="#phase-1-note-tools-agents-are-missing" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>edit_note</code>: append, prepend, find-and-replace, replace one section.</li>
+<li><code>move_note</code>, <code>delete_note</code> (to trash), <code>backlinks</code>, <code>recent_activity</code>,
+  <code>daily_note</code> (journal note per day, linked to the previous/next day).</li>
+<li><code>search_by_metadata</code> with operators (<code>$in</code>, <code>$gt</code>, <code>$between</code>, dotted
+  paths); <code>build_context("memory://…", depth)</code> with timeframes.</li>
+<li>Inline <code>[[links]]</code> in the text become <code>links_to</code> relations; <code>(…)</code> at the
+  end of a fact line is kept as its context.</li>
+<li>Web UI: per-section edit, <em>Recent</em>, daily-note button.</li>
+</ul>
+<h2 id="phase-2-quality-layer-memopad-memgraphrag">Phase 2 — quality layer (memopad "MemGraphRAG")<a class="headerlink" href="#phase-2-quality-layer-memopad-memgraphrag" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Observation-category registry with suggestions (<code>Fact</code> / <code>facts</code> → <code>fact</code>).</li>
+<li>Conflict detection between facts of one category on one note: flagged ⚠
+  with <em>Keep A / Keep B / Both are fine</em> (detection only; memopad's own review
+  called its check too aggressive — use a stricter threshold).</li>
+<li>Hub penalty in context building; provenance of every fact (conversation,
+  tool, URL, file); <code>optimize_storage</code> (merge duplicates with redirects,
+  preview first).</li>
+</ul>
+<h2 id="phase-3-semantic-search">Phase 3 — semantic search<a class="headerlink" href="#phase-3-semantic-search" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>fastembed</code> <code>bge-small-en-v1.5</code> (local, ~30 MB), <code>threads=1</code>, inference off
+  the event loop; vectors in SQLite (reuse <code>myclaw/vector/</code>).</li>
+<li>Embed on write (memopad only has a manual backfill), plus a backfill
+  command and a Knowledge-page button. Hybrid search (FTS + vectors, RRF) for
+  <code>search_knowledge</code> and the automatic context. Off by default.</li>
+</ul>
+<h2 id="phase-4-l0l3-distillation">Phase 4 — L0–L3 distillation<a class="headerlink" href="#phase-4-l0l3-distillation" title="Permanent link">&para;</a></h2>
+<ul>
+<li>L1 facts (deduplicated, confidence), L2 scenarios (clusters), L3 persona;
+  rule-based like memopad, optional LLM extractor later. Higher levels rank
+  first in the context; <code>drill_down</code> to the source note. Background scheduler
+  under the shared write limit. Web UI: level filter, Persona panel. Opt-in.</li>
+</ul>
+<h2 id="phase-5-ingestion">Phase 5 — ingestion<a class="headerlink" href="#phase-5-ingestion" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>assimilate</code>: URL, GitHub repo, local folder, PDF/DOCX/XLSX/image → linked
+  notes plus a Mermaid diagram, as one tool call.</li>
+<li>Importers: ChatGPT and Claude.ai exports, MCP memory JSON, a Markdown
+  folder (Obsidian vault). Upload on the Knowledge page.</li>
+</ul>
+<h2 id="phase-6-robustness-and-live-sync">Phase 6 — robustness and live sync<a class="headerlink" href="#phase-6-robustness-and-live-sync" title="Permanent link">&para;</a></h2>
+<ul>
+<li>File watcher in the Web UI process (ignores its own logs/status files —
+  memopad's self-loop); one shared write limit for all background writers;
+  retry on "database is locked"; doctor checks for index drift, broken links,
+  conflicts, embedding coverage, distillation status.</li>
+</ul>
+<h2 id="optional">Optional<a class="headerlink" href="#optional" title="Permanent link">&para;</a></h2>
+<p>Short-term session layering (G6), retrieval caps/timeouts (G4), CodeGraph
+(G2), skills as notes (G1 — probably covered by the Skills page), Obsidian
+<code>.canvas</code> export.</p>
+<h2 id="not-porting">Not porting<a class="headerlink" href="#not-porting" title="Permanent link">&para;</a></h2>
+<p>Postgres and Stoolap backends, cloud sync, ChatGPT connector tools,
+Handlebars prompts, memopad's FastAPI v2 / FastMCP architecture and its
+multi-project configuration (ZenSynora's knowledge bases cover projects).</p>
+<h2 id="memopad-pitfalls-to-avoid-from-its-history">memopad pitfalls to avoid (from its history)<a class="headerlink" href="#memopad-pitfalls-to-avoid-from-its-history" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Unify background writers under one semaphore; <code>busy_timeout</code> 30 s and
+  retry only on "database is locked" (done in Phase 0: <code>busy_timeout</code>).</li>
+<li>Replace observations and relations of a note in one transaction (done in
+  Phase 0).</li>
+<li><code>strict</code> link resolution: never fuzzy-match on create (done in Phase 0).</li>
+<li>Watcher must ignore its own writes; embeddings need a composite primary key
+  and must be updated on write; onnx <code>threads=1</code>, inference off the event loop.</li>
+<li>Type hints importable on Python 3.11; map <code>IntegrityError</code> to HTTP 409.</li>
+<li>Conflict detection must not flag ordinary updates.</li>
+<li>A release must not revert features — compare the feature list before
+  tagging (memopad <code>5c3b6c4</code>).</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": [], "search": "../../../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.c21346df.min.js"></script>
+      
+    
+  </body>
+</html>

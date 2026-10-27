@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
     
     
       
@@ -29,7 +29,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.57a0d79d.min.css">
       
       
 
@@ -304,6 +304,34 @@
     
   
     Web UI guide
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../knowledge_base_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Knowledge base
   
 
     
@@ -987,6 +1015,28 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#24-links-never-reached-the-index-edits-erased-backlinks-2026-10-24-kb-phase-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Links never reached the index; edits erased backlinks (2026-10-24, KB phase 0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-an-independent-review-of-the-fix-found-data-loss-2026-10-24-kb-phase-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5 An independent review of the fix found data loss (2026-10-24, KB phase 0)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -1516,6 +1566,28 @@
     <span class="md-ellipsis">
       
         2.3 266 notes, but no tags, facts or links (2026-10-23)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#24-links-never-reached-the-index-edits-erased-backlinks-2026-10-24-kb-phase-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.4 Links never reached the index; edits erased backlinks (2026-10-24, KB phase 0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#25-an-independent-review-of-the-fix-found-data-loss-2026-10-24-kb-phase-0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.5 An independent review of the fix found data loss (2026-10-24, KB phase 0)
       
     </span>
   </a>
@@ -2090,6 +2162,69 @@ in short form, in <code>AGENTS.md</code>.</p>
 </tbody>
 </table>
 <hr />
+<h3 id="24-links-never-reached-the-index-edits-erased-backlinks-2026-10-24-kb-phase-0">2.4 Links never reached the index; edits erased backlinks (2026-10-24, KB phase 0)<a class="headerlink" href="#24-links-never-reached-the-index-edits-erased-backlinks-2026-10-24-kb-phase-0" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>After 2.3 notes had links in their files, but the index (search, <code>get_related_knowledge</code>, <code>build_context</code>) still knew almost none; agents only ever saw titles and facts, never note text; deleted notes came back in search; hundreds of <code>session-summary-…</code> notes.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>Code ported from memopad that never worked: relation targets were resolved only by exact permalink of an existing note (notes link by title), <code>clear_relations</code> deleted links in both directions on every re-index, <code>rglob</code> indexed <code>.trash/</code>, the <code>since</code> sync computed deletions from the subset of recent files, the circuit breaker lived in a per-call object, moves were deleted afterwards, aliases/metadata were never stored, and the agent context printed only titles and facts.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Link resolver (permalink, slug, name, title, alias) with waiting links (<code>pending_relations</code>), outgoing-only replace in one transaction, dot-folders skipped, deletions from a full listing, module-level breaker, moves keep the entry id, note text in every agent view, one summary note per day; migration 0003 rebuilds the index.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td>Reading memopad and ZenSynora side by side, then <code>tests/test_kb_phase0_*.py</code> (114 tests: write → index → re-index → force-rebuild must give the same links).</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Ported code needs an end-to-end test of the feature it claims (here: a link by title survives write, edit of either note, incremental sync and full rebuild). A rebuild from the source of truth must give the same index as the step-by-step updates.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="25-an-independent-review-of-the-fix-found-data-loss-2026-10-24-kb-phase-0">2.5 An independent review of the fix found data loss (2026-10-24, KB phase 0)<a class="headerlink" href="#25-an-independent-review-of-the-fix-found-data-loss-2026-10-24-kb-phase-0" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>(Found before release.) Writing a note with the title of a hand-written note in a sub-folder overwrote it without a copy; facts under a second heading or in a note titled "Links" were removed by the next save (also in older versions); agent search found nothing for a plain sentence; <code>tag:x NOT y</code> returned exactly the excluded notes; a sync could drop a note written at the same moment.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>New code found more existing files (index fallback) but kept "replace" semantics; the body extractor and the fact/link parser used different rules; boolean search had no fallback for plain text; deletions compared against a fresh entity list instead of the start-of-sync snapshot.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>A save that would lose anything first keeps the previous version in <code>.trash/</code>; facts and links are parsed and stripped by the same line rules everywhere; boolean mode only when the query has operators or quotes; deletions re-check the file just before deleting.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td>A separate review agent that had not seen the work, with reproduction scripts in a temporary HOME (fuzzing 30 000 search queries, old databases from <code>main</code>, 2000–4000-note timings, parallel processes).</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Any function that overwrites user files keeps the previous version when something would be lost. For changes to stored user data, have the work reviewed by someone who did not write it, with real experiments, before merging.</td>
+</tr>
+</tbody>
+</table>
+<hr />
 <h2 id="3-code-structure">3. Code structure<a class="headerlink" href="#3-code-structure" title="Permanent link">&para;</a></h2>
 <h3 id="31-broken-relative-imports-after-myclawtools-became-a-package-2026-10-18-pr-31">3.1 Broken relative imports after <code>myclaw/tools</code> became a package (2026-10-18, PR #31)<a class="headerlink" href="#31-broken-relative-imports-after-myclawtools-became-a-package-2026-10-18-pr-31" title="Permanent link">&para;</a></h3>
 <table>
@@ -2543,6 +2678,9 @@ in short form, in <code>AGENTS.md</code>.</p>
 <li><strong>Missing features show up as agent workarounds:</strong> when agents build their own tool for something, add it as a built-in.</li>
 <li><strong>Long operations:</strong> run ZenSynora as a service for updates and scheduled jobs.</li>
 <li><strong>After fixing an error, run the feature end to end</strong> — the next bug is often hidden behind the first.</li>
+<li><strong>Ported code:</strong> test the feature end to end, not just that it imports; a full rebuild from the source of truth must equal the step-by-step result.</li>
+<li><strong>User files:</strong> never overwrite or delete a user's file without keeping the previous version (<code>.trash/</code>) when anything would be lost.</li>
+<li><strong>Independent review:</strong> changes to stored user data are reviewed by an agent or person that did not write them, with real experiments, before merge.</li>
 </ol>
 
 
@@ -2593,10 +2731,10 @@ in short form, in <code>AGENTS.md</code>.</p>
     
       
       
-      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
       
     
   </body>
