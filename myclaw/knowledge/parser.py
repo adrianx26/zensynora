@@ -417,14 +417,74 @@ def parse_observations(content: str) -> List[Observation]:
         if not match:
             continue
         category = match.group(1).strip()
-        content_text = match.group(2).strip()
-        tags = TAG_PATTERN.findall(content_text)  # Extract tags from content
+        content_text, source, trailing_tags = split_source(match.group(2).strip())
+        tags = TAG_PATTERN.findall(content_text) + trailing_tags  # Extract tags from content
         clean_content = TAG_PATTERN.sub('', content_text).strip()
-        if not category or (category, clean_content) in seen:
+        # 2026-10-24 (KB phase 2 review): the source is part of the key — the
+        # same fact from two sources is two lines (dropping one lost data)
+        if not category or (category, clean_content, source) in seen:
             continue
-        seen.add((category, clean_content))
-        observations.append(Observation(category=category, content=clean_content, tags=tags))
+        seen.add((category, clean_content, source))
+        observations.append(Observation(category=category, content=clean_content, tags=tags,
+                                        provenance_path=source))
     return observations
+
+
+# 2026-10-24 (KB phase 2): where a fact comes from, written at the end of the
+# fact line: ``- [spec] 32 GB RAM #hw (source: tool read_file /etc/x)``. Only
+# this exact ``(source: …)`` form is special; any other trailing "(…)" stays
+# part of the fact. ``#tags`` may come after it. The source may contain
+# balanced parentheses and '#' (URLs), so it is cut off before tags are read.
+# 2026-10-24 (review): the LAST "(source:" is used, and only when its
+# parenthesis closes at the end of the line (only #tags may follow):
+# "cost (source: invoice) (approx)" is plain text.
+_SOURCE_OPEN = re.compile(r'\(source:', re.IGNORECASE)
+_TRAILING_TAGS = re.compile(r'^((?:\s+#\w+)*)\s*$')
+
+
+def split_source(text: str) -> Tuple[str, Optional[str], List[str]]:
+    """``(fact text, source or None, tags written after the source)``."""
+    text = text or ''
+    starts = [m.start() for m in _SOURCE_OPEN.finditer(text)]
+    if not starts:
+        return text, None, []
+    start = starts[-1]
+    depth = 0
+    close = -1
+    for i in range(start, len(text)):
+        ch = text[i]
+        if ch == '(':
+            depth += 1
+        elif ch == ')':
+            depth -= 1
+            if depth == 0:
+                close = i
+                break
+    if close == -1:
+        return text, None, []
+    tail = _TRAILING_TAGS.match(text[close + 1:])
+    content = text[:start].rstrip()
+    source = text[start + len('(source:'):close].strip()
+    if not tail or not content or not source:
+        return text, None, []
+    return content, source, TAG_PATTERN.findall(tail.group(1) or '')
+
+
+def format_source(source: Optional[str]) -> str:
+    """`` (source: …)`` for a fact line ("" without a source); one line, no ')' at the end."""
+    text = " ".join(str(source or "").split())
+    # a source must read back as written: no "(source:" inside, balanced "()"
+    text = _SOURCE_OPEN.sub("(", text)
+    depth = 0
+    for ch in text:
+        depth += 1 if ch == "(" else -1 if ch == ")" else 0
+        if depth < 0:
+            break
+    if depth != 0:
+        text = text.replace("(", "[").replace(")", "]")
+    if not text:
+        return ""
+    return f" (source: {text[:300]})"
 
 
 def parse_relations(content: str) -> List[Relation]:
@@ -699,7 +759,9 @@ def generate_markdown(note: Note) -> str:
         lines.append('')
         for obs in note.observations:
             tags_str = ' '.join(f'#{tag}' for tag in obs.tags) if obs.tags else ''
-            lines.append(f'- [{obs.category}] {obs.content} {tags_str}'.strip())
+            # 2026-10-24 (KB phase 2): the fact's source goes back to the file
+            lines.append(f'- [{obs.category}] {obs.content} {tags_str}'.strip()
+                         + format_source(getattr(obs, 'provenance_path', None)))
         lines.append('')
 
     # Relations section

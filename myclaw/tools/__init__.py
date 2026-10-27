@@ -61,6 +61,10 @@ from .kb import (
     get_knowledge_context, list_knowledge, sync_knowledge_base,
     get_related_knowledge, list_knowledge_tags,
     _extract_search_terms,
+    # KB phase 2 (2026-10-24): quality tools
+    knowledge_conflicts, resolve_knowledge_conflict, knowledge_categories, find_duplicate_notes,
+    # KB phase 4 (2026-10-24): distilled facts / scenarios / persona
+    list_facts, list_scenarios, get_persona, drill_down, distill_knowledge,
 )
 from .jobs import job_create, job_list, job_run, job_status, job_update  # noqa: E402
 from .scheduler import (
@@ -130,6 +134,9 @@ _LAZY_AGENT_TOOLS = {
     "list_skills":               ("myclaw.agent_skills",         "list_agent_skills",         "List all skills (name and what each is for)"),
     "send_telegram_message":     ("myclaw.channels.telegram",    "send_telegram_message",     "Send a Telegram message to the user through ZenSynora's own bot (only to allowed users)"),
     "create_agent":              ("myclaw.agent_team",           "create_agent",              "Create a new named agent (specialist) that can then be talked to and given tasks with delegate"),
+    # 2026-10-24 (KB phase 5): ingestion into the knowledge base
+    "assimilate":                ("myclaw.tools.ingest",         "assimilate",                "Read a web page, a GitHub repository (https://github.com/owner/repo) or a local file/folder (PDF, Word, Excel, text, code, images) into linked knowledge notes plus a Mermaid diagram of its structure, in one call; returns the overview note and the diagram"),
+    "import_knowledge":          ("myclaw.tools.ingest",         "import_knowledge",          "Import a ChatGPT or Claude.ai export (.zip/.json), an MCP memory file, a folder or zip of Markdown notes (Obsidian vault) or one document into the knowledge base (kind: auto, chatgpt, claude, mcp_memory, markdown, document)"),
     # Medic Agent
     "check_system_health":       ("myclaw.agents.medic_agent",   "check_system_health",       "Check overall system health status"),
     "check_memory_usage":        ("myclaw.agents.medic_agent",   "check_memory_usage",        "Checks current system memory usage and logs a warning if it exceeds a threshold."),
@@ -204,13 +211,22 @@ TOOLS.update({
     "list_schedules":       {"func": list_schedules,       "desc": "List all active scheduled jobs"},
     # Knowledge
     "write_to_knowledge":   {"func": write_to_knowledge,   "desc": "Write a note to the knowledge base"},
-    "search_knowledge":     {"func": search_knowledge,     "desc": "Search knowledge base with FTS5"},
+    "search_knowledge":     {"func": search_knowledge,     "desc": "Search the knowledge base (words; AND/OR/NOT, \"phrases\", tag:x). mode: auto (default), fts, semantic (by meaning) or hybrid"},
     "read_knowledge":       {"func": read_knowledge,       "desc": "Read a specific knowledge note"},
     "list_knowledge":       {"func": list_knowledge,       "desc": "List all knowledge notes"},
     "get_knowledge_context":{"func": get_knowledge_context,"desc": "Build context from knowledge graph"},
     "get_related_knowledge":{"func": get_related_knowledge,"desc": "Get related entities from knowledge base"},
     "sync_knowledge_base":  {"func": sync_knowledge_base,  "desc": "Sync knowledge base with files"},
     "list_knowledge_tags":  {"func": list_knowledge_tags,  "desc": "List all knowledge tags"},
+    "knowledge_conflicts":  {"func": knowledge_conflicts,  "desc": "List contradicting facts in knowledge notes"},
+    "resolve_knowledge_conflict": {"func": resolve_knowledge_conflict, "desc": "Resolve one knowledge conflict: keep a, b or both"},
+    "knowledge_categories": {"func": knowledge_categories, "desc": "List fact categories with counts and merge suggestions"},
+    "find_duplicate_notes": {"func": find_duplicate_notes, "desc": "List possible duplicate knowledge notes (preview only)"},
+    "list_facts":           {"func": list_facts,           "desc": "List distilled facts (deduplicated across notes, with confidence); query filters"},
+    "list_scenarios":       {"func": list_scenarios,       "desc": "List distilled scenarios: groups of related facts with a title and summary"},
+    "get_persona":          {"func": get_persona,          "desc": "The distilled persona: a short summary of the user from the notes"},
+    "drill_down":           {"func": drill_down,           "desc": "Show the notes and fact lines behind a distilled fact (f12), scenario (s3) or the persona"},
+    "distill_knowledge":    {"func": distill_knowledge,    "desc": "Distil the knowledge base now into facts, scenarios and a persona"},
     # Agent Swarm
     "swarm_create":         {"func": swarm_create,         "desc": "Create a new agent swarm"},
     "swarm_assign":         {"func": swarm_assign,         "desc": "Assign a task to a swarm"},

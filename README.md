@@ -5,13 +5,13 @@
 **A private, self-hosted AI agent that runs on your own models.**
 
 Chat in the browser, the terminal, Telegram or WhatsApp. ZenSynora remembers
-your conversations, builds a personal knowledge base, uses 110 tools, and can
+your conversations, builds a personal knowledge base, uses 121 tools, and can
 split work across teams of agents — with a local model like llama.cpp or
 Ollama, or any major cloud provider.
 
-[![Version](https://img.shields.io/badge/version-0.7.5-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)](#requirements)
-[![Tests](https://img.shields.io/badge/tests-525-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-1128-brightgreen.svg)](#development)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 
 [Quick start](#quick-start) · [Using it](#using-zensynora) · [Updating](#updating-and-health) ·
@@ -27,9 +27,11 @@ Ollama, or any major cloud provider.
   LM Studio. Cloud providers (OpenAI, Anthropic, Gemini, Groq, OpenRouter) are
   optional. Everything is stored locally in `~/.myclaw`.
 - **Remembers.** Conversation memory per user, plus a Markdown knowledge base
-  with full-text search and a knowledge graph the agents read and write —
-  and you can explore, edit and search it as a live graph in the Web UI.
-- **Does things.** 110 tools: files, sandboxed shell, web and headless browser,
+  the agents read and write: notes with tags, facts and links, a live graph in
+  the Web UI, search by words or (optionally) by meaning, flags for
+  contradicting facts, and imports of web pages, GitHub repos, documents and
+  ChatGPT/Claude/Obsidian exports. [More below](#knowledge-base).
+- **Does things.** 121 tools: files, sandboxed shell, web and headless browser,
   scheduling, knowledge, delegation, and tools the agent writes for itself.
 - **Works in teams.** Chat channels with several agents at once — see who
   delegates what to whom. 137 ready-made agent profiles and swarms
@@ -97,7 +99,7 @@ knowledge base. Step by step: [docs/telegram_guide.md](docs/telegram_guide.md).
 | `zensynora agent` | Chat in the terminal (`@name` to address an agent) |
 | `zensynora gateway` | Run the Telegram or WhatsApp bot without the Web UI (falls back to terminal chat) — [Telegram guide](docs/telegram_guide.md) |
 | `zensynora mcp-server` | Expose ZenSynora's tools to MCP clients over stdio |
-| `zensynora knowledge sync \| search \| list \| read \| write` | Manage the knowledge base |
+| `zensynora knowledge sync \| search \| list \| read \| write \| import \| assimilate \| embed \| distill` | Manage the knowledge base (`--base NAME` for another base) — [guide](docs/knowledge_base_guide.md) |
 | `zensynora swarm …` · `skills list [--tools]` · `memory …` | Swarms, agent skills (and tools), conversation memory |
 | `zensynora doctor` | Health check with fix hints (`--fix`, `--offline`, `--json`); `--report [PATH]` writes a diagnostics report (Markdown, `.json` or `.zip`, no secrets) |
 | `zensynora backup create \| list \| restore` | Back up / restore settings, API keys, knowledge, conversations, jobs |
@@ -113,6 +115,33 @@ then `sudo systemctl start myclaw` and `journalctl -u myclaw -f`.
 **Uninstall:** `bash ~/.local/share/zensynora/source/uninstall.sh` asks before
 removing anything. Your data in `~/.myclaw` is only deleted when you confirm it
 (or pass `--purge` together with `--yes`); `--dry-run` shows what would happen.
+
+## Knowledge base
+
+Notes are plain Markdown files in `~/.myclaw/knowledge/default/` — edit them
+with any editor or Obsidian; the search index is rebuilt from them. Agents
+search it before answering and save what is worth keeping.
+
+- **Notes, facts, links:** frontmatter (tags, aliases, any metadata),
+  `- [category] fact (source: …)` and `- relation [[Other note]]`. Links work
+  by title or alias, also to notes written later. Deleted and replaced notes
+  go to `.trash/`, never erased.
+- **Knowledge page:** graph, notes list, tags and categories, ⚠ contradicting
+  facts (*Keep A / Keep B / Both are fine*), ⧉ duplicates with a merge
+  preview, a health line.
+- **Search:** `AND` / `OR` / `NOT`, `"phrases"`, `tag:name` — and, if you
+  switch it on, **search by meaning** with a small model that runs on your
+  computer (Settings → Features, *Install* on the Knowledge page).
+- **⇪ Import:** a web page, a GitHub repository, a folder or a PDF/Word/Excel
+  file becomes linked notes with a Mermaid diagram (the `assimilate` tool does
+  the same for agents); ChatGPT, Claude.ai, MCP memory and Obsidian exports.
+- **Optional:** *distillation* (facts with confidence, groups, a summary of
+  you that agents see — each traceable to its notes) and *live re-index* of
+  notes you edit by hand. Both are off by default.
+
+Optional extras: `pip install 'zensynora[semantic]'` (search by meaning),
+`[ingest]` (PDF/Word/Excel import), `[watch]` (live re-index). Everything:
+[docs/knowledge_base_guide.md](docs/knowledge_base_guide.md).
 
 ## Updating and health
 
@@ -193,7 +222,7 @@ Model advice per hardware: [docs/llm_recommendations.md](docs/llm_recommendation
 flowchart LR
     ui["Web UI · terminal · Telegram · WhatsApp · MCP"] --> agent["Agents<br/>router · context · tools"]
     agent --> llm["LLM providers<br/>local or cloud"]
-    agent --> tools["110 tools<br/>sandboxed"]
+    agent --> tools["121 tools<br/>sandboxed"]
     agent <--> state[("~/.myclaw<br/>memory · knowledge · config")]
     agent <--> agent2["other agents<br/>delegation · swarms"]
     jobs["Jobs<br/>schedule · score · bench"] --> agent
@@ -226,6 +255,7 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 - **Portable (USB drive):** `install_and_run_portable.sh` / `.bat` keep code
   (in `app/` or next to the script), venv and data (`data/.myclaw`) together on the drive.
 - **Manual venv:** `python3 -m venv venv && venv/bin/pip install -r requirements.txt -e .`
+  (add `-e '.[semantic,ingest,watch]'` for the optional knowledge-base features)
 
 ## Development
 
@@ -233,7 +263,7 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 git clone https://github.com/adrianx26/zensynora.git && cd zensynora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q -o addopts=""        # 730 tests
+pytest -q -o addopts=""        # 1128 tests
 ruff check .
 ```
 

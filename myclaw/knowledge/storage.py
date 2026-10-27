@@ -84,9 +84,16 @@ def _write_atomic(file_path: Path, text: str) -> None:
     """
     file_path.parent.mkdir(parents=True, exist_ok=True)
     tmp = file_path.with_name(f".{file_path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    # 2026-10-25 (KB phase 6): our own write — the file watcher ignores it
+    from .watch import remember_self_write
+
+    # 2026-10-27 (review): the bytes written are exactly the bytes remembered
+    # (binary: no newline translation on Windows)
+    data = text.encode("utf-8")
+    remember_self_write(file_path, data)
     try:
-        with open(tmp, "w", encoding="utf-8") as f:
-            f.write(text)
+        with open(tmp, "wb") as f:
+            f.write(data)
             f.flush()
             os.fsync(f.fileno())
         os.replace(tmp, file_path)
@@ -298,8 +305,10 @@ def _what_is_lost(old: Note, new: Note) -> List[str]:
     old_body = _squash(extract_body(old.content, old.title))
     if old_body and old_body not in _squash(extract_body(new.content, new.title)):
         lost.append("text")
-    new_obs = {(o.category, o.content) for o in new.observations}
-    if any((o.category, o.content) not in new_obs for o in old.observations):
+    # 2026-10-24 (KB phase 2 review): a fact's source counts too
+    new_obs = {(o.category, o.content, getattr(o, "provenance_path", None)) for o in new.observations}
+    if any((o.category, o.content, getattr(o, "provenance_path", None)) not in new_obs
+           for o in old.observations):
         lost.append("facts")
     new_rel = {(r.relation_type, r.target) for r in new.relations}
     if any((r.relation_type, r.target) not in new_rel for r in old.relations):
@@ -357,6 +366,7 @@ def write_note(
     db_path: Optional[Path] = None,
     aliases: Optional[List[str]] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    origin: Optional[str] = None,
 ) -> str:
     """
     Write a new note to the knowledge base.
@@ -374,6 +384,10 @@ def write_note(
             the existing note's aliases
         metadata: Other frontmatter keys (``type``, ``status``…); None keeps
             the existing note's metadata, a dict replaces it
+        origin: who wrote the text (frontmatter ``origin``: ``agent``,
+            ``extract``, ``session``, ``import``) — 2026-10-24 (KB phase 4
+            review): distillation counts first-person sentences as the user's
+            only in notes without an origin (written by the user)
 
     A note with the same permalink is replaced; if that loses anything, the
     previous file is kept in ``<base>/.trash/`` (2026-10-23, KB phase 0).
@@ -414,7 +428,8 @@ def write_note(
             relations=_merge_rel(given.relations, relations or []),
             file_path=file_path,
             aliases=_union(given.aliases, aliases),
-            metadata={**given.metadata, **(metadata or {})},
+            metadata={**given.metadata, **(metadata or {}),
+                      **({"origin": origin} if origin else {})},
             raw_frontmatter=given.raw_frontmatter,
         )
         if "name" in given.raw_frontmatter:
@@ -465,6 +480,8 @@ def write_note(
             if metadata is None:
                 note.metadata = dict(old.metadata)
             note.raw_frontmatter = old.raw_frontmatter
+        if origin:
+            note.metadata["origin"] = origin
         markdown_content = generate_markdown(note)
 
     # Write file (2026-10-23, KB phase 0: atomically; a lossy replace keeps
@@ -529,6 +546,9 @@ def delete_note(permalink: str, user_id: str = "default", db_path: Optional[Path
 def _move_to_trash(file_path: Path, knowledge_dir: Path) -> Path:
     """Move a note to ``<base>/.trash/<name>-<YYYYmmdd-HHMMSS>.md`` (Web UI scheme)."""
     dest = _trash_path(knowledge_dir, file_path.stem)
+    from .watch import remember_self_write  # 2026-10-25 (KB phase 6)
+
+    remember_self_write(file_path, None)
     shutil.move(str(file_path), str(dest))
     return dest
 
@@ -666,20 +686,41 @@ def search_notes(
     limit: int = 10,
     db_path: Optional[Path] = None,
     boolean: bool = False,
+    mode: str = "fts",
+    semantic_timeout: Optional[float] = None,
+    semantic_wait: Optional[float] = None,
+    info: Optional[Dict[str, Any]] = None,
 ) -> List[Note]:
     """
-    Search notes using FTS5.
+    Search notes using FTS5 (and, optionally, semantic vectors).
 
     Args:
         query: Search query
         user_id: User ID for isolation
         limit: Maximum results
+        mode: 2026-10-24 (KB phase 3) — ``"fts"`` (default: word search only,
+            exactly as before), ``"auto"`` (hybrid when semantic search is on
+            and notes are embedded, else FTS), ``"semantic"`` (vectors only) or
+            ``"hybrid"`` (FTS + vectors fused by RRF). Boolean syntax (AND / OR
+            / NOT, "phrases", prefix*) always uses FTS only; when vectors are
+            not available the result is the FTS one.
+        semantic_timeout: seconds to wait for the query embedding (default 15)
+        semantic_wait: seconds to wait for the model to load (default: the timeout)
+        info: optional dict, filled with ``mode`` (what was used) and
+            ``fallback`` (why semantic search was not used)
 
     Returns:
         List of matching Note objects
     """
     with KnowledgeDB(user_id, db_path=db_path) as db:
-        entities = db.search_fts(query, limit, boolean=boolean)
+        if mode == "fts" and info is None:
+            entities = db.search_fts(query, limit, boolean=boolean)
+        else:
+            from . import semantic as _semantic
+
+            entities = _semantic.search_entities(
+                db, query, limit, boolean=boolean, mode=mode, timeout=semantic_timeout,
+                wait_load=semantic_wait, info=info)
 
     # Batch-read all matched notes in parallel. The previous N+1 loop
     # serialized stat()+open()+parse() per result; this overlaps them.

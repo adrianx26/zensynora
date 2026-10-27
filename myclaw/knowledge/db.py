@@ -16,6 +16,10 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Callable, Tuple, Iterable
 
 from .parser import Note, Observation, Relation
+from . import quality as _quality
+from . import semantic as _semantic
+from . import distill as _distill
+from . import budget as _budget
 
 logger = logging.getLogger(__name__)
 
@@ -243,6 +247,10 @@ def _sql_fold(value: Any) -> Optional[str]:
     return value.strip().casefold() if isinstance(value, str) else value
 
 
+def _sql_catnorm(value: Any) -> Optional[str]:
+    return _quality.normalize_category(value) if isinstance(value, str) else value
+
+
 # search_by_metadata keys: names, dotted paths allowed (2026-10-23, KB phase 0)
 _METADATA_KEY_RE = re.compile(r"^[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)*$")
 
@@ -309,7 +317,8 @@ class EntityWithData:
     relations: List[Relation] = field(default_factory=list)
 
 
-_TEXT_BACKFILLED: set = set()  # db files whose old notes were indexed (v0.7.5)
+_TEXT_BACKFILLED: set = set()
+REPARSE_ALL_KEY = "reparse_all_notes"  # sync_meta flag: the next sync re-reads every note  # db files whose old notes were indexed (v0.7.5)
 
 
 class KnowledgeDB:
@@ -335,6 +344,9 @@ class KnowledgeDB:
 
         self._conn: Optional[sqlite3.Connection] = None
         self._batch_depth = 0  # 2026-10-24: >0 inside batch() (one big transaction)
+        # 2026-10-24 (KB phase 3): notes indexed inside batch(), queued for
+        # embedding once the batch is committed
+        self._indexed_in_batch: List[int] = []
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -351,6 +363,8 @@ class KnowledgeDB:
             # Unicode case folding for names/titles/aliases/tags (queries only —
             # never used in triggers or indexes, so other tools can open the file).
             self._conn.create_function("kb_fold", 1, _sql_fold, deterministic=True)
+            # 2026-10-24 (KB phase 2): normalised fact category (queries/backfill only)
+            self._conn.create_function("kb_catnorm", 1, _sql_catnorm, deterministic=True)
             # Enable WAL mode for better concurrent access
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA foreign_keys=ON")
@@ -650,6 +664,24 @@ class KnowledgeDB:
         except sqlite3.OperationalError:
             pass
 
+        # 2026-10-24 (KB phase 2): normalised fact category (indexed; the file
+        # keeps the category as written), the category registry and conflicts.
+        phase2_added = False
+        try:
+            conn.execute("ALTER TABLE observations ADD COLUMN category_norm TEXT")
+            phase2_added = True
+        except sqlite3.OperationalError:
+            pass
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_category_norm "
+                     "ON observations(category_norm)")
+        conn.execute("UPDATE observations SET category_norm = kb_catnorm(category) "
+                     "WHERE category_norm IS NULL AND category IS NOT NULL")
+        _quality.ensure_schema(conn)
+        # 2026-10-24 (KB phase 3): vector tables (derived, rebuildable; never dropped)
+        _semantic.ensure_schema(conn)
+        # 2026-10-24 (KB phase 4): distilled facts / scenarios / persona (derived, rebuildable)
+        _distill.ensure_schema(conn)
+
         # Phase 4 (MemoPad import): sync_meta table for watermark-based incremental scanning
         conn.execute("""
             CREATE TABLE IF NOT EXISTS sync_meta (
@@ -657,6 +689,12 @@ class KnowledgeDB:
                 value TEXT
             )
         """)
+        # 2026-10-24 (KB phase 2 review): an index made before phase 2 has no
+        # fact sources and no conflict check: the next sync (incremental too)
+        # re-reads every note once, so it gives what `sync --force` gives.
+        if phase2_added and conn.execute("SELECT 1 FROM observations LIMIT 1").fetchone():
+            conn.execute("INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, '1')",
+                         (REPARSE_ALL_KEY,))
 
         conn.commit()
         # v0.7.5: index the text of notes written before the text index existed
@@ -834,14 +872,32 @@ class KnowledgeDB:
             return
         if conn.in_transaction:
             conn.commit()
-        conn.execute("BEGIN IMMEDIATE")
+        # 2026-10-25 (KB phase 6): a write outside a background slot is a
+        # foreground write — background writers yield to it (budget.py)
+        with _budget.foreground(self.db_path):
+            conn.execute("BEGIN IMMEDIATE")
+            try:
+                yield conn
+            except BaseException:
+                conn.rollback()
+                raise
+            else:
+                conn.commit()
+
+    @staticmethod
+    @contextmanager
+    def _savepoint(conn: sqlite3.Connection, name: str):
+        """A nested savepoint inside an open transaction (2026-10-24, KB phase 2):
+        optional work whose failure is undone without undoing the transaction."""
+        conn.execute(f"SAVEPOINT {name}")
         try:
             yield conn
         except BaseException:
-            conn.rollback()
+            conn.execute(f"ROLLBACK TO {name}")
+            conn.execute(f"RELEASE {name}")
             raise
         else:
-            conn.commit()
+            conn.execute(f"RELEASE {name}")
 
     @contextmanager
     def batch(self):
@@ -858,17 +914,30 @@ class KnowledgeDB:
             return
         if conn.in_transaction:
             conn.commit()
-        conn.execute("BEGIN IMMEDIATE")
+        fg = _budget.foreground(self.db_path)  # 2026-10-25 (KB phase 6), see _write_txn
+        fg.__enter__()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+        except BaseException:
+            fg.__exit__(None, None, None)
+            raise
         self._batch_depth = 1
+        self._indexed_in_batch = []
         try:
             yield self
         except BaseException:
             conn.rollback()
+            self._indexed_in_batch = []
             raise
         else:
             conn.commit()
+            indexed, self._indexed_in_batch = self._indexed_in_batch, []
+            _semantic.note_indexed(self.db_path, indexed)
+            # 2026-10-24 (KB phase 4): counts towards the next background distillation
+            _distill.note_changed(self.db_path, len(indexed))
         finally:
             self._batch_depth = 0
+            fg.__exit__(None, None, None)
 
     def get_entity_by_permalink(self, permalink: str) -> Optional[Entity]:
         """Get entity by permalink."""
@@ -1001,6 +1070,13 @@ class KnowledgeDB:
                                   rel["to_name"] or permalink)
             cursor = conn.execute("DELETE FROM entities WHERE id = ?", (eid,))
             self._relink_for_keys(conn, folds, plinks)
+            try:  # 2026-10-24 (KB phase 2): its open conflicts are closed
+                with self._savepoint(conn, "kb_quality"):
+                    _quality.on_note_deleted(conn, permalink)
+            except Exception as e:
+                logger.info("Knowledge: conflicts of %s not closed: %s", permalink, e)
+        if self._batch_depth == 0 and cursor.rowcount > 0:
+            _distill.note_changed(self.db_path, 1)  # 2026-10-24 (KB phase 4): its facts lose support
         return cursor.rowcount > 0
 
     def clear_all_data(self, keep_file_paths: Optional[Iterable[str]] = None) -> None:
@@ -1057,10 +1133,12 @@ class KnowledgeDB:
 
         conn.execute(
             """
-            INSERT INTO observations (entity_id, category, content, tags, created_at, context, provenance_path)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO observations (entity_id, category, content, tags, created_at, context,
+                                      provenance_path, category_norm)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (entity_id, category, content, tags_json, now, context, provenance_path),
+            (entity_id, category, content, tags_json, now, context, provenance_path,
+             _quality.normalize_category(category)),
         )
         conn.commit()
 
@@ -1435,13 +1513,16 @@ class KnowledgeDB:
         if safe_query == "*":
             return []  # no searchable words (MATCH "*" is an FTS5 error)
 
-        rows = self._match_entities(conn, safe_query, limit, boolean=boolean)
+        # 2026-10-24 (KB phase 3 review): the UNION gives one row per index a
+        # note matches in (title, text, facts), so LIMIT counted duplicates and
+        # fewer than ``limit`` notes came back — fetch more rows, cut below.
+        rows = self._match_entities(conn, safe_query, limit * 3, boolean=boolean)
         # v0.7.1: a whole sentence (the agent searches with the user's
         # message) rarely has every word in one note. If the strict search
         # finds nothing, accept notes with any of the words, best match first.
         # Not for boolean queries: there the user chose AND/OR on purpose.
         if not boolean and not rows and safe_query.count(" ") >= 3:
-            rows = self._match_entities(conn, sanitize_fts_query(query, any_term=True), limit)
+            rows = self._match_entities(conn, sanitize_fts_query(query, any_term=True), limit * 3)
 
         entities = []
         seen_ids = set()
@@ -1449,7 +1530,7 @@ class KnowledgeDB:
             if row["id"] not in seen_ids:
                 seen_ids.add(row["id"])
                 entities.append(_row_to_entity(row))
-        return entities
+        return entities[:limit]
 
     @staticmethod
     def _match_entities(conn, q: str, limit: int, boolean: bool = False):
@@ -1792,12 +1873,22 @@ class KnowledgeDB:
                 conn.execute(
                     """
                     INSERT INTO observations
-                        (entity_id, category, content, tags, created_at, context, provenance_path)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                        (entity_id, category, content, tags, created_at, context, provenance_path,
+                         category_norm)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (eid, obs.category, obs.content, json.dumps(obs.tags or []), now,
-                     getattr(obs, "context", None), getattr(obs, "provenance_path", None)),
+                     getattr(obs, "context", None), getattr(obs, "provenance_path", None),
+                     _quality.normalize_category(obs.category)),
                 )
+
+            # 2026-10-24 (KB phase 2): contradicting facts of this note (derived
+            # data; a failure here never stops the note from being indexed)
+            try:
+                with self._savepoint(conn, "kb_quality"):
+                    _quality.on_note_indexed(conn, eid, note.permalink, note.observations)
+            except Exception as e:
+                logger.info("Knowledge: conflict check skipped for %s: %s", note.permalink, e)
 
             # Aliases: replace the set (before links, so a self-link by alias resolves)
             conn.execute("DELETE FROM entity_aliases WHERE entity_id = ?", (eid,))
@@ -1833,6 +1924,14 @@ class KnowledgeDB:
             # ones resolve, existing ones move to the best match (2026-10-24).
             new_folds, new_plinks = self._entity_keys(conn, eid)
             self._relink_for_keys(conn, old_folds | new_folds, old_plinks | new_plinks)
+        # 2026-10-24 (KB phase 3): every write, edit and sync passes here — queue
+        # the note for embedding after the commit (no-op when semantic search is
+        # off; never blocks; only changed chunks are embedded).
+        if self._batch_depth > 0:
+            self._indexed_in_batch.append(eid)
+        else:
+            _semantic.note_indexed(self.db_path, [eid])
+            _distill.note_changed(self.db_path, 1)  # 2026-10-24 (KB phase 4); no-op when off
         return eid
 
     # ── v0.7.5: full-text index of the note text ─────────────────────────────

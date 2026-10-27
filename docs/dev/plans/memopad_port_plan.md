@@ -7,8 +7,22 @@
 
 **Status:** Phase 0 done on branch `kb-phase0-fixes` (2026-10-24), including
 the fixes from an independent review (see incidents 2.4 and 2.5 in
-[incidents_and_lessons.md](../../incidents_and_lessons.md)). Phases 1–6 not
-started; each needs approval.
+[incidents_and_lessons.md](../../incidents_and_lessons.md)). Phases 2–6 done on
+branch `kb-phases-2-6` (2026-10-27), each built, reviewed independently and
+fixed (incident 2.6; working rules in [kb_phases_2_6_rules.md](kb_phases_2_6_rules.md)).
+**Phase 1 (note editing tools) is not done yet.**
+
+Follow-ups found while building 2–6:
+* Distillation on old notes: notes written by agents before 2026-10-25 have no
+  `origin:` and count as written by you, so their "the user …" sentences can
+  put odd items in the persona (seen on real notes: "User designated as Medic
+  …"). Needed: a *hide this fact* action on the Distilled tab, and marking old
+  auto-extracted notes (e.g. by the `auto-extracted` tag or a migration).
+* Similarity floors for semantic search (0.75 / 0.6) are first guesses; tune
+  them on a real install with the downloaded model.
+* The write budget orders background writers within one process; separate
+  CLI processes rely on SQLite's busy timeout and the distill lease.
+* Optional LLM pass for distillation; graph colours by distillation level.
 
 Two findings shaped the plan:
 

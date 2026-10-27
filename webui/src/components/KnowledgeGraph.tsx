@@ -12,6 +12,7 @@ export interface GNode {
   degree: number;
   missing: boolean;
   preview?: string;
+  conflicts?: number; // 2026-10-24 (KB phase 2): open conflicts (contradicting facts)
 }
 export interface GEdge { source: string; target: string; type: string }
 
@@ -241,6 +242,17 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
         ctx.fillStyle = th.bg;
         ctx.fill();
       }
+      if (n.conflicts) {
+        // small amber badge at the top right: this note has contradicting facts
+        const bx = p.x + p.r * 0.75, by = p.y - p.r * 0.75, br = Math.max(3.5, 4.5 / Math.sqrt(k));
+        ctx.beginPath();
+        ctx.arc(bx, by, br, 0, Math.PI * 2);
+        ctx.fillStyle = '#d29922';
+        ctx.fill();
+        ctx.strokeStyle = th.bg;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+      }
       const showLabel = near.has(p.id) || k > 1.1 || (k > 0.6 && n.degree >= 3) || ns.length <= 40;
       if (showLabel && !(dim && k < 1.5)) {
         const fs = 11 / Math.sqrt(k);
@@ -394,7 +406,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
         meta.className = 'kg-tip-meta';
         meta.textContent = gn.missing
           ? 'Linked to, but no note yet — click to create it'
-          : `${gn.observations} facts · ${gn.degree} links${gn.tags.length ? ' · #' + gn.tags.slice(0, 4).join(' #') : ''}`;
+          : `${gn.observations} facts · ${gn.degree} links${gn.conflicts ? ` · ⚠ ${gn.conflicts} conflict${gn.conflicts > 1 ? 's' : ''}` : ''}${gn.tags.length ? ' · #' + gn.tags.slice(0, 4).join(' #') : ''}`;
         tip.appendChild(meta);
         if (gn.preview) { const pv = document.createElement('div'); pv.className = 'kg-tip-preview'; pv.textContent = gn.preview.slice(0, 160); tip.appendChild(pv); }
       } else tip.style.display = 'none';

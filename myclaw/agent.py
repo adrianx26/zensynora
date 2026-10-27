@@ -276,7 +276,18 @@ SYSTEM_PROMPT = (
     "cancel_schedule(job_id), list_schedules(). "
     "Knowledge: write_to_knowledge(title, content, tags, observations, relations), search_knowledge(query), "
     "read_knowledge(permalink), get_knowledge_context(permalink, depth), list_knowledge(), "
-    "get_related_knowledge(permalink), sync_knowledge_base(), list_knowledge_tags(). "
+    "get_related_knowledge(permalink), sync_knowledge_base(), list_knowledge_tags(), "
+    # 2026-10-24 (KB phase 2): quality tools
+    "knowledge_conflicts(permalink), resolve_knowledge_conflict(conflict_id, keep), "
+    "knowledge_categories(), find_duplicate_notes(). "
+    # 2026-10-24 (KB phase 4): distilled facts, scenarios and persona
+    "Distilled: list_facts(query, limit), list_scenarios(query), get_persona(), drill_down(id) "
+    "(the notes behind a fact f12, scenario s3 or the persona), distill_knowledge(). "
+    # 2026-10-24 (KB phase 5): ingestion
+    "Import: assimilate(source, max_notes) reads a web page, a GitHub repository (https://github.com/owner/repo) "
+    "or a local file/folder into linked notes plus a Mermaid diagram in one call — use it for 'analyze this "
+    "repo/site/document and make a diagram'; import_knowledge(path, kind) imports ChatGPT/Claude exports, "
+    "MCP memory files and Markdown/Obsidian folders. "
     # 2026-10-23 (KB phase 0): how notes link to each other.
     "A line `- relation [[Other note]]` in a note's text links it to another note. "
     "Agent Swarms: swarm_create(name, strategy, workers, coordinator, aggregation), "
@@ -300,6 +311,9 @@ SYSTEM_PROMPT = (
 KB_CONTEXT_BUDGET = 2000       # characters for the whole block
 KB_CONTEXT_NOTE_TEXT = 500     # characters of text per note
 KB_CONTEXT_FACTS = 3           # facts per note
+# 2026-10-24 (KB phase 4): with knowledge.distill on, the persona / scenarios /
+# distilled facts come first, in at most this many characters of the budget.
+KB_CONTEXT_DISTILLED = 900
 # One session-summary note per day; its text keeps the newest characters.
 SESSION_SUMMARY_MAX_CHARS = 20000
 _SESSION_SUMMARY_LOCK = threading.Lock()
@@ -705,7 +719,10 @@ class Agent:
             if not facts:
                 return
             # max 5 notes per turn, each with tags, facts and links (2026-10-23)
-            saved = await asyncio.to_thread(kb_save_items, facts, user_id, ["auto-extracted"], 5, "[KB-AUTO]")
+            # 2026-10-24 (KB phase 2): every fact records where it came from
+            from .knowledge.quality import chat_source
+            saved = await asyncio.to_thread(kb_save_items, facts, user_id, ["auto-extracted"], 5, "[KB-AUTO]",
+                                            chat_source())
 
             if saved:
                 logger.info(
@@ -1218,6 +1235,7 @@ class Agent:
                 tags=tags,
                 observations=observations,
                 relations=relations,
+                origin="session",  # 2026-10-24 (KB phase 4 review): written by the agent
             )
 
     def _search_knowledge_context_sync(
@@ -1269,9 +1287,24 @@ class Agent:
             words = [w for w in cleaned.split() if len(w) > 3]
 
             notes = []
+            # 2026-10-24 (KB phase 2): with the hub penalty a few more candidates
+            # are fetched, so a very linked note can be ranked below a specific one.
+            from .knowledge.quality import hub_threshold, rank_with_hub_penalty
+            fetch = max_results + 3 if hub_threshold() is not None else max_results
+            # 2026-10-24 (KB phase 3): with knowledge.semantic_search on, strategy 1
+            # is hybrid (FTS + vectors, RRF) when notes are embedded; the query
+            # embedding gets ~1.5 s, else this turn uses FTS and the model warms
+            # up in the background. Off: the call is exactly as before.
+            from .knowledge import semantic as _semantic
+            search_info: dict = {}
+            semantic_kw = _semantic.context_search_kwargs(search_info)
+            if semantic_kw:
+                semantic_kw["semantic_wait"] = 0.0
             if words:
                 # Strategy 1: search with full message text (FTS5 ranked)
-                notes = search_notes(message, user_id, limit=max_results)
+                notes = search_notes(message, user_id, limit=fetch, **semantic_kw)
+                if search_info.get("mode"):
+                    metadata["search_mode"] = search_info["mode"]
 
                 if not notes:
                     # Strategy 2: bigram + single-keyword OR query
@@ -1280,7 +1313,23 @@ class Agent:
                     query = " OR ".join(f'"{t}"' if " " in t else t for t in candidates)
                     # 2026-10-23 (KB phase 0): boolean=True so OR means OR
                     # (as free text every word had to match).
-                    notes = search_notes(query, user_id, limit=max_results, boolean=True)
+                    notes = search_notes(query, user_id, limit=fetch, boolean=True)
+            if fetch != max_results and notes:
+                notes = rank_with_hub_penalty(notes, user_id)[:max_results]
+
+            # 2026-10-24 (KB phase 4): knowledge.distill on → "What I know about
+            # you / relevant facts" first (persona > scenarios > facts), inside
+            # the same budget; off → nothing here, the context is unchanged.
+            distilled = ""
+            try:
+                from .knowledge import distill as _distill
+                if _distill.enabled():
+                    distilled = _distill.context_block(user_id, message,
+                                                       budget=KB_CONTEXT_DISTILLED)
+                    if distilled:
+                        metadata["distilled"] = True
+            except Exception as e:  # derived data must never break the turn
+                logger.debug("distilled context skipped: %s", e)
 
             # 2026-10-23 (KB phase 0): memory://permalink references were
             # only used when the search happened to find that note.
@@ -1298,6 +1347,14 @@ class Agent:
                     if ref_note is not None:
                         notes = [ref_note] + list(notes)
                         found.add(ref)
+
+            if not notes and distilled:
+                context = "## Relevant Knowledge" + distilled + "\n\n---\n"
+                result = KnowledgeSearchResult(
+                    context=context, has_results=True, suggested_topics=[], gap_logged=False,
+                    metadata={**metadata, "results_count": 0},
+                )
+                return result if return_structured else context
 
             if not notes:
                 # Record gap so the agent can suggest KB creation.
@@ -1349,6 +1406,9 @@ class Agent:
             context_lines = ["## Relevant Knowledge"]
             used = len(context_lines[0])
             budget = KB_CONTEXT_BUDGET
+            if distilled:  # KB phase 4: distilled lines first
+                context_lines.append(distilled)
+                used += len(distilled) + 1
 
             def _add(line: str) -> bool:
                 nonlocal used
@@ -1576,8 +1636,11 @@ class Agent:
             if not facts:
                 return
             # max 3 notes per tool call, each with tags, facts and links (2026-10-23)
+            # 2026-10-24 (KB phase 2): facts record the tool and its URL/path
+            from .knowledge.quality import tool_source
             saved = await asyncio.to_thread(kb_save_items, facts, user_id,
-                                            ["auto-extracted", f"tool-{tool_name}"], 3, "[KB-TOOL]")
+                                            ["auto-extracted", f"tool-{tool_name}"], 3, "[KB-TOOL]",
+                                            tool_source(tool_name, args))
 
             if saved:
                 logger.info(

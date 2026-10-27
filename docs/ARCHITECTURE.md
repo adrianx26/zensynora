@@ -1,6 +1,7 @@
 # ZenSynora Architecture
 
-> **Status:** reflects **v0.7.5** (2026-10-14). Updated from the v0.4.1
+> **Status:** reflects **v0.8.0** (2026-10-27; knowledge base: see the
+> [Knowledge base guide](knowledge_base_guide.md)). Updated from the v0.4.1
 > version: adds the Web UI settings API, provider routing changes, the safe
 > updater and the doctor/medic rewrite (0.7.0); chat channels, agent-to-agent
 > events, jobs, backups, model rotation, custom providers and approval-gated
@@ -53,6 +54,11 @@ myclaw/
 ├── llm_errors.py            # Readable model-server errors + rotation cooldowns [0.7.3]
 ├── knowledge/               # scope.py: one shared knowledge base for internal ids [0.7.5]
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
+│   ├── quality.py           # fact sources, categories, conflicts, hub penalty, duplicates [0.8.0]
+│   ├── semantic.py          # optional embeddings, embed on write, hybrid search [0.8.0]
+│   ├── distill.py           # facts, scenarios, persona, drill_down [0.8.0]
+│   ├── ingest/              # assimilate URL/GitHub/folder/documents, chat & vault importers [0.8.0]
+│   ├── budget.py · watch.py · health.py  # write budget, live re-index, health checks [0.8.0]
 │   ├── path_reasoning.py    # find_paths / shortest_path [Sprint 7]
 │   ├── storage.py           # Batched parallel note reads [Sprint 1 + 8]; write_note keeps text + tags + facts + links [Unreleased]
 │   ├── extract.py           # Model output → notes with tags, facts, links; ✨ enrich [Unreleased]
@@ -88,7 +94,8 @@ myclaw/
 │   ├── doctor_api.py        # Doctor report, errors viewer, report download [Unreleased]
 │   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
 │   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [Unreleased]
-│   ├── knowledge_api.py     # Knowledge page: graph, notes, edit, trash, search [Unreleased]
+│   ├── knowledge_api.py     # Knowledge page: graph, notes, edit, trash, search, conflicts, duplicates [0.8.0]
+│   ├── knowledge_{import,semantic,distill,health}_api.py  # import jobs, semantic status/backfill/install, distillation, health [0.8.0]
 │   └── skills_api.py        # Skills page: list, edit, import, assign [0.7.5]
 └── ... (~50 utility modules)
 
@@ -361,7 +368,13 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_kb_phase0_agent.py` | 19 |
 | `test_kb_phase0_surfaces.py` | 16 |
 | `test_kb_phase0_migration.py` | 2 |
-| **Total** | **844** |
+| `test_kb_phase2_quality.py` | 98 |
+| `test_kb_phase3_semantic.py` | 54 |
+| `test_kb_phase4_distill.py` | 42 |
+| `test_kb_phase5_ingest.py` | 51 |
+| `test_kb_phase5_wiring.py` | 1 |
+| `test_kb_phase6_robust.py` | 39 |
+| **Total** | **1129** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

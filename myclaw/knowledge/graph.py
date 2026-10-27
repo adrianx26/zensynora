@@ -74,6 +74,12 @@ def get_related_entities(
     Returns:
         List of dicts with entity info and path
     """
+    # 2026-10-24 (KB phase 2): with depth >= 2 a hub (a note with more than
+    # knowledge.hub_degree links) is listed but not walked through — its
+    # neighbours would flood the context. Its result has "hub": True.
+    from .quality import degrees_by_id, hub_threshold
+
+    hub_limit = hub_threshold() if depth >= 2 else None
     with KnowledgeDB(user_id, db_path=db_path) as db:
         start_entity = db.get_entity_by_permalink(permalink)
         if not start_entity:
@@ -95,6 +101,10 @@ def get_related_entities(
             # Batch fetch target entities to avoid N+1 queries
             target_permalinks = [r[1] for r in relations]
             target_entities = db.get_entities_by_permalinks(target_permalinks)
+            hub_degrees: Dict[int, int] = {}
+            if hub_limit is not None and current_depth + 1 < depth:
+                hub_degrees = degrees_by_id(db._get_connection(),
+                                            [e.id for e in target_entities.values()])
             
             for rel_type, target_permalink, target_name in relations:
                 if relation_type and rel_type != relation_type:
@@ -107,16 +117,22 @@ def get_related_entities(
                 if target_entity.id not in visited:
                     visited.add(target_entity.id)
                     new_path = path + [(rel_type, target_permalink)]
+                    is_hub = hub_degrees.get(target_entity.id, 0) > (hub_limit or 0) \
+                        if hub_degrees else False
                     
-                    results.append({
+                    result = {
                         "permalink": target_permalink,
                         "name": target_name,
                         "relation_type": rel_type,
                         "depth": current_depth + 1,
                         "path": new_path
-                    })
+                    }
+                    if is_hub:
+                        result["hub"] = True
+                    results.append(result)
                     
-                    queue.append((target_entity.id, current_depth + 1, new_path))
+                    if not is_hub:
+                        queue.append((target_entity.id, current_depth + 1, new_path))
         
         return results
 
@@ -406,7 +422,9 @@ def build_context(
         for d in sorted(by_depth.keys()):
             lines.append(f"### Depth {d}")
             for r in by_depth[d]:
-                lines.append(f"- {r['relation_type']} → **{r['name']}** ({r['permalink']})")
+                # 2026-10-24 (KB phase 2): a hub is listed, not followed further
+                hub_note = " — hub note (many links), not followed further" if r.get("hub") else ""
+                lines.append(f"- {r['relation_type']} → **{r['name']}** ({r['permalink']}){hub_note}")
 
                 if d == 1:
                     rel_note = depth1_notes_by_permalink.get(r['permalink'])

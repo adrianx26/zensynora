@@ -14,7 +14,9 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Iterable, List
+from typing import Any, Iterable, List, Optional
+
+from .quality import normalize_category  # 2026-10-24 (KB phase 2)
 
 logger = logging.getLogger(__name__)
 
@@ -71,8 +73,13 @@ def known_notes_hint(titles: Iterable[str]) -> str:
     return ("Existing notes you can link to: " + "; ".join(titles[:12]) + ".") if titles else ""
 
 
-def save_items(items: List[Any], user_id: str, extra_tags: List[str], cap: int, log_prefix: str) -> int:
-    """Write each extracted item as a note with tags, facts and links. Returns how many were saved."""
+def save_items(items: List[Any], user_id: str, extra_tags: List[str], cap: int, log_prefix: str,
+               source: Optional[str] = None) -> int:
+    """Write each extracted item as a note with tags, facts and links. Returns how many were saved.
+
+    2026-10-24 (KB phase 2): ``source`` (e.g. ``chat 2026-10-24`` or
+    ``tool browse https://…``) is stored with every fact as ``(source: …)``.
+    """
     from .parser import Observation, Relation
     from .storage import write_note
 
@@ -96,10 +103,12 @@ def save_items(items: List[Any], user_id: str, extra_tags: List[str], cap: int, 
                 cat, text = "fact", f
             else:
                 continue
-            cat = _CATEGORY.sub(" ", str(cat)).strip().lower()[:30] or "fact"
+            # 2026-10-24 (KB phase 2): one spelling per category (Facts → fact)
+            cat = normalize_category(_CATEGORY.sub(" ", str(cat)).strip())[:30] or "fact"
             text = " ".join(str(text).split())[:400]
             if text:
-                obs.append(Observation(category=cat, content=text, tags=[]))
+                obs.append(Observation(category=cat, content=text, tags=[],
+                                       provenance_path=source or None))
         rels = []
         for link in item.get("links") or []:
             if not isinstance(link, dict):
@@ -110,7 +119,8 @@ def save_items(items: List[Any], user_id: str, extra_tags: List[str], cap: int, 
                 rels.append(Relation(relation_type=rtype, target=target))
         try:
             write_note(name=title, title=title, content=content, tags=tag_list,
-                       observations=obs[:8], relations=rels[:8], user_id=user_id)
+                       observations=obs[:8], relations=rels[:8], user_id=user_id,
+                       origin="extract")  # 2026-10-24 (KB phase 4 review)
             saved += 1
             logger.info(f"{log_prefix} Saved: '{title}' ({len(obs)} facts, {len(rels)} links)")
         except Exception as e:
@@ -169,7 +179,7 @@ async def enrich_note(config: Any, base: str, permalink: str) -> dict:
     obs = list(note.observations)
     for f in item["facts"]:
         if isinstance(f, dict) and str(f.get("text", "")).strip():
-            obs.append(Observation(category=_CATEGORY.sub(" ", str(f.get("category", "fact"))).strip().lower()[:30] or "fact",
+            obs.append(Observation(category=normalize_category(_CATEGORY.sub(" ", str(f.get("category", "fact"))).strip())[:30] or "fact",
                                    content=" ".join(str(f["text"]).split())[:400], tags=[]))
     rels = list(note.relations)
     for link in item["links"]:

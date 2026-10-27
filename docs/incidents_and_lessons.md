@@ -133,6 +133,18 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 
 ---
 
+### 2.6 Reviews of KB phases 2–6 found unsafe defaults before release (2026-10-24 … 27)
+
+| | |
+|---|---|
+| **Symptom** | (All found before release, by a separate review agent per phase.) Phase 2: about 12 of 20 "conflicts" on realistic notes were not contradictions (`mindy01` vs `mindy02`, temperatures of different days, versions); a `|` in a fact became its "source"; shell commands could land in fact sources. Phase 5: DNS-rebinding SSRF, symlinks in an imported vault copied `/etc/passwd` and the config, `credentials.json` and hidden folders readable inside the workspace, passwords in URLs stored, imports that kept writing after a timeout, re-imports replacing hand-written notes. Phase 3: hybrid ranking pushed the exact keyword hit out. Phase 4: the persona was built from the assistant's and third parties' sentences, a note could inject "ignore previous instructions" into "What I know about you", `admin / password` pairs reached the agent context, a full rebuild kept facts of deleted notes. Phase 6: renamed folders with a dot and `#inbox/` folders were not watched. |
+| **Root cause** | Features tested with the author's own examples only: heuristics (conflicts, duplicates, persona) were never run on notes shaped like the real ones; security checks covered the obvious inputs (IPs, `~/.ssh`) but not the second step (DNS answer at connect time, symlink targets, workspace branch); derived text was put into the prompt as if it were the user's own words. |
+| **Fix** | Each review's findings fixed with regression tests built from the reviewer's corpus and scripts: strict conflict rules (settings/specs only, ids are not values), pinned and re-checked fetches, the same hidden/secret rules on every path, URL credentials stripped everywhere, deadlines/cancel checked before every write, ingest never replaces a note it did not write, keyword hits kept on top, persona only from facts about the user (note `origin`), distilled context quoted and labelled as information, credential pairs treated as secrets. |
+| **Detected by** | An independent review agent per phase with a realistic corpus (notes like this user's), fuzzing, old databases from the previous phase, parallel processes, 2 000–10 000-note timings. |
+| **Rule** | Run every heuristic on a realistic corpus and count false positives before shipping. Anything derived from notes that reaches a prompt is quoted and labelled as data, never as instructions. Security checks must cover the step after the check (connect, follow, resolve). |
+
+---
+
 ## 3. Code structure
 
 ### 3.1 Broken relative imports after `myclaw/tools` became a package (2026-10-18, PR #31)
@@ -311,3 +323,7 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 16. **Ported code:** test the feature end to end, not just that it imports; a full rebuild from the source of truth must equal the step-by-step result.
 17. **User files:** never overwrite or delete a user's file without keeping the previous version (`.trash/`) when anything would be lost.
 18. **Independent review:** changes to stored user data are reviewed by an agent or person that did not write them, with real experiments, before merge.
+19. **Heuristics:** run them on a realistic corpus (notes shaped like the real ones) and count false positives before shipping; when in doubt, flag less.
+20. **Prompt hygiene:** text derived from notes, imports or web pages that reaches a prompt is quoted and labelled as information, never as instructions; it never speaks as the user.
+21. **Check the next step too:** a URL check must hold at connect time (pin the address, re-check redirects), a path check must hold after following symlinks, and every entry path (agent, CLI, upload) uses the same rules.
+22. **Optional and off by default:** features that change what agents see or run in the background are opt-in; heavy libraries are optional extras; no thread runs while a feature is off.

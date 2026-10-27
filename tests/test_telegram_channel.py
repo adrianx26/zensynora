@@ -388,6 +388,15 @@ def test_web_ui_restart_closes_the_bot_first(home, monkeypatch):  # noqa: F811
     monkeypatch.setattr(update_api.os, "execve", lambda *a: None)
     monkeypatch.setattr(update_api.time, "sleep", lambda s: None)
     monkeypatch.setattr(sys, "argv", ["zensynora", "webui"])
+
+    class _NowThread:  # 2026-10-24: run the re-exec thread while the patches are active;
+        def __init__(self, target=None, daemon=None, **kw):  # a late real thread replaced
+            self._target = target                           # pytest with `myclaw webui`.
+
+        def start(self):
+            self._target()
+
+    monkeypatch.setattr(update_api.threading, "Thread", _NowThread)
     asyncio.run(update_api.restart())
     assert stopped == [1]
 

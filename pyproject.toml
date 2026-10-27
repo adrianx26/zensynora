@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "zensynora"
-version = "0.7.5"
+version = "0.8.0"
 description = "A powerful personal AI agent with multi-provider LLM support, Telegram/WhatsApp gateways, persistent memory, and agent swarms."
 readme = "README.md"
 license = {text = "AGPL-3.0"}
@@ -83,6 +83,17 @@ redis = ["redis>=4.0"]
 metrics = ["prometheus-client>=0.20.0"]
 security = ["cryptography>=42.0.0", "keyring>=25.0.0"]
 mfa = ["pyotp>=2.9.0", "qrcode>=7.4"]
+# KB phase 5 (2026-10-24) — read PDF, Word and Excel files into the knowledge base
+# (assimilate / import). pypdf: BSD-3-Clause; python-docx, openpyxl: MIT.
+ingest = ["pypdf>=4.0,<7.0", "python-docx>=1.1,<2.0", "openpyxl>=3.1,<4.0", "ijson>=3.2,<4.0"]
+# KB phase 3 (2026-10-24) — semantic search of the knowledge base: local
+# embeddings (ONNX Runtime, CPU). fastembed: Apache-2.0; default model
+# BAAI/bge-small-en-v1.5 (MIT, 67 MB, downloaded on first use to ~/.myclaw/models).
+semantic = ["fastembed>=0.5,<1.0"]
+# KB phase 6 (2026-10-25) — live re-index of note files edited by hand (the
+# Web UI's file watcher, knowledge.watch_files). watchfiles: MIT. Without it the
+# watcher polls modification times every 5 s. (uvicorn[standard] usually brings it.)
+watch = ["watchfiles>=0.21,<2.0"]
 
 # Sprint 2 — distributed tracing
 tracing = [
@@ -131,6 +142,11 @@ all = [
     "PyJWT[crypto]>=2.8",
     "discord.py>=2.3",
     "slack-bolt>=1.18",
+    "pypdf>=4.0,<7.0",
+    "python-docx>=1.1,<2.0",
+    "openpyxl>=3.1,<4.0",
+    "fastembed>=0.5,<1.0",
+    "watchfiles>=0.21,<2.0",
 ]
 
 # Test runner only — what CI installs for the test jobs.

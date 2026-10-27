@@ -24,7 +24,9 @@ itself, so a failure at any point leaves the previous working release active.
 #   in place after the switch, manual backups never pruned.
 # 3 (2026-10-21): installs Node.js 22 into BASE/node when no usable node/npm is
 #   found (the Web UI was silently not rebuilt), checks Python venv/pip first.
-UPDATER_PROTOCOL = 3
+# 4 (2026-10-24): optional packages the user added are re-installed with the
+#   version range of the new release's extras (pyproject), e.g. fastembed.
+UPDATER_PROTOCOL = 4
 
 DEFAULT_REPO = "adrianx26/zensynora"
 DEFAULT_REF = "main"

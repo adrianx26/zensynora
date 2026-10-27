@@ -4,9 +4,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
 import KnowledgeGraph, { type GEdge, type GNode, type GraphHandle } from './KnowledgeGraph';
+import KnowledgeImport from './KnowledgeImport';
+import KnowledgeDistilled from './KnowledgeDistilled';
+import KnowledgeHealth from './KnowledgeHealth';
+import { CategoriesCard, CategoryMergePanel, ConflictsSection, DuplicatesPanel, type Conflict } from './KnowledgeQuality';
+import { SearchModePicker, SemanticCard } from './KnowledgeSemantic';
+import { useSemanticStatus, type SearchMode } from '../knowledgeSemantic';
 
 interface Count { name: string; count: number }
-interface GraphNode extends GNode { updated: string | null; size: number }
+interface GraphNode extends GNode { updated: string | null; size: number; categories?: string[] }
 interface GraphData {
   base: string;
   nodes: GraphNode[];
@@ -23,20 +29,22 @@ interface NoteDetail {
   tags: string[];
   content: string;
   body: string;
-  observations: { category: string; content: string; tags: string[] }[];
+  observations: { category: string; content: string; tags: string[]; source?: string | null }[];
   links: { type: string; target: string; label: string; exists: boolean }[];
   backlinks: { type: string; source: string; label: string }[];
   file: string;
   size: number;
   modified: string;
+  conflicts?: Conflict[]; // 2026-10-24 (KB phase 2)
 }
 
-type Tab = 'graph' | 'notes' | 'tags';
+type Tab = 'graph' | 'notes' | 'tags' | 'distilled';
 type ColorBy = 'tag' | 'links' | 'none';
 
 // Categorical palette (works on the dark and light themes).
 const PALETTE = ['#58a6ff', '#3fb950', '#d29922', '#f778ba', '#a371f7', '#39c5cf', '#ff7b72', '#e3b341', '#7ee787', '#79c0ff'];
 const BASE_KEY = 'zensynora_kb_base';
+const MODE_KEY = 'zensynora_kb_search_mode'; // KB phase 3: words / meaning / both
 
 function hashColor(s: string): string {
   let h = 0;
@@ -62,15 +70,22 @@ const KnowledgeView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<Tab>('graph');
   const [selected, setSelected] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);  // KB phase 5: import dialog
   const [detail, setDetail] = useState<NoteDetail | null>(null);
   const [detailErr, setDetailErr] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState<{ name: string; tags: string; content: string } | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  // 2026-10-24 (KB phase 2): quality tools in the side panel
+  const [side, setSide] = useState<{ type: 'dups' } | { type: 'catmerge'; from: string; to: string } | null>(null);
+  const [catFilter, setCatFilter] = useState<string[]>([]);
   // filters
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<Set<string> | null>(null);
+  // 2026-10-24 (KB phase 3): semantic search mode + status
+  const [mode, setMode] = useState<SearchMode>(() => (stored(MODE_KEY) as SearchMode) || 'auto');
+  const [modeNote, setModeNote] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [relFilter, setRelFilter] = useState<string[]>([]);
   const [hideMissing, setHideMissing] = useState(false);
@@ -81,6 +96,7 @@ const KnowledgeView: React.FC = () => {
   const [paused, setPaused] = useState(false);
   const [sort, setSort] = useState<{ key: 'title' | 'observations' | 'degree' | 'updated'; dir: 1 | -1 }>({ key: 'degree', dir: -1 });
   const graphRef = useRef<GraphHandle>(null);
+  const searchSeq = useRef(0); // 2026-10-24 (review): only the latest search answer is used
 
   const loadBases = useCallback(async () => {
     try {
@@ -103,7 +119,9 @@ const KnowledgeView: React.FC = () => {
   }, [base]);
 
   useEffect(() => { loadBases(); }, [loadBases]);
-  useEffect(() => { store(BASE_KEY, base); setSelected(null); setTagFilter([]); setRelFilter([]); load(); }, [base, load]);
+  const semantic = useSemanticStatus(base, data);
+  const searchMode: SearchMode = semantic.st?.enabled ? mode : 'fts';
+  useEffect(() => { store(BASE_KEY, base); setSelected(null); setTagFilter([]); setRelFilter([]); setCatFilter([]); setSide(null); load(); }, [base, load]);
 
   const loadDetail = useCallback(async (id: string) => {
     setDetailErr(null);
@@ -124,26 +142,30 @@ const KnowledgeView: React.FC = () => {
   // full-text search (debounced)
   useEffect(() => {
     const q = query.trim();
-    if (!q) { setHits(null); return; }
+    const seq = ++searchSeq.current;
+    if (!q) { setHits(null); setModeNote(null); return; }
     const t = window.setTimeout(async () => {
       try {
-        const r = await api<{ results: string[] }>(`/api/knowledge/search?base=${encodeURIComponent(base)}&q=${encodeURIComponent(q)}`);
+        const r = await api<{ results: string[]; note?: string | null }>(`/api/knowledge/search?base=${encodeURIComponent(base)}&q=${encodeURIComponent(q)}&mode=${searchMode}`);
+        if (seq !== searchSeq.current) return; // a newer search was started meanwhile
+        setModeNote(searchMode === 'fts' ? null : r.note || null);
         const ql = q.toLowerCase();
         const s = new Set(r.results);
         data?.nodes.forEach(n => { if (n.title.toLowerCase().includes(ql) || n.id.includes(ql)) s.add(n.id); });
         setHits(s);
-      } catch { setHits(new Set()); }
+      } catch { if (seq === searchSeq.current) setHits(new Set()); }
     }, 250);
     return () => window.clearTimeout(t);
-  }, [query, base, data]);
+  }, [query, base, data, searchMode]);
 
   // ── Filtered graph ──
   const view = useMemo(() => {
     if (!data) return { nodes: [] as GraphNode[], edges: [] as GEdge[] };
     let edges = data.edges.filter(e => !relFilter.length || relFilter.includes(e.type));
     let keep = new Set(data.nodes.map(n => n.id));
-    if (tagFilter.length) {
-      const tagged = new Set(data.nodes.filter(n => n.tags.some(t => tagFilter.includes(t))).map(n => n.id));
+    if (tagFilter.length || catFilter.length) {
+      const tagged = new Set(data.nodes.filter(n => (!tagFilter.length || n.tags.some(t => tagFilter.includes(t)))
+        && (!catFilter.length || (n.categories || []).some(c => catFilter.includes(c)))).map(n => n.id));
       // keep tagged notes and what they link to directly
       keep = new Set(tagged);
       edges.forEach(e => { if (tagged.has(e.source)) keep.add(e.target); if (tagged.has(e.target)) keep.add(e.source); });
@@ -176,7 +198,7 @@ const KnowledgeView: React.FC = () => {
       nodes = nodes.filter(n => linked.has(n.id) || n.id === selected);
     }
     return { nodes, edges };
-  }, [data, tagFilter, relFilter, hits, depth, selected, hideMissing, hideOrphans]);
+  }, [data, tagFilter, catFilter, relFilter, hits, depth, selected, hideMissing, hideOrphans]);
 
   const tagColor = useMemo(() => {
     const m = new Map<string, string>();
@@ -199,6 +221,7 @@ const KnowledgeView: React.FC = () => {
 
   const select = (id: string | null) => {
     setSelected(id);
+    if (id) setSide(null);
     if (id && tab === 'graph') graphRef.current?.focus(id);
   };
 
@@ -286,16 +309,25 @@ const KnowledgeView: React.FC = () => {
     await load();
   };
 
+  // after a conflict / merge action: message, reload the graph, the open note and the categories
+  const qualityDone = (text: string, ok: boolean) => {
+    setNotice({ ok, text });
+    if (!ok) return;
+    load(); // new graph data also reloads the category card
+    if (selected && !selected.startsWith('missing:')) loadDetail(selected);
+  };
+
   const missingTitle = selected?.startsWith('missing:') ? data?.nodes.find(n => n.id === selected)?.title || selected.slice(8) : null;
 
   const sortedNotes = useMemo(() => {
-    const list = (data?.nodes || []).filter(n => !n.missing && (!hits || hits.has(n.id)) && (!tagFilter.length || n.tags.some(t => tagFilter.includes(t))));
+    const list = (data?.nodes || []).filter(n => !n.missing && (!hits || hits.has(n.id)) && (!tagFilter.length || n.tags.some(t => tagFilter.includes(t)))
+      && (!catFilter.length || (n.categories || []).some(c => catFilter.includes(c))));
     const { key, dir } = sort;
     return [...list].sort((a, b) => {
       const va = a[key] ?? '', vb = b[key] ?? '';
       return (typeof va === 'string' ? va.localeCompare(String(vb)) : (va as number) - (vb as number)) * dir;
     });
-  }, [data, hits, tagFilter, sort]);
+  }, [data, hits, tagFilter, catFilter, sort]);
 
   const sortBtn = (key: typeof sort.key, label: string) => (
     <button type="button" className="kb-sort" onClick={() => setSort(s => ({ key, dir: s.key === key ? (s.dir === 1 ? -1 : 1) : (key === 'title' ? 1 : -1) }))}>
@@ -304,7 +336,6 @@ const KnowledgeView: React.FC = () => {
   );
 
   const maxTag = Math.max(1, ...(data?.tags || []).map(t => t.count));
-  const maxCat = Math.max(1, ...(data?.categories || []).map(t => t.count));
   const maxRel = Math.max(1, ...(data?.relation_types || []).map(t => t.count));
 
   return (
@@ -315,16 +346,24 @@ const KnowledgeView: React.FC = () => {
           {bases.map(b => <option key={b.name} value={b.name}>{b.name === 'default' ? 'Shared (default)' : b.name} · {b.notes}</option>)}
         </select>
         <input className="field-input kb-search" placeholder="Search notes and facts…" value={query} onChange={e => setQuery(e.target.value)} />
+        <SearchModePicker mode={mode} status={semantic.st} note={query.trim() ? modeNote : null}
+          onChange={m => { setMode(m); store(MODE_KEY, m); }} />
         <div className="kb-tabs" role="tablist">
-          {(['graph', 'notes', 'tags'] as Tab[]).map(t => (
+          {(['graph', 'notes', 'tags', 'distilled'] as Tab[]).map(t => (
             <button key={t} role="tab" aria-selected={tab === t} className={`settings-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-              {t === 'graph' ? 'Graph' : t === 'notes' ? 'Notes' : 'Tags & types'}
+              {t === 'graph' ? 'Graph' : t === 'notes' ? 'Notes' : t === 'tags' ? 'Tags & types' : 'Distilled'}
             </button>
           ))}
         </div>
         <div className="kb-actions">
           <button type="button" className="ghost-btn" onClick={() => setCreating({ name: '', tags: '', content: '' })}>+ New note</button>
           <button type="button" className="ghost-btn" disabled={loading} onClick={sync} title="Re-read every markdown file into the search index">↻ Re-index</button>
+          <button type="button" className="ghost-btn" onClick={() => setImportOpen(true)}
+            title="Read a web page, GitHub repository, folder or document into linked notes, or import ChatGPT / Claude / MCP memory / Obsidian exports">⇪ Import</button>
+          {data && data.stats.notes > 1 && (
+            <button type="button" className="ghost-btn" onClick={() => { setCreating(null); setSelected(null); setSide({ type: 'dups' }); }}
+              title="List notes that look like duplicates; preview and merge them one pair at a time">⧉ Find duplicates</button>
+          )}
           {data && data.stats.notes > 0 && (
             <button type="button" className="ghost-btn" disabled={enriching}
               title="Ask the default model to add tags, facts and links to notes that have none (10 per click; the text is not changed)"
@@ -342,15 +381,26 @@ const KnowledgeView: React.FC = () => {
           <span title="Linked to, but no note exists yet"><b>{data.stats.missing}</b> missing</span>
           <span title="Notes with no links"><b>{data.stats.orphans}</b> unlinked</span>
           {data.truncated && <span className="probe-err">Only the first 2000 notes are shown.</span>}
-          {(tagFilter.length > 0 || relFilter.length > 0 || hits) && (
-            <button type="button" className="chip small-chip" onClick={() => { setTagFilter([]); setRelFilter([]); setQuery(''); }}>✕ Clear filters</button>
+          {semantic.st?.enabled && (
+            <button type="button" className="chip small-chip" onClick={() => setTab('tags')}
+              title={semantic.st.reason || 'Notes with vectors for semantic search (details under Tags & types)'}>
+              <b>{semantic.st.embedded}</b>/{semantic.st.notes} embedded{semantic.st.installed ? '' : ' · not installed'}
+            </button>
+          )}
+          {data.nodes.some(n => n.conflicts) && (
+            <span title="Notes with facts that contradict each other (open a note to resolve)" style={{ color: '#d29922' }}>
+              <b>{data.nodes.filter(n => n.conflicts).length}</b> ⚠ with conflicts</span>
+          )}
+          {(tagFilter.length > 0 || catFilter.length > 0 || relFilter.length > 0 || hits) && (
+            <button type="button" className="chip small-chip" onClick={() => { setTagFilter([]); setCatFilter([]); setRelFilter([]); setQuery(''); }}>✕ Clear filters</button>
           )}
         </div>
       )}
+      <KnowledgeHealth base={base} reloadKey={data} onReindexed={load} />
       {notice && <div className={`notice ${notice.ok ? '' : 'error'}`} onClick={() => setNotice(null)}>{notice.text}</div>}
       {error && <div className="notice error">Could not load the knowledge base: {error} <button className="ghost-btn" onClick={load}>Retry</button></div>}
 
-      <div className={`kb-main ${selected || creating ? 'with-panel' : ''}`}>
+      <div className={`kb-main ${selected || creating || side ? 'with-panel' : ''}`}>
         <div className="kb-content">
           {tab === 'graph' && (
             <div className="kb-graph-card">
@@ -394,6 +444,7 @@ const KnowledgeView: React.FC = () => {
                   <span key={l} className="kb-legend-item"><span className="kb-swatch" style={{ background: linkColor(d as number) }} />{l} links</span>
                 ))}
                 <span className="kb-legend-item"><span className="kb-swatch missing" />missing note</span>
+                {data?.nodes.some(n => n.conflicts) && <span className="kb-legend-item"><span className="kb-swatch" style={{ background: '#d29922', width: 8, height: 8 }} />has conflicts</span>}
                 <span className="muted small kb-hint">Drag to pan · wheel to zoom · drag a note to pin it · double-click to unpin</span>
               </div>
             </div>
@@ -420,6 +471,11 @@ const KnowledgeView: React.FC = () => {
             </div>
           )}
 
+          {tab === 'distilled' && (
+            // 2026-10-24 (KB phase 4): persona, scenarios, facts with drill-down
+            <KnowledgeDistilled base={base} onOpenNote={p => { setCreating(null); setSide(null); select(p); }} />
+          )}
+
           {tab === 'tags' && data && (
             <div className="kb-tags-grid">
               <section className="settings-card">
@@ -436,15 +492,10 @@ const KnowledgeView: React.FC = () => {
                   {data.tags.length === 0 && <span className="muted">No tags yet.</span>}
                 </div>
               </section>
-              <section className="settings-card">
-                <h3>Fact categories</h3>
-                <p className="muted small">Facts are lines like <code>- [category] text</code>.</p>
-                {data.categories.map(c => (
-                  <div className="kb-bar" key={c.name}><span>{c.name}</span>
-                    <span className="kb-bar-track"><span className="kb-bar-fill" style={{ width: `${(c.count / maxCat) * 100}%` }} /></span><b>{c.count}</b></div>
-                ))}
-                {data.categories.length === 0 && <span className="muted">No facts yet.</span>}
-              </section>
+              <SemanticCard base={base} status={semantic} />
+              <CategoriesCard base={base} reloadKey={data} active={catFilter}
+                onToggle={c => toggle(catFilter, c, setCatFilter)}
+                onMerge={sg => { setCreating(null); setSelected(null); setSide({ type: 'catmerge', from: sg.from, to: sg.to }); }} />
               <section className="settings-card">
                 <h3>Link types</h3>
                 <p className="muted small">Links are lines like <code>- uses [[Other note]]</code>. Click to show only that type.</p>
@@ -459,9 +510,18 @@ const KnowledgeView: React.FC = () => {
           )}
         </div>
 
-        {(selected || creating) && (
+        {(selected || creating || side) && (
           <aside className="kb-panel">
-            <button type="button" className="kb-close ghost-btn" onClick={() => { setSelected(null); setCreating(null); }} aria-label="Close">✕</button>
+            <button type="button" className="kb-close ghost-btn" onClick={() => { setSelected(null); setCreating(null); setSide(null); }} aria-label="Close">✕</button>
+
+            {!creating && side?.type === 'dups' && (
+              <DuplicatesPanel base={base} onDone={qualityDone} onCancel={() => setSide(null)}
+                onOpen={id => { setSide(null); select(id); }} />
+            )}
+            {!creating && side?.type === 'catmerge' && (
+              <CategoryMergePanel base={base} from={side.from} to={side.to} onCancel={() => setSide(null)}
+                onDone={(t, ok) => { setSide(null); qualityDone(t, ok); }} />
+            )}
 
             {creating && (
               <div className="kb-detail">
@@ -480,7 +540,7 @@ const KnowledgeView: React.FC = () => {
               </div>
             )}
 
-            {!creating && missingTitle && (
+            {!creating && !side && missingTitle && (
               <div className="kb-detail">
                 <h3>{missingTitle}</h3>
                 <p className="muted">Other notes link to this, but it has no note yet.</p>
@@ -488,9 +548,9 @@ const KnowledgeView: React.FC = () => {
               </div>
             )}
 
-            {!creating && detailErr && <div className="notice error">{detailErr}</div>}
+            {!creating && !side && detailErr && <div className="notice error">{detailErr}</div>}
 
-            {!creating && detail && (
+            {!creating && !side && detail && (
               <div className="kb-detail">
                 <h3>{detail.title}</h3>
                 <div className="kb-tags">{detail.tags.map(t => <span key={t} className="kb-tag" style={{ borderColor: tagColor.get(t) }}>#{t}</span>)}</div>
@@ -512,6 +572,7 @@ const KnowledgeView: React.FC = () => {
                       {tab !== 'graph' && <button type="button" className="ghost-btn" onClick={() => { setTab('graph'); window.setTimeout(() => graphRef.current?.focus(detail.permalink), 50); }}>◎ Show in graph</button>}
                       <button type="button" className="ghost-btn danger" onClick={trash}>Move to trash</button>
                     </div>
+                    <ConflictsSection base={base} conflicts={detail.conflicts || []} onDone={qualityDone} />
                     {detail.body && <div className="kb-body">{detail.body}</div>}
 
                     {detail.observations.length > 0 && (
@@ -522,7 +583,8 @@ const KnowledgeView: React.FC = () => {
                         }, {})).map(([cat, list]) => (
                           <div key={cat} className="kb-obs-group">
                             <div className="kb-obs-cat">{cat}</div>
-                            <ul>{list.map((o, i) => <li key={i}>{o.content}{o.tags.map(t => <span key={t} className="kb-tag inline">#{t}</span>)}</li>)}</ul>
+                            <ul>{list.map((o, i) => <li key={i}>{o.content}{o.tags.map(t => <span key={t} className="kb-tag inline">#{t}</span>)}
+                              {o.source && <span className="muted small kb-source" title={`Source: ${o.source}`}> · {o.source}</span>}</li>)}</ul>
                           </div>
                         ))}
                       </section>
@@ -553,6 +615,8 @@ const KnowledgeView: React.FC = () => {
           </aside>
         )}
       </div>
+      <KnowledgeImport base={base} open={importOpen} onClose={() => setImportOpen(false)}
+        onDone={load} onOpenNote={(p) => { setImportOpen(false); setSide(null); setCreating(null); setSelected(p); }} />
     </div>
   );
 };

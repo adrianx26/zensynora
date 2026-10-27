@@ -478,6 +478,26 @@ class KnowledgeConfig(BaseModel):
     enabled: bool = True
     auto_extract: bool = False  # Auto-extract knowledge from conversations
     knowledge_dir: str = "~/.myclaw/knowledge"
+    # 2026-10-24 (KB phase 2): quality layer. Conflict detection only flags
+    # contradicting facts (never changes a note); notes with more than
+    # hub_degree links rank lower in the automatic context.
+    detect_conflicts: bool = True
+    hub_penalty: bool = True
+    hub_degree: int = Field(25, ge=1, le=10000)
+    # 2026-10-24 (KB phase 3): semantic search (local embeddings, optional
+    # package fastembed). Off by default; vectors live in the index database.
+    semantic_search: bool = False
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
+    # cosine similarity below which a note is no semantic match (0 = the model's default)
+    semantic_min_score: float = Field(0.0, ge=0.0, le=1.0)
+    # 2026-10-24 (KB phase 4): L0–L3 distillation (facts, scenarios, persona) in
+    # the background and first in the agent's context. Off by default.
+    distill: bool = False
+    distill_every: int = Field(20, ge=1, le=100000)          # changed notes per background run
+    distill_idle_minutes: float = Field(10.0, ge=0.0, le=10080.0)  # … or this long after the last change
+    # 2026-10-25 (KB phase 6): the Web UI re-indexes note files changed by hand
+    # (editor, Obsidian, git pull) within about a second. Off by default.
+    watch_files: bool = False
 
 
 class SwarmConfig(BaseModel):
@@ -905,6 +925,63 @@ def _apply_knowledge_dir(config: AppConfig) -> None:
         logger.warning("knowledge.knowledge_dir could not be applied (%s); using ~/.myclaw/knowledge", e)
 
 
+def _apply_knowledge_quality(config: AppConfig) -> None:
+    """Apply ``knowledge.detect_conflicts`` / ``hub_penalty`` / ``hub_degree``
+    (2026-10-24, KB phase 2). Never makes loading the config fail."""
+    try:
+        kc = getattr(config, "knowledge", None)
+        from .knowledge.quality import set_options
+
+        set_options(detect_conflicts=getattr(kc, "detect_conflicts", True),
+                    hub_penalty=getattr(kc, "hub_penalty", True),
+                    hub_degree=getattr(kc, "hub_degree", 25))
+    except Exception as e:
+        logger.warning("knowledge quality settings could not be applied (%s); using defaults", e)
+
+
+def _apply_knowledge_semantic(config: AppConfig) -> None:
+    """Apply ``knowledge.semantic_search`` / ``embedding_model`` /
+    ``semantic_min_score`` (2026-10-24, KB phase 3). Never makes loading fail."""
+    try:
+        kc = getattr(config, "knowledge", None)
+        from .knowledge.semantic import set_options
+
+        set_options(semantic_search=getattr(kc, "semantic_search", False),
+                    embedding_model=getattr(kc, "embedding_model", None),
+                    kb_enabled=getattr(kc, "enabled", True),
+                    min_score=getattr(kc, "semantic_min_score", 0.0))
+    except Exception as e:
+        logger.warning("semantic search settings could not be applied (%s); it stays off", e)
+
+
+def _apply_knowledge_distill(config: AppConfig) -> None:
+    """Apply ``knowledge.distill`` / ``distill_every`` / ``distill_idle_minutes``
+    (2026-10-24, KB phase 4). Never makes loading the config fail."""
+    try:
+        kc = getattr(config, "knowledge", None)
+        from .knowledge.distill import set_options
+
+        set_options(distill=getattr(kc, "distill", False),
+                    distill_every=getattr(kc, "distill_every", 20),
+                    idle_minutes=getattr(kc, "distill_idle_minutes", 10.0),
+                    kb_enabled=getattr(kc, "enabled", True))
+    except Exception as e:
+        logger.warning("distillation settings could not be applied (%s); it stays off", e)
+
+
+def _apply_knowledge_watch(config: AppConfig) -> None:
+    """Apply ``knowledge.watch_files`` (2026-10-25, KB phase 6): starts / stops the
+    file watcher in the Web UI process. Never makes loading the config fail."""
+    try:
+        kc = getattr(config, "knowledge", None)
+        from .knowledge.watch import set_options
+
+        set_options(watch_files=getattr(kc, "watch_files", False),
+                    kb_enabled=getattr(kc, "enabled", True))
+    except Exception as e:
+        logger.warning("file watcher settings could not be applied (%s); it stays off", e)
+
+
 def load_config(force_reload: bool = False) -> AppConfig:
     """Load and validate config. Exits with clear message on schema errors.
 
@@ -937,6 +1014,10 @@ def load_config(force_reload: bool = False) -> AppConfig:
             _cached_config = AppConfig(**raw)
             _config_mtime = current_mtime
             _apply_knowledge_dir(_cached_config)
+            _apply_knowledge_quality(_cached_config)
+            _apply_knowledge_semantic(_cached_config)
+            _apply_knowledge_distill(_cached_config)
+            _apply_knowledge_watch(_cached_config)
 
             # Validate critical configuration
             _validate_config(_cached_config)

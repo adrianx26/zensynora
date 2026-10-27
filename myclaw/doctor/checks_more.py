@@ -113,64 +113,10 @@ def _custom_tools(ctx):
 
 
 # ── data ─────────────────────────────────────────────────────────────────────
-def _knowledge_state() -> dict:
-    kdir = data_dir() / "knowledge" / "default"
-    files = sorted(kdir.rglob("*.md")) if kdir.is_dir() else []
-    db = data_dir() / "knowledge_default.db"
-    st = {"files": len(files), "indexed": 0, "missing": 0, "stale": 0, "fts": None, "db": db.exists()}
-    if not db.exists():
-        st["missing"] = len(files)
-        return st
-    con = _ro(db)
-    try:
-        tables = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type IN ('table','view')")}
-        if "entities" not in tables:
-            st["missing"] = len(files)
-            return st
-        paths = [r[0] for r in con.execute("SELECT file_path FROM entities")]
-        st["fts"] = "notes_text_fts" in tables
-    finally:
-        con.close()
-    known = set()
-    for p in paths:
-        pp = Path(p)
-        known.add(str(pp if pp.is_absolute() else kdir / pp))
-    st["indexed"] = len(paths)
-    st["missing"] = sum(1 for f in files if str(f) not in known)
-    on_disk = {str(f) for f in files}
-    st["stale"] = sum(1 for p in known if p not in on_disk)
-    return st
-
-
-@check("knowledge_index", "Knowledge index", "data")
-def _knowledge_index(ctx):
-    try:
-        if not ctx.get_config().knowledge.enabled:
-            return OK, "knowledge base turned off"
-    except BaseException:
-        pass
-    st = _knowledge_state()
-    if not st["files"] and not st["db"]:
-        return OK, "no notes yet"
-    detail = f"{st['files']} note file(s), {st['indexed']} indexed"
-    if st["missing"]:
-        detail += f", {st['missing']} not indexed"
-    if st["stale"]:
-        detail += f", {st['stale']} index entr{'y' if st['stale'] == 1 else 'ies'} without a file"
-    hint = "Run zensynora knowledge sync (or zensynora doctor --fix)."
-    if st["fts"] is False and st["indexed"]:
-        return WARN, detail + "; full-text index of note text missing", hint
-    if st["missing"] >= 3 or (st["missing"] and st["missing"] * 10 > st["files"]):
-        return WARN, detail, hint
-    return OK, detail
-
-
-@fixer("knowledge_index")
-def _fix_knowledge_index(ctx):
-    from ..knowledge.sync import sync_knowledge
-
-    s = sync_knowledge("default")
-    return f"knowledge synced: {s.get('added', 0)} added, {s.get('updated', 0)} updated, {s.get('deleted', 0)} removed"
+# 2026-10-25 (KB phase 6): the knowledge checks live in checks_knowledge.py
+# (every knowledge base, the configured knowledge folder, checksums of a
+# sample, waiting links, conflicts, embeddings, distillation, watcher, imports,
+# trash). "knowledge_index" keeps its id, title and fix.
 
 
 # ── configuration ────────────────────────────────────────────────────────────

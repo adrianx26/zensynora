@@ -237,12 +237,22 @@ _BASE_OPTION = click.option("--base", "-b", default="default", show_default=True
 @knowledge.command()
 @click.argument('query', required=False)
 @_BASE_OPTION
-def search(query, base):
+@click.option("--mode", default="fts", show_default=True,
+              type=click.Choice(["auto", "fts", "semantic", "hybrid"]),
+              help="fts = words; semantic = by meaning; hybrid = both; auto = hybrid when "
+                   "semantic search is on and ready")
+def search(query, base, mode):
     """Search knowledge base (supports AND / OR / NOT and "quoted phrases")"""
     if not query:
         query = click.prompt("Search query")
     # 2026-10-23 (KB phase 0): boolean=True keeps AND/OR/NOT as search syntax.
-    notes = search_notes(query, base, boolean=True)
+    info: dict = {}
+    if mode == "fts":
+        notes = search_notes(query, base, boolean=True)
+    else:  # 2026-10-24 (KB phase 3)
+        notes = search_notes(query, base, boolean=True, mode=mode, info=info)
+        if info.get("fallback"):
+            click.echo(f"(semantic search not used: {info['fallback']})")
     if notes:
         click.echo(f"\n🔍 Found {len(notes)} results for '{query}':\n")
         for i, note in enumerate(notes, 1):
@@ -325,6 +335,72 @@ def sync(base, force):
     stats = sync_knowledge(base, force=force)
     click.echo(f"✅ Sync complete: {stats['added'] + stats['updated'] + stats['deleted']} changes")
 
+@knowledge.command(name="embed")
+@_BASE_OPTION
+@click.option("--all", "all_notes", is_flag=True,
+              help="Check every note, not only those without current vectors "
+                   "(unchanged parts are still not embedded again)")
+@click.option("--limit", type=click.IntRange(1, 1_000_000), default=None,
+              help="At most this many notes")
+def embed_cmd(base, all_notes, limit):
+    """Compute semantic-search vectors for the notes (KB phase 3)"""
+    import time
+
+    from .knowledge import semantic
+
+    load_config()  # applies knowledge.embedding_model
+    st = semantic.embedding_status(base)
+    click.echo(f"Model: {st['model']} · {st['embedded']}/{st['notes']} notes embedded"
+               f"{'' if st['enabled'] else ' · semantic search is off (knowledge.semantic_search)'}")
+    if not st["installed"]:
+        raise click.ClickException(
+            f"fastembed is not installed. Install it with:\n  {sys.executable} -m pip install "
+            f"\"{semantic.INSTALL_SPEC}\"")
+    if not all_notes and st["stale"] == 0:
+        click.echo("✅ Every note is embedded.")
+        return
+    click.echo("Loading the model (the first time it is downloaded to ~/.myclaw/models)…")
+    last = [0.0]
+
+    def progress(done, total):
+        if total and (time.time() - last[0] > 2 or done == total):
+            last[0] = time.time()
+            click.echo(f"  … {done}/{total} notes")
+
+    r = semantic.backfill_embeddings(base, limit=limit, all_notes=all_notes, progress=progress)
+    if not r.get("ok"):
+        raise click.ClickException(r.get("message") or "embedding failed")
+    click.echo(f"✅ {r['message']}")
+
+
+@knowledge.command(name="distill")
+@_BASE_OPTION
+@click.option("--full", is_flag=True, help="Read every note again (a rebuild of the distilled data)")
+def distill_cmd(base, full):
+    """Distil notes into facts, scenarios and a persona (KB phase 4)"""
+    from .knowledge import distill
+
+    load_config()  # applies knowledge.distill / semantic settings
+    click.echo("Re-indexing changed notes…")
+    sync_knowledge(base)
+    last = [0.0]
+
+    def progress(done, total):
+        import time
+
+        if total and (time.time() - last[0] > 2 or done == total):
+            last[0] = time.time()
+            click.echo(f"  … {done}/{total} notes")
+
+    r = distill.distill(base, full=full, progress=progress, wait_lock=60.0)
+    if not r.get("ok"):
+        raise click.ClickException(r.get("message") or "distillation failed")
+    click.echo(f"✅ {r['message']}")
+    if not distill.enabled():
+        click.echo("   (automatic distillation and the distilled agent context are off: "
+                   "knowledge.distill in Settings → Features)")
+
+
 @knowledge.command()
 @_BASE_OPTION
 def tags(base):
@@ -334,6 +410,54 @@ def tags(base):
         click.echo("\n🏷️ Tags: " + " ".join(f"#{t}" for t in tags))
     else:
         click.echo("No tags found.")
+
+
+# 2026-10-24 (KB phase 5): read a URL / GitHub repository / file / folder, or
+# import an export, into the knowledge base. Your own files: no allowed-roots
+# check here (agents and the Web UI have one); secret files are never read.
+def _ingest_progress(text):
+    click.echo(f"  … {text}")
+
+
+@knowledge.command(name="assimilate")
+@click.argument("source")
+@_BASE_OPTION
+@click.option("--max-notes", default=40, show_default=True, type=click.IntRange(1, 500),
+              help="At most this many notes")
+def assimilate_cmd(source, base, max_notes):
+    """Read a URL, GitHub repository, file or folder into linked notes + a Mermaid diagram"""
+    from .knowledge.ingest import Budget, IngestError, assimilate
+    from .knowledge.ingest.run import format_summary
+
+    budget = Budget(max_notes=max_notes, seconds=3600, progress=_ingest_progress)
+    try:
+        result = assimilate(source, base=base, max_notes=max_notes, budget=budget, trusted=True)
+    except IngestError as e:
+        raise click.ClickException(str(e))
+    click.echo(format_summary("Assimilated", f"'{source}'", result))
+
+
+@knowledge.command(name="import")
+@click.argument("file")
+@_BASE_OPTION
+@click.option("--kind", default="auto", show_default=True,
+              type=click.Choice(["auto", "chatgpt", "claude", "mcp_memory", "markdown", "document"]),
+              help="What the file is (auto = detect)")
+@click.option("--max-notes", default=10000, show_default=True, type=click.IntRange(1, 50000),
+              help="At most this many notes")
+def import_cmd(file, base, kind, max_notes):
+    """Import a ChatGPT/Claude export, MCP memory file, Markdown folder (Obsidian) or document"""
+    from .knowledge.ingest import Budget, IngestError, import_file
+    from .knowledge.ingest.run import format_summary
+
+    budget = Budget(max_notes=max_notes, max_bytes=2_000_000_000, seconds=None,
+                    progress=_ingest_progress)
+    try:
+        result = import_file(file, base=base, kind=kind, max_notes=max_notes, budget=budget,
+                             trusted=True)
+    except IngestError as e:
+        raise click.ClickException(str(e))
+    click.echo(format_summary("Imported", f"'{file}' ({result.kind})", result, with_diagram=False))
 
 ### MEMORY COMMANDS ###
 @cli.group()

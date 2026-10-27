@@ -33,4 +33,8 @@ rules when changing ZenSynora:
 - Knowledge base: the Markdown files are the source of truth; a full rebuild (`sync --force`) must give the same index as step-by-step updates. Links resolve permalink > slug > name > title > alias, never fuzzy.
 - Never overwrite or delete a user's note without keeping the previous version in `<base>/.trash/` when anything would be lost.
 - Changes to stored user data get an independent review (someone who did not write them, with real experiments) before merge.
+- Run heuristics (conflicts, duplicates, persona) on a realistic corpus and count false positives before shipping.
+- Text derived from notes/imports/web pages that reaches a prompt is quoted and labelled as information, never instructions.
+- Security checks must hold for the next step (connect-time address, symlink target) and apply on every entry path.
+- Features that change agent context or run in the background are opt-in; optional libraries are extras; no thread while off.
 

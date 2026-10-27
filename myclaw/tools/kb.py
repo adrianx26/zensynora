@@ -50,7 +50,10 @@ def write_to_knowledge(
     title: short specific title (becomes the note's name; writing the same title again replaces the note)
     content: the text of the note (plain text or markdown)
     tags: 1-4 comma-separated topic words, e.g. "homelab, linux" — always add some
-    observations: facts, one per line as "category | text", e.g. "spec | 32 GB RAM"
+    observations: facts, one per line as "category | text", e.g. "spec | 32 GB RAM";
+                  optionally "category | text | source: where it comes from", e.g.
+                  "spec | 32 GB RAM | source: output of free -g" (a URL, "tool …" or
+                  "chat …" works without "source:"); other "|" stay part of the text
     relations: links to other notes, one per line as "relation | Other note title",
                e.g. "runs_on | Home server" — link to notes that already exist (search_knowledge first)
     user_id: User ID for multi-user isolation
@@ -65,10 +68,24 @@ def write_to_knowledge(
             for line in observations.strip().split("\n"):
                 if "|" in line:
                     category, obs_content = line.split("|", 1)
+                    # 2026-10-24 (KB phase 2): optional third field = source, only
+                    # when marked ("source: …", a URL, "tool …", "chat …") — a fact
+                    # may contain pipes ("ps aux | grep python").
+                    source = None
+                    if "|" in obs_content:
+                        head, tail = obs_content.rsplit("|", 1)
+                        mark = " ".join(tail.split())
+                        if mark.lower().startswith("source:"):
+                            source = mark[len("source:"):].strip() or None
+                        elif mark.lower().startswith(("http://", "https://", "tool ", "chat ")):
+                            source = mark
+                        if source:
+                            obs_content = head
                     obs_list.append(Observation(
                         category=category.strip(),
                         content=obs_content.strip(),
-                        tags=[]
+                        tags=[],
+                        provenance_path=source,
                     ))
 
         # Parse relations
@@ -90,7 +107,8 @@ def write_to_knowledge(
             observations=obs_list,
             relations=rel_list,
             tags=tag_list,
-            user_id=user_id
+            user_id=user_id,
+            origin="agent",  # 2026-10-24 (KB phase 4 review): "I …" here is the agent
         )
 
         return f"✅ Knowledge note created: [{title}](memory://{permalink})"
@@ -213,9 +231,30 @@ def _notes_with_tag(tag: str, user_id: str) -> list:
     return notes
 
 
-def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> str:
+def _semantic_args(mode: Any):
+    """``(search_notes kwargs, info dict, note)`` for the tool's ``mode`` (KB phase 3).
+
+    With semantic search off and mode "auto" the kwargs are empty: the search
+    is exactly the word search it always was.
     """
-    Search the knowledge base using full-text search.
+    from ..knowledge import semantic as _semantic
+
+    m = _semantic.normalise_mode(mode)
+    note = ""
+    if m is None:
+        note = (f"(mode '{mode}' is not known — use auto, fts, semantic or hybrid; "
+                "used auto.)")
+        m = "auto"
+    if m == "fts" or (m == "auto" and not _semantic.enabled()):
+        return {}, {}, note
+    info: Dict[str, Any] = {}
+    return {"mode": m, "semantic_timeout": _semantic.SEARCH_TIMEOUT, "info": info}, info, note
+
+
+def search_knowledge(query: str, limit: int = 5, user_id: str = "default",
+                     mode: str = "auto") -> str:
+    """
+    Search the knowledge base using full-text search (and semantic search).
 
     When no results are found, returns an actionable guidance payload that includes:
     - Confirmation that no results were found
@@ -230,6 +269,9 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> st
                starts with NOT means "every note (with the tags) except")
         limit: Maximum number of results (default: 5)
         user_id: User ID for multi-user isolation
+        mode: 2026-10-24 (KB phase 3) — "auto" (default: words + meaning when
+              semantic search is on, else words), "fts" (words only),
+              "semantic" (meaning only) or "hybrid" (both)
 
     Returns:
         Formatted search results, or standardized "no results" payload with guidance.
@@ -246,10 +288,11 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> st
         except (TypeError, ValueError):
             limit = 5
         fetch = limit * 4 if (tags or negated) else limit
+        sem_kw, sem_info, mode_note = _semantic_args(mode)
         if positive:
             # the text is passed on as it is: plain sentences are free text,
             # AND/OR/NOT and "phrases" are search syntax (db.search_fts)
-            notes = search_notes(positive, user_id, fetch, boolean=True)
+            notes = search_notes(positive, user_id, fetch, boolean=True, **sem_kw)
         elif tags:
             notes = _notes_with_tag(tags[0], user_id)
         elif negated:
@@ -273,6 +316,10 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> st
                 "",
                 "💡 Suggestions:",
             ]
+            if mode_note:
+                lines.insert(1, mode_note)
+            if sem_kw.get("mode") in ("semantic", "hybrid") and sem_info.get("fallback"):
+                lines.insert(1, f"(semantic search not used: {sem_info['fallback']})")
 
             if suggested_terms:
                 lines.append(f"  • Try broader search terms: '{broader_query}'")
@@ -294,6 +341,12 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default") -> st
             return "\n".join(lines)
 
         lines = [f"🔍 Search results for '{query}':", ""]
+        if mode_note:
+            lines[1:1] = [mode_note]
+        if sem_info.get("mode") in ("semantic", "hybrid"):
+            lines[1:1] = [f"(search: {'meaning' if sem_info['mode'] == 'semantic' else 'words + meaning'})"]
+        elif sem_kw.get("mode") in ("semantic", "hybrid") and sem_info.get("fallback"):
+            lines[1:1] = [f"(semantic search not used: {sem_info['fallback']} — showing word matches)"]
 
         for i, note in enumerate(notes, 1):
             lines.append(f"{i}. **{note.title}** ([{note.permalink}](memory://{note.permalink}))")
@@ -376,7 +429,9 @@ def read_knowledge(permalink: str, user_id: str = "default") -> str:
         if note.observations:
             lines.append("## Observations")
             for obs in note.observations:
-                lines.append(f"- [{obs.category}] {obs.content}")
+                # 2026-10-24 (KB phase 2): where the fact comes from
+                src = getattr(obs, "provenance_path", None)
+                lines.append(f"- [{obs.category}] {obs.content}" + (f" (source: {src})" if src else ""))
             lines.append("")
 
         if note.relations:
@@ -518,6 +573,307 @@ def list_knowledge_tags(user_id: str = "default") -> str:
 
 
 
+# ── KB phase 2 (2026-10-24): quality tools ───────────────────────────────────
+# Read-mostly: listing conflicts / categories / duplicates, and resolving ONE
+# conflict. Merging notes or categories rewrites many files, so it is a user
+# action in the Web UI (Knowledge page), not an agent tool.
+
+def knowledge_conflicts(permalink: str = "", user_id: str = "default") -> str:
+    """
+    List open conflicts: facts of the same category on the same note that
+    contradict each other (e.g. "32 GB RAM" and "64 GB RAM").
+
+    permalink: only this note (empty = every note)
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge.quality import list_conflicts
+
+    try:
+        items = list_conflicts(user_id, permalink=(permalink or "").strip())
+    except Exception as e:
+        logger.warning("knowledge_conflicts failed: %s", e)
+        return f"Could not list conflicts: {e}. Try sync_knowledge_base() and ask again."
+    where = f" in {permalink}" if permalink else ""
+    if not items:
+        return f"No open conflicts{where}. Facts that contradict each other are flagged when a note is saved."
+    lines = [f"⚠ {len(items)} open conflict(s){where}:", ""]
+    for c in items:
+        lines.append(f"#{c['id']} {c['title'] or c['permalink']} ({c['permalink']}) [{c['category']}]")
+        lines.append(f"   a: {c['a']}")
+        lines.append(f"   b: {c['b']}")
+    lines += ["", "Check which one is true (ask the user if unsure), then call "
+              "resolve_knowledge_conflict(conflict_id, keep) with keep = \"a\", \"b\" or \"both\"."]
+    return "\n".join(lines)
+
+
+def resolve_knowledge_conflict(conflict_id: int, keep: str, user_id: str = "default") -> str:
+    """
+    Resolve one conflict from knowledge_conflicts().
+
+    conflict_id: the number shown as #id
+    keep: "a" or "b" removes the other fact from the note (the old version is kept
+          in .trash); "both" means both facts are right — the pair is not flagged again
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge.quality import resolve_conflict
+
+    try:
+        result = resolve_conflict(user_id, conflict_id, keep)
+    except ValueError as e:
+        return f"Cannot resolve: {e} Example: resolve_knowledge_conflict(12, \"a\")."
+    except LookupError as e:
+        return f"{e} Call knowledge_conflicts() to see the open conflicts and their ids."
+    except Exception as e:
+        logger.warning("resolve_knowledge_conflict failed: %s", e)
+        return f"Could not resolve conflict {conflict_id}: {e}"
+    return ("✅ " if result.get("changed") else "") + result.get("message", "Done.")
+
+
+def knowledge_categories(user_id: str = "default") -> str:
+    """
+    List the fact categories (the [category] of "- [category] text" lines) with
+    how many facts use each, and suggestions of categories that should be merged.
+
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge.quality import list_categories
+
+    try:
+        data = list_categories(user_id)
+    except Exception as e:
+        logger.warning("knowledge_categories failed: %s", e)
+        return f"Could not read the categories: {e}. Try sync_knowledge_base() and ask again."
+    cats = data.get("categories") or []
+    if not cats:
+        return "No facts yet, so no categories. Facts are lines like \"- [setting] port 8080\"."
+    lines = ["Fact categories (facts per category):"]
+    for c in cats:
+        variants = [v for v in (c.get("variants") or {}) if v != c["name"]]
+        extra = f" (written as: {', '.join(variants)})" if variants else ""
+        lines.append(f"- {c['name']}: {c['count']}{extra}")
+    sugg = data.get("suggestions") or []
+    if sugg:
+        lines += ["", "Merge suggestions (the user can apply them on the Knowledge page → Tags & types):"]
+        for s in sugg:
+            lines.append(f"- \"{s['from']}\" ({s['from_count']}) → \"{s['to']}\" ({s['to_count']}): {s['reason']}")
+    lines += ["", "When writing facts, reuse one of these categories."]
+    return "\n".join(lines)
+
+
+def find_duplicate_notes(user_id: str = "default") -> str:
+    """
+    List notes that look like duplicates of each other (same title, title is the
+    other's alias, identical or nearly identical text). Preview only — nothing is changed.
+
+    user_id: User ID for multi-user isolation
+    """
+    import concurrent.futures
+
+    from ..knowledge.quality import find_duplicates
+
+    # 2026-10-24 (KB phase 2 review): never hold up the agent's turn for long —
+    # an 8 s budget inside, and at most ~10 s of waiting here.
+    pool = concurrent.futures.ThreadPoolExecutor(max_workers=1, thread_name_prefix="kb-dups")
+    try:
+        future = pool.submit(find_duplicates, user_id, None, 30, True, 8.0)
+        result = future.result(timeout=10)
+    except concurrent.futures.TimeoutError:
+        return ("Looking for duplicates takes too long for this knowledge base right now. "
+                "Ask the user to use the Knowledge page (⧉ Find duplicates).")
+    except Exception as e:
+        logger.warning("find_duplicate_notes failed: %s", e)
+        return f"Could not look for duplicates: {e}. Try sync_knowledge_base() and ask again."
+    finally:
+        pool.shutdown(wait=False)
+    pairs = result.get("pairs") or []
+    note = f"\n({result['message']})" if result.get("message") else ""
+    if not pairs:
+        return "No duplicate notes found." + note
+    lines = [f"{len(pairs)} possible duplicate pair(s):{note}", ""]
+    for d in pairs:
+        k, x = d["keep"], d["drop"]
+        lines.append(f"- keep {k['title']} ({k['permalink']}), merge {x['title']} ({x['permalink']}) "
+                     f"into it — {', '.join(d['reasons'])}")
+    lines += ["", "Merging is done by the user on the Knowledge page (Find duplicates → preview → merge); "
+              "tell the user which pairs look right."]
+    return "\n".join(lines)
+
+
+# ── KB phase 4 (2026-10-24): distilled facts, scenarios, persona ─────────────
+# Derived data (rebuilt from the notes); reading never changes a note.
+
+def _distill_off_hint() -> str:
+    from ..knowledge import distill as _d
+
+    return ("" if _d.enabled() else
+            "\n(Automatic distillation is off — Settings → Features → \"Distil facts, scenarios "
+            "and a persona\" (knowledge.distill); distill_knowledge() runs it once.)")
+
+
+def _fmt_fact(f: Dict[str, Any]) -> str:
+    n = f["support"]
+    flags = (" ⚠ conflicting" if f.get("conflicted") else "") + (" · about you" if f.get("about_user") else "")
+    return (f"f{f['id']} [{f['category']}] {shorten_text(f.get('display') or f['text'], 200)} — confidence "
+            f"{f['confidence']:.2f}, {n} note{'s' if n != 1 else ''}{flags}")
+
+
+def list_facts(query: str = "", limit: int = 20, user_id: str = "default") -> str:
+    """
+    List distilled facts (L1): atomic facts deduplicated across notes, with a
+    confidence and how many notes support them. Best first, or matching query.
+
+    query: words to look for (empty = the most confident facts)
+    limit: how many (1-100)
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge import distill as _d
+
+    try:
+        n = max(1, min(100, int(limit or 20)))
+    except (TypeError, ValueError):
+        return f"limit must be a number from 1 to 100 (got {limit!r}). Example: list_facts(\"ollama\", 10)."
+    try:
+        data = _d.list_facts(user_id, query=str(query or ""), limit=n)
+    except Exception as e:
+        logger.warning("list_facts failed: %s", e)
+        return f"Could not list facts: {e}. Try distill_knowledge() and ask again."
+    if not data.get("distilled"):
+        return "Nothing is distilled yet. Call distill_knowledge() first." + _distill_off_hint()
+    facts = data.get("facts") or []
+    if not facts:
+        return ((f"No distilled fact matches '{query}'. Try other words or search_knowledge()."
+                 if query else "No distilled facts yet — notes need facts (- [category] text) or "
+                 "first-person sentences (\"I prefer …\").") + _distill_off_hint())
+    head = (f"{len(facts)} fact(s) matching '{query}':" if query
+            else f"Top {len(facts)} of {data.get('total', len(facts))} fact(s):")
+    lines = [head] + [f"- {_fmt_fact(f)}" for f in facts]
+    lines.append("drill_down(\"f<id>\") shows the notes and lines behind a fact.")
+    return "\n".join(lines)
+
+
+def list_scenarios(query: str = "", user_id: str = "default") -> str:
+    """
+    List distilled scenarios (L2): groups of related facts (a note and the notes
+    it links to, a tag, a name, a category) with a title and a short summary.
+
+    query: words to look for (empty = the biggest scenarios)
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge import distill as _d
+
+    try:
+        data = _d.list_scenarios(user_id, query=str(query or ""), limit=20)
+    except Exception as e:
+        logger.warning("list_scenarios failed: %s", e)
+        return f"Could not list scenarios: {e}. Try distill_knowledge() and ask again."
+    if not data.get("distilled"):
+        return "Nothing is distilled yet. Call distill_knowledge() first." + _distill_off_hint()
+    items = data.get("scenarios") or []
+    if not items:
+        return ((f"No scenario matches '{query}'." if query else
+                 "No scenarios yet — they form when at least two facts are related.")
+                + _distill_off_hint())
+    lines = [f"{len(items)} scenario(s){f' matching {query!r}' if query else ''}:"]
+    for sc in items:
+        lines.append(f"- s{sc['id']} {sc['title']} ({sc['size']} facts, {sc['notes']} notes, "
+                     f"by {sc['grouped_by']}, confidence {sc['confidence']:.2f}): "
+                     f"{shorten_text(sc['summary'], 240)}")
+    lines.append("drill_down(\"s<id>\") lists its facts and their notes.")
+    return "\n".join(lines)
+
+
+def get_persona(user_id: str = "default") -> str:
+    """
+    The distilled persona (L3): a short summary of the user (preferences, setup,
+    projects, people, habits, decisions) built from the notes, with confidence.
+    It never contains secrets and does not replace the user profile (get_user_profile).
+
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge import distill as _d
+
+    try:
+        p = _d.get_persona(user_id)
+    except Exception as e:
+        logger.warning("get_persona failed: %s", e)
+        return f"Could not read the persona: {e}. Try distill_knowledge() and ask again."
+    if not p or not p.get("summary"):
+        return ("No persona yet. It is built by distill_knowledge() from facts about the user "
+                "(categories preference, person, decision, setting, habit, project, or sentences "
+                "like \"I prefer …\")." + _distill_off_hint())
+    lines = [f"Persona v{p['version']} ({p['created_at']}, confidence {p['confidence']:.2f}):",
+             p["summary"], ""]
+    for sec, items in (p.get("sections") or {}).items():
+        lines.append(f"{(p.get('titles') or {}).get(sec, sec)}:")
+        for it in items:
+            lines.append(f"  - f{it['id']} {shorten_text(it['text'], 160)} ({it['confidence']:.2f})")
+    lines.append("drill_down(\"persona\") shows the notes behind it.")
+    return "\n".join(lines)
+
+
+def drill_down(id: str, user_id: str = "default") -> str:
+    """
+    Show the notes and exact fact lines behind a distilled fact, scenario or the persona.
+
+    id: "f12" (fact), "s3" (scenario) or "persona" — as shown by list_facts,
+        list_scenarios, get_persona or the automatic context
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge import distill as _d
+
+    try:
+        data = _d.drill_down(id, user_id)
+    except ValueError as e:
+        return f"{e}. Use an id like \"f12\", \"s3\" or \"persona\" (from list_facts / list_scenarios)."
+    except LookupError as e:
+        return str(e)
+    except Exception as e:
+        logger.warning("drill_down failed: %s", e)
+        return f"Could not trace {id}: {e}. Try distill_knowledge() and ask again."
+    item = data["item"]
+    if data["kind"] == "fact":
+        lines = [f"Fact {_fmt_fact(item)}"]
+        if item.get("merged_into"):
+            lines.append(f"(merged into {item['merged_into']} — a near-duplicate by meaning)")
+    elif data["kind"] == "scenario":
+        lines = [f"Scenario s{item['id']} {item['title']}: {item['summary']}"]
+    else:
+        lines = [f"Persona v{item['version']}: {shorten_text(item['summary'], 400)}"]
+    lines.append("")
+    for f in data["facts"][:30]:
+        if data["kind"] != "fact":
+            lines.append(_fmt_fact(f))
+        for e in f.get("evidence", [])[:10]:
+            src = f" (source: {e['source']})" if e.get("source") else ""
+            lines.append(f"   ↳ {e['title']} (memory://{e['permalink']}): {shorten_text(e['line'], 200)}{src}")
+    lines += ["", f"Notes: {', '.join(data['notes']) or '—'} — read_knowledge(permalink) shows a whole note."]
+    return "\n".join(lines)
+
+
+def distill_knowledge(full: bool = False, user_id: str = "default") -> str:
+    """
+    Distil the knowledge base now: facts (deduplicated, with confidence),
+    scenarios (related facts) and the persona. Only changed notes are read again.
+
+    full: read every note again (a rebuild; normally not needed)
+    user_id: User ID for multi-user isolation
+    """
+    from ..knowledge import distill as _d
+
+    try:
+        sync_knowledge(user_id)   # notes edited by hand are seen too
+    except Exception as e:
+        logger.info("distill_knowledge: sync skipped: %s", e)
+    try:
+        r = _d.distill(user_id, full=bool(full), budget_seconds=60.0, wait_lock=10.0)
+    except Exception as e:
+        logger.warning("distill_knowledge failed: %s", e)
+        return f"Distillation failed: {e}. Try sync_knowledge_base() and then distill_knowledge() again."
+    if not r.get("ok"):
+        return r.get("message") or "Distillation did not run — try again in a minute."
+    return ("✅ " + r["message"] + " Use list_facts(), list_scenarios(), get_persona()."
+            + _distill_off_hint())
+
 
 # ── v0.7.5: every knowledge tool uses the knowledge base of the current turn ──
 # The tools defaulted to user "default" while the automatic search and saving
@@ -548,3 +904,14 @@ list_knowledge = _scoped(list_knowledge)
 sync_knowledge_base = _scoped(sync_knowledge_base)
 get_related_knowledge = _scoped(get_related_knowledge)
 list_knowledge_tags = _scoped(list_knowledge_tags)
+# KB phase 2 (2026-10-24)
+knowledge_conflicts = _scoped(knowledge_conflicts)
+resolve_knowledge_conflict = _scoped(resolve_knowledge_conflict)
+knowledge_categories = _scoped(knowledge_categories)
+find_duplicate_notes = _scoped(find_duplicate_notes)
+# KB phase 4 (2026-10-24)
+list_facts = _scoped(list_facts)
+list_scenarios = _scoped(list_scenarios)
+get_persona = _scoped(get_persona)
+drill_down = _scoped(drill_down)
+distill_knowledge = _scoped(distill_knowledge)

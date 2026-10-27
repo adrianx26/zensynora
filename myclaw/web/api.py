@@ -151,6 +151,14 @@ app.include_router(_skills_api.router)  # agent skills (v0.7.5)
 app.include_router(_telegram_api.router)  # Telegram bot inside the Web UI
 app.include_router(_doctor_api.router)  # doctor report, errors viewer, download
 app.include_router(_knowledge_api.router)  # knowledge base explorer (graph, notes, tags)
+from myclaw.web import knowledge_import_api as _knowledge_import_api  # noqa: E402
+app.include_router(_knowledge_import_api.router)  # 2026-10-24 (KB phase 5): assimilate / import jobs
+from myclaw.web import knowledge_semantic_api as _knowledge_semantic_api  # noqa: E402
+app.include_router(_knowledge_semantic_api.router)  # 2026-10-24 (KB phase 3): semantic search status / backfill / install
+from myclaw.web import knowledge_distill_api as _knowledge_distill_api  # noqa: E402
+app.include_router(_knowledge_distill_api.router)  # 2026-10-24 (KB phase 4): facts / scenarios / persona / drill-down
+from myclaw.web import knowledge_health_api as _knowledge_health_api  # noqa: E402
+app.include_router(_knowledge_health_api.router)  # 2026-10-25 (KB phase 6): index health, file watcher status
 
 
 _mcp_manager = None
@@ -190,6 +198,63 @@ async def _stop_background_runner() -> None:
 
 
 app.router.add_event_handler("startup", _start_background_runner)
+
+
+async def _start_semantic_scans() -> None:
+    """2026-10-24 (KB phase 3 review): the Web UI is the long-running process
+    that embeds notes still waiting (written by CLI commands, while the model
+    could not load, before the switch was on) — now and every 10 minutes,
+    only while semantic search is on."""
+    try:
+        from myclaw.knowledge import semantic
+
+        semantic.start_background()
+    except Exception as exc:  # pragma: no cover - never block the start
+        logger.warning("Semantic search background scans not started: %s", exc)
+
+
+app.router.add_event_handler("startup", _start_semantic_scans)
+
+
+async def _start_distill_scans() -> None:
+    """2026-10-24 (KB phase 4): the Web UI distils changed notes in the
+    background (after knowledge.distill_every changed notes or when idle; also
+    notes written by CLI commands) — only while knowledge.distill is on. Runs
+    on its own thread; waits while the semantic worker embeds."""
+    try:
+        from myclaw.knowledge import distill
+
+        distill.start_background()
+    except Exception as exc:  # pragma: no cover - never block the start
+        logger.warning("Knowledge distillation scheduler not started: %s", exc)
+
+
+app.router.add_event_handler("startup", _start_distill_scans)
+
+
+async def _start_file_watcher() -> None:
+    """2026-10-25 (KB phase 6): the Web UI re-indexes note files changed by hand
+    (editor, Obsidian, git pull) — only while knowledge.watch_files is on; the
+    thread starts and stops with the switch."""
+    try:
+        from myclaw.knowledge import watch
+
+        watch.start_background()
+    except Exception as exc:  # pragma: no cover - never block the start
+        logger.warning("Knowledge file watcher not started: %s", exc)
+
+
+async def _stop_file_watcher() -> None:
+    try:
+        from myclaw.knowledge import watch
+
+        await asyncio.to_thread(watch.stop_background)
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.debug("Knowledge file watcher not stopped: %s", exc)
+
+
+app.router.add_event_handler("startup", _start_file_watcher)
+app.router.add_event_handler("shutdown", _stop_file_watcher)
 app.router.add_event_handler("shutdown", _stop_background_runner)
 
 # Metrics middleware (must be first to capture all requests)
