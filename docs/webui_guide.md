@@ -313,6 +313,10 @@ The **Knowledge** page (sidebar) shows the knowledge base visually:
   change; click a column to sort.
 * **Tags & types** — tag cloud, fact categories (`- [category] text`) and
   link types; click one to filter the graph and the list.
+* **Usage** — which agent searched, read or wrote which notes and for what
+  message or job (a filterable log), with numbers and charts: accesses per
+  day and per agent, hit rate, latency, notes never used, searches that found
+  nothing, growth and structure benchmarks ([details](knowledge_base_guide.md#usage-log-and-benchmarks)).
 * **Side panel** — text, facts by category, *Links to* and *Linked from*
   (click to jump), **✎ Edit** (the Markdown file), **Move to trash** (moved
   to `.trash` in the same folder, not deleted).

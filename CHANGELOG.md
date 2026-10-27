@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Knowledge base: usage log and benchmarks (2026-10-27)**
+- Every knowledge access by an agent is logged: the automatic context search,
+  each knowledge tool (`search_knowledge`, `read_knowledge`, `list_facts` …)
+  and agent writes (`write_to_knowledge`, extraction, session summaries,
+  `assimilate` / `import_knowledge`) — with the agent, channel / job, query,
+  notes returned, result count, latency, search mode and **what it was for**
+  (the message, job task or delegated task; secrets redacted). Stored in
+  `~/.myclaw/knowledge_usage.db`, kept 90 days / 200 000 lines. On by default
+  (`knowledge.usage_log`; local, no model calls, a few µs per access).
+- New **Usage** tab on the Knowledge page: tiles (accesses, hit rate, latency,
+  notes used / never used, size), charts (accesses per day by kind, per agent,
+  growth from daily snapshots, latency, facts by category), top notes, top
+  queries, queries that found nothing, structure benchmarks (density,
+  connected groups, hubs …) and the filterable log. The note panel shows how
+  often agents used the note.
+- API: `GET /api/knowledge/usage`, `/api/knowledge/usage/stats`,
+  `/api/knowledge/usage/note/{permalink}`, `/api/knowledge/benchmarks`.
+
 ### Changed
 
 **Chat: agent steps grouped into one line (2026-10-27)**

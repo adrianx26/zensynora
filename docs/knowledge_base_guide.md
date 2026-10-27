@@ -485,6 +485,62 @@ under a second):
 
 API: `GET /api/knowledge/health?base=`.
 
+## Usage log and benchmarks
+
+Added 2026-10-27. The **Usage** tab on the Knowledge page shows which agent used
+which notes, and for what.
+
+**What is recorded.** One line per knowledge access by an agent:
+
+| Kind | When |
+|---|---|
+| automatic context | the search before an answer (`auto-context`; not for "hi"/"ok") |
+| tool | `search_knowledge`, `read_knowledge`, `get_knowledge_context`, `list_facts`, `drill_down` … |
+| write | `write_to_knowledge`, automatic extraction, the daily session summary, `assimilate` / `import_knowledge` |
+
+Each line keeps the time, base, agent (and the agent that delegated to it), the
+web chat channel or job, the query or permalink, the notes returned (up to 20),
+the number of results, the time it took, the search mode, and **for**: the
+first 200 characters of the user message, job task or delegated task that
+caused it. Secrets (keys, tokens, passwords) are replaced by `[redacted]` with
+the same patterns as imports and the doctor.
+
+**Where and how long.** `~/.myclaw/knowledge_usage.db` (separate from the
+notes and the index; deleting it loses only the log). Kept 90 days and at most
+200 000 lines (`knowledge.usage_retention_days`, `knowledge.usage_max_rows`;
+pruned once a day). Recording costs a few microseconds per access: a small
+queue is written by one background thread; a busy or broken log file only
+drops lines, the agent never waits for it.
+
+**Switch.** *Settings → Features → Knowledge usage log* (`knowledge.usage_log`,
+**on by default** — it is local, makes no model calls and changes nothing the
+agents see). Off, or the knowledge base off: nothing is recorded and no thread
+runs.
+
+**The Usage tab:**
+
+* tiles — accesses in 7 / 30 days, **hit rate** (searches that found at least
+  one note), average and p95 latency, notes used vs never used, size;
+* charts — accesses per day by kind, accesses per agent (click to filter the
+  log), growth of notes / facts / links (one snapshot of the counts per day,
+  taken when the Usage tab or the API is opened; before there are two, notes
+  by creation month), search latency per day, facts by category;
+* lists — notes used most, notes never used, top queries and **queries that
+  found nothing** (topics the knowledge base is missing; click to see them in
+  the log); click a note to open it;
+* **benchmarks** of the structure — tags, unlinked notes, waiting links, links
+  per note, graph density, connected groups and the largest one, most linked
+  notes, open conflicts, embeddings (semantic search on), distilled facts
+  (distillation on); computed in well under a second, cached for a minute;
+* the **log** — filter by agent, kind or text (query, note or reason), 25 per
+  page.
+
+The note side panel shows *Used by agents: N times (last: @agent, 2 h ago)*.
+
+API: `GET /api/knowledge/usage?base=&agent=&kind=&q=&since=&limit=&offset=`,
+`GET /api/knowledge/usage/stats?base=&days=`, `GET /api/knowledge/usage/note/{permalink}?base=`,
+`GET /api/knowledge/benchmarks?base=`.
+
 ## Plans
 
 What comes next (note editing tools — `edit_note`, `move_note`, `daily_note`,
