@@ -18,17 +18,18 @@ import BackupsView from './components/BackupsView';
 import ChannelsView from './components/ChannelsView';
 import UpdatesView from './components/UpdatesView';
 import SkillsView from './components/SkillsView';
+import RulesView from './components/RulesView';
 import KnowledgeView from './components/KnowledgeView';
 import { restartServer } from './updates';
 import { api, getAdminKey, getApiBase, type AgentInfo, type Channel, type SystemHealth } from './api';
 
-type View = 'chat' | 'channels' | 'models' | 'jobs' | 'skills' | 'knowledge' | 'backups' | 'updates' | 'settings' | 'costs' | 'tools' | 'doctor';
-const VIEWS: View[] = ['chat', 'channels', 'models', 'jobs', 'skills', 'knowledge', 'backups', 'updates', 'settings', 'costs', 'tools', 'doctor'];
+type View = 'chat' | 'channels' | 'models' | 'jobs' | 'skills' | 'rules' | 'knowledge' | 'backups' | 'updates' | 'settings' | 'costs' | 'tools' | 'doctor';
+const VIEWS: View[] = ['chat', 'channels', 'models', 'jobs', 'skills', 'rules', 'knowledge', 'backups', 'updates', 'settings', 'costs', 'tools', 'doctor'];
 const VIEW_KEY = 'zensynora_view';
 const CHANNEL_KEY = 'zensynora_channel';
 const THEME_KEY = 'zensynora_theme';
 const VIEW_TITLES: Record<View, string> = {
-  chat: 'Chat', channels: 'Channels', models: 'Models', jobs: 'Jobs', skills: 'Skills', knowledge: 'Knowledge base', backups: 'Backups', updates: 'Updates', settings: 'Settings',
+  chat: 'Chat', channels: 'Channels', models: 'Models', jobs: 'Jobs', skills: 'Skills', rules: 'Rules', knowledge: 'Knowledge base', backups: 'Backups', updates: 'Updates', settings: 'Settings',
   costs: 'Costs & usage', tools: 'Tools', doctor: 'Doctor',
 };
 
@@ -81,6 +82,7 @@ function App() {
   const [healthError, setHealthError] = useState(false);
   const [newChannel, setNewChannel] = useState<{ name: string; members: string[] } | null>(null);
   const [pending, setPending] = useState(0); // proposals waiting for approval
+  const [rulesPending, setRulesPending] = useState(0); // 2026-10-27: rule proposals waiting
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { setThemeDoc(theme); }, [theme]);
@@ -111,6 +113,8 @@ function App() {
     api<SystemHealth>('/api/system/health').then(h => { setHealth(h); setHealthError(false); }).catch(() => setHealthError(true));
     api<{ proposals: { status: string }[] }>('/api/medic/proposals?status=pending')
       .then(d => setPending(d.proposals.length)).catch(() => setPending(0));
+    api<{ pending: number }>('/api/rules')
+      .then(d => setRulesPending(d.pending)).catch(() => setRulesPending(0));
   }, []);
 
   useEffect(() => {
@@ -240,6 +244,7 @@ function App() {
             <NavButton id="models" icon="🧠" label="Models" view={view} go={go} />
             <NavButton id="jobs" icon="⏱" label="Jobs" view={view} go={go} />
             <NavButton id="skills" icon="📚" label="Skills" view={view} go={go} />
+            <NavButton id="rules" icon="📜" label="Rules" count={rulesPending} view={view} go={go} />
             <NavButton id="knowledge" icon="🕸" label="Knowledge" view={view} go={go} />
             <NavButton id="backups" icon="💾" label="Backups" view={view} go={go} />
             <NavButton id="updates" icon="⬆️" label="Updates" count={health?.update_installed ? 1 : undefined} view={view} go={go} />
@@ -321,6 +326,7 @@ function App() {
           {view === 'channels' && <ChannelsView agents={agents} onChanged={loadChannels} onOpen={openChannel} />}
           {view === 'updates' && <UpdatesView />}
           {view === 'skills' && <SkillsView />}
+          {view === 'rules' && <RulesView onChanged={loadHealth} />}
           {view === 'knowledge' && <KnowledgeView />}
           {view === 'backups' && <BackupsView onRestored={() => { loadAgents(); loadChannels(); loadHealth(); }} />}
           {view === 'settings' && <SettingsView onSaved={onSettingsSaved} />}

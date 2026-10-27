@@ -1157,3 +1157,8 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .ctx-status.low, .ctx-status.over { color: var(--danger-color); }
 .ctx-status.mid { color: #d29922; }
 .ctx-breakdown { line-height: 1.5; }
+
+/* 2026-10-27: Rules page */
+.rule-off { opacity: 0.6; }
+.rule-proposal { margin-top: 10px; }
+.rule-proposal .save-actions .field-input { flex: 1; }

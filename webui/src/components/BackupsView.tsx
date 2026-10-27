@@ -21,7 +21,7 @@ const PART_LABELS: Record<string, string> = {
   settings: 'Settings & API keys',
   knowledge: 'Knowledge base',
   memory: 'Conversations & chat channels',
-  jobs: 'Jobs, own tools & skills',
+  jobs: 'Jobs, own tools, skills & rules',
 };
 
 interface Props { onRestored?: () => void }

@@ -102,6 +102,16 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
     ],
   },
   {
+    // 2026-10-27: the user's rules (Rules page)
+    title: 'Rules',
+    fields: [
+      { path: 'rules.enabled', label: 'Agents follow the rules', kind: 'bool', help: 'The enabled rules from the Rules page are added to every agent\'s instructions. Off: they are kept but not sent.' },
+      { path: 'rules.prompt_chars', label: 'Most characters of rules per prompt', kind: 'number', help: '500–20000, default 4000. Higher-priority rules come first; agents are told when some are left out.' },
+      { path: 'rules.max_pending_per_agent', label: 'Proposals one agent may have waiting', kind: 'number', help: 'Default 5.' },
+      { path: 'rules.notify_telegram', label: 'Tell me on Telegram about new proposals', kind: 'bool', help: 'Uses the Telegram bot running in the Web UI (allowed users only).' },
+    ],
+  },
+  {
     title: 'Timeouts & memory',
     fields: [
       { path: 'timeouts.llm_seconds', label: 'LLM request timeout (s)', kind: 'number' },
