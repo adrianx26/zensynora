@@ -1410,10 +1410,14 @@ member. Without a mention the channel's <em>reply mode</em> decides:</p>
 </table>
 <p><strong>Agent-to-agent talk.</strong> When an agent hands work to another one (the
 <code>delegate</code> tool or a swarm), uses a tool, or a job posts into the channel,
-you see it as a small card in the conversation — <em>@default asked @writer</em>,
-<em>@writer answered @default · 1.2 s</em> — with the task and the answer one click
-away. The <strong>Activity</strong> panel on the right lists the same events for the
-channel; <em>inline activity</em> hides them from the conversation.</p>
+you see it in the conversation. Steps that follow each other are <strong>grouped
+into one line</strong> — <em>⚙ 12 steps · 2.0 s — @Executor: browse ×5 · @default asked
+@Executor</em> — and a click shows each step (<em>@default asked @writer</em>, <em>@writer
+answered @default · 1.2 s</em>, every tool call) with its task and answer. The
+<strong>Activity</strong> panel on the right lists every step for the channel. The menu at
+the top of the chat switches between <em>Activity: grouped</em> (default), <em>every
+step</em> (one line per step, as before) and <em>hidden</em>; the choice is remembered in
+this browser.</p>
 <p><strong>Agents as a team</strong> (v0.7.5). Every agent knows the other agents and what
 they do, and hands work to them with <code>delegate</code> when another one fits better —
 you see the hand-over as a card. An agent can also <strong>create a new agent</strong>
