@@ -30,14 +30,17 @@ from .parser import (
 )
 from .storage import (
     write_note, read_note, delete_note, list_notes, search_notes,
-    get_all_tags, update_note, get_note_by_tag
+    get_all_tags, update_note, get_note_by_tag, knowledge_root, set_knowledge_root
 )
 from .advanced_search import (
     search_advanced, SearchFilters, SearchResult, compute_embedding
 )
 from .graph import (
     get_related_entities, get_entity_network, find_path,
-    get_central_entities, build_context
+    get_central_entities, build_context,
+    # 2026-10-23 (KB phase 0): listed in __all__ but not imported (B14), so
+    # ``from myclaw.knowledge import *`` raised AttributeError
+    get_backlinks, search_by_metadata,
 )
 from .db import EntityAlias
 from .sync import sync_knowledge, sync_and_report, verify_sync
@@ -143,6 +146,8 @@ __all__ = [
     "get_all_tags",
     "update_note",
     "get_note_by_tag",
+    "knowledge_root",
+    "set_knowledge_root",
     # Advanced Search
     "search_advanced",
     "SearchFilters",

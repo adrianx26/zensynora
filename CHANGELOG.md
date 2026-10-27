@@ -176,6 +176,99 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
 
 ### Fixed
 
+**Knowledge base, phase 0 of the memopad port (2026-10-24)**
+
+ZenSynora's knowledge base is a port of [memopad](https://github.com/adrianx26/memopad).
+Before adding more of memopad's features, the parts already ported were
+checked and fixed ([plan](docs/dev/plans/memopad_port_plan.md),
+[guide](docs/knowledge_base_guide.md)).
+
+*Links and the index*
+- Links by note **title, file name or alias** (`- runs_on [[Home Server]]`)
+  are stored; before, a link reached the index only when written as the exact
+  permalink of an existing note, so almost every link was dropped. Links may
+  use `[[Note|label]]` and `[[Note#Section]]`; matching ignores case and never
+  guesses (`[[C# tips]]` does not link to "C").
+- A link to a note that **does not exist yet** is kept and connects when that
+  note is written; deleting a note turns links to it back into waiting links.
+  Knowledge stats show `unresolved_relations`.
+- **Editing a note no longer erases the links other notes have to it**
+  (re-indexing replaced links in both directions).
+- Links resolve the same way whether the index is updated step by step or
+  rebuilt (permalink > slug > name > title > alias).
+- Notes in `.trash/` and other dot-folders (`.git`, `.obsidian`) are no longer
+  indexed (deleted notes came back in search). `.bmignore` accepts glob
+  patterns (`*.tmp`, `drafts/`, `archive/**`). Symlinked folders are not indexed.
+- Sync: an incremental sync with `since` no longer deletes notes that simply
+  were not changed recently; one unreadable note no longer stops the sync or
+  loses its index entry (also on a full rebuild); moving or renaming a note
+  keeps its links; notes saved while a sync runs stay indexed; two files with
+  the same permalink are reported; the 3-strike skip for broken files now
+  works across syncs; a busy database is retried and never marks a file broken;
+  several processes can sync at once; readers never see an empty index during
+  a rebuild; the entry's checksum, path and title are updated on every change.
+- Frontmatter **aliases and metadata** (`type`, `status`, …) are stored and
+  searchable; tag search finds frontmatter tags and whole tags only.
+- Database connections wait up to 30 s for a lock (`busy_timeout`); link
+  lookups of names with diacritics use indexed columns (2000 notes: 10 s → 1.8 s).
+- Data migration **0003** rebuilds every knowledge index from the note files on
+  the next update (notes are not changed).
+
+*Note files*
+- **A save never silently loses data:** when writing a note would drop text,
+  facts, links, tags, aliases or frontmatter keys of the existing file, the
+  previous version is first kept in `<base>/.trash/`. Deleting a note from an
+  agent tool, the CLI or the API moves it to `.trash/` (as the Web UI did).
+- Facts (`- [category] text`) and links (`- rel [[Note]]`) are read under any
+  heading (before: only the first *Observations*/*Relations* section, so a
+  note with `## Notes` first, or titled "Links", lost them on the next save),
+  never inside code blocks; task checkboxes `- [ ]` / `- [x]` stay text.
+- Frontmatter: `tags`/`aliases` as one word, `a, b`, `[a, b]` or a YAML list;
+  hand-written keys (spaces, non-ASCII, nested maps, comments, `name:`,
+  non-ISO dates) are kept as written when ZenSynora updates the note.
+- A file whose frontmatter permalink differs from its name is no longer
+  mistaken for another note; a pasted `permalink:` cannot take over another
+  note; a pasted whole note keeps the tags, facts and links passed with it.
+- Notes are written atomically; notes in sub-folders can be read, updated and
+  deleted by permalink and are listed.
+
+*Agents*
+- Agents now see the **text** of notes, not only titles and facts: in the
+  automatic *Relevant Knowledge* context (~500 characters per note, ~2000 in
+  all; `memory://permalink` always adds that note), `read_knowledge` (text up
+  to 6000 characters, aliases, metadata, waiting links, *Linked from*),
+  `search_knowledge` (snippet per result) and `get_knowledge_context`.
+- `search_knowledge`: `AND` / `OR` / `NOT` (capitals), `"phrases"`, `pyth*`,
+  `tag:name` (also `tag:homelab NOT nas`); ordinary sentences are searched as
+  free text as before.
+- Session summaries go into **one note per day** (`session-summary-YYYYMMDD`,
+  `### HH:MM UTC` sections) instead of a new note on every turn.
+- `knowledge.enabled: false` now switches off all automatic knowledge activity
+  (context search, extraction, saving tool results, summaries, gap hints); the
+  tools still work.
+- The system prompt no longer tells agents to save "credentials" and forbids
+  storing passwords, API keys, tokens or other secrets.
+- Knowledge gaps from the Web UI are logged for the researcher; greetings are
+  no longer gaps.
+
+*CLI, Web UI, MCP, settings*
+- `zensynora knowledge … --base/-b NAME` on every command; `knowledge read`
+  shows the text; `knowledge search` supports AND/OR/NOT; new
+  `knowledge sync --force`.
+- Web UI: search supports AND/OR/NOT; alias links resolve in the graph like in
+  the index; the note API also returns `aliases` and `metadata`.
+- `zensynora mcp-server`: tool parameters have real types (integer, number,
+  boolean, array, object) and string values from clients are converted;
+  invalid arguments get a clear message; logs go to stderr (they broke the
+  protocol on stdout); the knowledge tools no longer offer `user_id` (they use
+  the shared `default` base), other tools keep it.
+- The `knowledge.knowledge_dir` setting takes effect (the index databases stay
+  in `~/.myclaw/`).
+- Removed the unused, broken `Memory.extract_knowledge_candidates()` and
+  `Memory.save_extracted_knowledge()`.
+- Test `test_once_parses_relative_and_clock_times` no longer fails on the day
+  before a daylight-saving change.
+
 **Knowledge notes had no tags, facts or links (2026-10-23)**
 - The Knowledge page showed 266 notes with **0 tags, 0 facts, 0 links** —
   every note an island. Two bugs in `knowledge/storage.py` /

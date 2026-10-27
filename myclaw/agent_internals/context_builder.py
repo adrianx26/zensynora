@@ -8,9 +8,7 @@ and structured logging, system prompt + KB context concatenation,
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
-from datetime import datetime
 from typing import Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -18,7 +16,7 @@ if TYPE_CHECKING:
     from ..memory import Memory
 
 logger = logging.getLogger(__name__)
-kb_gap_logger = logging.getLogger("myclaw.knowledge.gaps")
+kb_gap_logger = logging.getLogger("myclaw.knowledge.gaps")  # kept for importers
 
 
 async def build_message_context(
@@ -47,42 +45,11 @@ async def build_message_context(
 
     # If KB was empty AND we already noted a gap for this user, include a
     # one-line hint so the model knows to call write_to_knowledge().
-    kb_gap_hint = ""
-    if not had_kb_results and agent._kb_gaps.get(user_id):
-        last_gap = next(iter(agent._kb_gaps[user_id]))
-        kb_gap_hint = (
-            f"\n\n[Note: The knowledge base has no entries related to '{last_gap[:60]}'. "
-            "Consider using write_to_knowledge() to store useful information for future queries.]"
-        )
-
-        # Emit a structured log event for the gap (deduplicated within a
-        # short window via the agent's gap cache).
-        if not agent._gap_cache.is_duplicate(last_gap, user_id):
-            gap_data = {
-                "event": "knowledge_gap_detected",
-                "query": last_gap,
-                "description": "No knowledge base entries found for query",
-                "user_id": user_id,
-                "session_context": (
-                    "System will preserve context to avoid redundant empty "
-                    "searches in this session"
-                ),
-                "timestamp": datetime.utcnow().isoformat(),
-                "recommendation": (
-                    "Use write_to_knowledge() to create a new entry for "
-                    "future queries"
-                ),
-            }
-            kb_gap_logger.info(gap_data)
-
-            # Append to the researchers JSONL for later review.
-            from ..agent import GAP_FILE  # module-level constant
-            try:
-                GAP_FILE.parent.mkdir(parents=True, exist_ok=True)
-                with open(GAP_FILE, "a", encoding="utf-8") as f:
-                    f.write(json.dumps(gap_data) + "\n")
-            except Exception as e:
-                logger.error(f"Failed to record gap to file: {e}")
+    # 2026-10-23 (KB phase 0): Agent._kb_gap_hint (shared with stream_think)
+    # uses the newest gap and really writes it to GAP_FILE — the old code here
+    # de-duplicated with the cache _record_kb_gap had just filled, so the gap
+    # file stayed empty; off when knowledge.enabled is False.
+    kb_gap_hint = agent._kb_gap_hint(user_id, had_kb_results)
 
     # Bail if the task timer fired between scheduling and here.
     if agent._current_task_id and not agent._task_timer.is_task_active(

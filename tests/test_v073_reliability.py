@@ -239,4 +239,4 @@ def test_background_summary_skips_tool_steps_and_empty_summaries(tmp_path, monke
 
     monkeypatch.setattr(prov_mod, "complete_text", summary)
     asyncio.run(a._background_summarize_context(history, "u", None))
-    assert written and written[0]["content"].startswith("User planned")
+    assert written and "User planned" in written[0]["content"]

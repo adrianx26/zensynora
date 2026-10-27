@@ -303,8 +303,11 @@ def configure_logging(
     if scrub_pii_enabled and not any(isinstance(f, PIIScrubFilter) for f in root_logger.filters):
         root_logger.addFilter(PIIScrubFilter())
 
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
+    # Console handler. 2026-10-23 (KB phase 0): for `zensynora mcp-server`
+    # stdout carries the MCP protocol, so console logs go to stderr from the
+    # first line (the "initialised" line at import broke the client's parsing).
+    _stream = sys.stderr if "mcp-server" in sys.argv[1:] else sys.stdout
+    console_handler = logging.StreamHandler(_stream)
     console_handler.setFormatter(StructuredFormatter(use_json=use_json, use_color=use_color))
     root_logger.addHandler(console_handler)
 

@@ -111,6 +111,28 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 
 ---
 
+### 2.4 Links never reached the index; edits erased backlinks (2026-10-24, KB phase 0)
+
+| | |
+|---|---|
+| **Symptom** | After 2.3 notes had links in their files, but the index (search, `get_related_knowledge`, `build_context`) still knew almost none; agents only ever saw titles and facts, never note text; deleted notes came back in search; hundreds of `session-summary-…` notes. |
+| **Root cause** | Code ported from memopad that never worked: relation targets were resolved only by exact permalink of an existing note (notes link by title), `clear_relations` deleted links in both directions on every re-index, `rglob` indexed `.trash/`, the `since` sync computed deletions from the subset of recent files, the circuit breaker lived in a per-call object, moves were deleted afterwards, aliases/metadata were never stored, and the agent context printed only titles and facts. |
+| **Fix** | Link resolver (permalink, slug, name, title, alias) with waiting links (`pending_relations`), outgoing-only replace in one transaction, dot-folders skipped, deletions from a full listing, module-level breaker, moves keep the entry id, note text in every agent view, one summary note per day; migration 0003 rebuilds the index. |
+| **Detected by** | Reading memopad and ZenSynora side by side, then `tests/test_kb_phase0_*.py` (114 tests: write → index → re-index → force-rebuild must give the same links). |
+| **Rule** | Ported code needs an end-to-end test of the feature it claims (here: a link by title survives write, edit of either note, incremental sync and full rebuild). A rebuild from the source of truth must give the same index as the step-by-step updates. |
+
+### 2.5 An independent review of the fix found data loss (2026-10-24, KB phase 0)
+
+| | |
+|---|---|
+| **Symptom** | (Found before release.) Writing a note with the title of a hand-written note in a sub-folder overwrote it without a copy; facts under a second heading or in a note titled "Links" were removed by the next save (also in older versions); agent search found nothing for a plain sentence; `tag:x NOT y` returned exactly the excluded notes; a sync could drop a note written at the same moment. |
+| **Root cause** | New code found more existing files (index fallback) but kept "replace" semantics; the body extractor and the fact/link parser used different rules; boolean search had no fallback for plain text; deletions compared against a fresh entity list instead of the start-of-sync snapshot. |
+| **Fix** | A save that would lose anything first keeps the previous version in `.trash/`; facts and links are parsed and stripped by the same line rules everywhere; boolean mode only when the query has operators or quotes; deletions re-check the file just before deleting. |
+| **Detected by** | A separate review agent that had not seen the work, with reproduction scripts in a temporary HOME (fuzzing 30 000 search queries, old databases from `main`, 2000–4000-note timings, parallel processes). |
+| **Rule** | Any function that overwrites user files keeps the previous version when something would be lost. For changes to stored user data, have the work reviewed by someone who did not write it, with real experiments, before merging. |
+
+---
+
 ## 3. Code structure
 
 ### 3.1 Broken relative imports after `myclaw/tools` became a package (2026-10-18, PR #31)
@@ -286,3 +308,6 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 13. **Missing features show up as agent workarounds:** when agents build their own tool for something, add it as a built-in.
 14. **Long operations:** run ZenSynora as a service for updates and scheduled jobs.
 15. **After fixing an error, run the feature end to end** — the next bug is often hidden behind the first.
+16. **Ported code:** test the feature end to end, not just that it imports; a full rebuild from the source of truth must equal the step-by-step result.
+17. **User files:** never overwrite or delete a user's file without keeping the previous version (`.trash/`) when anything would be lost.
+18. **Independent review:** changes to stored user data are reviewed by an agent or person that did not write them, with real experiments, before merge.

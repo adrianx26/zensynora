@@ -356,7 +356,12 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_v075_channels_medic_skills.py` | 25 |
 | `test_vector_backends.py` | 24 |
 | `test_web_settings.py` | 4 |
-| **Total** | **730** |
+| `test_kb_phase0_index.py` | 36 |
+| `test_kb_phase0_notes.py` | 41 |
+| `test_kb_phase0_agent.py` | 19 |
+| `test_kb_phase0_surfaces.py` | 16 |
+| `test_kb_phase0_migration.py` | 2 |
+| **Total** | **844** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

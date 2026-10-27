@@ -43,7 +43,10 @@ MAX_NODES = 2000
 
 
 def _root() -> Path:
-    return Path.home() / ".myclaw" / "knowledge"
+    # 2026-10-23 (KB phase 0): honour knowledge.knowledge_dir (set_knowledge_root).
+    from myclaw.knowledge.storage import knowledge_root
+
+    return knowledge_root()
 
 
 def _base(base: str | None) -> str:
@@ -84,24 +87,51 @@ def _slug(text: str) -> str:
         return ""
 
 
+def _aliases(n: Any) -> list[str]:
+    return [str(a).strip() for a in (getattr(n, "aliases", None) or []) if str(a).strip()]
+
+
 class _Resolver:
-    """Find the note a relation target ([[...]]) points to: permalink, name or title."""
+    """Find the note a relation target ([[...]]) points to.
+
+    2026-10-23 (KB phase 0): same order as ``KnowledgeDB.resolve_target`` —
+    permalink, slug, name, title, alias (case-insensitive, no fuzzy matching) —
+    so a link resolves in the graph exactly as in the database. Within one
+    step the first note (by file name) wins.
+    """
 
     def __init__(self, notes: list[Any]):
-        self.ids: dict[str, str] = {}
+        # One lookup table per step, checked in order.
+        self.tiers: list[dict[str, str]] = [{} for _ in range(6)]
+        perm, slug, name, title, alias, extra = self.tiers
         for n in notes:
-            for k in (n.permalink, _slug(n.permalink), _slug(n.name or ""), _slug(n.title or ""),
-                      (n.title or "").strip().lower(), (n.name or "").strip().lower(),
-                      n.file_path.stem if n.file_path else ""):
-                if k and k not in self.ids:
-                    self.ids[k] = n.permalink
+            pl = n.permalink
+            self._add(perm, (pl or "").strip().lower(), pl)
+            self._add(perm, (n.file_path.stem.lower() if n.file_path else ""), pl)
+            self._add(slug, _slug(pl or ""), pl)
+            self._add(name, (n.name or "").strip().lower(), pl)
+            self._add(title, (n.title or "").strip().lower(), pl)
+            for a in _aliases(n):
+                self._add(alias, a.lower(), pl)
+            # Before 0.7.5 phase 0 a target was also matched by the slug of a
+            # name/title; kept as the last step so existing links still resolve.
+            for k in (_slug(n.name or ""), _slug(n.title or ""), *(_slug(a) for a in _aliases(n))):
+                self._add(extra, k, pl)
+
+    @staticmethod
+    def _add(table: dict[str, str], key: str, permalink: str) -> None:
+        if key and key not in table:
+            table[key] = permalink
 
     def __call__(self, target: str) -> tuple[str, bool]:
         t = (target or "").strip()
-        for k in (t, t.lower(), _slug(t)):
-            if k in self.ids:
-                return self.ids[k], True
-        return "missing:" + (_slug(t) or t.lower()), False
+        low, sl = t.lower(), _slug(t)
+        perm, slug, name, title, alias, extra = self.tiers
+        for table, key in ((perm, low), (slug, sl), (name, low), (title, low), (alias, low),
+                           (extra, sl)):
+            if key and key in table:
+                return table[key], True
+        return "missing:" + (sl or low), False
 
 
 def _iso(dt: Any) -> str | None:
@@ -219,6 +249,14 @@ def _note_file(base: str, permalink: str) -> Path:
     raise HTTPException(status_code=404, detail="Note not found.")
 
 
+def _jsonable(value: Any) -> Any:
+    """Frontmatter values (dates…) as JSON-safe data."""
+    try:
+        return json.loads(json.dumps(value, default=str))
+    except Exception:
+        return {}
+
+
 def _note_detail(base: str, permalink: str) -> dict[str, Any]:
     from myclaw.knowledge.parser import parse_note
 
@@ -245,6 +283,8 @@ def _note_detail(base: str, permalink: str) -> dict[str, Any]:
         "observations": [{"category": o.category, "content": o.content, "tags": o.tags or []} for o in n.observations],
         "links": links, "backlinks": backlinks,
         "created": _iso(n.created_at), "updated": _iso(n.updated_at),
+        # 2026-10-23 (KB phase 0): additive — frontmatter aliases and other keys.
+        "aliases": _aliases(n), "metadata": _jsonable(getattr(n, "metadata", None) or {}),
         "file": str(f), "size": st.st_size,
         "modified": time.strftime("%Y-%m-%d %H:%M", time.localtime(st.st_mtime)),
     }
@@ -328,7 +368,10 @@ async def remove_note(permalink: str, base: str | None = None):
 
 @router.get("/api/knowledge/search", dependencies=guard)
 async def search(q: str, base: str | None = None, limit: int = 30):
-    """Full-text search; falls back to matching titles and text when the index finds nothing."""
+    """Full-text search; falls back to matching titles and text when the index finds nothing.
+
+    2026-10-23 (KB phase 0): AND / OR / NOT and "quoted phrases" work (boolean=True).
+    """
     from myclaw.knowledge.storage import search_notes
 
     b = _base(base)
@@ -337,7 +380,8 @@ async def search(q: str, base: str | None = None, limit: int = 30):
         return {"results": []}
     hits: list[str] = []
     try:
-        hits = [n.permalink for n in await asyncio.to_thread(search_notes, q, b, max(1, min(limit, 100)))]
+        hits = [n.permalink for n in await asyncio.to_thread(
+            search_notes, q, b, max(1, min(limit, 100)), None, True)]
     except Exception as e:
         logger.debug("FTS search failed: %s", e)
     if not hits:
