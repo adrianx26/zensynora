@@ -13,6 +13,87 @@ runs inside the Web UI, and shares the knowledge base with it. See the new
 
 ### Added
 
+**Knowledge base, phases 2–6 of the memopad port (2026-10-27)**
+
+More of [memopad](https://github.com/adrianx26/memopad)'s features, each phase
+built, reviewed independently and fixed before the next one
+([plan](docs/dev/plans/memopad_port_plan.md), [guide](docs/knowledge_base_guide.md)).
+Everything that changes what agents see or runs in the background is **off by
+default**; heavy libraries are optional extras (`zensynora[semantic]`,
+`[ingest]`, `[watch]`). Notes stay the source of truth: everything derived can
+be rebuilt, and nothing is deleted (replaced versions go to `.trash/`).
+
+*Quality (phase 2)*
+- A fact may end with `(source: …)`; the automatic extractors record where a
+  fact came from (`chat <date>`, `tool browse <url>` — commands, query strings
+  and tokens are never written).
+- Fact categories are counted together across spellings (`Specs` → `spec`,
+  `config` → `setting`), with merge suggestions to preview and apply.
+- **Contradicting facts** of the same setting/spec on one note (`port: 11434`
+  vs `port: 8080`) get a ⚠ panel — *Keep A / Keep B / Both are fine* — and an
+  amber dot in the graph. Deliberately strict: readings over time, versions,
+  counters, people and ids like `mindy01`/`mindy02` are never flagged. Switch
+  `knowledge.detect_conflicts`.
+- Notes linked to everything (hubs) rank lower in what agents see and are not
+  walked through (`knowledge.hub_penalty`, `knowledge.hub_degree`).
+- **⧉ Find duplicates** (preview, merge one pair at a time; the dropped title
+  becomes an alias so links keep working). Templated notes such as daily
+  weather reports are not duplicates.
+- Tools `knowledge_conflicts`, `resolve_knowledge_conflict`,
+  `knowledge_categories`, `find_duplicate_notes`.
+
+*Importing (phase 5)*
+- **⇪ Import** on the Knowledge page, the tools `assimilate(source)` and
+  `import_knowledge(path)`, and `zensynora knowledge assimilate|import`: a web
+  page, a GitHub repository, a local folder or a document (PDF, Word, Excel,
+  text, code, images) becomes an overview note with a Mermaid diagram plus
+  linked part notes — "analyze this repo and make a diagram" is one tool call.
+  Repositories are read code-first (most-imported modules, entry points).
+- ChatGPT and Claude.ai exports, MCP memory files and Markdown/Obsidian
+  folders. Re-importing updates notes instead of duplicating them; notes you
+  wrote or edited are never replaced; a large source continues where the last
+  run stopped.
+- Safety: only public web addresses (checked on every redirect and pinned to
+  the checked address), never hidden folders or files with keys/passwords,
+  passwords and tokens in text and URLs redacted, symlinks out of a folder
+  ignored, size/time/memory limits, uploads capped at 200 MB. Every run is
+  logged in `~/.myclaw/logs/knowledge_ingest.jsonl`.
+
+*Semantic search (phase 3)*
+- Optional search by meaning with a local model (fastembed;
+  `BAAI/bge-small-en-v1.5` or a multilingual model with Romanian), switched on
+  in Settings → Features and installed from the Knowledge page (adds packages
+  only). Notes are embedded in the background when written; **Backfill** for
+  existing notes; one background thread, one CPU core.
+- Hybrid search (words + meaning) in the agents' automatic context,
+  `search_knowledge(mode=…)` and the Knowledge page; the best word matches
+  always stay on top, and agents fall back to word search when the model is
+  slow or not loaded. `zensynora knowledge embed`.
+
+*Distillation (phase 4)*
+- Optional (`knowledge.distill`): facts drawn from the notes (merged,
+  with confidence and the notes they came from), groups of related facts, and
+  a **persona** — what the notes say about you. Only facts clearly about you
+  count; other people are listed with their relation ("Ana (wife): …"); text
+  written by agents or imported chats never counts as you. Shown to agents as
+  quoted information (never instructions) and the persona only when the
+  question is about you; secrets and system snapshots never appear.
+- **Distilled** tab (click a fact to see the note lines it came from), tools
+  `list_facts`, `list_scenarios`, `get_persona`, `drill_down`,
+  `distill_knowledge`, `zensynora knowledge distill`. Notes written by agents
+  now carry `origin:` in their frontmatter.
+
+*Live sync and health (phase 6)*
+- Optional live re-index of notes edited by hand (editor, Obsidian, `git pull`)
+  within about a second (`knowledge.watch_files`); ZenSynora's own writes,
+  `.trash`, temp files and the database are ignored.
+- Background work (sync, imports, embeddings, distillation) takes turns per
+  knowledge base; saving a note never waits behind it.
+- Doctor: knowledge checks for index drift (every base, changed files), broken
+  links, open conflicts, embeddings, distillation, live sync, import errors and
+  `.trash` size; `zensynora doctor --fix` re-indexes. A status line on the
+  Knowledge page.
+
 **Agents can create, run and check jobs (2026-10-21)**
 - Five new tools give agents the **Jobs page**: `job_create` (manual, once —
   "in 30 minutes", "18:30", "tomorrow 09:00" —, every N minutes, daily,
