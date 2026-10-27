@@ -389,8 +389,15 @@ PowerShell script, how to review code.
   own version (deleting it brings the built-in one back).
 
 Your skills are files in `~/.myclaw/skills/<name>/SKILL.md` and are included
-in backups (*Jobs, own tools & skills*). `zensynora skills list` shows all
+in backups (*Jobs, own tools, skills & rules*). `zensynora skills list` shows all
 skills and which agents have them.
+
+## Rules: what every agent must follow
+
+**Rules** in the sidebar (the number = proposals waiting). Write rules every agent
+follows (title, priority, which agents, text); agents can only propose new rules,
+changes or deletions, shown at the top with a diff for you to approve or reject.
+See the [Rules guide](rules_guide.md).
 
 ## Backups: settings, API keys, knowledge
 

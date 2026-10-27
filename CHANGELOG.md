@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Rules every agent follows (2026-10-27)**
+- New **Rules** page (and `zensynora rules list | show | proposals | approve | reject`):
+  rules are Markdown files in `~/.myclaw/rules/` with a title, priority
+  (high/normal/low), the agents they apply to and an on/off switch. Every agent
+  (chat, jobs, delegation, Telegram) gets the enabled rules that apply to it in a
+  "Rules you must follow" section of its instructions, highest priority first.
+- Agents can only **propose** rules, changes and deletions (`propose_rule`,
+  `propose_rule_change`, `propose_rule_deletion`; read with `list_rules`,
+  `read_rule`). Proposals show who and why with a diff; nothing changes until you
+  approve. Changed or deleted rules are kept in `~/.myclaw/rules/.trash/`;
+  rejected proposals stay as history. Optional Telegram notice of new proposals.
+- Doctor check *Rules* (warns when a proposal waits more than 7 days); settings
+  in Settings → Features → Rules; rules are part of backups.
+  See the [Rules guide](docs/rules_guide.md).
+
 ### Changed
 
 **Chat: agent steps grouped into one line (2026-10-27)**
