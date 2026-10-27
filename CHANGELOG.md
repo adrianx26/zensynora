@@ -7,7 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Since 0.7.5 (no new version number yet). The Telegram bot was reviewed and fixed: it answers normal messages again,
+## [0.8.0] - 2026-10-27
+
+The knowledge base, rebuilt on memopad's design: links that really connect,
+agents that see note text, quality checks, imports, optional search by meaning,
+distillation and live sync (phases 0 and 2–6 of the memopad port). The Telegram bot was reviewed and fixed: it answers normal messages again,
 runs inside the Web UI, and shares the knowledge base with it. See the new
 [Telegram guide](docs/telegram_guide.md).
 
