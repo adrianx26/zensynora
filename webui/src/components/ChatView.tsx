@@ -14,6 +14,7 @@ import { MessageActions, MessageBody, MessageEditor } from './MessageActions';
 import { copyText } from '../clipboard';
 import { api, getApiBase, getWsBase, type AgentInfo, type Channel, type ChatMsg } from '../api';
 import { agentColor } from '../colors';
+import { ACTIVITY_MODES, groupMessages, loadActivityMode, saveActivityMode, summarizeEvents, type ActivityMode } from '../chatEvents';
 
 interface Props {
   channelId: string;
@@ -74,6 +75,26 @@ function EventCard({ meta, compact }: { meta: Record<string, any>; compact?: boo
   );
 }
 
+/** A run of consecutive agent steps as one line; click to see each step (2026-10-27). */
+function EventGroup({ events }: { events: ChatMsg[] }) {
+  const [open, setOpen] = useState(false);
+  const s = summarizeEvents(events);
+  const secs = s.ms >= 1000 ? ` · ${(s.ms / 1000).toFixed(1)} s` : '';
+  return (
+    <div className={`event-card event-group ${s.failed ? 'bad' : ''}`}>
+      <button className="event-head" onClick={() => setOpen(o => !o)} aria-expanded={open}
+        title={open ? 'Hide the steps' : 'Show each step'}>
+        <span className="event-icon">⚙</span>
+        <span className="event-title">
+          {s.steps} steps{s.failed ? ` · ${s.failed} failed` : ''}{secs} — {s.text}
+        </span>
+        <span className="event-toggle">{open ? '▾' : '▸'}</span>
+      </button>
+      {open && <div className="event-group-list">{events.map(e => <EventCard key={e.id} meta={e.meta} compact />)}</div>}
+    </div>
+  );
+}
+
 const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpenSettings, onAgentsChanged }) => {
   const [channel, setChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -83,7 +104,7 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
   const [busy, setBusy] = useState(false);
   const [working, setWorking] = useState<string[]>([]);
   const [showActivity, setShowActivity] = useState(true);
-  const [showEventsInline, setShowEventsInline] = useState(true);
+  const [activityMode, setActivityMode] = useState<ActivityMode>(loadActivityMode);
   const [editMembers, setEditMembers] = useState(false);
   const [mfa, setMfa] = useState<{ required: boolean; code: string; error?: string }>({ required: false, code: '' });
   const [error, setError] = useState<string | null>(null);
@@ -409,7 +430,7 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
   };
 
   const events = messages.filter(m => m.role === 'event');
-  const visible = showEventsInline ? messages : messages.filter(m => m.role !== 'event');
+  const items = useMemo(() => groupMessages(messages, activityMode), [messages, activityMode]);
   const isDm = channel?.kind === 'dm';
 
   return (
@@ -433,9 +454,11 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
             </div>
           )}
           <div className="channel-actions">
-            <label className="mini-toggle" title="Show tool calls and delegations inside the conversation">
-              <input type="checkbox" checked={showEventsInline} onChange={e => setShowEventsInline(e.target.checked)} /> inline activity
-            </label>
+            <select className="mini-select" value={activityMode} aria-label="How agent activity is shown"
+              title={ACTIVITY_MODES.find(a => a.id === activityMode)?.help}
+              onChange={e => { const v = e.target.value as ActivityMode; setActivityMode(v); saveActivityMode(v); }}>
+              {ACTIVITY_MODES.map(a => <option key={a.id} value={a.id} title={a.help}>{a.label}</option>)}
+            </select>
             <button className={`ghost-btn ${showActivity ? 'active' : ''}`} onClick={() => setShowActivity(v => !v)}>
               Activity{events.length ? ` (${events.length})` : ''}
             </button>
@@ -485,7 +508,7 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
         {status === 'closed' && <div className="connection-banner"><span>Disconnected — reconnecting… Is <code>zensynora webui</code> running?</span></div>}
 
         <div className="chat-window" ref={scrollRef} onScroll={onScroll}>
-          {visible.length === 0 && (
+          {items.length === 0 && (
             <div className="empty-chat">
               <h3>{isDm ? `Chat with @${channel?.members[0] ?? ''}` : `#${channel?.name ?? ''}`}</h3>
               <p className="muted">
@@ -493,10 +516,15 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
               </p>
             </div>
           )}
-          {visible.map(m => {
-            if (m.role === 'event') {
-              return <div key={m.id} className="event-row"><EventCard meta={m.meta} /></div>;
+          {items.map(item => {
+            if (item.kind === 'events') {
+              return (
+                <div key={item.key} className="event-row">
+                  {item.events.length === 1 ? <EventCard meta={item.events[0].meta} /> : <EventGroup events={item.events} />}
+                </div>
+              );
             }
+            const m = item.msg;
             if (m.role === 'system') {
               return <div key={m.id} className="system-row">{m.text}</div>;
             }

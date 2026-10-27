@@ -37,10 +37,14 @@ member. Without a mention the channel's *reply mode* decides:
 
 **Agent-to-agent talk.** When an agent hands work to another one (the
 `delegate` tool or a swarm), uses a tool, or a job posts into the channel,
-you see it as a small card in the conversation — *@default asked @writer*,
-*@writer answered @default · 1.2 s* — with the task and the answer one click
-away. The **Activity** panel on the right lists the same events for the
-channel; *inline activity* hides them from the conversation.
+you see it in the conversation. Steps that follow each other are **grouped
+into one line** — *⚙ 12 steps · 2.0 s — @Executor: browse ×5 · @default asked
+@Executor* — and a click shows each step (*@default asked @writer*, *@writer
+answered @default · 1.2 s*, every tool call) with its task and answer. The
+**Activity** panel on the right lists every step for the channel. The menu at
+the top of the chat switches between *Activity: grouped* (default), *every
+step* (one line per step, as before) and *hidden*; the choice is remembered in
+this browser.
 
 **Agents as a team** (v0.7.5). Every agent knows the other agents and what
 they do, and hands work to them with `delegate` when another one fits better —
