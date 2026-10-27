@@ -7,6 +7,7 @@ import KnowledgeGraph, { type GEdge, type GNode, type GraphHandle } from './Know
 import KnowledgeImport from './KnowledgeImport';
 import KnowledgeDistilled from './KnowledgeDistilled';
 import KnowledgeHealth from './KnowledgeHealth';
+import KnowledgeUsage, { NoteUsageLine } from './KnowledgeUsage';
 import { CategoriesCard, CategoryMergePanel, ConflictsSection, DuplicatesPanel, type Conflict } from './KnowledgeQuality';
 import { SearchModePicker, SemanticCard } from './KnowledgeSemantic';
 import { useSemanticStatus, type SearchMode } from '../knowledgeSemantic';
@@ -38,7 +39,7 @@ interface NoteDetail {
   conflicts?: Conflict[]; // 2026-10-24 (KB phase 2)
 }
 
-type Tab = 'graph' | 'notes' | 'tags' | 'distilled';
+type Tab = 'graph' | 'notes' | 'tags' | 'distilled' | 'usage';
 type ColorBy = 'tag' | 'links' | 'none';
 
 // Categorical palette (works on the dark and light themes).
@@ -69,6 +70,7 @@ const KnowledgeView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<Tab>('graph');
+  const [usageQuery, setUsageQuery] = useState(''); // 2026-10-27: usage log filter from a note
   const [selected, setSelected] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);  // KB phase 5: import dialog
   const [detail, setDetail] = useState<NoteDetail | null>(null);
@@ -349,9 +351,9 @@ const KnowledgeView: React.FC = () => {
         <SearchModePicker mode={mode} status={semantic.st} note={query.trim() ? modeNote : null}
           onChange={m => { setMode(m); store(MODE_KEY, m); }} />
         <div className="kb-tabs" role="tablist">
-          {(['graph', 'notes', 'tags', 'distilled'] as Tab[]).map(t => (
+          {(['graph', 'notes', 'tags', 'distilled', 'usage'] as Tab[]).map(t => (
             <button key={t} role="tab" aria-selected={tab === t} className={`settings-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-              {t === 'graph' ? 'Graph' : t === 'notes' ? 'Notes' : t === 'tags' ? 'Tags & types' : 'Distilled'}
+              {t === 'graph' ? 'Graph' : t === 'notes' ? 'Notes' : t === 'tags' ? 'Tags & types' : t === 'distilled' ? 'Distilled' : 'Usage'}
             </button>
           ))}
         </div>
@@ -476,6 +478,12 @@ const KnowledgeView: React.FC = () => {
             <KnowledgeDistilled base={base} onOpenNote={p => { setCreating(null); setSide(null); select(p); }} />
           )}
 
+          {tab === 'usage' && (
+            // 2026-10-27: usage log (which agent used which notes, for what) and benchmarks
+            <KnowledgeUsage key={`${base}:${usageQuery}`} base={base} initialQuery={usageQuery}
+              onOpenNote={p => { setCreating(null); setSide(null); select(p); }} />
+          )}
+
           {tab === 'tags' && data && (
             <div className="kb-tags-grid">
               <section className="settings-card">
@@ -555,6 +563,7 @@ const KnowledgeView: React.FC = () => {
                 <h3>{detail.title}</h3>
                 <div className="kb-tags">{detail.tags.map(t => <span key={t} className="kb-tag" style={{ borderColor: tagColor.get(t) }}>#{t}</span>)}</div>
                 <div className="muted small kb-meta" title={detail.file}>{detail.permalink}.md · {detail.modified} · {(detail.size / 1024).toFixed(1)} KB</div>
+                <NoteUsageLine base={base} permalink={detail.permalink} onShow={() => { setUsageQuery(detail.permalink); setTab('usage'); }} />
 
                 {editing != null ? (
                   <>
