@@ -143,6 +143,31 @@ All tools are registered in `myclaw/tools/__init__.py` and implemented in
 | `list_change_proposals(status)` | Proposals and their status — v0.7.1 |
 | `get_recent_problems(hours=24)` | Grouped log errors (incl. CRITICAL), repeated warnings, restarts / crash loop, risky custom tools, failed or low-scoring job runs, open proposals — v0.7.1 |
 | `record_lesson(topic, lesson)` | Save a lesson to the knowledge note `medic-lessons` — v0.7.1 |
+| `propose_agent_fusion(agent_a, agent_b, new_name="", reason)` | Propose fusing two agents into one (see below); nothing changes until you approve — 2026-10-27 |
+| `list_agent_fusions(status="")` | Fusion proposals and their status — 2026-10-27 |
+
+### Agent fusion
+
+When two agents do the same work (overlapping descriptions, prompts and
+skills), the medic can propose making them one with
+`propose_agent_fusion(agent_a, agent_b, new_name, reason)` (a reason is
+required). The proposal is stored in `~/.myclaw/agent_fusions/<id>.json`:
+
+* name: `new_name`, or agent A's name;
+* description and system prompt merged — the default model writes the merged
+  prompt (the old prompts are passed to it quoted, as information); if no
+  model answers, both prompts are kept under headings;
+* skills of both; provider, model and key of the higher-level agent (A on a
+  tie); the larger context length;
+* **level = the lower of the two levels** (levels are only a label for now).
+
+It is applied only when you approve it in Settings → Agents → *Fusion
+proposals* (preview with prompt diff, skills, level and what moves) or with
+`zensynora agents approve ID`. Applying moves channel memberships, jobs and
+direct conversations to the fused agent and keeps both old definitions in
+`<id>.backup.json`; `zensynora agents undo ID` (or **Undo**) restores them.
+Agents can never fuse the default agent; only you can, by choosing it
+explicitly.
 
 ### Integrity and recovery
 

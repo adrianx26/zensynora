@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Agent levels, what every agent can do, agent fusion (2026-10-27)**
+- **Levels 1–9** for every agent (`agents.defaults.level`,
+  `agents.named[].level`; existing agents start at 1). Set in Settings →
+  Agents, shown as an **L3** badge in the sidebar, channel member chips and
+  chat, and in the agent's prompt. Only a label for now — no permissions
+  change with the level.
+- **Every agent (level 1 included)** is told in its prompt that it can create
+  skills, tools, jobs, delegate, add to the knowledge base and ask for more
+  information. New tools: `create_skill` (same code as the Skills page; never
+  overwrites an existing or built-in skill), `assign_skill` (to the calling
+  agent only) and `request_information` (a question marked **question** in the
+  agent's chat or job result; the topic is recorded as a knowledge gap for the
+  researcher; your next message without `@mention` goes to the agent that
+  asked; at most 3 per turn).
+- **Agent fusion**: the medic (`propose_agent_fusion`) or you (Settings →
+  Agents → *Fusion proposals*, `zensynora agents fuse A B`) propose making two
+  agents one — merged prompt, both skills, model of the higher-level agent,
+  **the lower level of the two**. Applied only after you approve (preview with
+  prompt diff and what moves); channels, jobs and direct conversations move to
+  the fused agent, both old agents are kept in
+  `~/.myclaw/agent_fusions/<id>.backup.json` and **Undo** restores them. The
+  default agent is only fused when you choose it explicitly. API:
+  `/api/agents/fusions` (list, propose, preview, approve, reject, undo); CLI:
+  `zensynora agents list | fuse | fusions | show | approve | reject | undo`.
+
 ### Changed
 
 **Chat: agent steps grouped into one line (2026-10-27)**

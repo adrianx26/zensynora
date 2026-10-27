@@ -371,6 +371,58 @@ user id to Allowed Telegram users below.* The sidebar health has a
 **Telegram** row too (running @name / stopped / conflict / error). Set-up step by step, commands and
 troubleshooting: [Telegram guide](telegram_guide.md).
 
+## Agents: levels, what every agent can do, fusion
+
+**Levels.** Every agent has a level from 1 to 9 (Settings → Agents → *Level*,
+saved with *Save settings*; `agents.defaults.level`, `agents.named[].level`).
+New agents and agents from older settings start at **1**. The level is shown
+as a small **L3** badge next to the agent's name in the sidebar, the channel
+member chips and the chat, and the agent's prompt says "You are level N".
+**For now the level is only a label**: it changes no permissions — a level-1
+agent can do everything a level-9 agent can.
+
+**What every agent can do** (level 1 included):
+
+| | Tool |
+|---|---|
+| Create a skill (shown on the Skills page) | `create_skill(name, description, instructions)`; `assign_skill(skill)` gives it to the agent itself (never to others). An existing skill — yours or built-in — is never overwritten |
+| Create a tool | `register_tool(name, code, documentation)` |
+| Schedule jobs | `job_create(…)` and the other job tools (off when *Agents may create and change jobs* is off) |
+| Delegate | `delegate(agent_name, task)` |
+| Add to the knowledge base | `write_to_knowledge(…)` |
+| Ask for more information | `request_information(topic, question, why)` |
+
+`request_information` posts the question in the chat where the agent works,
+marked **question** (in a job: in the run's result, and in the job's channel
+if it has one) and records the topic as a knowledge gap for the researcher
+(`~/.myclaw/knowledge_gaps.jsonl`). Your next message in that chat without an
+`@mention` goes to the agent that asked — also in a channel where another
+agent would answer first — and it is told which question you are answering.
+At most 3 questions per turn; every question is also logged in
+`~/.myclaw/agent_questions.jsonl`.
+
+**Fusion: two agents become one.** Settings → Agents → *Fusion proposals*.
+Pick two agents (optionally a new name) → **Preview fusion**. The preview
+shows the fused agent: system prompt merged by the default model (or, if it
+does not answer, both prompts under headings) as a diff against each old
+prompt, both agents' skills, the provider/model/key of the agent with the
+higher level (the first one on a tie), the larger context length and **the
+lower of the two levels** — and what moves: channels, jobs and direct
+conversations. Nothing changes until you click **Approve and apply**; then the
+two agents are replaced by the fused one, channel memberships, jobs (and the
+conversation they report to) and both direct conversations move to it, and
+both old definitions are saved in `~/.myclaw/agent_fusions/<id>.backup.json`.
+**Undo** puts both agents, their channels, jobs and conversations back. The
+agents' private conversation memory files are left as they are.
+
+The medic can propose a fusion too (tool `propose_agent_fusion`); it appears
+in the same list, waiting for you. The default agent is never fused unless
+you tick *include the default agent*: it then stays the default agent (keeps
+its model and built-in prompt) and gets the other agent's skills, the lower
+level and the larger context length. From the command line:
+`zensynora agents list | fuse A B [--name N] | fusions | show ID | approve ID |
+reject ID | undo ID`.
+
 ## Skills: instructions agents load when needed
 
 **Skills** in the sidebar. A skill is a Markdown file of instructions for one
