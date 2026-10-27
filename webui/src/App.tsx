@@ -20,6 +20,7 @@ import UpdatesView from './components/UpdatesView';
 import SkillsView from './components/SkillsView';
 import KnowledgeView from './components/KnowledgeView';
 import { restartServer } from './updates';
+import { LevelBadge } from './components/LevelBadge';
 import { api, getAdminKey, getApiBase, type AgentInfo, type Channel, type SystemHealth } from './api';
 
 type View = 'chat' | 'channels' | 'models' | 'jobs' | 'skills' | 'knowledge' | 'backups' | 'updates' | 'settings' | 'costs' | 'tools' | 'doctor';
@@ -223,7 +224,7 @@ function App() {
                 <div key={a.name} className={`agent-item ${active ? 'active' : ''}`} onClick={() => openDm(a.name)} title={a.description || `Direct chat with @${a.name}`}>
                   <div className="agent-avatar" style={{ background: agentColor(a.name), color: '#0d1117' }}>{a.name.charAt(0).toUpperCase()}</div>
                   <div className="agent-info">
-                    <span className="agent-name">@{a.name}</span>
+                    <span className="agent-name">@{a.name}<LevelBadge level={a.level} /></span>
                     <span className="agent-status">{a.provider ? `${a.provider} · ` : ''}{a.model}</span>
                   </div>
                 </div>

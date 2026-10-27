@@ -109,6 +109,45 @@ export interface AgentInfo {
   provider?: string;
   description?: string;
   system_prompt?: string;
+  level?: number; // 2026-10-27: 1-9, a label only
+}
+
+// 2026-10-27: agent fusion proposals (Settings → Agents → Fusion proposals)
+export interface FusedAgent {
+  name: string;
+  description: string;
+  system_prompt: string;
+  skills: string[];
+  provider: string;
+  model: string;
+  key: string;
+  context_length: number;
+  level: number;
+}
+
+export interface AgentFusion {
+  id: string;
+  status: 'pending' | 'applied' | 'rejected' | 'undone';
+  agent_a: string;
+  agent_b: string;
+  allow_default: boolean;
+  reason: string;
+  author: string;
+  created: number;
+  originals: Record<string, FusedAgent>;
+  fused: FusedAgent;
+  prompt_source: string;
+  moved?: { channels: number; jobs: number; messages: number };
+  problems?: string[];
+  // preview only
+  diff_a?: string;
+  diff_b?: string;
+  summary?: string;
+  impact?: {
+    channels: { id: string; name: string; messages: number }[];
+    dms: { id: string; name: string; messages: number }[];
+    jobs: { id: string; name: string; agent: string }[];
+  } | null;
 }
 
 export interface Job {

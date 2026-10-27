@@ -1157,3 +1157,13 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .ctx-status.low, .ctx-status.over { color: var(--danger-color); }
 .ctx-status.mid { color: #d29922; }
 .ctx-breakdown { line-height: 1.5; }
+
+/* Agent levels and fusion (2026-10-27) */
+.level-badge { display: inline-block; font-size: 0.65rem; font-weight: 600; line-height: 1; padding: 2px 5px; margin-left: 5px; border-radius: 6px; border: 1px solid rgba(139, 148, 158, 0.45); color: var(--text-secondary); vertical-align: middle; }
+.badge.question-badge { color: #d29922; border-color: #d29922; margin-left: 6px; }
+.question-msg { border-left: 3px solid #d29922; padding-left: 8px; }
+.fusion-card { margin-top: 18px; }
+.fusion-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+.fusion-row .field-input { width: auto; min-width: 140px; }
+.fusion-item { border: 1px solid rgba(139, 148, 158, 0.3); border-radius: 8px; padding: 8px 10px; margin: 8px 0; }
+.fusion-item .diff { max-height: 260px; }

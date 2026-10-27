@@ -4,6 +4,8 @@ import { api, ApiError, getAdminKey, setAdminKey, type ProbeResult, type Provide
 import { KeySelect, ProviderKeysPanel } from './ProviderKeys';
 import { LatencyTest, ModelPicker } from './ModelPicker';
 import { ContextLength } from './ContextLength';
+import { LevelBadge } from './LevelBadge';
+import { AgentFusions } from './AgentFusions';
 
 type Json = any;
 
@@ -221,6 +223,17 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
         })}
         {skillList.length === 0 && <span className="muted small">No skills found.</span>}
       </div>
+    </div>
+  );
+
+  // 2026-10-27: agent level 1-9 (a label only for now — no permissions)
+  const levelField = (value: number | undefined, onChange: (n: number) => void, changed = false) => (
+    <div className="field">
+      <label className="field-label">Level <LevelBadge level={value} />{changed && <span className="changed-dot" />}
+        <span className="muted small"> — a label only for now; it does not change what the agent may do</span></label>
+      <select className="field-input narrow" value={value || 1} onChange={e => onChange(Number(e.target.value))}>
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => <option key={n} value={n}>{n}</option>)}
+      </select>
     </div>
   );
 
@@ -617,6 +630,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
               <ContextLength agentName="default" systemPrompt="" skills={getPath(draft, 'agents.defaults.skills') || []}
                 provider={defaultProvider} model={getPath(draft, 'agents.defaults.model') || ''} keyId={getPath(draft, 'agents.defaults.key') || ''}
                 value={getPath(draft, 'agents.defaults.context_length') || 0} onChange={v => update('agents.defaults.context_length', v)} />
+              {levelField(getPath(draft, 'agents.defaults.level'), n => update('agents.defaults.level', n), 'agents.defaults.level' in changes)}
             </div>
             {skillChips(getPath(draft, 'agents.defaults.skills') || [], next => update('agents.defaults.skills', next))}
             <h3>Named agents</h3>
@@ -635,7 +649,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
                 <div className="agent-editor" key={i}>
                   <div className="agent-editor-grid four">
                     <div className="field">
-                      <label className="field-label">Name</label>
+                      <label className="field-label">Name <LevelBadge level={a.level} /></label>
                       <input className="field-input" value={a.name} onChange={e => setAgent('name', e.target.value.replace(/\s+/g, '_'))} />
                     </div>
                     <div className="field">
@@ -663,6 +677,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
                   <ContextLength agentName={a.name || `agent${i + 1}`} systemPrompt={a.system_prompt || ''} skills={a.skills || []}
                     provider={agentProvider} model={a.model || getPath(draft, 'agents.defaults.model') || ''} keyId={agentKey}
                     value={a.context_length || 0} onChange={v => setAgent('context_length', v)} />
+                  {levelField(a.level, n => setAgent('level', n))}
                   <div className="field">
                     <label className="field-label">Short description</label>
                     <input className="field-input" value={a.description || ''} placeholder="e.g. Reviews Python code for bugs and explains fixes simply"
@@ -687,9 +702,15 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
               );
             })}
             <button type="button" className="ghost-btn" onClick={() => update('agents.named', [...named, {
-              name: `agent${named.length + 1}`, provider: '', key: '', model: getPath(draft, 'agents.defaults.model') || '', system_prompt: '', description: '', skills: [], context_length: 0,
+              name: `agent${named.length + 1}`, provider: '', key: '', model: getPath(draft, 'agents.defaults.model') || '', system_prompt: '', description: '', skills: [], context_length: 0, level: 1,
             }])}>+ Add agent</button>
           </div>
+        )}
+        {tab === 'Agents' && (
+          <AgentFusions dirty={dirtyCount > 0}
+            agents={[{ name: 'default', level: getPath(data.config, 'agents.defaults.level') },
+              ...((getPath(data.config, 'agents.named') || []) as Json[]).map((x: Json) => ({ name: x.name, level: x.level }))]}
+            onChanged={() => { load(); onSaved?.(); }} />
         )}
 
         {tab === 'Channels' && (

@@ -14,6 +14,7 @@ import { MessageActions, MessageBody, MessageEditor } from './MessageActions';
 import { copyText } from '../clipboard';
 import { api, getApiBase, getWsBase, type AgentInfo, type Channel, type ChatMsg } from '../api';
 import { agentColor } from '../colors';
+import { LevelBadge } from './LevelBadge';
 import { ACTIVITY_MODES, groupMessages, loadActivityMode, saveActivityMode, summarizeEvents, type ActivityMode } from '../chatEvents';
 
 interface Props {
@@ -447,6 +448,7 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
               {channel.members.map(m => (
                 <span key={m} className="member-chip" style={{ borderColor: agentColor(m) }}>
                   <span className="member-dot" style={{ background: agentColor(m) }} />@{m}
+                  <LevelBadge level={agents.find(a => a.name === m)?.level} />
                   {working.includes(m) && <span className="member-working" title="answering…">…</span>}
                 </span>
               ))}
@@ -535,10 +537,12 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
             return (
               <div key={m.id} className={`chat-message ${mine ? 'user' : 'agent'}`}>
                 {mine ? <div className="message-avatar">U</div> : <Avatar name={m.sender} />}
-                <div className="message-content">
+                <div className={`message-content${m.meta?.question ? ' question-msg' : ''}`}>
                   {!mine && (
                     <div className="message-meta">
                       <b style={{ color: agentColor(m.sender) }}>@{m.sender}</b>
+                      {agents.some(a => a.name === m.sender) && <LevelBadge level={agents.find(a => a.name === m.sender)?.level} />}
+                      {m.meta?.question && <span className="badge question-badge" title="The agent asks you for information (request_information); your reply goes to it">question</span>}
                       {m.meta?.job && <span className="badge">job: {m.meta.job}</span>}
                       {m.meta?.model && !streaming && <span className="muted"> · {m.meta.provider}/{m.meta.model}{m.meta.ms ? ` · ${(m.meta.ms / 1000).toFixed(1)} s` : ''}</span>}
                       {!streaming && m.meta?.tps != null && (
