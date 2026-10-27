@@ -119,6 +119,14 @@ ZenSynora's own Node.js; a system Node.js is never touched. Updates run with
 the new updater as soon as it is downloaded (updater protocol 3), so this
 already applies to the first update after this change.
 
+**Optional packages (2026-10-27, updater protocol 4).** Packages you added
+yourself — for example `fastembed` installed by the Knowledge page's
+*Install* button for semantic search, or the `[ingest]` / `[watch]` extras —
+are installed again into the new release. When such a package belongs to one
+of ZenSynora's optional extras (`semantic`, `ingest`, `watch` in
+`pyproject.toml`), it is installed with the version range of the **new**
+release, so an update can never pull an incompatible version.
+
 ## Layout
 
 ```

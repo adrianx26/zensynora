@@ -361,7 +361,13 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_kb_phase0_agent.py` | 19 |
 | `test_kb_phase0_surfaces.py` | 16 |
 | `test_kb_phase0_migration.py` | 2 |
-| **Total** | **844** |
+| `test_kb_phase2_quality.py` | 98 |
+| `test_kb_phase3_semantic.py` | 54 |
+| `test_kb_phase4_distill.py` | 42 |
+| `test_kb_phase5_ingest.py` | 51 |
+| `test_kb_phase5_wiring.py` | 1 |
+| `test_kb_phase6_robust.py` | 39 |
+| **Total** | **1129** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

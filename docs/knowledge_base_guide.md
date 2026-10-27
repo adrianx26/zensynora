@@ -487,6 +487,7 @@ API: `GET /api/knowledge/health?base=`.
 
 ## Plans
 
-What comes next (more of memopad's features: note editing tools, an optional
-model pass for distillation) is in
+What comes next (note editing tools — `edit_note`, `move_note`, `daily_note`,
+`recent_activity` —, hiding wrong distilled facts, an optional model pass for
+distillation) is in
 [docs/dev/plans/memopad_port_plan.md](dev/plans/memopad_port_plan.md).
