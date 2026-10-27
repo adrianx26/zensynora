@@ -159,6 +159,8 @@ from myclaw.web import knowledge_distill_api as _knowledge_distill_api  # noqa: 
 app.include_router(_knowledge_distill_api.router)  # 2026-10-24 (KB phase 4): facts / scenarios / persona / drill-down
 from myclaw.web import knowledge_health_api as _knowledge_health_api  # noqa: E402
 app.include_router(_knowledge_health_api.router)  # 2026-10-25 (KB phase 6): index health, file watcher status
+from myclaw.web import knowledge_usage_api as _knowledge_usage_api  # noqa: E402
+app.include_router(_knowledge_usage_api.router)  # 2026-10-27: usage log (which agent used what, why), benchmarks
 
 
 _mcp_manager = None
