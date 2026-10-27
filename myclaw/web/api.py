@@ -148,6 +148,8 @@ app.include_router(_backup_api.router)
 app.include_router(_medic_api.router)  # self-update proposals (v0.7.1)
 app.include_router(_update_api.router)  # check / update / rollback / restart (v0.7.4)
 app.include_router(_skills_api.router)  # agent skills (v0.7.5)
+from myclaw.web import agents_api as _agents_api  # noqa: E402
+app.include_router(_agents_api.router)  # 2026-10-27: agent fusion proposals (approve / reject / undo)
 app.include_router(_telegram_api.router)  # Telegram bot inside the Web UI
 app.include_router(_doctor_api.router)  # doctor report, errors viewer, download
 app.include_router(_knowledge_api.router)  # knowledge base explorer (graph, notes, tags)
@@ -303,6 +305,7 @@ async def get_agents():
             "model": defaults.model,
             "provider": defaults.provider,
             "system_prompt": getattr(defaults, "system_prompt", ""),
+            "level": getattr(defaults, "level", 1),  # 2026-10-27: a label only
         }
     ]
     for na in config.agents.named:
@@ -312,6 +315,7 @@ async def get_agents():
             "provider": na.provider or defaults.provider,
             "system_prompt": na.system_prompt or "",
             "description": getattr(na, "description", "") or "",
+            "level": getattr(na, "level", 1),
         })
     return {"agents": agents}
 

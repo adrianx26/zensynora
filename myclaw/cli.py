@@ -686,6 +686,137 @@ def backup_delete(name):
     click.echo(f"Deleted {name}")
 
 
+### AGENTS: LEVELS AND FUSION (2026-10-27) ###
+@cli.group()
+def agents():
+    """Agents: levels and fusion proposals (two agents become one after you approve).
+
+    \b
+    zensynora agents list                 agents with their level
+    zensynora agents fuse A B [--name N]  propose a fusion (nothing changes yet)
+    zensynora agents fusions              list proposals (add --status pending)
+    zensynora agents show ID              fused agent, prompt diff, what moves
+    zensynora agents approve ID           apply it
+    zensynora agents reject ID --note …
+    zensynora agents undo ID              put both agents back
+    """
+
+
+@agents.command("list")
+def agents_list():
+    from .agent_team import agent_level
+    from .config import load_config
+
+    cfg = load_config()
+    for n in ["default"] + [a.name for a in cfg.agents.named]:
+        click.echo(f" - @{n}  L{agent_level(cfg, n)}")
+    click.echo("Levels (1-9) are only a label for now; change them in Settings → Agents.")
+
+
+def _fusion_echo(p: dict) -> None:
+    f = p["fused"]
+    click.echo(f"{p['id']}  [{p['status']:<8}] @{p['agent_a']} + @{p['agent_b']} → @{f['name']} (L{f['level']})"
+               f"  by {p.get('author', '?')}")
+
+
+@agents.command("fusions")
+@click.option("--status", type=click.Choice(["pending", "applied", "rejected", "undone"]))
+def agents_fusions(status):
+    from . import agent_fusion
+
+    items = agent_fusion.list_fusions(status)
+    if not items:
+        click.echo("No fusion proposals.")
+    for p in items:
+        _fusion_echo(p)
+
+
+@agents.command("fuse")
+@click.argument("agent_a")
+@click.argument("agent_b")
+@click.option("--name", "new_name", default="", help="Name of the fused agent (default: AGENT_A's name)")
+@click.option("--reason", default="")
+@click.option("--no-model", is_flag=True, help="Do not ask the default model to merge the prompts")
+@click.option("--include-default", is_flag=True, help="Allow fusing the default agent (it stays the default)")
+def agents_fuse(agent_a, agent_b, new_name, reason, no_model, include_default):
+    """Propose fusing AGENT_A and AGENT_B (applied only with `agents approve`)."""
+    from . import agent_fusion
+
+    try:
+        p = agent_fusion.create_fusion(agent_a, agent_b, new_name, reason, "you (cli)", not no_model,
+                                       include_default)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    _fusion_echo(p)
+    click.echo(f"Review it with `zensynora agents show {p['id']}`, then approve or reject it.")
+
+
+@agents.command("show")
+@click.argument("fid")
+def agents_show(fid):
+    from . import agent_fusion
+
+    try:
+        p = agent_fusion.preview(fid)
+    except (KeyError, ValueError):
+        raise click.ClickException(f"No fusion proposal {fid}.")
+    f = p["fused"]
+    click.echo(p["summary"])
+    click.echo(f"\nskills: {', '.join(f['skills']) or 'none'} · model: {f['provider'] or 'default'}/"
+               f"{f['model'] or 'default'} · context: {f['context_length'] or 'model default'} · "
+               f"prompt: {p['prompt_source']}")
+    if p.get("reason"):
+        click.echo(f"reason: {p['reason']}")
+    if p.get("impact"):
+        im = p["impact"]
+        click.echo(f"moves: {len(im['channels'])} channel(s), {len(im['dms'])} conversation(s), "
+                   f"{len(im['jobs'])} job(s)")
+    click.echo("\n" + (p["diff_a"] or "(prompt of @%s unchanged)\n" % p["agent_a"]))
+    click.echo(p["diff_b"] or "(prompt of @%s unchanged)" % p["agent_b"])
+
+
+@agents.command("approve")
+@click.argument("fid")
+def agents_approve(fid):
+    """Apply a fusion: two agents become one (undo with `agents undo ID`)."""
+    from . import agent_fusion
+
+    try:
+        p = agent_fusion.apply_fusion(fid, by="you (cli)")
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    m = p.get("moved", {})
+    click.echo(f"✔ Applied: @{p['fused']['name']} — moved {m.get('channels', 0)} channel membership(s), "
+               f"{m.get('jobs', 0)} job(s), {m.get('messages', 0)} message(s). Restart a running Web UI "
+               "or open Settings → Agents and save so it uses the new agent.")
+
+
+@agents.command("reject")
+@click.argument("fid")
+@click.option("--note", default="")
+def agents_reject(fid, note):
+    from . import agent_fusion
+
+    try:
+        agent_fusion.reject_fusion(fid, by="you (cli)", note=note)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    click.echo("Rejected.")
+
+
+@agents.command("undo")
+@click.argument("fid")
+def agents_undo(fid):
+    """Put both agents of an applied fusion back (from its backup)."""
+    from . import agent_fusion
+
+    try:
+        agent_fusion.undo_fusion(fid, by="you (cli)")
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    click.echo("✔ Undone: both agents, their channels, jobs and conversations are back.")
+
+
 ### MEDIC SELF-UPDATE (v0.7.1) ###
 @cli.group()
 def medic():

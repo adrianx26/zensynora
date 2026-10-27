@@ -254,6 +254,47 @@ def rename_agent(old: str, new: str) -> int:
         return c.execute("UPDATE jobs SET agent = ? WHERE agent = ?", (new, old)).rowcount
 
 
+def move_agent_jobs(old: str, new: str, channel_moves: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """Jobs of ``old`` run with ``new`` (agent fusion, 2026-10-27); jobs reporting to a
+    channel in ``channel_moves`` report to its new id. Returns what changed, for undo."""
+    channel_moves = channel_moves or {}
+    changed: list[dict[str, Any]] = []
+    with _conn() as c:
+        for r in c.execute("SELECT id, agent, channel_id FROM jobs").fetchall():
+            sets: dict[str, Any] = {}
+            if r["agent"] == old:
+                sets["agent"] = new
+            if r["channel_id"] in channel_moves:
+                sets["channel_id"] = channel_moves[r["channel_id"]]
+            if not sets:
+                continue
+            c.execute(f"UPDATE jobs SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ?",
+                      (*sets.values(), r["id"]))
+            changed.append({"id": r["id"], "agent": r["agent"], "channel_id": r["channel_id"], **{
+                f"new_{k}": v for k, v in sets.items()}})
+    return changed
+
+
+def restore_agent_jobs(changes: list[dict[str, Any]]) -> int:
+    """Undo :func:`move_agent_jobs` for jobs that still have the values it set."""
+    n = 0
+    with _conn() as c:
+        for ch in changes:
+            row = c.execute("SELECT agent, channel_id FROM jobs WHERE id = ?", (ch["id"],)).fetchone()
+            if row is None:
+                continue
+            sets: dict[str, Any] = {}
+            if "new_agent" in ch and row["agent"] == ch["new_agent"]:
+                sets["agent"] = ch["agent"]
+            if "new_channel_id" in ch and row["channel_id"] == ch["new_channel_id"]:
+                sets["channel_id"] = ch["channel_id"]
+            if sets:
+                c.execute(f"UPDATE jobs SET {', '.join(k + ' = ?' for k in sets)} WHERE id = ?",
+                          (*sets.values(), ch["id"]))
+                n += 1
+    return n
+
+
 def delete_job(job_id: str) -> bool:
     with _conn() as c:
         c.execute("DELETE FROM runs WHERE job_id = ?", (job_id,))

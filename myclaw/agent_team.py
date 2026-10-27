@@ -1,8 +1,10 @@
 """Agents working as a team (v0.7.5): who else is there, delegating, creating agents.
 
-* :func:`team_section` — part of every agent's system prompt: the other agents
-  and what each does, and how to hand them work (``delegate``) or create a new
-  specialist (``create_agent``).
+* :func:`team_section` — part of every agent's system prompt: its level (1-9,
+  a label only — 2026-10-27), what every agent can do itself (skills, tools,
+  jobs, delegation, knowledge, asking the user — see ``myclaw.agent_caps``),
+  the other agents and what each does, and how to hand them work
+  (``delegate``) or create a new specialist (``create_agent``).
 * :func:`create_agent` — tool: an agent adds a new named agent to the settings
   (name, what it does, prompt, model, skills). It is available at once — in the
   sidebar, in chat (``@name``) and for delegation — and can be changed or removed
@@ -37,24 +39,61 @@ def on_agent_created(fn: Callable[[str, Any], None]) -> None:
 def _describe(config: Any, name: str) -> str:
     d = config.agents.defaults
     if name == "default":
-        return f"the main agent, general tasks ({d.provider}/{d.model})"
+        return f"the main agent, general tasks ({d.provider}/{d.model}, level {agent_level(config, name)})"
     for a in config.agents.named:
         if a.name == name:
             what = (a.description or "").strip() or (a.system_prompt or "").strip().split("\n")[0][:120]
-            return f"{what or 'no description'} ({a.provider or d.provider}/{a.model or d.model})"
+            return (f"{what or 'no description'} ({a.provider or d.provider}/{a.model or d.model}, "
+                    f"level {agent_level(config, name)})")
     return ""
 
 
+def agent_level(config: Any, name: str) -> int:
+    """The agent's level (1-9; 1 when unknown). A label only — see AgentDefaults.level."""
+    try:
+        if name == "default":
+            return int(getattr(config.agents.defaults, "level", 1) or 1)
+        for a in config.agents.named:
+            if a.name == name:
+                return int(getattr(a, "level", 1) or 1)
+    except (AttributeError, TypeError, ValueError):
+        pass
+    return 1
+
+
+def capabilities_lines(config: Any, has_others: bool) -> list[str]:
+    """2026-10-27: what EVERY agent can do (level 1 included), told in its prompt."""
+    jobs_on = bool(getattr(config.agents, "allow_job_creation", True))
+    return [
+        "What you can do yourself (every agent can, whatever its level):",
+        "- create a skill (reusable instructions, shown on the Skills page): create_skill(name, description, "
+        "instructions); give it to yourself with assign_skill(skill). Existing and built-in skills are never "
+        "overwritten — pick another name.",
+        "- create a tool: register_tool(name, code, documentation) — call list_toolbox() first and reuse a "
+        "similar tool.",
+        ("- schedule work: job_create(name, prompt, agent, schedule, …) makes a job on the Jobs page."
+         if jobs_on else "- scheduling jobs is turned off by the user (agents.allow_job_creation)."),
+        ("- delegate: delegate(agent_name, task) hands a task to another agent." if has_others
+         else "- delegate: delegate(agent_name, task) once there are other agents."),
+        "- add to the knowledge base: write_to_knowledge(title, content, tags, …) for facts worth keeping.",
+        "- ask for more information: request_information(topic, question, why) posts your question to the "
+        "user in this chat (or in the job's result) and records the topic for research. Use it when facts "
+        "about a task, job, subject or domain are missing and your tools cannot find them; at most 3 "
+        "questions per turn, then say what you are waiting for. The user's reply comes back to you.",
+    ]
+
+
 def team_section(config: Any, agent_name: str) -> str:
-    """'Your team' part of the system prompt (empty when the agent is alone)."""
+    """'Your team' part of the system prompt: level, capabilities, other agents."""
     names = ["default"] + [a.name for a in config.agents.named]
     others = [n for n in names if n != agent_name]
     can_create = bool(getattr(config.agents, "allow_agent_creation", True))
-    tg_on = bool(getattr(getattr(getattr(config, "channels", None), "telegram", None), "enabled", False))
     jobs_on = bool(getattr(config.agents, "allow_job_creation", True))
-    if not others and not can_create and not tg_on and not jobs_on:
-        return ""
     lines = ["## Your team"]
+    # 2026-10-27: agent levels 1-9 — a label only for now (no permissions).
+    lines.append(f"You are @{agent_name}, level {agent_level(config, agent_name)} of 9. The level is only a "
+                 "label for now; it does not change what you may do.")
+    lines += capabilities_lines(config, bool(others))
     if others:
         lines.append("Other agents you can hand work to:")
         lines += [f"- @{n}: {_describe(config, n)}" for n in others]

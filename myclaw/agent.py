@@ -271,6 +271,9 @@ SYSTEM_PROMPT = (
     "browse(url, max_length), download_file(url, path), delegate(agent_name, task). "
     "Tool management: list_tools(), register_tool(name, code, documentation), "
     "list_toolbox(), get_tool_documentation(name). "
+    # 2026-10-27: every agent can write skills and ask the user for missing information.
+    "Skills: create_skill(name, description, instructions), assign_skill(skill), use_skill(name). "
+    "Ask: request_information(topic, question, why) sends the user a question when facts are missing. "
     "Scheduling: schedule(task, delay, every, user_id), edit_schedule(job_id, new_task, delay, every), "
     "split_schedule(job_id, sub_tasks_json), suspend_schedule(job_id), resume_schedule(job_id), "
     "cancel_schedule(job_id), list_schedules(). "

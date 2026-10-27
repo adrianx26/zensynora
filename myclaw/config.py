@@ -403,6 +403,10 @@ class AgentDefaults(BaseModel):
     # num_ctx; for every provider the oldest messages are left out so a turn
     # fits (myclaw/context_budget.py). Settings → Agents → Context length.
     context_length: int = Field(0, ge=0, le=10_000_000)
+    # 2026-10-27: agent level 1-9 (every agent starts at 1). Only a label for
+    # now: shown in the Web UI and the agent's prompt; it grants no
+    # permissions. A fused agent gets the lower level of the two.
+    level: int = Field(1, ge=1, le=9)
 
 
 class NamedAgentConfig(BaseModel):
@@ -422,6 +426,8 @@ class NamedAgentConfig(BaseModel):
     key: str = ""
     # Context length in tokens (0 = the model's default) — see AgentDefaults.
     context_length: int = Field(0, ge=0, le=10_000_000)
+    # 2026-10-27: level 1-9, a label only (see AgentDefaults.level).
+    level: int = Field(1, ge=1, le=9)
 
 
 class ModelChoice(BaseModel):

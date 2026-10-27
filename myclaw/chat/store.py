@@ -167,6 +167,93 @@ def rename_member(old: str, new: str) -> None:
             c.execute("UPDATE messages SET channel_id = ? WHERE channel_id = ?", (new_dm, old_dm))
 
 
+def move_member(old: str, new: str, note: str = "") -> dict[str, Any]:
+    """Agent fusion (2026-10-27): ``old`` is replaced by ``new`` everywhere.
+
+    * channels with ``old`` as member get ``new`` instead (no duplicates);
+    * the direct conversation with ``old`` is moved into the one with ``new``
+      (created if needed): its messages keep their text, sender and time, a
+      system note marks the move, the empty old conversation is removed.
+
+    Nothing is deleted that cannot be put back: the return value records the
+    old member lists, the old conversation row and the moved message ids, for
+    :func:`restore_member`.
+    """
+    undo: dict[str, Any] = {"old": old, "new": new, "channels": [], "dm": None}
+    old_dm, new_dm = f"dm-{slug(old)}", f"dm-{slug(new)}"
+    now = time.time()
+    with _conn() as c:
+        for r in c.execute("SELECT id, members FROM channels").fetchall():
+            members = json.loads(r["members"] or "[]")
+            if old not in members:
+                continue
+            undo["channels"].append({"id": r["id"], "members": members})
+            if r["id"] == old_dm:
+                continue  # moved below
+            c.execute("UPDATE channels SET members = ?, updated = ? WHERE id = ?",
+                      (json.dumps(list(dict.fromkeys(new if m == old else m for m in members))), now, r["id"]))
+        row = c.execute("SELECT * FROM channels WHERE id = ?", (old_dm,)).fetchone()
+        if row is not None and old_dm != new_dm:
+            created = False
+            if not c.execute("SELECT 1 FROM channels WHERE id = ?", (new_dm,)).fetchone():
+                c.execute("INSERT INTO channels (id, name, kind, topic, members, reply_mode, created, updated) "
+                          "VALUES (?, ?, 'dm', '', ?, 'lead', ?, ?)", (new_dm, new, json.dumps([new]), now, now))
+                created = True
+            ids = [m["id"] for m in c.execute("SELECT id FROM messages WHERE channel_id = ? ORDER BY id",
+                                              (old_dm,)).fetchall()]
+            c.execute("UPDATE messages SET channel_id = ? WHERE channel_id = ?", (new_dm, old_dm))
+            note_id = None
+            if ids:
+                note_id = c.execute(
+                    "INSERT INTO messages (channel_id, role, sender, text, meta, created) "
+                    "VALUES (?, 'system', '', ?, '{}', ?)",
+                    (new_dm, note or f"The conversation with @{old} was moved here ({len(ids)} messages).", now),
+                ).lastrowid
+            c.execute("DELETE FROM channels WHERE id = ?", (old_dm,))
+            undo["dm"] = {"from": old_dm, "to": new_dm, "row": dict(row), "message_ids": ids,
+                          "note_id": note_id, "created_target": created}
+    return undo
+
+
+def restore_member(undo: dict[str, Any]) -> None:
+    """Undo :func:`move_member` as far as the data still allows (later changes are kept)."""
+    old, new = undo["old"], undo["new"]
+    now = time.time()
+    with _conn() as c:
+        dm = undo.get("dm")
+        if dm:
+            row = dm["row"]
+            c.execute("INSERT OR IGNORE INTO channels (id, name, kind, topic, members, reply_mode, created, updated) "
+                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                      (row["id"], row["name"], row["kind"], row["topic"], row["members"], row["reply_mode"],
+                       row["created"], now))
+            ids = list(dm.get("message_ids") or [])
+            for i in range(0, len(ids), 500):
+                part = ids[i:i + 500]
+                c.execute(f"UPDATE messages SET channel_id = ? WHERE channel_id = ? AND id IN "
+                          f"({', '.join('?' * len(part))})", (dm["from"], dm["to"], *part))
+            if dm.get("note_id"):
+                c.execute("DELETE FROM messages WHERE id = ? AND role = 'system'", (dm["note_id"],))
+            if dm.get("created_target") and not c.execute(
+                    "SELECT 1 FROM messages WHERE channel_id = ? LIMIT 1", (dm["to"],)).fetchone():
+                c.execute("DELETE FROM channels WHERE id = ?", (dm["to"],))
+        for rec in undo.get("channels") or []:
+            r = c.execute("SELECT members FROM channels WHERE id = ?", (rec["id"],)).fetchone()
+            if r is None:
+                continue
+            current = json.loads(r["members"] or "[]")
+            if new not in current and rec["id"] != (dm or {}).get("from"):
+                continue  # the user removed the agent since: leave the channel as it is
+            back = [m for m in rec["members"] if m in (old, new)]
+            members: list[str] = []
+            for m in current:
+                members.extend(back if m == new else [m])
+            if not members or rec["id"] == (dm or {}).get("from"):
+                members = rec["members"]
+            c.execute("UPDATE channels SET members = ?, updated = ? WHERE id = ?",
+                      (json.dumps(list(dict.fromkeys(members))), now, rec["id"]))
+
+
 def close_interrupted() -> int:
     """Answers left "typing…" because the server stopped mid-answer (v0.7.5)."""
     n = 0

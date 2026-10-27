@@ -223,6 +223,13 @@ class ChatEngine:
             if ch is None:
                 return
             targets = [only] if only else self.resolve_targets(ch, text)
+            # 2026-10-27: a reply to an agent's question (request_information) goes to that
+            # agent when the message names nobody, and it is told what was asked.
+            asked: dict[str, Any] | None = None
+            if not only and anchor is None and not _MENTION.findall(text):
+                asked = await self._answered_question(channel_id)
+                if asked is not None:
+                    targets = [asked["sender"]]
             new_members = [t for t in targets if t not in ch["members"]]
             if new_members:
                 ch = await asyncio.to_thread(store.update_channel, channel_id,
@@ -244,6 +251,10 @@ class ChatEngine:
                         if m["role"] == "agent" and m["sender"] != only and m["text"]:
                             replies[m["sender"]] = m["text"]
 
+            if asked is not None:
+                q = (asked.get("meta") or {}).get("question") or {}
+                text = (f"[This answers your question about \"{events.short(q.get('topic', ''), 200)}\": "
+                        f"\"{events.short(q.get('question', ''), 600)}\"]\n{text}")
             events.publish(channel_id, {"type": "turn_start", "agents": targets})
             try:
                 if ch["reply_mode"] == "parallel" and len(targets) > 1:
@@ -263,6 +274,20 @@ class ChatEngine:
                     except Exception as e:  # pragma: no cover - resync_memory logs its own errors
                         logger.debug("memory resync after regenerate failed: %s", e)
                 events.publish(channel_id, {"type": "turn_end"})
+
+    async def _answered_question(self, channel_id: str) -> dict[str, Any] | None:
+        """The agent question (request_information) your newest message answers, if any."""
+        from ..agent_caps import pending_question
+
+        try:
+            msgs = await asyncio.to_thread(store.list_messages, channel_id, None, 30)
+        except Exception as e:  # pragma: no cover - never block a turn
+            logger.debug("could not look for an open question: %s", e)
+            return None
+        asked = pending_question(msgs)
+        if asked is None or asked.get("sender") not in self._registry():
+            return None
+        return asked
 
     def _prompt(self, ch: dict[str, Any], agent: str, text: str, replies: dict[str, str],
                 history: list[dict[str, Any]]) -> str:
@@ -317,6 +342,9 @@ class ChatEngine:
         events.publish(channel_id, {"type": "stream_start", "message": msg})
         tokens = (events.CURRENT_CHANNEL.set(channel_id), events.CURRENT_AGENT.set(agent_name),
                   MEMORY_SCOPE.set(memory_scope(channel_id, agent_name)))
+        from ..agent_caps import QUESTION_BUDGET
+
+        budget_token = QUESTION_BUDGET.set({"n": 0})  # 2026-10-27: request_information per turn
         parts: list[str] = []
         started = time.monotonic()
         first_at = last_at = None  # v0.7.5: token speed
@@ -342,6 +370,7 @@ class ChatEngine:
         finally:
             for var, tok in zip((events.CURRENT_CHANNEL, events.CURRENT_AGENT, MEMORY_SCOPE), tokens):
                 var.reset(tok)
+            QUESTION_BUDGET.reset(budget_token)
             full = "".join(parts).strip()
             used = getattr(agent, "last_model_used", None) or (getattr(agent, "_provider_name", ""), agent.model)
             meta = {"model": used[1], "provider": used[0], "ms": int((time.monotonic() - started) * 1000)}

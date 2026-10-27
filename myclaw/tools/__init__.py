@@ -67,6 +67,10 @@ from .kb import (
     list_facts, list_scenarios, get_persona, drill_down, distill_knowledge,
 )
 from .jobs import job_create, job_list, job_run, job_status, job_update  # noqa: E402
+# 2026-10-27: every agent can write skills and ask the user for missing information
+from ..agent_caps import create_skill, assign_skill, request_information  # noqa: E402
+# async tool (not lazy: a lazy wrapper hides that it is a coroutine); the module is import-cheap
+from ..agent_fusion import propose_agent_fusion  # noqa: E402  (also myclaw.agents.medic_agent)
 from .scheduler import (
     schedule, edit_schedule, split_schedule, suspend_schedule,
     resume_schedule, cancel_schedule, list_schedules,
@@ -134,6 +138,8 @@ _LAZY_AGENT_TOOLS = {
     "list_skills":               ("myclaw.agent_skills",         "list_agent_skills",         "List all skills (name and what each is for)"),
     "send_telegram_message":     ("myclaw.channels.telegram",    "send_telegram_message",     "Send a Telegram message to the user through ZenSynora's own bot (only to allowed users)"),
     "create_agent":              ("myclaw.agent_team",           "create_agent",              "Create a new named agent (specialist) that can then be talked to and given tasks with delegate"),
+    # 2026-10-27: agent fusion — a proposal the user approves (Settings → Agents → Fusion proposals)
+    "list_agent_fusions":        ("myclaw.agents.medic_agent",   "list_agent_fusions",        "List agent fusion proposals and their status"),
     # 2026-10-24 (KB phase 5): ingestion into the knowledge base
     "assimilate":                ("myclaw.tools.ingest",         "assimilate",                "Read a web page, a GitHub repository (https://github.com/owner/repo) or a local file/folder (PDF, Word, Excel, text, code, images) into linked knowledge notes plus a Mermaid diagram of its structure, in one call; returns the overview note and the diagram"),
     "import_knowledge":          ("myclaw.tools.ingest",         "import_knowledge",          "Import a ChatGPT or Claude.ai export (.zip/.json), an MCP memory file, a folder or zip of Markdown notes (Obsidian vault) or one document into the knowledge base (kind: auto, chatgpt, claude, mcp_memory, markdown, document)"),
@@ -201,6 +207,12 @@ TOOLS.update({
     "job_run":              {"func": job_run,              "desc": "Start a job now in the background"},
     "job_status":           {"func": job_status,           "desc": "How a job's recent runs went: status, duration, model, answer or error"},
     "job_update":           {"func": job_update,           "desc": "Pause or resume a job, or change one an agent created"},
+    # Skills and questions (2026-10-27): every agent, whatever its level
+    "create_skill":         {"func": create_skill,         "desc": "Create a new skill (reusable instructions on the Skills page); never overwrites an existing or built-in skill"},
+    "assign_skill":         {"func": assign_skill,         "desc": "Give a skill to yourself so it is listed in your prompt (only your own skills)"},
+    "request_information":  {"func": request_information,  "desc": "Ask the user for missing information about a task, job, subject or domain: posts a marked question in this chat (or the job result) and records the topic for research; max 3 per turn"},
+    # 2026-10-27: agent fusion — a proposal the user approves (Settings → Agents → Fusion proposals)
+    "propose_agent_fusion": {"func": propose_agent_fusion, "desc": "Medic: propose fusing two agents into one (merged prompt, skills union, lower level); applied only after the user approves it"},
     # Scheduling
     "schedule":             {"func": schedule,             "desc": "Schedule a future task (delay= or every=)"},
     "edit_schedule":        {"func": edit_schedule,        "desc": "Edit an active scheduled job (new task, delay, or every)"},
@@ -323,6 +335,7 @@ __all__ = [
     "delegate",
     "ssh_command", "ssh_put_file", "ssh_get_file", "get_system_diagnostic",
     "job_create", "job_list", "job_run", "job_status", "job_update",
+    "create_skill", "assign_skill", "request_information",
     "schedule", "edit_schedule", "split_schedule", "suspend_schedule",
     "resume_schedule", "cancel_schedule", "list_schedules", "nlp_schedule",
     "write_to_knowledge", "search_knowledge", "read_knowledge",

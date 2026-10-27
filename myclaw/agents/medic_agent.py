@@ -466,6 +466,42 @@ def _reset_loop_counter() -> None:
         _calls.clear()
 
 
+# ── Agent fusion (2026-10-27) ────────────────────────────────────────────────
+async def propose_agent_fusion(agent_a: str, agent_b: str, new_name: str = "", reason: str = "") -> str:
+    """
+    Propose fusing two agents into one. Nothing changes until the user approves
+    it (Settings → Agents → Fusion proposals, or `zensynora agents approve ID`).
+    The fused agent gets both skills, a merged prompt and the LOWER level of the two.
+
+    Args:
+        agent_a (str): First agent (its name is kept unless new_name is given).
+        agent_b (str): Second agent.
+        new_name (str): Optional name for the fused agent.
+        reason (str): Why the two should become one (shown to the user).
+
+    Returns:
+        str: The proposal id and summary, or what is wrong.
+    """
+    from ..agent_fusion import propose_agent_fusion as _propose
+
+    return await _propose(agent_a, agent_b, new_name, reason)
+
+
+def list_agent_fusions(status: str = "") -> str:
+    """
+    List agent fusion proposals.
+
+    Args:
+        status (str): pending, applied, rejected or undone (empty = all).
+
+    Returns:
+        str: One line per proposal.
+    """
+    from ..agent_fusion import list_agent_fusions as _list
+
+    return _list(status)
+
+
 class MedicAgent:
     """
     MedicAgent — class wrapper used by the gateway on startup.
@@ -502,4 +538,5 @@ __all__ = [
     "scan_files", "verify_file_integrity", "enable_hash_check", "create_backup", "list_backups",
     "recover_file", "detect_errors_in_file", "validate_modification", "check_file_virustotal",
     "record_task_execution", "get_task_analytics", "prevent_infinite_loop",
+    "propose_agent_fusion", "list_agent_fusions",
 ]

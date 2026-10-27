@@ -167,6 +167,10 @@ class JobRunner:
 
         # the agent's task timer must not stop a job before its own timeout (2026-10-21)
         tmax_token = TASK_MAX_SECONDS.set(int(job.get("timeout_s") or 300) + 30)
+        from ..agent_caps import QUESTION_BUDGET, take_job_questions
+
+        budget_token = QUESTION_BUDGET.set({"n": 0})  # 2026-10-27: request_information per run
+        take_job_questions(scope)  # nothing left over from an earlier run
         status, output, error = "error", "", ""
         try:
             if job.get("fresh_context", True) or kind != "run":
@@ -195,8 +199,13 @@ class JobRunner:
             logger.exception("Job %s failed", job["id"])
             status, error = "error", str(e)[:1000]
         finally:
+            # 2026-10-27: questions the agent asked (request_information) are part of the result.
+            # (In a channel they were already posted there as marked questions.)
+            questions = take_job_questions(scope)
+            recorded = (output.rstrip() + "\n\n---\n" + "\n\n".join(questions)).strip() if questions else output
+            QUESTION_BUDGET.reset(budget_token)
             used = getattr(agent, "last_model_used", None) or (getattr(agent, "_provider_name", ""), agent.model)
-            await asyncio.to_thread(store.finish_run, run_id, status, output, error, used[0], used[1])
+            await asyncio.to_thread(store.finish_run, run_id, status, recorded, error, used[0], used[1])
             if channel:
                 events.emit({"type": "job_run", "status": status, "job_id": job["id"], "job": job["name"],
                              "run_id": run_id, "result": events.short(output or error, 4000)})
