@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+**Chat: agent steps grouped into one line (2026-10-27)**
+- Tool calls, delegations and job steps that follow each other in a chat are
+  shown as **one line** — *⚙ 12 steps · 1 failed · 2.0 s — @Executor: browse ×5 ·
+  @default: browse ×4, read_file · @default asked @Executor* — instead of one
+  line per step ("@Executor used browse" five times in a row). Click it to see
+  every step. The chat menu offers *Activity: grouped* (default), *every step*
+  and *hidden*, remembered per browser (replaces the *inline activity*
+  checkbox). The Activity panel still lists every step.
+
 ## [0.8.0] - 2026-10-27
 
 The knowledge base, rebuilt on memopad's design: links that really connect,
