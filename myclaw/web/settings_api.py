@@ -370,8 +370,19 @@ async def get_settings():
         "provider_presets": PROVIDER_PRESETS,
         "config_file": str(CONFIG_FILE),
         "config_file_exists": CONFIG_FILE.exists(),
+        "security_warnings": _security_warnings(cfg),
     }
 
+
+def _security_warnings(cfg: AppConfig) -> List[str]:
+    """2026-10-28: allowed commands that the shell tool skips (interpreters, shells)."""
+    from myclaw.tools.core import refused_command
+
+    bad = sorted({c for c in cfg.security.allowed_commands if refused_command(c)})
+    if not bad:
+        return []
+    return [f"Not used: {', '.join(bad)} — interpreters and shells could run any program, so the shell tool "
+            "never runs them. Remove them from the allowed commands."]
 
 
 @router.put("/api/settings", dependencies=guard)

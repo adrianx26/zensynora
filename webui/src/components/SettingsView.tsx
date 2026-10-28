@@ -14,6 +14,7 @@ interface SettingsResponse {
   providers: string[];
   config_file: string;
   config_file_exists: boolean;
+  security_warnings?: string[];
 }
 
 type Kind = 'text' | 'password' | 'number' | 'bool' | 'select' | 'list';
@@ -133,7 +134,7 @@ const SECURITY_FIELDS: FieldDef[] = [
     help: 'Lets other computers open these settings (sent as X-API-Key). Leave empty to allow settings only from this computer.',
   },
   { path: 'security.cors_origins', label: 'Allowed browser origins (CORS)', kind: 'list', help: 'One per line. Needs a Web UI restart.' },
-  { path: 'security.allowed_commands', label: 'Shell commands the agent may run', kind: 'list', help: 'One per line.' },
+  { path: 'security.allowed_commands', label: 'Shell commands the agent may run', kind: 'list', help: 'One per line. Interpreters and shells (python, bash, node, env, xargs, sudo, nc …) are never run. Every argument is checked: writes only in the workspace, no ZenSynora settings or rules, curl/wget only to public web addresses.' },
   { path: 'security.blocked_commands', label: 'Always-blocked shell commands', kind: 'list', help: 'One per line.' },
   { path: 'security.gdpr_enabled', label: 'GDPR helpers', kind: 'bool' },
 ];
@@ -757,6 +758,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
         {tab === 'Security' && (
           <div className="settings-card">
             <h3>Security</h3>
+            {(data.security_warnings || []).map(w => <div className="notice error" key={w}>{w}</div>)}
             {SECURITY_FIELDS.map(renderField)}
           </div>
         )}

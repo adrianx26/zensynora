@@ -187,6 +187,18 @@ def _tool_sandbox(ctx):
     return OK, f"agent-made tools run in a separate process; kernel lock-down (Landlock): {st['landlock']}"
 
 
+@check("shell_commands", "Shell commands", "security")
+def _shell_commands(ctx):
+    from ..tools.core import refused_command
+
+    allowed = list(ctx.get_config().security.allowed_commands or [])
+    bad = sorted({c for c in allowed if refused_command(c)})
+    if bad:
+        return WARN, f"not used (interpreters/shells): {', '.join(bad)}", \
+            "Remove them from Settings → Security → shell commands; they could run any program."
+    return OK, f"{len(allowed)} allowed command(s)"
+
+
 # 2026-10-27: the user's rules and the agents' proposals (myclaw/rules.py)
 @check("rules", "Rules", "configuration")
 def _rules(ctx):

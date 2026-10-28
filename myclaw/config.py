@@ -550,9 +550,12 @@ class SecurityConfig(BaseModel):
         "git",
         "echo",
         "pwd",
-        # SECURITY: Removed python, python3, pip, curl, wget — an AI agent
-        # executing arbitrary code or downloading files is a remote-code-execution
-        # vulnerability. Use dedicated tools (e.g. browse, download) instead.
+        # 2026-10-28: curl and wget are allowed again — the shell tool checks
+        # every URL (public addresses only, no redirects/proxies/config files)
+        # and every output path (workspace only). Interpreters (python, pip,
+        # bash, node …) are never run, even when listed here.
+        "curl",
+        "wget",
     ]
     blocked_commands: list[str] = [
         "rm",
@@ -882,8 +885,6 @@ def _validate_config(config: AppConfig) -> None:
         "python",
         "python3",
         "pip",
-        "curl",
-        "wget",
         "sh",
         "bash",
         "zsh",

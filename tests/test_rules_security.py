@@ -50,18 +50,30 @@ def _refused(cmd, why=""):
     ("sort -ro x evil.md", "sort -o"),
     ("git --work-tree=../rules checkout HEAD -- evil.md", "--work-tree"),
     ("git --git-dir=../rules/.git status", "--git-dir"),
-    ("git -C ../rules status", "git -C"),
-    ("git -C../rules status", "git -C"),
+    ("git -C ../rules status", "outside"),
+    ("git -C../rules status", "outside"),
+    ("git -C /tmp status", "outside"),
     ("git -c core.hooksPath=x commit -m x", "git -c"),
     ("git config alias.x !ls", "git config"),
     ("git config core.hooksPath hooks", "git config"),
+    ("git config --global user.name x", "git config"),
+    ("git config --unset user.name", "git config"),
+    ("git config set core.pager x", "git config"),
+    ("git config user.name a b", "git config"),
     ("git init --separate-git-dir=../rules/g", "--separate-git-dir"),
     ("git checkout --work-tree ../rules -- evil.md", "--work-tree"),
-    ("cat ../config.json", "~/.myclaw"),
-    ("cat ~/.myclaw/config.json", "~/.myclaw"),
-    ("ls ../rules", "~/.myclaw"),
-    ("grep -r x ../rules/.proposals", "~/.myclaw"),
-    ("ls ../medic/proposals", "~/.myclaw"),
+    ("cat ../config.json", "contains secrets"),
+    ("cat ~/.myclaw/config.json", "contains secrets"),
+    ("cat ../config.json.bak", "contains secrets"),
+    ("cat ../.config_key", "contains secrets"),
+    ("tail ../mfa.db", "contains secrets"),
+    ("ls ../rules/.proposals", "contains secrets"),
+    ("cat ../rules/.manifest.json", "contains secrets"),
+    ("grep -r x ../rules/.proposals", "contains secrets"),
+    ("grep -r password ..", "contains secrets"),
+    ("grep -rn password ~", "contains secrets"),
+    ("grep -R x ~/.myclaw", "contains secrets"),
+    ("cat ../../.myclaw/./config.json", "contains secrets"),
     ("uniq a.txt /tmp/out.txt", "outside"),
     ("git clone https://github.com/a/b /tmp/b", "outside"),
 ])
@@ -98,9 +110,9 @@ def test_curl_and_wget_to_local_addresses_are_refused(ws, url):
 
 
 @pytest.mark.parametrize("cmd, why", [
-    ("curl -L https://example.com", "curl -L"),
-    ("curl -sL https://example.com", "curl -L"),
-    ("curl -sLo out.txt https://example.com", "curl -L"),
+    ("curl -L https://example.com", "browse tool"),
+    ("curl -sL https://example.com", "browse tool"),
+    ("curl -sLo out.txt https://example.com", "browse tool"),
     ("curl -K cfg.txt https://example.com", "curl -K"),
     ("curl --resolve example.com:443:127.0.0.1 https://example.com", "--resolve"),
     ("curl -x http://127.0.0.1:8765 https://example.com", "curl -x"),
@@ -165,8 +177,10 @@ def test_settings_command_lists_are_applied(monkeypatch):
     monkeypatch.setattr(core, "BLOCKED_COMMANDS", core.BLOCKED_COMMANDS)
     cfg = AppConfig()
     core.apply_security_config(cfg)
-    assert "curl" not in core.ALLOWED_COMMANDS and "wget" not in core.ALLOWED_COMMANDS  # the settings' default
-    assert "ls" in core.ALLOWED_COMMANDS and "rm" in core.BLOCKED_COMMANDS
+    # 2026-10-28: curl/wget are in the default list again (their URLs are checked)
+    assert {"curl", "wget", "ls"} <= core.ALLOWED_COMMANDS and "rm" in core.BLOCKED_COMMANDS
+    cfg.security.allowed_commands = ["ls"]
+    core.apply_security_config(cfg)
     with pytest.raises(shell_mod.ShellError, match="not allowed"):
         shell_mod.parse("curl https://example.com")
     cfg.security.allowed_commands = ["ls", "Grep"]
@@ -274,3 +288,192 @@ def test_unsafe_saved_tool_is_not_loaded(tmp_path, monkeypatch, caplog):
     toolbox.load_custom_tools()
     assert "old_hack" not in myclaw.tools.TOOLS
     assert "Not loading tool 'old_hack'" in caplog.text
+
+
+# ── 2026-10-28 (re-review) ───────────────────────────────────────────────────
+@pytest.fixture
+def public_dns(monkeypatch):
+    """check_url without network: names resolve to a public address unless a test says otherwise."""
+    import socket
+
+    real = socket.getaddrinfo
+    names = {}
+
+    def fake(host, port, *a, **k):
+        if host in names:
+            return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (names[host], port))]
+        numeric = ":" in host
+        try:
+            socket.inet_aton(host)  # 127.1, 0x7f.0.0.1, 2130706433 … are addresses, not names
+            numeric = True
+        except OSError:
+            pass
+        if numeric:
+            return real(host, port, *a, **k)
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34", port))]
+    monkeypatch.setattr(socket, "getaddrinfo", fake)
+    from myclaw.knowledge.ingest import sources
+
+    monkeypatch.setattr(sources, "_proxy_for", lambda url: None)
+    return names
+
+
+# What agents run every day (the re-reviewer's list) must keep working.
+EVERYDAY = [
+    "ls -la", "ls -la ~/.myclaw/logs", "ls ..", "ls /", "ls ~/.myclaw", "cat /etc/os-release",
+    "cat ~/.myclaw/logs/myclaw.log", "tail -n 50 ~/.myclaw/logs/myclaw.log", "grep -i error ~/.myclaw/logs/myclaw.log",
+    "grep -rn ERROR ~/.myclaw/logs", "cat /proc/meminfo", "grep -rn TODO .", "find . -name '*.py'",
+    "find ~ -maxdepth 2 -name '*.pdf'", "find /home -name '*.md' -maxdepth 3", "wc -l a.txt", "sort -n -k2 a.txt",
+    "sort -t, -k2 -r a.txt", "sort -u a.txt", "uniq -c a.txt", "uniq a.txt out.txt", "cut -d, -f1 a.txt | sort | uniq -c",
+    "echo hello", "echo --version", "pwd && ls -la", "git status", "git log --oneline -n 20", "git diff HEAD~1 --stat",
+    "git -C project status", "git -Cproject status", "git add -A", "git commit -m 'fix: x=y'", "git config user.name",
+    "git config user.email", "git config --get remote.origin.url", "git config --list", "git config user.name 'Agent'",
+    "git config user.email agent@example.com", "git log --format=%an", "git checkout -b feature/x", "git stash",
+    "git show HEAD:README.md", "git grep -n foo", "git diff --output=patch.diff",
+    "git clone https://github.com/psf/requests.git", "git clone https://github.com/psf/requests.git repos/requests",
+    "curl https://api.github.com/repos/psf/requests", "curl -s 'https://wttr.in/Paris?format=3'", "curl -I https://example.com",
+    "curl -fsS https://example.com", "curl -o page.html https://example.com", "curl -s https://example.com -o out/page.html",
+    "curl -sS --max-time 10 https://example.com", "curl -s ipinfo.io", "wget -q https://example.com/file.zip",
+    "wget -O file.zip https://example.com/file.zip", "wget -qO- https://example.com", "wget -P downloads https://example.com/a",
+]
+
+
+@pytest.mark.parametrize("cmd", EVERYDAY)
+def test_everyday_commands_still_work(ws, public_dns, cmd):
+    (ws.parent / "logs").mkdir(exist_ok=True)
+    shell_mod.parse(cmd)
+
+
+@pytest.mark.parametrize("cmd", [
+    "cat $HOME/.myclaw/config.json",              # no $ at all
+    "cat ~/.myclaw/config.json",
+    "cat '~/.myclaw/config.json'",
+    "cat ../config.json",
+    "cat ./../config.json",
+    "cat ../logs/../config.json",
+    "head -c 100 ../.config_key",
+    "grep -r token ~/.myclaw",
+    "grep -rn key ..",
+    "grep --recursive key ~",
+    "ls ../rules/.proposals",
+    "git -C .. status",                            # git writes: workspace only
+    "git clone https://github.com/a/b ../rules",
+    "git -c core.pager=x log",
+    "git --git-dir=../x status",
+    "sort -o ../rules/x.md a.txt",
+])
+def test_path_forms_to_secrets_or_outside_are_refused(ws, cmd):
+    with pytest.raises(shell_mod.ShellError):
+        shell_mod.parse(cmd)
+
+
+def test_symlink_in_the_workspace_to_secrets_is_refused(ws):
+    (ws / "link").symlink_to(ws.parent / "config.json")
+    (ws.parent / "config.json").write_text("{}")
+    _refused("cat link", "contains secrets")
+
+
+@pytest.mark.parametrize("url", [
+    "http://2130706433/", "http://0177.0.0.1/", "http://0x7f.0.0.1/", "http://127.1/", "http://[::1]/",
+    "http://[::ffff:127.0.0.1]/", "http://[0:0:0:0:0:ffff:7f00:1]/", "http://[64:ff9b::7f00:1]/", "http://0/",
+    "http://169.254.169.254/", "http://[fe80::1]/", "http://100.64.0.1/", "http://localhost.:8000/",
+    "http://foo.localhost/", "http://internal.example/",
+])
+def test_curl_local_addresses_in_any_form_are_refused(ws, public_dns, url):
+    public_dns["internal.example"] = "127.0.0.1"  # a DNS name that points at this computer
+    _refused(f"curl -s {url}")
+    _refused(f"wget -q {url}")
+
+
+def test_curl_redirects_point_to_the_browse_tool(ws, public_dns):
+    msg = _refused("curl -fsSL https://example.com", "browse tool")
+    assert "without -L" in msg
+
+
+def test_every_agent_uses_the_same_shell_checks():
+    """Delegated agents, jobs and Telegram all call the one registered shell tool."""
+    import inspect
+
+    from myclaw.agent_internals import tool_executor
+
+    assert myclaw.tools.TOOLS["shell"]["func"] is shell_mod.shell
+    assert "from ..tools import" in inspect.getsource(tool_executor) and "TOOLS[tool_name]" in \
+        inspect.getsource(tool_executor)
+
+
+# ── interpreters in the settings ────────────────────────────────────────────
+@pytest.mark.parametrize("name", ["python3", "python3.13", "bash", "sh", "node", "perl", "env", "xargs", "sudo",
+                                  "nc", "socat", "pwsh", "awk", "/usr/bin/python3"])
+def test_interpreters_in_the_settings_are_skipped(monkeypatch, name, caplog):
+    import logging
+
+    from myclaw.config import AppConfig
+
+    monkeypatch.setattr(core, "ALLOWED_COMMANDS", core.ALLOWED_COMMANDS)
+    monkeypatch.setattr(core, "REFUSED_COMMANDS", ())
+    cfg = AppConfig()
+    cfg.security.allowed_commands = ["ls", name]
+    with caplog.at_level(logging.WARNING):
+        core.apply_security_config(cfg)
+    assert core.ALLOWED_COMMANDS == {"ls"} and core.REFUSED_COMMANDS == (name.lower(),)
+    assert "interpreters or shells" in caplog.text
+    monkeypatch.setattr(core, "ALLOWED_COMMANDS", frozenset({"ls", name.rsplit("/", 1)[-1]}))
+    with pytest.raises(shell_mod.ShellError, match="interpreters and shells"):
+        shell_mod.parse(f"{name.rsplit('/', 1)[-1]} -c x")
+
+
+def test_settings_and_doctor_show_skipped_interpreters(tmp_path, monkeypatch):
+    import json as _json
+
+    import myclaw.config as cfg_mod
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from myclaw.web import settings_api
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".myclaw").mkdir()
+    cfg_file = tmp_path / ".myclaw" / "config.json"
+    cfg_file.write_text(_json.dumps({"security": {"allowed_commands": ["ls", "bash", "python3"]}}))
+    monkeypatch.setattr(cfg_mod, "CONFIG_FILE", cfg_file)
+    monkeypatch.setattr(settings_api, "CONFIG_FILE", cfg_file)
+    cfg_mod._cached_config = None
+    app = FastAPI()
+    app.include_router(settings_api.router)
+    w = TestClient(app).get("/api/settings").json()["security_warnings"]
+    assert w and "bash, python3" in w[0]
+    from myclaw.doctor import run_checks
+
+    r = {x.id: x for x in run_checks(offline=True, only=["shell_commands"]).results}["shell_commands"]
+    assert r.status == "warn" and "bash" in r.detail
+    cfg_mod._cached_config = None
+
+
+# ── the Web UI header on every change ───────────────────────────────────────
+def test_settings_save_needs_the_ui_header(tmp_path, monkeypatch):
+    import myclaw.config as cfg_mod
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from myclaw.web import settings_api
+
+    monkeypatch.setenv("HOME", str(tmp_path))
+    (tmp_path / ".myclaw").mkdir()
+    cfg_file = tmp_path / ".myclaw" / "config.json"
+    monkeypatch.setattr(cfg_mod, "CONFIG_FILE", cfg_file)
+    monkeypatch.setattr(settings_api, "CONFIG_FILE", cfg_file)
+    cfg_mod._cached_config = None
+    app = FastAPI()
+    app.include_router(settings_api.router)
+    change = {"changes": {"agents.max_tool_rounds": 7}}
+    plain = TestClient(app, headers={})  # curl / a script without the header
+    r = plain.put("/api/settings", json=change)
+    assert r.status_code == 403 and "X-ZenSynora-UI" in r.json()["detail"]
+    assert plain.get("/api/settings").status_code == 200  # reading is fine
+    other_site = TestClient(app).put("/api/settings", json=change, headers={"Origin": "https://evil.example"})
+    assert other_site.status_code == 403
+    ok = TestClient(app).put("/api/settings", json=change)  # the Web UI
+    assert ok.status_code == 200
+    cfg_mod._cached_config = None
+    assert cfg_mod.load_config(force_reload=True).agents.max_tool_rounds == 7
+    cfg_mod._cached_config = None

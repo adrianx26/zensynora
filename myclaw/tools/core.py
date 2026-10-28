@@ -189,6 +189,20 @@ def update_allowlist(new_commands: List[str]) -> None:
 
 
 _DEFAULT_BLOCKED = BLOCKED_COMMANDS
+REFUSED_COMMANDS: tuple = ()  # allowed in the settings but skipped (interpreters, shells)
+_INTERPRETERS = {"bash", "sh", "zsh", "fish", "dash", "ksh", "csh", "tcsh", "ash", "node", "nodejs", "deno",
+                 "bun", "perl", "ruby", "irb", "php", "lua", "luajit", "powershell", "pwsh", "cmd", "env", "xargs",
+                 "nohup", "sudo", "su", "doas", "nc", "ncat", "netcat", "socat", "busybox", "awk", "gawk", "mawk",
+                 "nawk", "tclsh", "wish", "osascript", "expect", "script", "time", "timeout", "nice", "strace",
+                 "ssh", "scp", "rsync", "make", "docker", "pip", "pip3", "uv", "uvx", "npx", "npm"}
+
+
+def refused_command(name: str) -> bool:
+    """Commands the shell tool never runs, even when listed in the settings."""
+    n = (name or "").strip().lower().rsplit("/", 1)[-1]
+    n = n[:-4] if n.endswith(".exe") else n
+    return n in _INTERPRETERS or n.startswith(("python", "pypy", "jython", "ipython", "perl", "ruby", "php",
+                                               "lua", "node"))
 
 
 def apply_security_config(cfg) -> None:
@@ -199,12 +213,21 @@ def apply_security_config(cfg) -> None:
     unlike the settings' default). Called at start-up and after every settings
     save. Blocked commands always include the built-in ones.
     """
-    global ALLOWED_COMMANDS, BLOCKED_COMMANDS
+    global ALLOWED_COMMANDS, BLOCKED_COMMANDS, REFUSED_COMMANDS
     sec = getattr(cfg, "security", None)
     if sec is None:
         return
     allowed = [str(c).strip().lower() for c in (getattr(sec, "allowed_commands", None) or []) if str(c).strip()]
     blocked = [str(c).strip().lower() for c in (getattr(sec, "blocked_commands", None) or []) if str(c).strip()]
+    # 2026-10-28 (rules re-review): an interpreter or shell would run anything —
+    # every other check would be pointless. Skip them (Settings → Security and
+    # the doctor show which).
+    refused = sorted({c for c in allowed if refused_command(c)})
+    if refused and refused != list(REFUSED_COMMANDS):
+        logger.warning("Settings → Security: these allowed commands are interpreters or shells and are not "
+                       "used: %s", ", ".join(refused))
+    REFUSED_COMMANDS = tuple(refused)
+    allowed = [c for c in allowed if c not in refused]
     ALLOWED_COMMANDS = frozenset(allowed)
     BLOCKED_COMMANDS = frozenset(_DEFAULT_BLOCKED | set(blocked))
     logger.debug("Shell allow-list from settings: %s", ", ".join(sorted(ALLOWED_COMMANDS)))

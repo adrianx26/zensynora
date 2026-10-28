@@ -113,6 +113,9 @@ def parse(cmd: str) -> List[Tuple[str, List[List[str]]]]:
             if name in _core.BLOCKED_COMMANDS:
                 logger.warning(f"Blocked command attempted: {name}")
                 raise ShellError(f"Error: Command '{name}' is blocked for security")
+            if _core.refused_command(name):  # 2026-10-28: even when listed in the settings
+                raise ShellError(f"Error: '{name}' is not allowed: interpreters and shells could run anything. "
+                                 "Use the dedicated tools instead.")
             if name not in allowed:
                 raise ShellError(f"Error: '{name}' not allowed. Allowed: {', '.join(sorted(allowed))}")
             bad = FORBIDDEN_ARGS.get(name, set()) & set(args[1:])
@@ -127,13 +130,23 @@ def parse(cmd: str) -> List[Tuple[str, List[List[str]]]]:
 # --work-tree=…``, ``curl -o``) or reach ZenSynora's own API on localhost
 # (``curl -X POST http://127.0.0.1:…/approve``). Every argument that can be a
 # path is checked: commands that can write must stay in the workspace, and no
-# command may touch ~/.myclaw outside the workspace (rules, settings,
-# proposals). curl/wget may only fetch public web addresses.
+# command may read the files that hold secrets or decide what agents may do
+# (settings, keys, the rules' manifest and proposals, backups). curl/wget may
+# only fetch public web addresses.
+# 2026-10-28 (re-review): reading the rest of ~/.myclaw (logs!) is fine again,
+# git -C works inside the workspace, git config can read any key and set
+# user.name / user.email for the repository.
 WRITERS = {"git", "uniq", "curl", "wget"}
-_GIT_FORBIDDEN = {"-c", "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env",
+_RECURSIVE = {"grep": {"-r", "-R", "--recursive", "--dereference-recursive", "-d", "--directories"}}
+_GIT_FORBIDDEN = {"-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env",
                   "--super-prefix", "--list-cmds"}
-_GIT_CONFIG_READ = {"--get", "--get-all", "--get-regexp", "--list", "-l", "--show-origin", "--show-scope",
-                    "--name-only", "--null", "-z", "get", "list"}
+_GIT_CONFIG_WRITE_OPTS = {"--add", "--replace-all", "--unset", "--unset-all", "--rename-section",
+                          "--remove-section", "-e", "--edit", "--global", "--system", "--file", "-f", "--blob",
+                          "--worktree", "--type", "--bool", "--int", "--path"}
+_GIT_CONFIG_READ_OPTS = {"--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l", "--show-origin",
+                         "--show-scope", "--name-only", "--null", "-z", "--includes", "--no-includes", "--local",
+                         "--default"}
+_GIT_CONFIG_SETTABLE = {"user.name", "user.email"}
 _CURL_FORBIDDEN = {"-K", "--config", "-L", "--location", "--location-trusted", "--resolve", "--connect-to",
                    "--unix-socket", "--abstract-unix-socket", "-x", "--proxy", "--preproxy", "--proxy1.0",
                    "--socks4", "--socks4a", "--socks5", "--socks5-hostname", "--interface", "--dns-servers",
@@ -155,12 +168,29 @@ _WGET_VALUE_OPTS = {"-O", "--output-document", "-o", "--output-file", "-a", "--a
 
 
 def _home_data() -> Path:
-
     return (Path.home() / ".myclaw").resolve()
 
 
-def _resolve_arg(value: str) -> Path:
+def _secret_paths() -> List[Path]:
+    """Files no shell command may read: they hold keys or decide what agents may do."""
+    data = _home_data()
+    out = [data / "config.json", data / "config.json.bak", data / ".config_key", data / ".env", data / "mfa.db",
+           data / "rules" / ".manifest.json", data / "rules" / ".proposals", data / "rules" / ".trash",
+           data / "sandbox", Path(__file__).resolve().parents[2] / ".env", Path.home() / ".myclaw-backups"]
+    try:
+        from ..backup import backup_dir
 
+        out.append(Path(backup_dir()))
+    except Exception:  # pragma: no cover - settings unreadable
+        pass
+    try:
+        out += [p for p in data.glob("config.json*")]
+    except OSError:
+        pass
+    return [p.resolve() for p in out]
+
+
+def _resolve_arg(value: str) -> Path:
     p = Path(value).expanduser()
     return (p if p.is_absolute() else (WORKSPACE / p)).resolve()
 
@@ -185,18 +215,26 @@ def _path_candidates(args: List[str]) -> List[str]:
     return [c for c in out if c and "://" not in c]
 
 
+def _inside(target: Path, folder: Path) -> bool:
+    return target == folder or folder in target.parents
+
+
 def _check_paths(name: str, args: List[str]) -> None:
     workspace = WORKSPACE.resolve()
-    data = _home_data()
+    secrets = _secret_paths()
+    recursive = bool(_RECURSIVE.get(name, set()) & set(args[1:])) or (
+        name in _RECURSIVE and any(a.startswith("-") and not a.startswith("--") and ("r" in a or "R" in a)
+                                   for a in args[1:]))
     for c in _path_candidates(args[1:]):
         try:
             target = _resolve_arg(c)
         except (OSError, RuntimeError, ValueError):
             raise ShellError(f"Error: '{c}' cannot be checked as a path; use a simple file name in the workspace.")
-        in_ws = target == workspace or workspace in target.parents
-        if not in_ws and (target == data or data in target.parents):
-            raise ShellError(f"Error: '{c}' is in ZenSynora's data folder (~/.myclaw) — shell commands may "
-                             "only use it inside the workspace. Rules and settings are changed by the user.")
+        in_ws = _inside(target, workspace)
+        for secret in secrets:
+            if _inside(target, secret) or (recursive and _inside(secret, target) and not in_ws):
+                raise ShellError(f"Error: '{c}' contains secrets (ZenSynora's settings, keys, rules approvals or "
+                                 "backups) and cannot be used by shell commands. Logs are in ~/.myclaw/logs.")
         if name in WRITERS and not in_ws:
             raise ShellError(f"Error: '{name}' may only use files inside the workspace (~/.myclaw/workspace); "
                              f"'{c}' is outside. Use a relative path like out/file.txt.")
@@ -241,6 +279,33 @@ def _url_args(name: str, args: List[str]) -> List[str]:
     return [u for u in urls if u]
 
 
+def _check_git_config(rest: List[str]) -> None:
+    """git config: reading is fine; writing only user.name / user.email of this repository."""
+    i = 0
+    while i < len(rest) and rest[i].startswith("-"):
+        i += 2 if rest[i] == "-C" else 1  # git's own options (-C <folder> takes a value)
+    if i >= len(rest) or rest[i] != "config":
+        return
+    tail = rest[i + 1:]
+    opts = [a.split("=", 1)[0] for a in tail if a.startswith("-")]
+    words = [a for a in tail if not a.startswith("-")]
+    if words and words[0] in ("get", "list"):
+        return  # new-style read commands
+    if words and words[0] in ("set", "unset", "rename-section", "remove-section", "edit"):
+        verb, words = words[0], words[1:]
+    else:
+        verb = "set" if len(words) >= 2 else ""
+    if not verb and not (set(opts) & {"--add", "--replace-all", "--unset", "--unset-all", "--rename-section",
+                                      "--remove-section", "-e", "--edit"}):
+        return  # 'git config user.name', 'git config --get …', 'git config --list'
+    key = words[0].lower() if words else ""
+    bad_opts = set(opts) & _GIT_CONFIG_WRITE_OPTS
+    if verb == "set" and key in _GIT_CONFIG_SETTABLE and not bad_opts and len(words) == 2:
+        return
+    raise ShellError("Error: 'git config' may change only user.name and user.email of this repository "
+                     "(e.g. git config user.name \"Agent\"); reading any setting is fine.")
+
+
 def check_arguments(name: str, args: List[str]) -> None:
     """Refuse arguments that write outside the workspace, touch ~/.myclaw or reach local services."""
     rest = args[1:]
@@ -249,18 +314,16 @@ def check_arguments(name: str, args: List[str]) -> None:
             if not a.startswith("-"):
                 break
             opt = a.split("=", 1)[0]
-            if opt in _GIT_FORBIDDEN or (a[:2] in ("-C", "-c") and not a.startswith("--")):
+            if opt in _GIT_FORBIDDEN or (a[:2] == "-c" and not a.startswith("--")):
                 shown = opt if opt.startswith("--") else opt[:2]
                 raise ShellError(f"Error: 'git {shown}' is not allowed (it changes which files or settings git "
-                                 "uses). Run git inside the workspace without it.")
+                                 "uses). Run git inside the workspace without it; 'git -C <folder>' works for "
+                                 "folders in the workspace.")
         for a in rest:
             opt = a.split("=", 1)[0]
             if opt in ("--git-dir", "--work-tree", "--separate-git-dir", "--template", "--config-env"):
                 raise ShellError(f"Error: 'git … {opt}' is not allowed (it points git at other folders).")
-        sub = next((a for a in rest if not a.startswith("-")), "")
-        if sub == "config" and not (set(rest) & _GIT_CONFIG_READ):
-            raise ShellError("Error: 'git config' may only read settings (--get, --list); changing git settings "
-                             "is not allowed.")
+        _check_git_config(rest)
     elif name == "sort":
         for a in rest:
             if a == "-o" or (a.startswith("--o") and "--output".startswith(a.split("=", 1)[0])) \
@@ -284,6 +347,10 @@ def check_arguments(name: str, args: List[str]) -> None:
                         break
             if opt in forbidden or in_cluster:
                 opt = in_cluster or opt
+                if opt in ("-L", "--location", "--location-trusted"):
+                    raise ShellError("Error: 'curl -L' (follow redirects) is not allowed: a redirect could lead to "
+                                     "this computer. Use the browse tool to read a page, or curl the final "
+                                     "address without -L.")
                 raise ShellError(f"Error: '{name} {opt}' is not allowed (redirects, proxies, config files and "
                                  "name overrides could reach local services).")
         if name == "wget" and any(a.split("=", 1)[0] == "--max-redirect" for a in rest):
