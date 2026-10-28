@@ -112,7 +112,46 @@ def set_config_changed_hook(fn) -> None:
 
 
 # ── Access guard ─────────────────────────────────────────────────────────────
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def _foreign_origin(request: Request) -> Optional[str]:
+    """The Origin of a browser request from another site (None = same site / no browser).
+
+    2026-10-27 (rules review): a web page open in the user's browser could post
+    to the guarded routes (they trust localhost). Browsers always send Origin
+    on such requests, so one that is not this server or a configured UI origin
+    (security.cors_origins) is refused.
+    """
+    origin = request.headers.get("origin")
+    if not origin:
+        return None
+    host = request.headers.get("host", "")
+    if origin in (f"http://{host}", f"https://{host}"):
+        return None
+    try:
+        if origin in (load_config().security.cors_origins or []):
+            return None
+    except Exception:  # pragma: no cover - unreadable settings: refuse
+        pass
+    return origin
+
+
+async def require_ui(request: Request) -> None:
+    """Actions that only the user may take (approve rules or code changes) also need
+    the header ``X-ZenSynora-UI: 1``, which the Web UI sends and plain requests lack."""
+    if request.headers.get("x-zensynora-ui") != "1":
+        raise HTTPException(status_code=403, detail="This action is only available from the ZenSynora Web UI "
+                                                    "(or `zensynora` on this computer).")
+
+
 async def require_local_or_admin(request: Request) -> None:
+    if request.method.upper() not in _SAFE_METHODS:
+        foreign = _foreign_origin(request)
+        if foreign:
+            logger.warning("Refused %s %s from another site (Origin: %s)", request.method, request.url.path,
+                           foreign[:100])
+            raise HTTPException(status_code=403, detail="Requests from other web sites are not allowed.")
     host = request.client.host if request.client else ""
     if host in _LOOPBACK:
         return
@@ -129,6 +168,8 @@ async def require_local_or_admin(request: Request) -> None:
 
 
 guard = [Depends(require_local_or_admin)]
+# Settings guard + the Web UI header (user-only decisions: rules, code proposals).
+ui_guard = [Depends(require_local_or_admin), Depends(require_ui)]
 
 
 # ── Helpers: secrets & dotted paths ──────────────────────────────────────────

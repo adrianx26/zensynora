@@ -36,7 +36,8 @@ export class ApiError extends Error {
 }
 
 export async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // 2026-10-27: marks requests from this UI; rule and code approvals need it.
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-ZenSynora-UI': '1' };
   const key = getAdminKey();
   if (key) headers['X-API-Key'] = key;
   const res = await fetch(`${getApiBase()}${path}`, {
