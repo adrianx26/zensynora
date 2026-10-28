@@ -90,6 +90,7 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
       { path: 'semantic_cache.enabled', label: 'Semantic response cache', kind: 'bool' },
       { path: 'sandbox.enabled', label: 'Sandbox for generated tools', kind: 'bool' },
       { path: 'sandbox.allow_network', label: 'Sandbox may use the network', kind: 'bool' },
+      { path: 'sandbox.max_time_seconds', label: 'Longest an agent-made tool may run (s)', kind: 'number', help: 'Agent-made tools run in a separate, locked-down process (no ZenSynora data, writes only in the workspace, public internet only).' },
     ],
   },
   {

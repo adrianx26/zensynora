@@ -43,145 +43,47 @@ from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
-# ── Dynamic-tool AST sandbox (shared by register_tool & improve_skill) ───────
-#
-# Single source of truth for which imports/calls are forbidden in agent-authored
-# tool code. Both code paths must use _validate_tool_ast() so the policy cannot
-# drift.
-
-_FORBIDDEN_IMPORTS = frozenset({
-    "os",
-    "sys",
-    "subprocess",
-    "shutil",
-    "socket",
-    "urllib",
-    "http",
-    "pty",
-    "commands",
-    "importlib",
-    "pathlib",   # Path("/etc/passwd").read_text() bypasses file sandboxing
-    "ctypes",    # native code execution / sandbox escape
-    "cffi",      # foreign function interface
-    "mmap",      # direct memory access
-    # 2026-10-27 (rules review): ZenSynora itself (a tool could call
-    # myclaw.rules.save_rule / approve and bypass the user), and the ways to
-    # reach modules or frames indirectly.
-    "myclaw",
-    "builtins",
-    "gc",
-    "inspect",
-    "types",
-    "runpy",
-    "code",
-    "codeop",
-    "pickle",
-    "marshal",
-    "multiprocessing",
-    "posix",
-    "nt",
-    "io",
-    "_io",
-    "fcntl",
-    "tempfile",
-    "glob",
-    "zipimport",
-    "pkgutil",
-})
-
-_FORBIDDEN_CALLS = frozenset({
-    "eval", "exec", "__import__", "globals", "locals", "compile", "getattr",
-    "vars", "setattr", "delattr", "breakpoint", "__build_class__",
-})
-
-# Dunder names a tool may use; every other ``__x__`` (``__subclasses__``,
-# ``__globals__``, ``__builtins__``, ``__class__`` …) leads out of the sandbox.
-_ALLOWED_DUNDERS = frozenset({
-    "__init__", "__name__", "__doc__", "__len__", "__iter__", "__next__", "__enter__", "__exit__",
-    "__str__", "__repr__", "__eq__", "__lt__", "__hash__", "__contains__", "__getitem__",
-})
-
-# Calls that are not forbidden outright but blocked in dynamic tools — file
-# access must go through injected, audited helpers instead.
-_RESTRICTED_CALLS = frozenset({"open"})
+# ── Dynamic-tool checks (shared by register_tool & improve_skill) ────────────
+# 2026-10-28 (rules re-review): an allow-list of modules and more; see
+# tool_policy. Agent-made tools also run in a separate process (tool_sandbox).
+from .tool_policy import ALLOWED_MODULES, validate_tool_code  # noqa: E402,F401
 
 
 def _validate_tool_ast(code: str) -> Optional[str]:
-    """Validate dynamic tool code via AST analysis.
+    """Error message when agent-written tool code is not allowed, else None."""
+    return validate_tool_code(code)
 
-    Returns an error string if the code is unsafe, or None if it passes.
-    Used by both register_tool() and improve_skill() to enforce a single,
-    consistent security policy.
+
+# Tools in the TOOLBOX registry that were not loaded, with the reason (doctor, Tools page).
+SKIPPED_TOOLS: Dict[str, str] = {}
+
+
+def load_toolbox_tool(name: str, tool_path: Path, check_code: bool = True) -> tuple[Any, Optional[str]]:
+    """A TOOLBOX tool as a sandboxed callable: ``(func, None)`` or ``(None, reason)``.
+
+    2026-10-28 (rules re-review): TOOLBOX tools are never imported into
+    ZenSynora any more — the code is checked (unless the user marked the tool
+    as theirs) and runs in a separate, locked-down process (tool_sandbox).
     """
-    import ast
-
-    def _is_builtin_access(node: ast.AST) -> bool:
-        """Detect __builtins__['eval'] or getattr(__builtins__, 'eval') patterns."""
-        if isinstance(node, ast.Subscript):
-            if isinstance(node.value, ast.Attribute):
-                if (
-                    isinstance(node.value.value, ast.Name)
-                    and node.value.value.id == "__builtins__"
-                ):
-                    return True
-            if isinstance(node.value, ast.Name) and node.value.id == "__builtins__":
-                return True
-        if isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name) and node.func.id == "getattr":
-                if len(node.args) >= 2:
-                    first = node.args[0]
-                    if isinstance(first, ast.Name) and first.id == "__builtins__":
-                        return True
-                    if (
-                        isinstance(first, ast.Attribute)
-                        and isinstance(first.value, ast.Name)
-                        and first.value.id == "__builtins__"
-                    ):
-                        return True
-        return False
+    from . import tool_sandbox
 
     try:
-        tree = ast.parse(code)
-    except SyntaxError as e:
-        return f"Syntax error in tool code: {e}"
+        code = Path(tool_path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        return None, f"unreadable ({e.__class__.__name__})"
+    if check_code:
+        problem = _validate_tool_ast(code)
+        if problem:
+            return None, problem.removeprefix("Error: ")
+    try:
+        return tool_sandbox.SandboxedTool(name, code, str(tool_path)), None
+    except (ValueError, SyntaxError) as e:
+        return None, str(e)
 
-    def _bad_dunder(name: str) -> bool:
-        return name.startswith("__") and name.endswith("__") and name not in _ALLOWED_DUNDERS
 
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Attribute) and _bad_dunder(node.attr):
-            return f"Error: Accessing '{node.attr}' is forbidden for security reasons."
-        if isinstance(node, ast.Name) and _bad_dunder(node.id):
-            return f"Error: Using '{node.id}' is forbidden for security reasons."
-        if isinstance(node, ast.Constant) and isinstance(node.value, str) and _bad_dunder(node.value.strip()):
-            return "Error: Dunder names in strings are forbidden for security reasons."
-        if isinstance(node, ast.ImportFrom) and node.level:
-            return "Error: Relative imports are forbidden in tools (they would reach ZenSynora's own code)."
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                if alias.name.split(".")[0] in _FORBIDDEN_IMPORTS:
-                    return f"Error: Importing '{alias.name}' is forbidden for security reasons."
-        elif isinstance(node, ast.ImportFrom):
-            if node.module and node.module.split(".")[0] in _FORBIDDEN_IMPORTS:
-                return f"Error: Importing from '{node.module}' is forbidden for security reasons."
-        elif isinstance(node, ast.Call):
-            if isinstance(node.func, ast.Name):
-                if node.func.id in _FORBIDDEN_CALLS:
-                    return f"Error: Calling '{node.func.id}' is forbidden for security reasons."
-                if node.func.id in _RESTRICTED_CALLS:
-                    return "Error: open() is forbidden in dynamic tools. Use injected file helpers instead."
-            if _is_builtin_access(node):
-                return "Error: Accessing __builtins__ dynamically is forbidden for security reasons."
-        elif isinstance(node, ast.Subscript):
-            if _is_builtin_access(node):
-                return "Error: Accessing __builtins__ dynamically is forbidden for security reasons."
-        elif isinstance(node, ast.Attribute):
-            # Block module.attr access for forbidden modules (catches
-            # `import json as p; p = pathlib` style aliasing only partially,
-            # but handles the common `pathlib.Path(...)` case).
-            if isinstance(node.value, ast.Name) and node.value.id in _FORBIDDEN_IMPORTS:
-                return f"Error: Accessing '{node.value.id}' module attributes is forbidden for security reasons."
-    return None
+def _install(name: str, func: Any) -> None:
+    TOOLS[name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {name}"}
+    SKIPPED_TOOLS.pop(name, None)
 
 
 # ── Feature 4: Agent Builds Its Own Tools ────────────────────────────────────
@@ -355,20 +257,20 @@ Errors are logged to the standard logging system and can be found in the applica
     # Update main TOOLBOX README
     _update_toolbox_readme()
 
-    # Dynamic load
-    try:
-        spec = importlib.util.spec_from_file_location(name, tool_path)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        func = getattr(mod, name)
-    except AttributeError:
-        tool_path.unlink(missing_ok=True)
-        return f"Error: code must define a function named '{name}'."
-    except Exception as e:
-        tool_path.unlink(missing_ok=True)
-        return f"Error loading tool: {e}"
+    # Load it in the sandbox once (catches import errors), then register the
+    # sandboxed stand-in — the code never runs inside ZenSynora (2026-10-28).
+    from . import tool_sandbox
 
-    TOOLS[name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {name}"}
+    func, problem = load_toolbox_tool(name, tool_path)
+    if func is None:
+        tool_path.unlink(missing_ok=True)
+        return f"Error: {problem}"
+    problem = tool_sandbox.check(name, code, str(tool_path))
+    if problem:
+        tool_path.unlink(missing_ok=True)
+        return f"Error loading tool: {problem}"
+
+    _install(name, func)
 
     # Update dynamic schemas for LLMs
     TOOL_SCHEMAS.clear()
@@ -567,31 +469,18 @@ def load_custom_tools():
                                f"remove '{name}' from {TOOLBOX_REG.name} or set it to disabled")
                 continue
 
-            # 2026-10-27 (rules review): agent-made tools are checked again on load, so
-            # one saved before the stricter checks cannot reach ZenSynora's own code.
-            if not (isinstance(info, dict) and info.get("author") == "user"):
-                try:
-                    problem = _validate_tool_ast(tool_path.read_text(encoding="utf-8"))
-                except (OSError, UnicodeDecodeError) as e:
-                    problem = f"unreadable ({e})"
-                if problem:
-                    logger.warning(f"Not loading tool '{name}' from TOOLBOX: {problem} — rewrite it with "
-                                   f"register_tool, or set \"author\": \"user\" in {TOOLBOX_REG.name} if you "
-                                   "wrote it yourself.")
-                    continue
-
-            try:
-                spec = importlib.util.spec_from_file_location(name, tool_path)
-                if spec is None or spec.loader is None:
-                    logger.warning(f"Could not load spec for tool '{name}'")
-                    continue
-                mod = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mod)
-                func = getattr(mod, name)
-                TOOLS[name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {name}"}
-                logger.info(f"Loaded tool from TOOLBOX: {name}")
-            except Exception as e:
-                logger.warning(f"Failed to load tool '{name}' from TOOLBOX: {e}")
+            # 2026-10-27/28 (rules review): agent-made tools are checked again on load
+            # (unless the user marked a tool as theirs) and always run sandboxed.
+            mine = isinstance(info, dict) and info.get("author") == "user"
+            func, problem = load_toolbox_tool(name, tool_path, check_code=not mine)
+            if func is None:
+                SKIPPED_TOOLS[name] = str(problem)
+                logger.warning(f"Not loading tool '{name}' from TOOLBOX: {problem} — rewrite it with "
+                               f"register_tool, or set \"author\": \"user\" in {TOOLBOX_REG.name} if you "
+                               "wrote it yourself (it still runs in the tool sandbox).")
+                continue
+            _install(name, func)
+            logger.info(f"Loaded tool from TOOLBOX (sandboxed): {name}")
 
         # Update the TOOLBOX README
         _update_toolbox_readme()
@@ -683,19 +572,13 @@ def enable_skill(skill_name: str) -> str:
             info = registry[skill_name]
             tool_path = Path(info.get("path", ""))
             if tool_path.exists():
-                try:
-                    spec = importlib.util.spec_from_file_location(skill_name, tool_path)
-                    if spec and spec.loader:
-                        mod = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(mod)
-                        func = getattr(mod, skill_name)
-                        TOOLS[skill_name] = {
-                            "func": func,
-                            "desc": func.__doc__ or f"Custom tool: {skill_name}",
-                        }
-                        logger.info(f"Enabled and loaded skill: {skill_name}")
-                except Exception as e:
-                    return f"Skill enabled but failed to reload: {e}"
+                func, problem = load_toolbox_tool(skill_name, tool_path,
+                                                  check_code=info.get("author") != "user")
+                if func is None:
+                    SKIPPED_TOOLS[skill_name] = str(problem)
+                    return f"Skill enabled but not loaded: {problem}"
+                _install(skill_name, func)
+                logger.info(f"Enabled and loaded skill: {skill_name}")
 
         TOOL_SCHEMAS.clear()
         TOOL_SCHEMAS.extend(_generate_schemas())
@@ -1121,19 +1004,18 @@ Errors are logged to the standard logging system.
 
         # Try to load and validate the new code
         try:
-            spec = importlib.util.spec_from_file_location(skill_name, existing_path)
-            if spec is None or spec.loader is None:
+            from . import tool_sandbox
+
+            func, problem = load_toolbox_tool(skill_name, existing_path)
+            problem = problem or tool_sandbox.check(skill_name, improved_code, str(existing_path))
+            if func is None or problem:
                 # Restore backup
                 if backup_path and backup_path.exists():
                     shutil.copy2(backup_path, existing_path)
-                return "Error: Could not load improved code. Restored previous version."
-
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            func = getattr(mod, skill_name)
+                return f"Error: Could not load improved code ({problem}). Restored previous version."
 
             # Update TOOLS
-            TOOLS[skill_name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {skill_name}"}
+            _install(skill_name, func)
 
         except Exception as e:
             # Restore backup on load failure
@@ -1229,18 +1111,11 @@ def rollback_skill(skill_name: str) -> str:
             new_version = "1.0.0"
 
         # Reload the tool
-        try:
-            spec = importlib.util.spec_from_file_location(skill_name, existing_path)
-            if spec and spec.loader:
-                mod = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mod)
-                func = getattr(mod, skill_name)
-                TOOLS[skill_name] = {
-                    "func": func,
-                    "desc": func.__doc__ or f"Custom tool: {skill_name}",
-                }
-        except Exception as e:
-            return f"Restored but failed to reload: {e}"
+        func, problem = load_toolbox_tool(skill_name, existing_path)
+        if func is None:
+            SKIPPED_TOOLS[skill_name] = str(problem)
+            return f"Restored but not loaded: {problem}"
+        _install(skill_name, func)
 
         # Update registry
         registry[skill_name]["version"] = new_version

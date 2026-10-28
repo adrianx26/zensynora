@@ -651,6 +651,9 @@ class SandboxConfig(BaseModel):
     max_time_seconds: int = 30
     allow_network: bool = False
     trusted_skills: list[str] = []
+    # 2026-10-28: agent-made tools run in a separate process; they may connect
+    # only to public addresses on these TCP ports (Landlock, Linux).
+    tool_ports: list[int] = [80, 443]
 
 
 class LogRotationConfig(BaseModel):

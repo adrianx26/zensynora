@@ -239,12 +239,12 @@ def hub_install(skill_name: str, user_id: str = "default") -> str:
     
     # Load the skill
     try:
-        spec = importlib.util.spec_from_file_location(skill_name, dest_path)
-        if spec is None or spec.loader is None:
-            return f"Could not load skill '{skill_name}'."
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        func = getattr(mod, skill_name)
+        # 2026-10-28: hub skills run in the tool sandbox like agent-made tools.
+        from ..tools.toolbox import load_toolbox_tool
+
+        func, problem = load_toolbox_tool(skill_name, dest_path, check_code=False)
+        if func is None:
+            return f"Could not load skill '{skill_name}': {problem}"
         TOOLS[skill_name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {skill_name}"}
         TOOL_SCHEMAS.clear()
         TOOL_SCHEMAS.extend(_generate_schemas_from_tools())
@@ -400,12 +400,12 @@ def hub_install_from_external(skill_name: str, user_id: str = "default") -> str:
     
     # Load the skill
     try:
-        spec = importlib.util.spec_from_file_location(skill_name, dest_path)
-        if spec is None or spec.loader is None:
-            return f"Could not load skill '{skill_name}'."
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        func = getattr(mod, skill_name)
+        # 2026-10-28: hub skills run in the tool sandbox like agent-made tools.
+        from ..tools.toolbox import load_toolbox_tool
+
+        func, problem = load_toolbox_tool(skill_name, dest_path, check_code=False)
+        if func is None:
+            return f"Could not load skill '{skill_name}': {problem}"
         TOOLS[skill_name] = {"func": func, "desc": func.__doc__ or f"Custom tool: {skill_name}"}
         TOOL_SCHEMAS.clear()
         TOOL_SCHEMAS.extend(_generate_schemas_from_tools())

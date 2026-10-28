@@ -373,6 +373,7 @@ async def get_settings():
     }
 
 
+
 @router.put("/api/settings", dependencies=guard)
 async def update_settings(update: SettingsUpdate):
     cfg = load_config()
@@ -725,10 +726,18 @@ async def list_tools():
 
         ensure_tool_schemas()
         tools = []
+        from myclaw.tools import TOOLS
+        from myclaw.tools.toolbox import SKIPPED_TOOLS
+
         for schema in TOOL_SCHEMAS:
             fn = schema.get("function", schema)
-            tools.append({"name": fn.get("name", ""), "description": (fn.get("description") or "").strip()})
-        return {"tools": sorted(tools, key=lambda t: t["name"])}
+            name = fn.get("name", "")
+            sandboxed = bool(getattr(TOOLS.get(name, {}).get("func"), "sandboxed", False))
+            tools.append({"name": name, "description": (fn.get("description") or "").strip(),
+                          "sandboxed": sandboxed})
+        # 2026-10-28: TOOLBOX tools that were not loaded, and why.
+        skipped = [{"name": n, "reason": r} for n, r in sorted(SKIPPED_TOOLS.items())]
+        return {"tools": sorted(tools, key=lambda t: t["name"]), "skipped": skipped}
     except Exception as e:
         from myclaw.tools import TOOLS
 

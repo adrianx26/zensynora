@@ -199,7 +199,6 @@ def test_settings_save_hook_applies_the_lists(monkeypatch):
     "import builtins\n",
     "import inspect\n",
     "import gc\n",
-    "import io\n",
     "x = ().__class__.__bases__[0].__subclasses__()\n",
     "def f():\n    return f.__globals__\n",
     "x = __builtins__\n",

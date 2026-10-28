@@ -152,6 +152,41 @@ def _skills(ctx):
     return OK, f"{len(names)} skill(s) available"
 
 
+# 2026-10-28 (rules re-review): agent-made tools run in a locked-down process
+@check("tool_sandbox", "Tool sandbox", "security")
+def _tool_sandbox(ctx):
+    from ..tools import tool_sandbox, toolbox
+
+    skipped = dict(toolbox.SKIPPED_TOOLS)
+    reg_path = toolbox.TOOLBOX_REG
+    if reg_path.exists():
+        try:
+            reg = json.loads(reg_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            reg = {}
+        for name, info in (reg.items() if isinstance(reg, dict) else []):
+            if not isinstance(info, dict) or not info.get("enabled", True):
+                continue
+            path = Path(info.get("path", ""))
+            if not path.exists():
+                continue
+            func, problem = toolbox.load_toolbox_tool(name, path, check_code=info.get("author") != "user")
+            if func is None:
+                skipped[name] = str(problem)
+    if not reg_path.exists() and not skipped:
+        return OK, "no agent-made tools"
+    st = tool_sandbox.status()
+    problems = []
+    if not st["ok"]:
+        problems.append(f"the sandbox does not start: {st['error'][:200]}")
+    if skipped:
+        problems.append("not loaded: " + "; ".join(f"{n} ({r[:80]})" for n, r in sorted(skipped.items())[:5]))
+    if problems:
+        return WARN, "; ".join(problems), \
+            "Ask an agent to rewrite the tool with register_tool, or disable it (Tools page lists them)."
+    return OK, f"agent-made tools run in a separate process; kernel lock-down (Landlock): {st['landlock']}"
+
+
 # 2026-10-27: the user's rules and the agents' proposals (myclaw/rules.py)
 @check("rules", "Rules", "configuration")
 def _rules(ctx):
