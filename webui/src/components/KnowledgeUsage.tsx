@@ -2,7 +2,7 @@
 // and for what; numbers and charts about the knowledge base (inline SVG, no chart
 // library — like the Costs page). Data: /api/knowledge/usage, /usage/stats,
 // /benchmarks.
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 
 interface DayRow { day: string; context: number; tool: number; write: number }
@@ -42,6 +42,7 @@ const KIND_COLOR: Record<string, string> = { context: '#58a6ff', tool: '#3fb950'
 const KIND_LABEL: Record<string, string> = { context: 'automatic context', tool: 'tools', write: 'writes' };
 const SERIES = ['#58a6ff', '#a371f7', '#3fb950', '#d29922'];
 const PAGE = 25;
+const NO_AGENT = '-'; // the API's filter for records without an agent
 
 const fmt = (n: number | null | undefined) => new Intl.NumberFormat().format(n || 0);
 
@@ -69,89 +70,116 @@ const Tile: React.FC<{ label: string; value: React.ReactNode; sub?: React.ReactN
   </div>
 );
 
-const W = 560, H = 150, PAD_L = 34, PAD_B = 18, PAD_T = 8;
+// 2026-10-27 (review): charts are drawn at the width they are shown (1 unit = 1 px),
+// so the axis text is a readable 11 px, and the scale always reaches the highest value.
+const H = 170, PAD_L = 48, PAD_R = 14, PAD_B = 22, PAD_T = 10, FONT = 11;
 
-function ticks(max: number): number[] {
-  if (max <= 0) return [0];
-  const step = Math.pow(10, Math.floor(Math.log10(max)));
-  const s = max / step > 5 ? step * 2 : max / step > 2 ? step : step / 2;
-  const out: number[] = [];
-  for (let v = 0; v <= max + 1e-9; v += s) out.push(Math.round(v * 100) / 100);
-  return out;
+function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [w, setW] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(entries => setW(Math.round(entries[0].contentRect.width)));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, Math.max(240, w || 560)];
 }
 
-const Axes: React.FC<{ max: number; labels: string[]; unit?: string }> = ({ max, labels, unit }) => {
-  const iw = W - PAD_L, ih = H - PAD_B - PAD_T;
-  const every = Math.max(1, Math.ceil(labels.length / 8));
+/** A scale whose top tick is at least ``max`` (about 4 steps of 1, 2 or 5 × 10ⁿ). */
+function scale(max: number, integer: boolean): { top: number; ticks: number[] } {
+  if (!(max > 0)) return { top: 1, ticks: [0, 1] };
+  const raw = max / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+  const r = raw / mag;
+  let step = (r <= 1 ? 1 : r <= 2 ? 2 : r <= 5 ? 5 : 10) * mag;
+  if (integer) step = Math.max(1, Math.round(step));
+  const top = Math.ceil(max / step - 1e-9) * step;
+  const ticks: number[] = [];
+  for (let v = 0; v <= top + step / 1000; v += step) ticks.push(Math.round(v * 1000) / 1000);
+  return { top, ticks };
+}
+
+const Axes: React.FC<{ width: number; sc: { top: number; ticks: number[] }; labels: string[]; xs: (i: number) => number; unit?: string }> = ({ width, sc, labels, xs, unit }) => {
+  const ih = H - PAD_B - PAD_T;
+  const room = Math.max(2, Math.floor((width - PAD_L - PAD_R) / 64));
+  const every = Math.max(1, Math.ceil(labels.length / room));
   return (
-    <g fontSize="9" fill="var(--text-secondary)">
-      {ticks(max).map(t => {
-        const y = PAD_T + ih - (max ? (t / max) * ih : 0);
+    <g fontSize={FONT} fill="var(--text-secondary)">
+      {sc.ticks.map(t => {
+        const y = PAD_T + ih - (t / sc.top) * ih;
         return (
           <g key={t}>
-            <line x1={PAD_L} x2={W} y1={y} y2={y} stroke="var(--panel-border)" strokeWidth="1" />
-            <text x={PAD_L - 4} y={y + 3} textAnchor="end">{t}{unit || ''}</text>
+            <line x1={PAD_L} x2={width - PAD_R} y1={y} y2={y} stroke="var(--panel-border)" strokeWidth="1" />
+            <text x={PAD_L - 6} y={y + 4} textAnchor="end">{t}{unit || ''}</text>
           </g>
         );
       })}
-      {labels.map((l, i) => i % every === 0 && (
-        <text key={i} x={PAD_L + (labels.length > 1 ? (i / (labels.length - 1)) : 0.5) * iw} y={H - 4} textAnchor="middle">{l}</text>
+      {labels.map((l, i) => (i % every === 0 || (labels.length > 1 && i === labels.length - 1 && i % every > every / 2)) && (
+        <text key={i} x={xs(i)} y={H - 5} textAnchor="middle">{l}</text>
       ))}
     </g>
   );
 };
 
 const StackedBars: React.FC<{ rows: DayRow[] }> = ({ rows }) => {
+  const [ref, width] = useWidth();
   const kinds = ['context', 'tool', 'write'] as const;
-  const max = Math.max(1, ...rows.map(r => r.context + r.tool + r.write));
-  const top = ticks(max).slice(-1)[0] || max;
-  const iw = W - PAD_L, ih = H - PAD_B - PAD_T;
+  const sc = scale(Math.max(...rows.map(r => r.context + r.tool + r.write), 0), true);
+  const iw = width - PAD_L - PAD_R, ih = H - PAD_B - PAD_T;
   const bw = iw / Math.max(1, rows.length);
+  const xs = (i: number) => PAD_L + i * bw + bw / 2;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label="Knowledge accesses per day">
-      <Axes max={top} labels={rows.map(r => r.day.slice(5))} />
-      {rows.map((r, i) => {
-        let y = PAD_T + ih;
-        return (
-          <g key={r.day}>
-            <title>{`${r.day}: ${r.context} automatic, ${r.tool} tools, ${r.write} writes`}</title>
-            {kinds.map(k => {
-              const h = (r[k] / top) * ih;
-              y -= h;
-              return h > 0 ? <rect key={k} x={PAD_L + i * bw + bw * 0.15} y={y} width={bw * 0.7} height={h} fill={KIND_COLOR[k]} rx="1" /> : null;
-            })}
-          </g>
-        );
-      })}
-    </svg>
+    <div ref={ref} className="kb-chart">
+      <svg viewBox={`0 0 ${width} ${H}`} width="100%" height={H} role="img" aria-label="Knowledge accesses per day">
+        <Axes width={width} sc={sc} labels={rows.map(r => r.day.slice(5))} xs={xs} />
+        {rows.map((r, i) => {
+          let y = PAD_T + ih;
+          return (
+            <g key={r.day}>
+              <title>{`${r.day}: ${r.context} automatic, ${r.tool} tools, ${r.write} writes`}</title>
+              <rect x={PAD_L + i * bw} y={PAD_T} width={bw} height={ih} fill="transparent" />
+              {kinds.map(k => {
+                const h = (r[k] / sc.top) * ih;
+                y -= h;
+                return h > 0 ? <rect key={k} x={PAD_L + i * bw + bw * 0.15} y={y} width={Math.max(1, bw * 0.7)} height={h} fill={KIND_COLOR[k]} rx="1" /> : null;
+              })}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 };
 
 interface Series { name: string; values: (number | null)[]; color: string }
 
-const Lines: React.FC<{ labels: string[]; series: Series[]; unit?: string; label: string }> = ({ labels, series, unit, label }) => {
-  const max = Math.max(1, ...series.flatMap(s => s.values.map(v => v ?? 0)));
-  const top = ticks(max).slice(-1)[0] || max;
-  const iw = W - PAD_L, ih = H - PAD_B - PAD_T;
+const Lines: React.FC<{ labels: string[]; series: Series[]; unit?: string; label: string; integer?: boolean }> = ({ labels, series, unit, label, integer = false }) => {
+  const [ref, width] = useWidth();
+  const sc = scale(Math.max(0, ...series.flatMap(s => s.values.map(v => v ?? 0))), integer);
+  const iw = width - PAD_L - PAD_R, ih = H - PAD_B - PAD_T;
   const x = (i: number) => PAD_L + (labels.length > 1 ? i / (labels.length - 1) : 0.5) * iw;
-  const y = (v: number) => PAD_T + ih - (v / top) * ih;
+  const y = (v: number) => PAD_T + ih - (v / sc.top) * ih;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={label}>
-      <Axes max={top} labels={labels} unit={unit} />
-      {series.map(s => {
-        const pts = s.values.map((v, i) => (v == null ? null : `${x(i)},${y(v)}`)).filter(Boolean).join(' ');
-        return (
-          <g key={s.name}>
-            <polyline fill="none" stroke={s.color} strokeWidth="1.8" points={pts} />
-            {s.values.map((v, i) => v != null && (
-              <circle key={i} cx={x(i)} cy={y(v)} r={labels.length > 40 ? 1.2 : 2.4} fill={s.color}>
-                <title>{`${labels[i]} · ${s.name}: ${v}${unit || ''}`}</title>
-              </circle>
-            ))}
-          </g>
-        );
-      })}
-    </svg>
+    <div ref={ref} className="kb-chart">
+      <svg viewBox={`0 0 ${width} ${H}`} width="100%" height={H} role="img" aria-label={label}>
+        <Axes width={width} sc={sc} labels={labels} xs={x} unit={unit} />
+        {series.map(s => {
+          const pts = s.values.map((v, i) => (v == null ? null : `${x(i)},${y(v)}`)).filter(Boolean).join(' ');
+          return (
+            <g key={s.name}>
+              <polyline fill="none" stroke={s.color} strokeWidth="2" points={pts} />
+              {s.values.map((v, i) => v != null && (
+                <circle key={i} cx={x(i)} cy={y(v)} r={labels.length > 40 ? 2 : 3.5} fill={s.color}>
+                  <title>{`${labels[i]} · ${s.name}: ${v}${unit || ''}`}</title>
+                </circle>
+              ))}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 };
 
@@ -188,9 +216,9 @@ const AgentBars: React.FC<{ rows: AgentRow[]; onPick: (a: string) => void }> = (
   return (
     <>
       {rows.map(r => (
-        <button type="button" key={r.agent} className="kb-bar" onClick={() => onPick(r.agent)}
+        <button type="button" key={r.agent} className="kb-bar" onClick={() => onPick(r.agent || NO_AGENT)}
           title={`${r.context} automatic, ${r.tool} tool calls, ${r.write} writes — click to filter the log`}>
-          <span>@{r.agent || '(no agent)'}</span>
+          <span>{r.agent ? `@${r.agent}` : '(no agent)'}</span>
           <span className="kb-bar-track" style={{ display: 'flex' }}>
             {(['context', 'tool', 'write'] as const).map(k => r[k] > 0 &&
               <span key={k} style={{ width: `${(r[k] / max) * 100}%`, background: KIND_COLOR[k], height: '100%' }} />)}
@@ -213,7 +241,7 @@ function what(r: LogRow): string {
   return r.action;
 }
 
-const KnowledgeUsage: React.FC<{ base: string; onOpenNote: (permalink: string) => void; initialQuery?: string }> = ({ base, onOpenNote, initialQuery = '' }) => {
+const KnowledgeUsage: React.FC<{ base: string; onOpenNote: (permalink: string) => void; initialNote?: string }> = ({ base, onOpenNote, initialNote = '' }) => {
   const [days, setDays] = useState(30);
   const [stats, setStats] = useState<Stats | null>(null);
   const [bench, setBench] = useState<Bench | null>(null);
@@ -221,8 +249,9 @@ const KnowledgeUsage: React.FC<{ base: string; onOpenNote: (permalink: string) =
   const [log, setLog] = useState<Log | null>(null);
   const [agent, setAgent] = useState('');
   const [kind, setKind] = useState('');
-  const [text, setText] = useState(initialQuery);
-  const [q, setQ] = useState(initialQuery);
+  const [text, setText] = useState('');
+  const [q, setQ] = useState('');
+  const [note, setNote] = useState(initialNote); // exactly this note (from the note panel)
   const [page, setPage] = useState(0);
   const [reload, setReload] = useState(0);
 
@@ -248,11 +277,12 @@ const KnowledgeUsage: React.FC<{ base: string; onOpenNote: (permalink: string) =
     if (agent) p.set('agent', agent);
     if (kind) p.set('kind', kind);
     if (q) p.set('q', q);
+    if (note) p.set('note', note);
     api<Log>(`/api/knowledge/usage?${p.toString()}`)
       .then(l => { if (live) setLog(l); })
       .catch(e => { if (live) setErr((e as Error).message); });
     return () => { live = false; };
-  }, [base, agent, kind, q, page, reload]);
+  }, [base, agent, kind, q, note, page, reload]);
 
   const pickAgent = useCallback((a: string) => { setAgent(a); setPage(0); }, []);
   const filterText = (t: string) => { setText(t); setQ(t); setPage(0); };
@@ -293,8 +323,9 @@ const KnowledgeUsage: React.FC<{ base: string; onOpenNote: (permalink: string) =
           title={`Searches (automatic + search_knowledge) with at least one note, last ${stats.days} days`} />
         <Tile label="Latency" value={stats.latency.avg == null ? '—' : `${stats.latency.avg} ms`}
           sub={stats.latency.p95 == null ? 'no searches yet' : `p95 ${stats.latency.p95} ms · ${fmt(stats.latency.n)} calls`} />
-        <Tile label="Notes used" value={`${fmt(stats.notes_used)} / ${fmt(stats.notes_total ?? bench.notes)}`}
-          sub={`${fmt(stats.never_used)} never used`} title={`Distinct notes agents read in the last ${stats.days} days / all notes`} />
+        <Tile label={`Notes used · ${stats.days} days`} value={`${fmt(stats.notes_used)} / ${fmt(stats.notes_total ?? bench.notes)}`}
+          sub={`${fmt(stats.never_used)} not used in ${stats.days} days`}
+          title={`Existing notes that agents read in the last ${stats.days} days / all notes (writes do not count)`} />
         <Tile label="Knowledge base" value={`${fmt(bench.notes)} notes`}
           sub={`${fmt(bench.facts)} facts · ${fmt(bench.links)} links · ${bytes(bench.files_bytes)} + index ${bytes(bench.index_bytes)}`} />
       </section>
@@ -320,7 +351,7 @@ const KnowledgeUsage: React.FC<{ base: string; onOpenNote: (permalink: string) =
       <section className="settings-card">
         <h3>Growth</h3>
         <p className="muted small">{snaps.length >= 2 ? 'Daily snapshots of the counts.' : 'Notes by the month they were created (daily snapshots start today).'}</p>
-        {growthLabels.length ? <Lines labels={growthLabels} series={growth} label="Knowledge base growth" /> : <span className="muted small">No notes yet.</span>}
+        {growthLabels.length ? <Lines labels={growthLabels} series={growth} label="Knowledge base growth" integer /> : <span className="muted small">No notes yet.</span>}
         <Legend items={growth.map(s => ({ name: s.name, color: s.color }))} />
       </section>
 
@@ -363,7 +394,7 @@ const KnowledgeUsage: React.FC<{ base: string; onOpenNote: (permalink: string) =
           onClick: n.exists ? () => onOpenNote(n.permalink) : undefined }))} empty="No note was used in this period." />
         {stats.never_used ? (
           <>
-            <h4>Never used <span className="muted">{fmt(stats.never_used)}</span></h4>
+            <h4 title="Existing notes no agent read in this period">Not used in {stats.days} days <span className="muted">{fmt(stats.never_used)}</span></h4>
             <div className="kb-cloud">
               {stats.never_used_sample.map(n => (
                 <button type="button" key={n.permalink} className="chip small-chip" onClick={() => onOpenNote(n.permalink)}>{n.title}</button>
@@ -378,7 +409,7 @@ const KnowledgeUsage: React.FC<{ base: string; onOpenNote: (permalink: string) =
         <Bars rows={stats.top_queries.map(t => ({ name: t.query, count: t.count, title: `${t.query} — ${t.avg_results} results on average`,
           onClick: () => filterText(t.query) }))} empty="No searches in this period." />
         <h4 title="Searches that found no note — topics the knowledge base is missing">Found nothing <span className="muted">{stats.empty_queries.length}</span></h4>
-        {stats.empty_queries.length === 0 && <span className="muted small">Every search found something.</span>}
+        {stats.empty_queries.length === 0 && <span className="muted small">{stats.searches ? 'Every search found something.' : 'No searches yet.'}</span>}
         {stats.empty_queries.map(t => (
           <button type="button" key={t.query} className="kb-link" onClick={() => filterText(t.query)}
             title={`Last: @${t.agent || '?'} ${ago(t.last)}`}>
@@ -393,7 +424,7 @@ const KnowledgeUsage: React.FC<{ base: string; onOpenNote: (permalink: string) =
           <label>Agent
             <select className="field-input" value={agent} onChange={e => pickAgent(e.target.value)}>
               <option value="">all</option>
-              {(log?.agents || []).map(a => <option key={a} value={a}>{a ? `@${a}` : '(no agent)'}</option>)}
+              {(log?.agents || []).map(a => <option key={a || NO_AGENT} value={a || NO_AGENT}>{a ? `@${a}` : '(no agent)'}</option>)}
             </select>
           </label>
           <label>Kind
@@ -403,7 +434,8 @@ const KnowledgeUsage: React.FC<{ base: string; onOpenNote: (permalink: string) =
           </label>
           <input className="field-input" style={{ width: 220, padding: '4px 8px', fontSize: '0.82rem' }} placeholder="Query, note or reason…"
             value={text} onChange={e => setText(e.target.value)} />
-          {(agent || kind || q) && <button type="button" className="chip small-chip" onClick={() => { setAgent(''); setKind(''); filterText(''); }}>✕ Clear</button>}
+          {note && <button type="button" className="chip small-chip active" onClick={() => { setNote(''); setPage(0); }} title="Show every record again">note: {note} ✕</button>}
+          {(agent || kind || q || note) && <button type="button" className="chip small-chip" onClick={() => { setAgent(''); setKind(''); setNote(''); filterText(''); }}>✕ Clear</button>}
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table className="cost-table kb-usage-log">
@@ -432,7 +464,7 @@ const KnowledgeUsage: React.FC<{ base: string; onOpenNote: (permalink: string) =
                 </tr>
               ))}
               {log && log.rows.length === 0 && (
-                <tr><td colSpan={6} className="muted">{log.total === 0 && !agent && !kind && !q
+                <tr><td colSpan={6} className="muted">{log.total === 0 && !agent && !kind && !q && !note
                   ? 'Nothing recorded yet — agents appear here when they search, read or write the knowledge base.'
                   : 'No records match the filters.'}</td></tr>
               )}

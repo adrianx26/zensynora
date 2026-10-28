@@ -480,7 +480,7 @@ const KnowledgeView: React.FC = () => {
 
           {tab === 'usage' && (
             // 2026-10-27: usage log (which agent used which notes, for what) and benchmarks
-            <KnowledgeUsage key={`${base}:${usageQuery}`} base={base} initialQuery={usageQuery}
+            <KnowledgeUsage key={`${base}:${usageQuery}`} base={base} initialNote={usageQuery}
               onOpenNote={p => { setCreating(null); setSide(null); select(p); }} />
           )}
 
