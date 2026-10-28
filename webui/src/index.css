@@ -1162,3 +1162,4 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .rule-off { opacity: 0.6; }
 .rule-proposal { margin-top: 10px; }
 .rule-proposal .save-actions .field-input { flex: 1; }
+.rule-review { margin: 8px 0; }

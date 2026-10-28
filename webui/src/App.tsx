@@ -113,8 +113,8 @@ function App() {
     api<SystemHealth>('/api/system/health').then(h => { setHealth(h); setHealthError(false); }).catch(() => setHealthError(true));
     api<{ proposals: { status: string }[] }>('/api/medic/proposals?status=pending')
       .then(d => setPending(d.proposals.length)).catch(() => setPending(0));
-    api<{ pending: number }>('/api/rules')
-      .then(d => setRulesPending(d.pending)).catch(() => setRulesPending(0));
+    api<{ pending: number; review?: number }>('/api/rules')
+      .then(d => setRulesPending(d.pending + (d.review || 0))).catch(() => setRulesPending(0));
   }, []);
 
   useEffect(() => {

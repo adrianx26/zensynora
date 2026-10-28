@@ -19,6 +19,10 @@ interface Rule {
   created: string;
   updated: string;
   text: string;
+  // 2026-10-27 (review): the file differs from what you last approved
+  state?: 'ok' | 'changed' | 'unverified';
+  review_diff?: string;
+  has_approved?: boolean;
 }
 
 interface RuleProposal {
@@ -34,6 +38,7 @@ interface RuleProposal {
   decided_by: string | null;
   note: string;
   diff?: string;
+  stale?: boolean;
 }
 
 interface Draft { slug: string; title: string; text: string; scope: string[]; priority: Priority; enabled: boolean; isNew: boolean }
@@ -72,6 +77,7 @@ const RulesView: React.FC<{ onChanged?: () => void }> = ({ onChanged }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const [busy, setBusy] = useState<string | null>(null); // an approve/reject/review in flight
 
   const load = useCallback(async () => {
     try {
@@ -88,7 +94,6 @@ const RulesView: React.FC<{ onChanged?: () => void }> = ({ onChanged }) => {
     }
   }, []);
 
-  // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load
   useEffect(() => { load(); }, [load]);
 
   const act = async (fn: () => Promise<unknown>, ok?: string) => {
@@ -108,9 +113,19 @@ const RulesView: React.FC<{ onChanged?: () => void }> = ({ onChanged }) => {
   const pending = proposals.filter(p => p.status === 'pending');
   const decided = proposals.filter(p => p.status !== 'pending');
 
+  const once = async (key: string, fn: () => Promise<unknown>, ok: string) => {
+    if (busy) return;
+    setBusy(key);
+    try { await act(fn, ok); } finally { setBusy(null); }
+  };
+
   const decide = (p: RuleProposal, verdict: 'approve' | 'reject') =>
-    act(() => api(`/api/rules/proposals/${p.id}/${verdict}`, { method: 'POST', body: JSON.stringify({ note: notes[p.id] || '' }) }),
+    once(`p${p.id}`, () => api(`/api/rules/proposals/${p.id}/${verdict}`, { method: 'POST', body: JSON.stringify({ note: notes[p.id] || '' }) }),
       verdict === 'approve' ? `Approved #${p.id} — every agent follows it from its next message.` : `Rejected #${p.id} (kept in the history).`);
+
+  const review = (r: Rule, how: 'accept' | 'restore') =>
+    once(`r${r.slug}`, () => api(`/api/rules/${encodeURIComponent(r.slug)}/${how}`, { method: 'POST' }),
+      how === 'accept' ? `“${r.title}” is used again in this version.` : `“${r.title}” is back to the approved version (the changed file is in .trash).`);
 
   const toggle = (r: Rule) =>
     act(() => api(`/api/rules/${encodeURIComponent(r.slug)}`, { method: 'PUT', body: JSON.stringify({ enabled: !r.enabled }) }),
@@ -158,12 +173,13 @@ const RulesView: React.FC<{ onChanged?: () => void }> = ({ onChanged }) => {
                 <span className="muted small">by @{p.proposed_by} · {when(p.created)}</span>
               </div>
               <p className="pre"><b>Why:</b> {p.reason || '—'}</p>
+              {p.stale && <div className="notice">The rule was changed after this proposal was made. The diff below is against the rule as it is now — approving replaces your newer text.</div>}
               <DiffView diff={p.diff || ''} />
               <div className="save-actions">
                 <input className="field-input" placeholder="Note (optional)" value={notes[p.id] || ''}
                   onChange={e => setNotes({ ...notes, [p.id]: e.target.value })} />
-                <button className="ghost-btn" onClick={() => decide(p, 'reject')}>Reject</button>
-                <button className="primary-btn" onClick={() => decide(p, 'approve')}>Approve</button>
+                <button className="ghost-btn" disabled={!!busy} onClick={() => decide(p, 'reject')}>Reject</button>
+                <button className="primary-btn" disabled={!!busy} onClick={() => decide(p, 'approve')}>{busy === `p${p.id}` ? 'Working…' : 'Approve'}</button>
               </div>
             </div>
           ))}
@@ -242,6 +258,16 @@ const RulesView: React.FC<{ onChanged?: () => void }> = ({ onChanged }) => {
                 </span>
               </div>
               <p className="muted small">{scopeText(r.scope)} · by {r.author} · {r.slug}</p>
+              {r.state && r.state !== 'ok' && (
+                <div className="notice rule-review">
+                  <b>Changed outside ZenSynora — review.</b> Agents do not see this rule until you decide.
+                  <DiffView diff={r.review_diff || ''} />
+                  <div className="row-actions">
+                    <button className="primary-btn" disabled={!!busy} onClick={() => review(r, 'accept')}>Keep this version</button>
+                    {r.has_approved && <button className="ghost-btn" disabled={!!busy} onClick={() => review(r, 'restore')}>Restore approved version</button>}
+                  </div>
+                </div>
+              )}
               <pre className="skill-body">{r.text}</pre>
               <div className="row-actions">
                 <label className="mini-toggle" title="Switched-off rules stay here but agents do not see them">
