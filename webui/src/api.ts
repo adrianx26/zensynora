@@ -127,7 +127,9 @@ export interface FusedAgent {
 
 export interface AgentFusion {
   id: string;
-  status: 'pending' | 'applied' | 'rejected' | 'undone';
+  status: 'pending' | 'applying' | 'applied' | 'failed' | 'rejected' | 'undone';
+  interrupted?: boolean; // 2026-10-28: an apply that died — Undo rolls it back
+  error?: string;
   agent_a: string;
   agent_b: string;
   allow_default: boolean;
@@ -138,6 +140,7 @@ export interface AgentFusion {
   fused: FusedAgent;
   prompt_source: string;
   moved?: { channels: number; jobs: number; messages: number };
+  undo_check?: { changed: string[]; blocked_by: string[] } | null;
   problems?: string[];
   // preview only
   diff_a?: string;

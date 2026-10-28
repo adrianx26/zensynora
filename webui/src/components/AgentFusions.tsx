@@ -28,8 +28,11 @@ interface Props {
 }
 
 const STATUS: Record<AgentFusion['status'], string> = {
-  pending: 'waiting for you', applied: 'applied', rejected: 'rejected', undone: 'undone',
+  pending: 'waiting for you', applying: 'applying…', applied: 'applied', failed: 'failed (rolled back)',
+  rejected: 'rejected', undone: 'undone',
 };
+const statusText = (p: AgentFusion) => (p.status === 'applying' && p.interrupted ? 'interrupted — click Undo' : STATUS[p.status]);
+const badgeClass = (p: AgentFusion) => (p.status === 'applied' ? 'applied' : p.status === 'failed' || p.interrupted ? 'failed' : 'pending');
 
 export const AgentFusions: React.FC<Props> = ({ agents, dirty, onChanged }) => {
   const [items, setItems] = useState<AgentFusion[]>([]);
@@ -76,10 +79,29 @@ export const AgentFusions: React.FC<Props> = ({ agents, dirty, onChanged }) => {
   const act = async (p: AgentFusion, action: 'approve' | 'reject' | 'undo') => {
     if (action === 'approve' && !window.confirm(
       `Fuse @${p.agent_a} and @${p.agent_b} into @${p.fused.name}? The two agents are replaced; you can undo it later.`)) return;
+    let body = '{}';
+    if (action === 'undo' && p.status === 'applied') {
+      // 2026-10-28: warn before an undo that would lose later changes (or is blocked by a later fusion).
+      try {
+        const pv = await api<AgentFusion>(`/api/agents/fusions/${p.id}`);
+        const check = pv.undo_check;
+        if (check?.blocked_by.length) {
+          setNotice({ kind: 'error', text: `@${p.fused.name} is part of a later fusion (${check.blocked_by.join(', ')}) — undo that one first.` });
+          return;
+        }
+        if (check?.changed.length) {
+          if (!window.confirm(`@${p.fused.name} was changed after the fusion:\n- ${check.changed.join('\n- ')}\n\nUndo anyway? These changes will be lost.`)) return;
+          body = JSON.stringify({ force: true });
+        }
+      } catch (err) {
+        setNotice({ kind: 'error', text: (err as Error).message });
+        return;
+      }
+    }
     setBusy(true);
     setNotice(null);
     try {
-      const r = await api<AgentFusion>(`/api/agents/fusions/${p.id}/${action}`, { method: 'POST', body: '{}' });
+      const r = await api<AgentFusion>(`/api/agents/fusions/${p.id}/${action}`, { method: 'POST', body });
       setOpen(null);
       setNotice({
         kind: 'ok',
@@ -90,13 +112,14 @@ export const AgentFusions: React.FC<Props> = ({ agents, dirty, onChanged }) => {
       if (action !== 'reject') onChanged();
     } catch (err) {
       setNotice({ kind: 'error', text: (err as Error).message });
+      load();
     } finally {
       setBusy(false);
     }
   };
 
   const names = agents.map(a => a.name);
-  const visible = items.filter(p => p.status === 'pending' || p.status === 'applied');
+  const visible = items.filter(p => ['pending', 'applying', 'applied', 'failed'].includes(p.status));
 
   return (
     <div className="settings-card fusion-card">
@@ -133,16 +156,17 @@ export const AgentFusions: React.FC<Props> = ({ agents, dirty, onChanged }) => {
           <div className="fusion-row">
             <b>@{p.agent_a}</b><LevelBadge level={p.originals[p.agent_a]?.level} /> + <b>@{p.agent_b}</b><LevelBadge level={p.originals[p.agent_b]?.level} />
             → <b>@{p.fused.name}</b><LevelBadge level={p.fused.level} />
-            <span className={`badge proposal-${p.status === 'applied' ? 'applied' : 'pending'}`}>{STATUS[p.status]}</span>
+            <span className={`badge proposal-${badgeClass(p)}`}>{statusText(p)}</span>
             <span className="muted small">by {p.author} · {ago(p.created)}</span>
             <button className="ghost-btn" onClick={() => show(p.id)}>{open?.id === p.id ? 'Hide' : 'Preview'}</button>
             {p.status === 'pending' && <>
               <button className="primary-btn" disabled={busy || dirty} onClick={() => act(p, 'approve')}>Approve and apply</button>
               <button className="ghost-btn" disabled={busy} onClick={() => act(p, 'reject')}>Reject</button>
             </>}
-            {p.status === 'applied' && <button className="ghost-btn" disabled={busy || dirty} onClick={() => act(p, 'undo')}>Undo</button>}
+            {(p.status === 'applied' || (p.status === 'applying' && p.interrupted)) && <button className="ghost-btn" disabled={busy || dirty} onClick={() => act(p, 'undo')}>Undo</button>}
           </div>
           {p.reason && <div className="muted small">Why: {p.reason}</div>}
+          {p.error && <div className="probe-err small">{p.status === 'failed' ? 'Applying failed; everything was put back: ' : ''}{p.error}</div>}
           {open?.id === p.id && (
             <div className="fusion-preview">
               <p>{open.summary}</p>
