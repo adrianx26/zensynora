@@ -158,16 +158,28 @@ def _rules(ctx):
     from .. import rules
 
     items = rules.list_rules()
-    active = sum(1 for r in items if r["enabled"])
-    off = len(items) - active
+    active = sum(1 for r in items if r["enabled"] and not rules.needs_review(r))
+    off = sum(1 for r in items if not r["enabled"])
     pending = rules.list_proposals("pending")
     detail = f"{active} active" + (f" ({off} switched off)" if off else "") + \
         f", {len(pending)} proposal(s) waiting"
+    problems, hints = [], []
+    review = [r["slug"] for r in items if rules.needs_review(r)]
+    if review:
+        problems.append(f"changed outside ZenSynora, not used until you review: {', '.join(review)}")
+        hints.append("Review them in the Web UI → Rules (Keep this version / Restore approved version) or "
+                     "with zensynora rules accept SLUG.")
+    skipped = rules.skipped_files()
+    if skipped:
+        problems.append("skipped: " + "; ".join(f"{n} ({why})" for n, why in skipped[:5]))
+        hints.append("Rule files are named like answer-in-romanian.md (lowercase letters, digits, dashes).")
     stale = [p for p in pending if rules.waiting_since_days(p) > rules.STALE_DAYS]
     if stale:
         ids = ", ".join(f"#{p['id']}" for p in stale)
-        return WARN, f"{detail}; {len(stale)} waiting more than {rules.STALE_DAYS} days ({ids})", \
-            "Approve or reject them in the Web UI → Rules, or with zensynora rules approve/reject ID."
+        problems.append(f"{len(stale)} waiting more than {rules.STALE_DAYS} days ({ids})")
+        hints.append("Approve or reject them in the Web UI → Rules, or with zensynora rules approve/reject ID.")
+    if problems:
+        return WARN, f"{detail}; " + "; ".join(problems), " ".join(hints)
     return OK, detail
 
 

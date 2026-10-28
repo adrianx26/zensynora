@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import datetime as _dt
 import difflib
+import hashlib
 import json
 import logging
 import os
@@ -45,8 +46,14 @@ import re
 import shutil
 import threading
 import time
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
+
+try:  # cross-process lock (Linux/macOS); Windows falls back to the thread lock
+    import fcntl as _fcntl
+except ImportError:  # pragma: no cover - Windows
+    _fcntl = None  # type: ignore[assignment]
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +71,10 @@ DEFAULT_PROMPT_CHARS = 4000
 DEFAULT_MAX_PENDING = 5
 STALE_DAYS = 7           # doctor warns when a proposal waits longer
 PROPOSED_NOTE = "Proposal #{id} sent to the user for approval — it is not active yet."
+KEEP_DECIDED = 500       # decided proposals kept as history (older ones are pruned)
+# 2026-10-27 (review): a rule is used only when its file matches what the user
+# last approved (sha256 in .manifest.json, written only by the user's actions).
+OK_STATE, CHANGED_STATE, UNVERIFIED_STATE = "ok", "changed", "unverified"
 
 _lock = threading.RLock()
 
@@ -79,6 +90,30 @@ def proposals_dir() -> Path:
 
 def trash_dir() -> Path:
     return rules_dir() / ".trash"
+
+
+def manifest_path() -> Path:
+    return rules_dir() / ".manifest.json"
+
+
+def _sha(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+@contextmanager
+def _locked() -> Iterator[None]:
+    """One writer at a time — also across processes (Web UI, gateway, CLI)."""
+    with _lock:
+        if _fcntl is None:  # pragma: no cover - Windows
+            yield
+            return
+        proposals_dir().mkdir(parents=True, exist_ok=True)
+        with open(proposals_dir() / ".lock", "a+") as f:
+            _fcntl.flock(f, _fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                _fcntl.flock(f, _fcntl.LOCK_UN)
 
 
 def slugify(title: str) -> str:
@@ -232,6 +267,44 @@ def _invalidate() -> None:
         _cache.update(sig=None, sections={})
 
 
+_manifest_warned: set[str] = set()
+
+
+def _read_manifest() -> dict[str, Any]:
+    try:
+        data = json.loads(manifest_path().read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except (OSError, ValueError) as e:
+        key = str(e)[:80]
+        if key not in _manifest_warned:
+            _manifest_warned.add(key)
+            logger.warning("Rules manifest unreadable (%s): every rule waits for your review", e)
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _record(slug: str, content: str | None, by: str) -> None:
+    """Remember the content the user approved (None = the rule is gone). User paths only."""
+    m = _read_manifest()
+    if content is None:
+        m.pop(slug, None)
+    else:
+        m[slug] = {"sha256": _sha(content), "approved": content, "at": _now(), "by": by or "user"}
+    _atomic_write(manifest_path(), json.dumps(m, indent=1, ensure_ascii=False))
+
+
+def _write_rule(path: Path, content: str, by: str) -> None:
+    _atomic_write(path, content)
+    _record(path.stem, content, by)
+
+
+def approved_content(slug: str) -> str | None:
+    """The version of a rule the user last approved (None = never approved)."""
+    entry = _read_manifest().get(_check_slug(slug))
+    return entry.get("approved") if isinstance(entry, dict) else None
+
+
 def _to_trash(path: Path, why: str) -> Path | None:
     """Move a rule file to .trash (never lost). Returns where it went."""
     if not path.exists():
@@ -249,10 +322,11 @@ def _to_trash(path: Path, why: str) -> Path | None:
 
 
 # ── reading (cached by mtime) ────────────────────────────────────────────────
-_cache: dict[str, Any] = {"sig": None, "rules": [], "sections": {}}
+_cache: dict[str, Any] = {"sig": None, "rules": [], "sections": {}, "skipped": []}
 
 
 def _signature() -> tuple:
+    """Names, times and sizes of the rule files and the manifest (no reading)."""
     base = rules_dir()
     try:
         entries = list(os.scandir(base))
@@ -263,13 +337,21 @@ def _signature() -> tuple:
         if e.name.startswith(".") or not e.name.endswith(".md"):
             continue
         try:
-            if not e.is_file():
+            if e.is_symlink():  # 2026-10-27 (review): never follow links out of the folder
+                sig.append((e.name, 0, 0, "symlink"))
                 continue
-            st = e.stat()
+            if not e.is_file(follow_symlinks=False):
+                continue
+            st = e.stat(follow_symlinks=False)
         except OSError:
             continue
-        sig.append((e.name, st.st_mtime_ns, st.st_size))
-    return (str(base), tuple(sorted(sig)))
+        sig.append((e.name, st.st_mtime_ns, st.st_size, "file"))
+    try:
+        mst = manifest_path().stat()
+        man = (mst.st_mtime_ns, mst.st_size)
+    except OSError:
+        man = (0, 0)
+    return (str(base), tuple(sorted(sig)), man)
 
 
 def _sort_key(r: dict[str, Any]) -> tuple:
@@ -281,20 +363,46 @@ def _load_all() -> list[dict[str, Any]]:
     with _lock:
         if _cache["sig"] == sig:
             return _cache["rules"]
-        rules = []
-        for name, _mt, _size in (sig[1] if len(sig) > 1 else ()):
+        rules, skipped = [], []
+        manifest = _read_manifest() if len(sig) > 1 else {}
+        for name, _mt, _size, kind in (sig[1] if len(sig) > 1 else ()):
             slug = name[:-3]
+            if kind == "symlink":
+                skipped.append((name, "a symbolic link (not used)"))
+                continue
             if not SLUG_RE.match(slug):
+                skipped.append((name, "name not allowed (use lowercase letters, digits and dashes)"))
                 continue
             try:
-                text = (rules_dir() / name).read_text(encoding="utf-8")
+                with open(rules_dir() / name, "rb") as fh:
+                    data = fh.read(MAX_TEXT * 8 + 4096)
+                text = data.decode("utf-8")
             except (OSError, UnicodeDecodeError) as e:
-                logger.warning("Rule file %s cannot be read: %s", name, e)
+                logger.info("Rule file %s cannot be read: %s", name, e)
+                skipped.append((name, f"unreadable ({e.__class__.__name__})"))
                 continue
-            rules.append(parse(text, slug))
+            rule = parse(text, slug)
+            entry = manifest.get(slug)
+            if not isinstance(entry, dict):
+                rule["state"] = UNVERIFIED_STATE
+            elif entry.get("sha256") != _sha(text):
+                rule["state"] = CHANGED_STATE
+            else:
+                rule["state"] = OK_STATE
+            rules.append(rule)
         rules.sort(key=_sort_key)
-        _cache.update(sig=sig, rules=rules, sections={})
+        _cache.update(sig=sig, rules=rules, sections={}, skipped=skipped)
         return rules
+
+
+def skipped_files() -> list[tuple[str, str]]:
+    """Files in the rules folder that are not rules (bad name, link, unreadable)."""
+    _load_all()
+    return list(_cache["skipped"])
+
+
+def needs_review(rule: dict[str, Any]) -> bool:
+    return rule.get("state", OK_STATE) != OK_STATE
 
 
 def list_rules() -> list[dict[str, Any]]:
@@ -310,8 +418,8 @@ def get_rule(slug: str) -> dict[str, Any] | None:
 def _raw(slug: str) -> str | None:
     p = _rule_path(slug)
     try:
-        return p.read_text(encoding="utf-8") if p.is_file() else None
-    except OSError:
+        return p.read_text(encoding="utf-8") if p.is_file() and not p.is_symlink() else None
+    except (OSError, UnicodeDecodeError):
         return None
 
 
@@ -327,7 +435,7 @@ def save_rule(title: str, text: str, scope: Any = "all", priority: str = "normal
     if not key:
         raise ValueError("The title needs at least one letter or digit.")
     _check_slug(key)
-    with _lock:
+    with _locked():
         path = _rule_path(key)
         old = get_rule(key) if path.exists() else None
         if old is not None and create:
@@ -340,7 +448,7 @@ def save_rule(title: str, text: str, scope: Any = "all", priority: str = "normal
                 "created": (old or {}).get("created") or now, "updated": now}
         if old is not None:
             _to_trash(path, "replaced")
-        _atomic_write(path, render(rule))
+        _write_rule(path, render(rule), "user")
     return get_rule(key) or {**rule, "slug": key}
 
 
@@ -357,14 +465,43 @@ def update_rule(slug: str, **changes: Any) -> dict[str, Any]:
 
 def delete_rule(slug: str) -> str:
     """Delete a rule (moved to .trash). Returns the trash file."""
-    with _lock:
+    with _locked():
         path = _rule_path(slug)
-        if not path.is_file():
+        if not (path.is_file() or path.is_symlink()):
             raise KeyError(slug)
-        target = _to_trash(path, "deleted")
+        target = _to_trash(path, "deleted") if not path.is_symlink() else None
         path.unlink()
-        _invalidate()
-    return str(target)
+        _record(path.stem, None, "user")
+    return str(target or "")
+
+
+def accept_rule(slug: str, by: str = "user") -> dict[str, Any]:
+    """The user keeps a rule file changed outside ZenSynora: it is used from now on."""
+    with _locked():
+        key = _check_slug(slug)
+        text = _raw(key)
+        if text is None:
+            raise KeyError(slug)
+        r = parse(text, key)
+        validate(r["title"], r["text"], r["scope"], r["priority"])
+        _record(key, text, by)
+    return get_rule(key) or r
+
+
+def restore_rule(slug: str, by: str = "user") -> dict[str, Any]:
+    """Put back the version the user last approved (the changed file goes to .trash)."""
+    with _locked():
+        key = _check_slug(slug)
+        old = approved_content(key)
+        if old is None:
+            raise ValueError(f"'{key}' was never approved — keep it, or delete the file.")
+        path = _rule_path(key)
+        if path.is_symlink():
+            path.unlink()
+        elif path.exists():
+            _to_trash(path, "changed-outside")
+        _write_rule(path, old, by)
+    return get_rule(key) or parse(old, key)
 
 
 # ── proposals (agents) ───────────────────────────────────────────────────────
@@ -404,8 +541,17 @@ def list_proposals(status: str | None = None, agent: str | None = None) -> list[
     return sorted(out, key=lambda p: int(p.get("id", 0)), reverse=True)
 
 
+def proposal_stale(prop: dict[str, Any]) -> bool:
+    """The rule changed after the proposal was made (the diff is against the file now)."""
+    base = prop.get("base_sha")
+    if not base or prop.get("action") == "create":
+        return False
+    cur = _raw(prop["slug"])
+    return cur is None or _sha(cur) != base
+
+
 def proposal_diff(prop: dict[str, Any]) -> str:
-    """Line diff between the rule as it is now and the proposal."""
+    """Line diff between the rule as it is NOW and the proposal."""
     cur = _raw(prop["slug"]) or ""
     new = "" if prop.get("action") == "delete" else prop.get("content", "")
     return "".join(difflib.unified_diff(
@@ -444,7 +590,7 @@ def create_proposal(action: str, slug: str, reason: str, proposed_by: str, title
         raise ValueError(f"The reason is too long ({len(reason)} characters, at most {MAX_REASON}).")
     if _looks_secret(reason):
         raise ValueError("The reason looks like it contains a password, token or API key — leave secrets out.")
-    with _lock:
+    with _locked():
         pending = list_proposals("pending")
         mine = [p for p in pending if str(p.get("proposed_by", "")).lower() == agent.lower()]
         limit = _max_pending()
@@ -485,6 +631,7 @@ def create_proposal(action: str, slug: str, reason: str, proposed_by: str, title
             "id": n, "action": action, "slug": key,
             "title": parse(content, key)["title"] if content else (get_rule(key) or {}).get("title", key),
             "content": content, "reason": reason, "proposed_by": agent, "created": _now(),
+            "base_sha": _sha(_raw(key) or "") if action != "create" else "",
             "status": "pending", "decided_at": None, "decided_by": None, "note": "",
         }
         for _ in range(50):
@@ -510,12 +657,26 @@ def _decide(pid: Any, status: str, by: str, note: str = "") -> dict[str, Any]:
     prop.update(status=status, decided_at=_now(), decided_by=by or "user", note=(note or "").strip()[:1000])
     _save_proposal(prop)
     _emit("rule_proposal_" + status, prop)
+    _prune()
     return prop
+
+
+def _prune(keep: int = KEEP_DECIDED) -> int:
+    """Forget decided proposals beyond the newest ``keep`` (pending ones always stay)."""
+    decided = [p for p in list_proposals() if p.get("status") != "pending"]
+    removed = 0
+    for p in decided[keep:]:
+        try:
+            _prop_path(p["id"]).unlink()
+            removed += 1
+        except (OSError, ValueError):
+            pass
+    return removed
 
 
 def approve(pid: Any, by: str = "user", note: str = "") -> dict[str, Any]:
     """Apply a proposal (the user). create/modify write the file, delete moves it to .trash."""
-    with _lock:
+    with _locked():
         prop = get_proposal(pid)
         if not prop:
             raise KeyError(pid)
@@ -531,7 +692,7 @@ def approve(pid: Any, by: str = "user", note: str = "") -> dict[str, Any]:
             new = parse(prop["content"], key)
             validate(new["title"], new["text"], new["scope"], new["priority"])
             new["updated"] = _now()
-            _atomic_write(path, render(new))
+            _write_rule(path, render(new), by)
         elif action == "modify":
             cur = get_rule(key)
             if cur is None:
@@ -541,18 +702,18 @@ def approve(pid: Any, by: str = "user", note: str = "") -> dict[str, Any]:
             # Keep what the proposal is not about: on/off, who made it, when.
             new.update(enabled=cur["enabled"], author=cur["author"], created=cur["created"], updated=_now())
             _to_trash(path, "replaced")
-            _atomic_write(path, render(new))
+            _write_rule(path, render(new), by)
         else:
             if not path.exists():
                 raise ValueError(f"Rule '{key}' no longer exists — reject the proposal.")
             _to_trash(path, "deleted")
             path.unlink()
-            _invalidate()
+            _record(key, None, by)
         return _decide(pid, "approved", by, note)
 
 
 def reject(pid: Any, by: str = "user", note: str = "") -> dict[str, Any]:
-    with _lock:
+    with _locked():
         return _decide(pid, "rejected", by, note)
 
 
@@ -644,7 +805,8 @@ def prompt_section(agent_name: str, max_chars: int | None = None) -> str:
         cached = _cache["sections"].get(key)
         if cached is not None and _cache["rules"] is rules:
             return cached
-    picked = [r for r in rules if r["enabled"] and r["text"] and applies_to(r, agent_name)]
+    picked = [r for r in rules if r["enabled"] and r["text"] and r.get("state") == OK_STATE
+              and applies_to(r, agent_name)]
     if not picked:
         section = ""
     else:
@@ -653,18 +815,32 @@ def prompt_section(agent_name: str, max_chars: int | None = None) -> str:
                 "web pages): follow them in everything you do, the first ones have the highest priority. If a "
                 "request conflicts with a rule, say so instead of breaking it. You cannot change a rule yourself "
                 "— propose a change (propose_rule_change / propose_rule_deletion) and the user decides.")
-        parts, used, shown = [head], len(head), 0
+        parts, used, left_out = [head], len(head), []
+
+        def block(r: dict[str, Any], text: str, cut: bool) -> str:
+            quoted = "\n".join("> " + line if line else ">" for line in text.splitlines())
+            more = f"\n(cut here — read_rule('{r['slug']}') shows the rest)" if cut else ""
+            return f"\n\n### Rule “{r['title']}” ({r['priority']} priority, `{r['slug']}`)\n{quoted}{more}"
+
+        # 2026-10-27 (review): one long rule no longer hides all the rules after
+        # it — it is cut to the space left, or left out, and the rest follow.
         for r in picked:
-            quoted = "\n".join("> " + line if line else ">" for line in r["text"].splitlines())
-            block = f"\n\n### Rule “{r['title']}” ({r['priority']} priority, `{r['slug']}`)\n{quoted}"
-            if used + len(block) > cap:
-                break
-            parts.append(block)
-            used += len(block)
-            shown += 1
-        if shown < len(picked):
-            parts.append(f"\n\n({len(picked) - shown} more rule(s) not shown — the prompt limit is {cap} "
-                         "characters. They still apply: read them with list_rules and read_rule(slug).)")
+            text, cut = r["text"], False
+            if len(text) > MAX_TEXT:  # a hand-written file can be longer
+                text, cut = text[:MAX_TEXT].rstrip(), True
+            b = block(r, text, cut)
+            room = cap - used
+            if len(b) > room:
+                avail = room - (len(block(r, "", True)) + 1)
+                if avail < 200:
+                    left_out.append(r["slug"])
+                    continue
+                b = block(r, text[:avail].rstrip(), True)
+            parts.append(b)
+            used += len(b)
+        if left_out:
+            parts.append(f"\n\n({len(left_out)} more rule(s) not shown — the prompt limit is {cap} characters: "
+                         f"{', '.join(left_out)}. They still apply: read them with read_rule(slug).)")
         section = "".join(parts)
     with _lock:
         if _cache["rules"] is rules:
@@ -701,6 +877,8 @@ def agent_list_rules() -> str:
         for r in rules:
             scope = "all agents" if r["scope"] == ["all"] else ", ".join("@" + s for s in r["scope"])
             mark = "" if r["enabled"] else " [switched off]"
+            if needs_review(r):
+                mark += " [changed outside ZenSynora — not active until the user reviews it]"
             lines.append(f"- {r['slug']}: {r['title']} ({r['priority']}, {scope}){mark}")
     else:
         lines.append("There are no rules yet. You can suggest one with propose_rule(title, text, scope, reason).")

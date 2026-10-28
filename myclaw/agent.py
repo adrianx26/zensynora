@@ -414,6 +414,7 @@ class Agent:
         self.last_model_used: Optional[tuple] = None
         self._system_prompt_loaded = False
         self._system_prompt = ""
+        self.rules_name: Optional[str] = None  # whose rules apply (benchmark copies: the real agent)
 
         # Initialize skill preloader for this agent
         self._skill_preloader = get_skill_preloader()
@@ -810,7 +811,8 @@ class Agent:
         try:
             from .rules import prompt_section
 
-            section = prompt_section(self.name)
+            # A benchmark copy ("bench-<agent>") follows the rules of the agent it copies.
+            section = prompt_section(getattr(self, "rules_name", None) or self.name)
         except Exception as exc:  # a broken rule file must not stop the agent
             logger.warning("Could not load rules for agent %s: %s", self.name, exc)
             return prompt

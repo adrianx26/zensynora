@@ -34,6 +34,9 @@ def _build_registry(config) -> dict:
         )
     tool_module.load_custom_tools()
     tool_module.set_registry(registry)
+    from .tools.core import apply_security_config
+
+    apply_security_config(config)  # 2026-10-27: Settings → Security's shell command lists
     return registry
 
 
@@ -796,6 +799,8 @@ def rules():
     zensynora rules proposals            proposals waiting for you (--status all|approved|rejected)
     zensynora rules approve ID           apply a proposal
     zensynora rules reject ID --note …   reject it (kept as history)
+    zensynora rules accept SLUG          use a rule file changed outside ZenSynora
+    zensynora rules restore SLUG         put back the version you last approved
 
     Write and edit rules in the Web UI → Rules, or as files in ~/.myclaw/rules.
     """
@@ -816,6 +821,9 @@ def rules_list():
         state = "on " if r["enabled"] else "off"
         click.echo(f"[{state}] {r['priority']:<6} {r['slug']}: {r['title']}  ({_scope_text(r['scope'])}, "
                    f"by {r['author']})")
+        if store.needs_review(r):
+            click.echo(f"      ! changed outside ZenSynora — not used until you run: zensynora rules accept "
+                       f"{r['slug']}  (or: zensynora rules restore {r['slug']})")
     waiting = len(store.list_proposals("pending"))
     if waiting:
         click.echo(f"\n{waiting} proposal(s) waiting — zensynora rules proposals")
@@ -888,6 +896,34 @@ def rules_reject(pid, note):
 
     p = _rules_decide(store.reject, pid, note)
     click.echo(f"Rejected #{p['id']}.")
+
+
+@rules.command("accept")
+@click.argument("slug")
+def rules_accept(slug):
+    """Keep a rule file changed outside ZenSynora (agents use it again)."""
+    from . import rules as store
+
+    try:
+        r = store.accept_rule(slug, by="user (cli)")
+    except KeyError:
+        raise click.ClickException(f"No rule '{slug}'. See: zensynora rules list")
+    except ValueError as e:
+        raise click.ClickException(f"{e} Edit the file first.")
+    click.echo(f"Accepted {r['slug']} — agents follow this version from their next message.")
+
+
+@rules.command("restore")
+@click.argument("slug")
+def rules_restore(slug):
+    """Put back the version of a rule you last approved (the changed file goes to .trash)."""
+    from . import rules as store
+
+    try:
+        r = store.restore_rule(slug, by="user (cli)")
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    click.echo(f"Restored {r['slug']} to the approved version.")
 
 
 @cli.command()
