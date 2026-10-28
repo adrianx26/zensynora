@@ -499,7 +499,7 @@ class KnowledgeConfig(BaseModel):
     # (editor, Obsidian, git pull) within about a second. Off by default.
     watch_files: bool = False
     # 2026-10-27: usage log — which agent used which notes, and why
-    # (~/.myclaw/knowledge_usage.db). Local, cheap, no model calls: on by default.
+    # (~/.myclaw/knowledge-usage.db). Local, cheap, no model calls: on by default.
     usage_log: bool = True
     usage_retention_days: int = Field(90, ge=1, le=3650)
     usage_max_rows: int = Field(200_000, ge=1000, le=10_000_000)

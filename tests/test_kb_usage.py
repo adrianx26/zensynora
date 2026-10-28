@@ -123,7 +123,7 @@ def test_tool_calls_hits_misses_reads_and_writes(home):
     assert rows[("read_knowledge", "home-server")]["notes"] == ["home-server"]
     bad = rows[("read_knowledge", "does-not-exist")]
     assert bad["ok"] is False and bad["results"] == 0 and bad["notes"] == []
-    w = rows[("write_to_knowledge", None)]
+    w = rows[("write_to_knowledge", "New note")]
     assert w["kind"] == "write" and w["notes"] == ["new-note"]
     assert rows[("list_knowledge", None)]["results"] == 4
     assert all(r["agent"] == "ops" and r["reason"] == "check the server" for r in rows.values())
@@ -369,6 +369,7 @@ def test_api_without_any_log_yet(home):
     assert c.get("/api/knowledge/benchmarks").json()["notes"] == 0
     assert c.get("/api/knowledge/usage/note/x").json()["count"] == 0
 
+
 # ── review fixes (2026-10-27) ───────────────────────────────────────────────
 
 def test_worker_pool_runs_each_call_in_the_callers_context():
@@ -444,3 +445,227 @@ def test_parallel_tool_calls_use_their_own_turn_and_base(home, monkeypatch):
     assert {(r["agent"], r["reason"]) for r in usage.query_log("tg-555")["rows"]} == {("beta", "beta question")}
     assert {(r["agent"], r["reason"]) for r in usage.query_log("default")["rows"]} == {("alpha", "alpha question")}
 
+
+def test_group_chat_reason_is_the_users_text(home, agent):
+    from myclaw.knowledge import usage
+
+    _kb(home)
+    prompt = ("[Group chat #general. You are @researcher. Other agents here: @coder.]\n\n"
+              "User: what runs on the home server")
+    rtok = usage.REASON.set("what runs on the home server")
+    tok = usage.begin_turn("researcher", prompt)
+    try:
+        inner = usage.begin_turn("coder", "check docker for @researcher")   # a delegation keeps its task
+        usage.record("tool", "search_knowledge", base="default", query="docker")
+        usage.end_turn(inner)
+        asyncio.run(agent._search_knowledge_context(prompt, "webui"))
+    finally:
+        usage.end_turn(tok)
+        usage.REASON.reset(rtok)
+    rows = {r["action"]: r for r in _rows()}
+    assert rows["search_knowledge"]["reason"] == "check docker for @researcher"
+    assert rows["search_knowledge"]["via"] == "researcher"
+    assert rows["auto-context"]["reason"] == "what runs on the home server"
+
+
+def test_auto_context_query_is_what_was_searched(home, agent, monkeypatch):
+    import myclaw.agent as agent_mod
+
+    calls = []
+
+    def fake(query, user_id, limit=10, boolean=False, **kw):
+        calls.append(query)
+        return []
+
+    monkeypatch.setattr(agent_mod, "search_notes", fake)
+    agent._search_knowledge_context_sync("tell me about zebrafish embryos", "default")
+    (r,) = _rows()
+    assert len(calls) == 2 and r["query"] == calls[-1] and " OR " in r["query"]   # strategy 2's query
+
+
+def test_switched_off_no_thread_and_no_file(tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+
+    (tmp_path / ".myclaw" / "knowledge" / "default").mkdir(parents=True)
+    (tmp_path / ".myclaw" / "config.json").write_text(json.dumps({"knowledge": {"usage_log": False}}))
+    code = (
+        "import threading\n"
+        "from myclaw.config import load_config; load_config()\n"
+        "from myclaw.knowledge import usage, write_note\n"
+        "write_note('Docker', content='runtime')\n"
+        "from myclaw.tools.kb import search_knowledge, read_knowledge\n"
+        "search_knowledge('docker'); read_knowledge('docker')\n"
+        "t = usage.begin_turn('r', 'q'); usage.record('tool', 'x'); usage.end_turn(t)\n"
+        "print(usage.enabled(), [x.name for x in threading.enumerate() if 'usage' in x.name], "
+        "usage.db_path().exists())\n")
+    env = {**os.environ, "HOME": str(tmp_path), "PYTHONPATH": os.getcwd()}
+    out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=120)
+    assert out.stdout.strip().splitlines()[-1] == "False [] False", out.stderr[-2000:]
+
+
+def test_write_to_knowledge_query_is_the_title(home):
+    from myclaw.tools.kb import write_to_knowledge
+
+    write_to_knowledge("Garage door", "opens with the remote", tags="home")
+    (r,) = _rows()
+    assert (r["query"], r["notes"]) == ("Garage door", ["garage-door"])
+
+
+def test_snapshot_keeps_the_latest_count_of_the_day(home):
+    from myclaw.knowledge import usage
+    from myclaw.web import knowledge_usage_api
+
+    assert usage.snapshot("default", {"notes": 1, "facts": 0, "links": 0, "tags": 0}, force=True)
+    assert not usage.snapshot("default", {"notes": 2})               # at most hourly
+    assert usage.snapshot("default", {"notes": 3, "facts": 4}, force=True)
+    (s,) = usage.snapshots("default")
+    assert (s["notes"], s["facts"]) == (3, 4)
+    _kb(home)
+    usage._snapshot_done.clear()
+    assert knowledge_usage_api.snapshot_all() == 1                  # the Web UI's hourly task
+    assert usage.snapshots("default")[-1]["notes"] == 3
+
+
+def test_usage_db_is_not_mistaken_for_a_knowledge_base(home):
+    from myclaw.knowledge import health, usage
+
+    _kb(home)
+    usage.connect().close()
+    assert "usage" not in health.bases() and usage.db_path().name == "knowledge-usage.db"
+
+
+@pytest.mark.parametrize("text, secret", [
+    ("the password is hunter2", "hunter2"),
+    ("pass hunter2 please", "hunter2"),
+    ("my api key: 7d9f3a1b2c", "7d9f3a1b2c"),
+    ("aws wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY ok", "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"),
+    ("secret " + "a1" * 32, "a1" * 32),
+    ("token=abcd1234efgh", "abcd1234efgh"),
+])
+def test_plain_word_secrets_are_redacted(text, secret):
+    from myclaw.knowledge import usage
+
+    out = usage.redact(text)
+    assert secret not in out and "[redacted]" in out
+
+
+def test_ordinary_words_are_not_redacted():
+    from myclaw.knowledge import usage
+
+    for text in ("pass the salt", "the token is valid", "what is my password policy"):
+        assert usage.redact(text) == text
+
+
+def test_ingest_redaction_is_unchanged():
+    from myclaw.knowledge.ingest.safety import redact
+
+    assert redact("the password is hunter2") == "the password is hunter2"   # note text is not changed
+    assert "[redacted]" in redact("password = hunter2pass")
+
+
+def test_ended_turn_is_never_reused(home):
+    from myclaw.knowledge import usage
+
+    handle = usage.begin_turn("researcher", "old question")
+    handle[1]["active"] = False                       # ended from another context (generator closed)
+    assert usage.current_turn() is None
+    t2 = usage.begin_turn("coder", "new question")
+    assert usage.current_turn()["source"] == "chat" and usage.current_turn()["via"] is None
+    usage.end_turn(t2)
+    usage.end_turn(handle)
+    usage.record("tool", "search_knowledge", base="default", query="x")
+    (r,) = _rows()
+    assert r["agent"] == "" and r["reason"] == ""
+
+
+def test_job_started_inside_a_turn_is_recorded_as_job(home):
+    from myclaw.jobs import store
+    from myclaw.jobs.runner import JobRunner
+    from myclaw.knowledge import usage
+
+    class FakeAgent:
+        name, model, _provider_name = "worker", "m", "p"
+
+        async def think(self, prompt, user_id="default"):
+            t = usage.begin_turn(self.name, prompt)
+            usage.record("tool", "search_knowledge", base="default", query="q")
+            usage.end_turn(t)
+            return "done"
+
+        async def _get_memory(self, uid):
+            class M:
+                async def clear(self):
+                    pass
+            return M()
+
+    job = store.create_job({"name": "nightly", "agent": "worker", "prompt": "summarise the NAS logs"})
+    run_id = store.start_run(job["id"])
+    runner = JobRunner(lambda: {})
+
+    async def main():
+        t = usage.begin_turn("default", "please start the nightly job")   # a turn starts it
+        try:
+            return await runner._execute(job, run_id, FakeAgent())
+        finally:
+            usage.end_turn(t)
+
+    assert asyncio.run(main()) == "ok"
+    (r,) = _rows()
+    assert (r["agent"], r["source"], r["via"], r["reason"]) == ("worker", "job", None, "summarise the NAS logs")
+    assert r["job"] == job["id"]
+
+
+def test_row_cap_is_enforced_without_waiting_a_day(home, monkeypatch):
+    from myclaw.knowledge import usage
+
+    monkeypatch.setattr(usage, "ROWS_CHECK_EVERY", 100)
+    usage.set_options(max_rows=1000)
+    con = usage.connect()
+    with con:
+        con.execute("INSERT OR REPLACE INTO kb_usage_meta (key, value) VALUES ('last_prune', ?)",
+                    (str(time.time()),))
+    con.close()
+    for i in range(1300):
+        usage.record("tool", "search_knowledge", base="default", query=f"q{i}")
+    usage.flush(20)
+    con = usage.connect()
+    assert con.execute("SELECT COUNT(*) FROM kb_usage").fetchone()[0] <= 1100
+    monkeypatch.setattr(usage, "VACUUM_BYTES", 0)
+    usage.prune(con)
+    assert con.execute("SELECT value FROM kb_usage_meta WHERE key = 'last_vacuum'").fetchone() is not None
+    con.close()
+
+
+def test_log_filters_escape_like_match_note_and_no_agent(home):
+    from myclaw.knowledge import usage
+
+    usage.record("tool", "search_knowledge", base="default", query="100% sure", agent="a", notes=["docker"])
+    usage.record("tool", "search_knowledge", base="default", query="100 sure", agent="a",
+                 notes=["docker-compose"])
+    usage.record("tool", "search_knowledge", base="default", query="a_b", agent="", notes=[])
+    usage.record("tool", "search_knowledge", base="default", query="axb", agent="b", notes=[])
+    usage.flush(5)
+    assert [r["query"] for r in usage.query_log("default", q="100%")["rows"]] == ["100% sure"]
+    assert [r["query"] for r in usage.query_log("default", q="a_b")["rows"]] == ["a_b"]
+    assert [r["query"] for r in usage.query_log("default", note="docker")["rows"]] == ["100% sure"]
+    assert [r["query"] for r in usage.query_log("default", agent=usage.NO_AGENT)["rows"]] == ["a_b"]
+
+
+def test_notes_used_counts_existing_notes_in_the_window(home):
+    from myclaw.knowledge import usage
+    from myclaw.knowledge.benchmarks import titles
+
+    _kb(home)
+    usage.record("tool", "read_knowledge", base="default", notes=["docker", "deleted-note"])
+    usage.flush(5)
+    con = usage.connect()
+    with con:  # used long ago, outside a 7-day window
+        usage._insert(con, {"ts": time.time() - 20 * 86_400, "base": "default", "agent": "a", "kind": "tool",
+                            "action": "read_knowledge", "query": "x", "notes": ["lonely"], "results": 1})
+    con.close()
+    s = usage.stats("default", 7, titles=titles("default"))
+    assert s["notes_used"] == 1 and s["notes_total"] == 3 and s["never_used"] == 2
+    assert {n["permalink"] for n in s["never_used_sample"]} == {"home-server", "lonely"}

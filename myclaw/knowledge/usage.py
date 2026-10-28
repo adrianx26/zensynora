@@ -14,7 +14,7 @@ results, the latency, the search mode, and **what it was for**: the user
 message, job task or delegated task of the turn (first :data:`REASON_CHARS`
 characters, secrets redacted with the ingestion redaction helpers).
 
-Storage: a small separate SQLite database ``~/.myclaw/knowledge_usage.db``
+Storage: a small separate SQLite database ``~/.myclaw/knowledge-usage.db``
 (WAL, ``busy_timeout``), pruned at most once a day (``knowledge.usage_retention_days``,
 default 90, and ``knowledge.usage_max_rows``, default 200 000). It also keeps
 one snapshot of the main counts per base and day (growth chart).
@@ -56,8 +56,11 @@ PRUNE_EVERY = 86_400.0    # seconds between prunes
 _OPTIONS: Dict[str, Any] = {"usage_log": True, "kb_enabled": True,
                             "retention_days": 90, "max_rows": 200_000}
 
-# The turn an access belongs to: {"agent", "reason", "source", "via"} (set by Agent.think).
+# The turn an access belongs to: {"agent", "reason", "source", "via", "active"} (set by Agent.think).
 TURN: ContextVar[Optional[Dict[str, Any]]] = ContextVar("kb_usage_turn", default=None)
+# What the person really wrote, when the agent receives it wrapped (a group-chat
+# preamble): set by the chat engine, used as the reason of the outermost turn.
+REASON: ContextVar[Optional[str]] = ContextVar("kb_usage_reason", default=None)
 
 KINDS = ("context", "tool", "write")
 WRITE_ACTIONS = {"write_to_knowledge", "extraction", "session_summary", "assimilate",
@@ -88,19 +91,27 @@ def options() -> Dict[str, Any]:
 
 
 def db_path() -> Path:
-    """``~/.myclaw/knowledge_usage.db`` of the current HOME (tests change HOME)."""
-    return Path.home() / ".myclaw" / "knowledge_usage.db"
+    """``~/.myclaw/knowledge-usage.db`` of the current HOME (tests change HOME)."""
+    return Path.home() / ".myclaw" / "knowledge-usage.db"
 
 
 # ── turn context ────────────────────────────────────────────────────────────
 
-def begin_turn(agent: str, message: str, depth: int = 0) -> Any:
+def current_turn() -> Optional[Dict[str, Any]]:
+    """The turn of this context, or None (a turn that has ended is never used again)."""
+    turn = TURN.get()
+    return turn if turn is not None and turn.get("active", True) else None
+
+
+def begin_turn(agent: str, message: str, depth: int = 0, reason: Optional[str] = None) -> Any:
     """Remember the agent and its message for the accesses of this turn.
 
-    Returns a token for :func:`end_turn`. Never raises (returns None then).
+    ``reason`` (or :data:`REASON`, for the outermost turn) replaces the message as
+    "for what" — the user's own text instead of the prompt built around it.
+    Returns a handle for :func:`end_turn`. Never raises (returns None then).
     """
     try:
-        parent = TURN.get()
+        parent = current_turn()
         job = _job_id()
         if parent is not None:
             source = "delegation"
@@ -110,18 +121,25 @@ def begin_turn(agent: str, message: str, depth: int = 0) -> Any:
             source = "delegation"
         else:
             source = "chat"
-        return TURN.set({"agent": str(agent or ""), "reason": str(message or "")[:4000],
-                         "source": source, "via": parent.get("agent") if parent else None})
+        if reason is None and parent is None:
+            reason = REASON.get()
+        turn = {"agent": str(agent or ""), "reason": str(reason if reason is not None else message or "")[:4000],
+                "source": source, "via": parent.get("agent") if parent else None, "active": True}
+        return TURN.set(turn), turn
     except Exception:
         return None
 
 
-def end_turn(token: Any) -> None:
-    if token is None:
+def end_turn(handle: Any) -> None:
+    """End a turn. The turn is marked ended first, so even when the reset fails
+    (an async generator closed from another context) it is never reused."""
+    if not handle:
         return
+    token, turn = handle
+    turn["active"] = False
     try:
         TURN.reset(token)
-    except (ValueError, RuntimeError):  # a generator closed from another context
+    except (ValueError, RuntimeError):
         pass
 
 
@@ -177,7 +195,7 @@ def record(kind: str, action: str, *, base: str = "default", query: Optional[str
     if not enabled():
         return False
     try:
-        turn = TURN.get() or {}
+        turn = current_turn() or {}
         channel, current_agent = _channel_agent()
         uniq: List[str] = []
         for p in notes or ():
@@ -343,7 +361,7 @@ def _write_batch(batch: Sequence[Dict[str, Any]]) -> None:
             with con:
                 for r in rows:
                     _insert(con, r)
-            _maybe_prune(con)
+            _maybe_prune(con, inserted=len(rows))
         except sqlite3.Error as e:
             _warn_once(f"write:{path}", "Knowledge usage log: cannot write %s (%s); records dropped", path, e)
         except Exception as e:  # never let the thread die
@@ -374,19 +392,49 @@ def _insert(con: sqlite3.Connection, r: Dict[str, Any]) -> None:
 _FALLBACK_SECRET = re.compile(
     r"(?i)(?:sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|xox[abpr]-[A-Za-z0-9-]{10,}|"
     r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)")
+# 2026-10-27 (review): secrets written in plain words ("the password is hunter2",
+# "pass hunter2", "my api key: 7d9f…"), AWS secret access keys (40 characters) and
+# 64-hex secrets. Only for the usage log: a false positive here hides a word in
+# a log line, while in ingest/safety.py it would change the text of imported notes.
+_NL_SECRET = re.compile(
+    r"(?i)\b(pass(?:word|wd|phrase|code)?|pwd|pin|api[ _-]?key|secret(?:[ _-]?key)?|"
+    r"(?:access|auth|bearer|bot|api)?[ _-]?token|private[ _-]?key|credentials?)"
+    r"(\s*[:=]>?\s*|\s*->\s*|\s+(?:is|was|=)\s+|\s+)([\"'`]?)([^\s\"'`]{3,})")
+_AWS_SECRET = re.compile(r"(?<![A-Za-z0-9/+=])[A-Za-z0-9/+]{40}(?![A-Za-z0-9/+=])")
+_HEX64 = re.compile(r"\b[0-9a-fA-F]{64,}\b")
+
+
+def _nl(m: "re.Match[str]") -> str:
+    value = m.group(4)
+    if value.lower().startswith(("[redacted", "redacted")):
+        return m.group(0)
+    if not any(c in m.group(2) for c in ":=-") and not (
+            any(c.isdigit() for c in value) or not value.isalnum() or len(value) >= 8):
+        return m.group(0)  # "pass the salt", "the token is valid"
+    return f"{m.group(1)}{m.group(2)}{m.group(3)}[redacted]"
+
+
+def _aws(m: "re.Match[str]") -> str:
+    v = m.group(0)
+    mixed = any(c.isupper() for c in v) and any(c.islower() for c in v) and any(c.isdigit() for c in v)
+    return "[redacted]" if mixed else v
 
 
 def redact(text: str) -> str:
-    """Secrets hidden with the ingestion / doctor patterns ([redacted])."""
+    """Secrets hidden ([redacted]): the ingestion / doctor patterns plus plain-word
+    secrets, AWS secret keys and 64-hex secrets."""
     if not text:
         return text
     try:
         from .ingest.safety import redact as _redact
 
-        return _redact(text)
+        text = _redact(text)
     except Exception as e:  # the module is part of ZenSynora; fall back to a few patterns
         logger.debug("usage log redaction fallback: %s", e)
-        return _FALLBACK_SECRET.sub("[redacted]", text)
+        text = _FALLBACK_SECRET.sub("[redacted]", text)
+    text = _HEX64.sub("[redacted]", text)
+    text = _AWS_SECRET.sub(_aws, text)
+    return _NL_SECRET.sub(_nl, text)
 
 
 def _clean(text: str, limit: int, url: bool = False) -> str:
@@ -402,8 +450,21 @@ def _clean(text: str, limit: int, url: bool = False) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def _maybe_prune(con: sqlite3.Connection, force: bool = False) -> int:
+ROWS_CHECK_EVERY = 1000          # inserted records between row-count checks
+VACUUM_BYTES = 50 * 1024 * 1024  # VACUUM (at most weekly) above this size
+VACUUM_EVERY = 7 * 86_400
+_inserted = 0
+
+
+def _maybe_prune(con: sqlite3.Connection, force: bool = False, inserted: int = 0) -> int:
+    """Prune once a day — or at once when the log grew past ``max_rows`` * 1.1."""
+    global _inserted
     now = time.time()
+    _inserted += inserted
+    if not force and _inserted >= ROWS_CHECK_EVERY:
+        _inserted = 0
+        count = con.execute("SELECT COUNT(*) FROM kb_usage").fetchone()[0]
+        force = count > int(_OPTIONS["max_rows"]) * 1.1
     row = con.execute("SELECT value FROM kb_usage_meta WHERE key = 'last_prune'").fetchone()
     if not force and row is not None:
         try:
@@ -415,7 +476,8 @@ def _maybe_prune(con: sqlite3.Connection, force: bool = False) -> int:
 
 
 def prune(con: sqlite3.Connection, now: Optional[float] = None) -> int:
-    """Delete records older than the retention or beyond the row limit. Returns rows deleted."""
+    """Delete records older than the retention or beyond the row limit (and VACUUM a
+    large file at most weekly). Returns rows deleted."""
     now = now or time.time()
     cutoff = now - float(_OPTIONS["retention_days"]) * 86_400
     deleted = 0
@@ -431,7 +493,33 @@ def prune(con: sqlite3.Connection, now: Optional[float] = None) -> int:
                     (time.strftime("%Y-%m-%d", time.localtime(now - 3 * 365 * 86_400)),))
         con.execute("INSERT OR REPLACE INTO kb_usage_meta (key, value) VALUES ('last_prune', ?)",
                     (str(now),))
+    _maybe_vacuum(con, now)
     return deleted
+
+
+def _maybe_vacuum(con: sqlite3.Connection, now: float) -> bool:
+    try:
+        path = con.execute("PRAGMA database_list").fetchone()[2]
+        size = Path(path).stat().st_size if path else 0
+    except (sqlite3.Error, OSError, IndexError, TypeError):
+        return False
+    if size < VACUUM_BYTES:
+        return False
+    row = con.execute("SELECT value FROM kb_usage_meta WHERE key = 'last_vacuum'").fetchone()
+    try:
+        if row is not None and now - float(row[0]) < VACUUM_EVERY:
+            return False
+    except ValueError:
+        pass
+    try:
+        con.execute("VACUUM")
+        with con:
+            con.execute("INSERT OR REPLACE INTO kb_usage_meta (key, value) VALUES ('last_vacuum', ?)",
+                        (str(now),))
+        return True
+    except sqlite3.Error as e:
+        logger.debug("usage log VACUUM skipped: %s", e)
+        return False
 
 
 # ── helpers for the hooks ───────────────────────────────────────────────────
@@ -439,7 +527,7 @@ def prune(con: sqlite3.Connection, now: Optional[float] = None) -> int:
 _MEMORY_LINK = re.compile(r"memory://([\w./-]+?)(?=[)\s'\"`,]|$)", re.MULTILINE)
 _ERROR_STARTS = ("Error ", "Error:", "Could not", "Note not found", "Not started", "Distillation failed",
                  "limit must", "Unknown", "Invalid")
-_QUERY_ARGS = ("query", "permalink", "id", "source", "path", "conflict_id")
+_QUERY_ARGS = ("query", "permalink", "title", "id", "source", "path", "conflict_id")
 
 
 def _out_permalinks(out: str) -> List[str]:
@@ -520,9 +608,19 @@ def _row(r: sqlite3.Row) -> Dict[str, Any]:
     return d
 
 
+NO_AGENT = "-"  # agent filter for records without an agent
+
+
+def _like(text: str) -> str:
+    """``%text%`` for LIKE … ESCAPE '\\' (``%`` and ``_`` in the text match themselves)."""
+    return "%" + text.lower().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
 def query_log(base: Optional[str] = None, agent: str = "", kind: str = "", q: str = "",
-              since: Optional[float] = None, limit: int = 50, offset: int = 0) -> Dict[str, Any]:
-    """Log rows, newest first. ``kind`` matches the kind (context/tool/write) or the action."""
+              since: Optional[float] = None, limit: int = 50, offset: int = 0,
+              note: str = "") -> Dict[str, Any]:
+    """Log rows, newest first. ``kind`` matches the kind (context/tool/write) or the action;
+    ``agent`` :data:`NO_AGENT` = records without an agent; ``note`` = exactly this permalink."""
     con = _open_ro()
     if con is None:
         return {"rows": [], "total": 0}
@@ -533,15 +631,19 @@ def query_log(base: Optional[str] = None, agent: str = "", kind: str = "", q: st
         args.append(base)
     if agent:
         where.append("agent = ?")
-        args.append(agent)
+        args.append("" if agent == NO_AGENT else agent)
     if kind:
         where.append("(kind = ? OR action = ?)")
         args += [kind, kind]
     if q:
-        like = f"%{q.lower()}%"
-        where.append("(lower(coalesce(query,'')) LIKE ? OR lower(coalesce(reason,'')) LIKE ? "
-                     "OR lower(notes) LIKE ?)")
+        like = _like(q)
+        where.append("(lower(coalesce(query,'')) LIKE ? ESCAPE '\\' OR lower(coalesce(reason,'')) "
+                     "LIKE ? ESCAPE '\\' OR lower(notes) LIKE ? ESCAPE '\\')")
         args += [like, like, like]
+    if note:
+        where.append("id IN (SELECT usage_id FROM kb_usage_notes WHERE permalink = ?"
+                     + (" AND base = ?" if base else "") + ")")
+        args += [note, base] if base else [note]
     if since:
         where.append("ts >= ?")
         args.append(float(since))
@@ -660,7 +762,8 @@ def _aggregate(con: sqlite3.Connection, out: Dict[str, Any], base: str, now: flo
 
     notes = con.execute("SELECT permalink, SUM(ts >= ?), MAX(ts) FROM kb_usage_notes "
                         "WHERE base = ? AND kind != 'write' GROUP BY permalink", (since, base)).fetchall()
-    used = [n for n in notes if n[1]]
+    # 2026-10-27 (review): used / never used over the same window, existing notes only
+    used = [n for n in notes if n[1] and (titles is None or n[0] in titles)]
     out["notes_used"] = len(used)
     top = []
     for permalink, count, last in sorted(used, key=lambda n: (-n[1], -n[2]))[:15]:
@@ -671,9 +774,9 @@ def _aggregate(con: sqlite3.Connection, out: Dict[str, Any], base: str, now: flo
                     "exists": True if titles is None else permalink in titles})
     out["top_notes"] = top
     if titles is not None:
-        ever = {n[0] for n in notes}
-        out["never_used"] = sum(1 for p in titles if p not in ever)
-        out["never_used_sample"] = _sample(titles, ever)
+        in_window = {n[0] for n in used}
+        out["never_used"] = sum(1 for p in titles if p not in in_window)
+        out["never_used_sample"] = _sample(titles, in_window)
 
 
 def _sample(titles: Dict[str, str], used: set, n: int = 20) -> List[Dict[str, str]]:
@@ -717,27 +820,29 @@ def agents(base: Optional[str] = None) -> List[str]:
 
 # ── daily snapshots of the main counts (growth chart) ──────────────────────
 
-_snapshot_done: set = set()
+SNAPSHOT_EVERY = 3600.0
+_snapshot_done: Dict[tuple, float] = {}
 
 
-def snapshot(base: str, counts: Dict[str, Any]) -> bool:
-    """Store today's notes/facts/links/tags of ``base`` (at most once a day). True when stored."""
+def snapshot(base: str, counts: Dict[str, Any], force: bool = False) -> bool:
+    """Store today's notes/facts/links/tags of ``base``: one row per day, updated at
+    most hourly (2026-10-27, review: the latest count of the day, not the first)."""
     if not enabled():
         return False
     day = time.strftime("%Y-%m-%d")
     key = (str(db_path()), base, day)
-    if key in _snapshot_done:
+    if not force and time.monotonic() - _snapshot_done.get(key, -1e18) < SNAPSHOT_EVERY:
         return False
     try:
         con = connect(timeout=1.0)
         try:
             with con:
                 cur = con.execute(
-                    "INSERT OR IGNORE INTO kb_snapshots (base, day, notes, facts, links, tags) "
+                    "INSERT OR REPLACE INTO kb_snapshots (base, day, notes, facts, links, tags) "
                     "VALUES (?,?,?,?,?,?)",
                     (base, day, int(counts.get("notes") or 0), int(counts.get("facts") or 0),
                      int(counts.get("links") or 0), int(counts.get("tags") or 0)))
-            _snapshot_done.add(key)
+            _snapshot_done[key] = time.monotonic()
             return bool(cur.rowcount)
         finally:
             con.close()

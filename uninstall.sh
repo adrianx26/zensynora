@@ -420,6 +420,7 @@ if [[ "$DOCKER_ONLY" == "false" ]]; then
             # v0.7.1: chat channels, jobs, per-user knowledge indexes, usage meter
             run rm -f  "$MYCLAW_DIR/chat.db" "$MYCLAW_DIR/jobs.db" "$MYCLAW_DIR/metering.db"
             run rm -f  "$MYCLAW_DIR/"knowledge_*.db
+            run rm -f  "$MYCLAW_DIR/"knowledge-usage.db*      # 2026-10-27: knowledge usage log
             success "Data cleared, config preserved."
         else
             if confirm_data_removal "  Remove all MyClaw data in $MYCLAW_DIR?"; then

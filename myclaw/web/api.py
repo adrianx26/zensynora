@@ -161,6 +161,8 @@ from myclaw.web import knowledge_health_api as _knowledge_health_api  # noqa: E4
 app.include_router(_knowledge_health_api.router)  # 2026-10-25 (KB phase 6): index health, file watcher status
 from myclaw.web import knowledge_usage_api as _knowledge_usage_api  # noqa: E402
 app.include_router(_knowledge_usage_api.router)  # 2026-10-27: usage log (which agent used what, why), benchmarks
+app.router.add_event_handler("startup", _knowledge_usage_api.start_snapshots)  # growth snapshots, hourly
+app.router.add_event_handler("shutdown", _knowledge_usage_api.stop_snapshots)
 
 
 _mcp_manager = None

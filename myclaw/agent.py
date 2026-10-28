@@ -1244,14 +1244,14 @@ class Agent:
         return permalink
 
     @staticmethod
-    def _record_kb_usage(message: str, user_id: str, notes: list, metadata: dict,
+    def _record_kb_usage(query: str, user_id: str, notes: list, metadata: dict,
                          t0: float, distilled: bool) -> None:
         """The automatic context search in the knowledge usage log (2026-10-27; never raises)."""
         try:
             from .knowledge import usage as _kb_usage
 
             _kb_usage.record(
-                "context", "auto-context", base=user_id, query=message,
+                "context", "auto-context", base=user_id, query=query,
                 notes=[getattr(n, "permalink", "") for n in notes], results=len(notes),
                 latency_ms=(time.perf_counter() - t0) * 1000.0,
                 mode=str(metadata.get("search_mode") or "fts") + ("+distilled" if distilled else ""))
@@ -1308,6 +1308,7 @@ class Agent:
             words = [w for w in cleaned.split() if len(w) > 3]
 
             notes = []
+            searched = message
             # 2026-10-24 (KB phase 2): with the hub penalty a few more candidates
             # are fetched, so a very linked note can be ranked below a specific one.
             from .knowledge.quality import hub_threshold, rank_with_hub_penalty
@@ -1335,6 +1336,7 @@ class Agent:
                     # 2026-10-23 (KB phase 0): boolean=True so OR means OR
                     # (as free text every word had to match).
                     notes = search_notes(query, user_id, limit=fetch, boolean=True)
+                    searched = query  # 2026-10-27: the usage log shows what was really searched
             if fetch != max_results and notes:
                 notes = rank_with_hub_penalty(notes, user_id)[:max_results]
 
@@ -1370,7 +1372,7 @@ class Agent:
                         found.add(ref)
 
             if words or memory_refs:
-                self._record_kb_usage(message, user_id, notes, metadata, _t0, bool(distilled))
+                self._record_kb_usage(searched, user_id, notes, metadata, _t0, bool(distilled))
 
             if not notes and distilled:
                 context = "## Relevant Knowledge" + distilled + "\n\n---\n"
