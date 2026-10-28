@@ -81,7 +81,8 @@ class _ConfigFileWatcher(FileSystemEventHandler if WATCHDOG_AVAILABLE else objec
             current_time = time.time()
             if current_time - self._last_reload_time > 1:
                 global _cached_config
-                _cached_config = None  # Invalidate cache
+                with _config_lock:  # 2026-10-28: not while load_config builds a new one
+                    _cached_config = None  # Invalidate cache
                 logger.info(f"Config file changed, cache invalidated")
                 self._last_reload_time = current_time
 
@@ -392,6 +393,51 @@ class ProvidersConfig(BaseModel):
 # ── Agent Config ──────────────────────────────────────────────────────────────
 
 
+# 2026-10-28: a bad agent level in config.json (12, 0, null, "high") stopped the
+# app with SystemExit. Loading the file clamps it to 1-9 (or 1) with one warning;
+# the settings API validates without this context, so wrong input there is a 422.
+LEVEL_CONTEXT = {"lenient_levels": True}
+_warned_levels: set = set()
+
+
+def _lenient_level(value: Any, info: Any) -> Any:
+    ctx = getattr(info, "context", None) or {}
+    if not ctx.get("lenient_levels"):
+        return value
+    try:
+        n = int(value)
+        if isinstance(value, bool) or (isinstance(value, float) and value != n):
+            raise ValueError
+    except (TypeError, ValueError):
+        n = 1
+        fixed = 1
+    else:
+        fixed = min(9, max(1, n))
+    if str(fixed) != str(value):
+        key = repr(value)
+        if key not in _warned_levels:
+            _warned_levels.add(key)
+            logger.warning("Agent level %r in the settings is not 1-9; using %d. Fix it in Settings → Agents.",
+                           value, fixed)
+    return fixed
+
+
+def repair_levels(raw: Any) -> Any:
+    """Clamp the agent levels of a raw settings dict read from the file (in place).
+
+    Used before a save adds the user's or an agent's changes, so a bad level
+    already in the file does not block every later save; the new values are
+    still validated strictly."""
+    agents = (raw or {}).get("agents") if isinstance(raw, dict) else None
+    if not isinstance(agents, dict):
+        return raw
+    entries = [agents.get("defaults")] + list(agents.get("named") or [])
+    for e in entries:
+        if isinstance(e, dict) and "level" in e:
+            e["level"] = _lenient_level(e["level"], type("I", (), {"context": LEVEL_CONTEXT})())
+    return raw
+
+
 class AgentDefaults(BaseModel):
     model: str = "llama3.2"
     provider: str = "ollama"  # which provider to use by default
@@ -407,6 +453,11 @@ class AgentDefaults(BaseModel):
     # now: shown in the Web UI and the agent's prompt; it grants no
     # permissions. A fused agent gets the lower level of the two.
     level: int = Field(1, ge=1, le=9)
+
+    @field_validator("level", mode="before")
+    @classmethod
+    def _level_on_load(cls, v, info):
+        return _lenient_level(v, info)
 
 
 class NamedAgentConfig(BaseModel):
@@ -428,6 +479,11 @@ class NamedAgentConfig(BaseModel):
     context_length: int = Field(0, ge=0, le=10_000_000)
     # 2026-10-27: level 1-9, a label only (see AgentDefaults.level).
     level: int = Field(1, ge=1, le=9)
+
+    @field_validator("level", mode="before")
+    @classmethod
+    def _level_on_load(cls, v, info):
+        return _lenient_level(v, info)
 
 
 class ModelChoice(BaseModel):
@@ -1017,18 +1073,23 @@ def load_config(force_reload: bool = False) -> AppConfig:
             # Apply environment variable overrides
             raw = _apply_env_overrides(raw)
 
-            _cached_config = AppConfig(**raw)
-            _config_mtime = current_mtime
-            _apply_knowledge_dir(_cached_config)
-            _apply_knowledge_quality(_cached_config)
-            _apply_knowledge_semantic(_cached_config)
-            _apply_knowledge_distill(_cached_config)
-            _apply_knowledge_watch(_cached_config)
+            # 2026-10-28: a local variable — the file watcher may reset the global
+            # at any moment (load_config(force_reload=True) right after save_config
+            # failed with "'NoneType' object has no attribute …"). Loading is lenient
+            # for agent levels: a bad level is clamped with a warning (LEVEL_CONTEXT).
+            cfg = AppConfig.model_validate(raw, context=LEVEL_CONTEXT)
+            _apply_knowledge_dir(cfg)
+            _apply_knowledge_quality(cfg)
+            _apply_knowledge_semantic(cfg)
+            _apply_knowledge_distill(cfg)
+            _apply_knowledge_watch(cfg)
 
             # Validate critical configuration
-            _validate_config(_cached_config)
+            _validate_config(cfg)
 
-            return _cached_config
+            _cached_config = cfg
+            _config_mtime = current_mtime
+            return cfg
         except json.JSONDecodeError as e:
             raise SystemExit(f"❌ Config error: {CONFIG_FILE} is not valid JSON — {e}")
         except ValidationError as e:
@@ -1048,6 +1109,38 @@ def _reveal_secrets(raw: dict) -> dict:
         else:
             out[k] = v
     return out
+
+
+def plain_dump(config: "AppConfig") -> dict:
+    """AppConfig → plain dict with the real secret values (never "**********")."""
+    raw = config.model_dump()
+
+    def _inject_secrets(raw_dict, model_obj):
+        for field_name, field_val in raw_dict.items():
+            obj_val = getattr(model_obj, field_name, None)
+            if isinstance(field_val, dict) and obj_val is not None:
+                _inject_secrets(field_val, obj_val)
+            elif isinstance(field_val, list) and isinstance(obj_val, list):
+                for item_raw, item_obj in zip(field_val, obj_val):
+                    if isinstance(item_raw, dict) and isinstance(item_obj, BaseModel):
+                        _inject_secrets(item_raw, item_obj)
+            elif isinstance(obj_val, SecretStr):
+                raw_dict[field_name] = obj_val.get_secret_value()
+
+    _inject_secrets(raw, config)
+    return json.loads(json.dumps(raw, default=str))
+
+
+def raw_for_update(config: "AppConfig | None" = None) -> dict:
+    """The settings file as a dict to change and save (2026-10-28).
+
+    Without a file (fresh install) it starts from the loaded settings with
+    their real secrets — ``model_dump(mode="json")`` wrote "**********" in
+    place of every API key. Bad agent levels from the file are clamped."""
+    raw = (load_encrypted_or_plain(CONFIG_FILE) or {}) if CONFIG_FILE.exists() else {}
+    if not raw:
+        raw = plain_dump(config if config is not None else load_config())
+    return repair_levels(raw)
 
 
 def save_config(config):

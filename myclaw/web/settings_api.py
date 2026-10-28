@@ -336,7 +336,11 @@ async def get_settings():
 async def update_settings(update: SettingsUpdate):
     cfg = load_config()
     secret_paths = set(_secret_paths(cfg))
-    raw = copy.deepcopy(_read_raw_config())
+    # 2026-10-28: a bad agent level already in the file is repaired (clamped);
+    # the values in this request are validated strictly below (422).
+    from myclaw.config import repair_levels
+
+    raw = repair_levels(copy.deepcopy(_read_raw_config()))
     old_names = [(a or {}).get("name", "") for a in (_get_path(raw, "agents.named") or [])] if raw else []
 
     if not raw:
