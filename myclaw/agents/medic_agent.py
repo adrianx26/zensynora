@@ -469,8 +469,9 @@ def _reset_loop_counter() -> None:
 # ── Agent fusion (2026-10-27) ────────────────────────────────────────────────
 async def propose_agent_fusion(agent_a: str, agent_b: str, new_name: str = "", reason: str = "") -> str:
     """
-    Propose fusing two agents into one. Nothing changes until the user approves
-    it (Settings → Agents → Fusion proposals, or `zensynora agents approve ID`).
+    Propose fusing two agents into one (only the medic agent or the medic's own
+    jobs may). Nothing changes until the user approves it (Settings → Agents →
+    Fusion proposals, or `zensynora agents approve ID`).
     The fused agent gets both skills, a merged prompt and the LOWER level of the two.
 
     Args:

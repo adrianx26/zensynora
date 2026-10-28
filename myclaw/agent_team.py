@@ -108,6 +108,11 @@ def team_section(config: Any, agent_name: str) -> str:
         lines.append(
             "To message the user on Telegram call send_telegram_message(text). ZenSynora's bot already "
             "has the token and the user's id — never ask for them and never build your own Telegram tool.")
+    if agent_name.lower() == "medic":
+        # 2026-10-28: only the medic proposes fusions (other agents get an error from the tool).
+        lines.append(
+            "As the medic you may propose fusing two agents that do the same work with "
+            "propose_agent_fusion(agent_a, agent_b, new_name, reason); the user approves or rejects it.")
     if can_create:
         lines.append(
             "If a large or recurring kind of task needs a specialist nobody here is, you may call "
@@ -146,7 +151,7 @@ def create_agent(name: str, description: str, system_prompt: str = "", model: st
     skills: comma-separated skill names to give it (see list_skills)
     key: id of the provider's API key to use (empty = the default key)
     """
-    from .config import CONFIG_FILE, AppConfig, load_config, load_encrypted_or_plain, save_config
+    from .config import AppConfig, load_config, save_config
     from .events import CURRENT_AGENT, emit
 
     cfg = load_config()
@@ -192,9 +197,9 @@ def create_agent(name: str, description: str, system_prompt: str = "", model: st
              "model": (model or "").strip() or cfg.agents.defaults.model, "provider": (provider or "").strip(),
              "skills": wanted, "key": key_id}
 
-    raw = (load_encrypted_or_plain(CONFIG_FILE) or {}) if CONFIG_FILE.exists() else {}
-    if not raw:
-        raw = cfg.model_dump(mode="json")
+    from .config import raw_for_update
+
+    raw = raw_for_update(cfg)  # 2026-10-28: never masked secrets on a fresh install
     raw.setdefault("agents", {}).setdefault("named", []).append(entry)
     try:
         AppConfig(**raw)

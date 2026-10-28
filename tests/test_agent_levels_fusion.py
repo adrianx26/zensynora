@@ -11,6 +11,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
+from myclaw.web.agents_api import _ORIGIN as WEB  # the Web UI's origin (only it and the CLI may apply)
 from tests.test_v071_features import FakeAgent, _wait_turn, home  # noqa: F401  (fixture)
 
 
@@ -198,19 +199,19 @@ def test_request_information_validates_and_works_without_a_chat(gaps):
 
 
 def test_request_information_in_a_job_goes_into_the_run_result(gaps):
-    from myclaw.agent import MEMORY_SCOPE
-    from myclaw.agent_caps import request_information, take_job_questions
+    from myclaw.agent_caps import QUESTION_BUDGET, new_turn_budget, request_information
+
+    budget = new_turn_budget(job_run="abc-7")
 
     async def run():
-        t = MEMORY_SCOPE.set("job-abc")
+        t = QUESTION_BUDGET.set(budget)
         try:
             return await request_information("budget", "What is the budget?")
         finally:
-            MEMORY_SCOPE.reset(t)
+            QUESTION_BUDGET.reset(t)
 
     assert "job run's result" in asyncio.run(run())
-    q = take_job_questions("job-abc")
-    assert len(q) == 1 and "What is the budget?" in q[0] and take_job_questions("job-abc") == []
+    assert len(budget["questions"]) == 1 and "What is the budget?" in budget["questions"][0]
 
 
 def test_the_users_reply_goes_to_the_agent_that_asked(gaps):
@@ -285,9 +286,9 @@ def test_fusion_is_only_a_proposal_until_approved(team):
     assert "+You fix grammar." in pv["diff_a"] and "will be removed" in pv["summary"]
     with pytest.raises(ValueError, match="already waiting"):
         agent_fusion.create_fusion("Editor", "Writer", use_model=False)
-    assert agent_fusion.reject_fusion(prop["id"])["status"] == "rejected"
+    assert agent_fusion.reject_fusion(prop["id"], WEB)["status"] == "rejected"
     with pytest.raises(ValueError, match="only pending"):
-        agent_fusion.apply_fusion(prop["id"])
+        agent_fusion.apply_fusion(prop["id"], WEB)
     assert len(load_config(force_reload=True).agents.named) == 3
 
 
@@ -302,9 +303,15 @@ def test_fusion_refuses_default_and_unknown_agents(team):
         agent_fusion.create_fusion("Writer", "writer", use_model=False)
     with pytest.raises(ValueError, match="already exists"):
         agent_fusion.create_fusion("Writer", "Editor", "Other", use_model=False)
-    out = asyncio.run(agent_fusion.propose_agent_fusion("default", "Writer", reason="x"))
-    assert out.startswith("Error") and "default agent" in out
-    assert asyncio.run(agent_fusion.propose_agent_fusion("Writer", "Editor")).startswith("Error")  # no reason
+    from myclaw.events import CURRENT_AGENT
+
+    tok = CURRENT_AGENT.set("medic")
+    try:
+        out = asyncio.run(agent_fusion.propose_agent_fusion("default", "Writer", reason="x"))
+        assert out.startswith("Error") and "default agent" in out
+        assert asyncio.run(agent_fusion.propose_agent_fusion("Writer", "Editor")).startswith("Error")  # no reason
+    finally:
+        CURRENT_AGENT.reset(tok)
     assert agent_fusion.list_fusions() == []
 
 
@@ -319,8 +326,14 @@ def test_medic_tool_proposes_with_a_model_written_prompt(team, monkeypatch):
         seen.append(messages)
         return "You are Writer. You write clear texts and fix their grammar.", "ollama", "m0"
 
+    from myclaw.events import CURRENT_AGENT
+
     monkeypatch.setattr(provider, "complete_with_fallback", fake_complete)
-    out = asyncio.run(medic_agent.propose_agent_fusion("Writer", "Editor", reason="they overlap"))
+    tok = CURRENT_AGENT.set("medic")
+    try:
+        out = asyncio.run(medic_agent.propose_agent_fusion("Writer", "Editor", reason="they overlap"))
+    finally:
+        CURRENT_AGENT.reset(tok)
     assert out.startswith("Fusion proposal") and "Nothing changed yet" in out and "model ollama/m0" in out
     p = agent_fusion.list_fusions("pending")[0]
     assert p["author"].startswith("agent:") and p["fused"]["system_prompt"].endswith("fix their grammar.")
@@ -331,8 +344,12 @@ def test_medic_tool_proposes_with_a_model_written_prompt(team, monkeypatch):
         raise RuntimeError("model down")
 
     monkeypatch.setattr(provider, "complete_with_fallback", broken)
-    agent_fusion.reject_fusion(p["id"])
-    out = asyncio.run(agent_fusion.propose_agent_fusion("Writer", "Editor", reason="again"))
+    agent_fusion.reject_fusion(p["id"], WEB)
+    tok = CURRENT_AGENT.set("medic")
+    try:
+        out = asyncio.run(agent_fusion.propose_agent_fusion("Writer", "Editor", reason="again"))
+    finally:
+        CURRENT_AGENT.reset(tok)
     assert "headings (the model did not answer)" in out
     assert "## From @Editor" in agent_fusion.list_fusions("pending")[0]["fused"]["system_prompt"]
 
@@ -345,7 +362,7 @@ def test_apply_moves_channels_jobs_conversations_and_undo_restores(team):
 
     _, job = team
     prop = agent_fusion.create_fusion("Writer", "Editor", "", "overlap", use_model=False)
-    applied = agent_fusion.apply_fusion(prop["id"])
+    applied = agent_fusion.apply_fusion(prop["id"], WEB)
     assert applied["status"] == "applied" and applied["moved"]["jobs"] == 1
     cfg = load_config(force_reload=True)
     assert [a.name for a in cfg.agents.named] == ["Writer", "Other"]
@@ -362,7 +379,7 @@ def test_apply_moves_channels_jobs_conversations_and_undo_restores(team):
     assert set(backup["originals"]) == {"Writer", "Editor"}
     assert backup["originals"]["Editor"]["system_prompt"] == "You fix grammar."
 
-    agent_fusion.undo_fusion(prop["id"])
+    agent_fusion.undo_fusion(prop["id"], WEB)
     cfg = load_config(force_reload=True)
     for a in cfg.agents.named[:2]:  # exactly the definitions from before
         assert {k: v for k, v in a.model_dump().items() if k in backup["originals"][a.name]} == \
@@ -378,7 +395,7 @@ def test_apply_moves_channels_jobs_conversations_and_undo_restores(team):
     assert j["agent"] == "Editor" and j["channel_id"] == "dm-editor"
     assert agent_fusion.get_fusion(prop["id"])["status"] == "undone"
     with pytest.raises(ValueError):
-        agent_fusion.undo_fusion(prop["id"])
+        agent_fusion.undo_fusion(prop["id"], WEB)
 
 
 def test_fusion_under_a_new_name_and_with_the_default_agent(team):
@@ -387,22 +404,22 @@ def test_fusion_under_a_new_name_and_with_the_default_agent(team):
     from myclaw.config import load_config
 
     prop = agent_fusion.create_fusion("Writer", "Editor", "Duo", use_model=False)
-    agent_fusion.apply_fusion(prop["id"])
+    agent_fusion.apply_fusion(prop["id"], WEB)
     cfg = load_config(force_reload=True)
     assert [a.name for a in cfg.agents.named] == ["Duo", "Other"]
     assert store.get_channel("general")["members"] == ["default", "Duo"]
     assert store.get_channel("dm-duo") is not None
-    agent_fusion.undo_fusion(prop["id"])
+    agent_fusion.undo_fusion(prop["id"], WEB)
     assert [a.name for a in load_config(force_reload=True).agents.named] == ["Writer", "Editor", "Other"]
     assert store.get_channel("general")["members"] == ["default", "Writer", "Editor"]
     assert store.get_channel("dm-duo") is None  # it was created for the fusion and is empty again
 
     prop = agent_fusion.create_fusion("default", "Other", reason="x", use_model=False, allow_default=True)
     assert prop["fused"]["name"] == "default"
-    agent_fusion.apply_fusion(prop["id"])
+    agent_fusion.apply_fusion(prop["id"], WEB)
     cfg = load_config(force_reload=True)
     assert [a.name for a in cfg.agents.named] == ["Writer", "Editor"] and cfg.agents.defaults.model == "m0"
-    agent_fusion.undo_fusion(prop["id"])
+    agent_fusion.undo_fusion(prop["id"], WEB)
     assert [a.name for a in load_config(force_reload=True).agents.named] == ["Writer", "Editor", "Other"]
 
 
@@ -433,7 +450,7 @@ def test_apply_refuses_when_an_agent_changed_since(team):
     changed[1]["system_prompt"] = "New prompt"
     _write_config(home_dir, changed)
     with pytest.raises(ValueError, match="changed or removed"):
-        agent_fusion.apply_fusion(prop["id"])
+        agent_fusion.apply_fusion(prop["id"], WEB)
     assert agent_fusion.get_fusion(prop["id"])["status"] == "pending"
 
 

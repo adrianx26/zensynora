@@ -275,6 +275,23 @@ def move_agent_jobs(old: str, new: str, channel_moves: dict[str, str] | None = N
     return changed
 
 
+def plan_agent_jobs(old: str, new: str, channel_moves: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """What :func:`move_agent_jobs` would change (nothing is changed; 2026-10-28)."""
+    channel_moves = channel_moves or {}
+    out: list[dict[str, Any]] = []
+    with _conn() as c:
+        for r in c.execute("SELECT id, agent, channel_id FROM jobs").fetchall():
+            sets: dict[str, Any] = {}
+            if r["agent"] == old:
+                sets["agent"] = new
+            if r["channel_id"] in channel_moves:
+                sets["channel_id"] = channel_moves[r["channel_id"]]
+            if sets:
+                out.append({"id": r["id"], "agent": r["agent"], "channel_id": r["channel_id"],
+                            **{f"new_{k}": v for k, v in sets.items()}})
+    return out
+
+
 def restore_agent_jobs(changes: list[dict[str, Any]]) -> int:
     """Undo :func:`move_agent_jobs` for jobs that still have the values it set."""
     n = 0

@@ -713,14 +713,25 @@ def agents_list():
     click.echo("Levels (1-9) are only a label for now; change them in Settings → Agents.")
 
 
+_FUSION_ORIGIN = object()  # private: "you, on the command line" for agent_fusion (2026-10-28)
+
+
+def _fusion_origin() -> object:
+    from . import agent_fusion
+
+    agent_fusion.register_origin(_FUSION_ORIGIN, "cli")
+    return _FUSION_ORIGIN
+
+
 def _fusion_echo(p: dict) -> None:
     f = p["fused"]
-    click.echo(f"{p['id']}  [{p['status']:<8}] @{p['agent_a']} + @{p['agent_b']} → @{f['name']} (L{f['level']})"
+    state = p['status'] + (" — interrupted, run `agents undo ID`" if p.get("interrupted") else "")
+    click.echo(f"{p['id']}  [{state:<8}] @{p['agent_a']} + @{p['agent_b']} → @{f['name']} (L{f['level']})"
                f"  by {p.get('author', '?')}")
 
 
 @agents.command("fusions")
-@click.option("--status", type=click.Choice(["pending", "applied", "rejected", "undone"]))
+@click.option("--status", type=click.Choice(["pending", "applying", "applied", "failed", "rejected", "undone"]))
 def agents_fusions(status):
     from . import agent_fusion
 
@@ -782,8 +793,8 @@ def agents_approve(fid):
     from . import agent_fusion
 
     try:
-        p = agent_fusion.apply_fusion(fid, by="you (cli)")
-    except ValueError as e:
+        p = agent_fusion.apply_fusion(fid, _fusion_origin())
+    except Exception as e:
         raise click.ClickException(str(e))
     m = p.get("moved", {})
     click.echo(f"✔ Applied: @{p['fused']['name']} — moved {m.get('channels', 0)} channel membership(s), "
@@ -798,21 +809,22 @@ def agents_reject(fid, note):
     from . import agent_fusion
 
     try:
-        agent_fusion.reject_fusion(fid, by="you (cli)", note=note)
-    except ValueError as e:
+        agent_fusion.reject_fusion(fid, _fusion_origin(), note=note)
+    except Exception as e:
         raise click.ClickException(str(e))
     click.echo("Rejected.")
 
 
 @agents.command("undo")
 @click.argument("fid")
-def agents_undo(fid):
-    """Put both agents of an applied fusion back (from its backup)."""
+@click.option("--force", is_flag=True, help="Undo even though the fused agent was changed since (the changes are lost)")
+def agents_undo(fid, force):
+    """Put both agents of an applied (or interrupted) fusion back (from its backup)."""
     from . import agent_fusion
 
     try:
-        agent_fusion.undo_fusion(fid, by="you (cli)")
-    except ValueError as e:
+        agent_fusion.undo_fusion(fid, _fusion_origin(), force=force)
+    except Exception as e:
         raise click.ClickException(str(e))
     click.echo("✔ Undone: both agents, their channels, jobs and conversations are back.")
 

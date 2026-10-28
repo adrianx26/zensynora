@@ -212,7 +212,7 @@ TOOLS.update({
     "assign_skill":         {"func": assign_skill,         "desc": "Give a skill to yourself so it is listed in your prompt (only your own skills)"},
     "request_information":  {"func": request_information,  "desc": "Ask the user for missing information about a task, job, subject or domain: posts a marked question in this chat (or the job result) and records the topic for research; max 3 per turn"},
     # 2026-10-27: agent fusion — a proposal the user approves (Settings → Agents → Fusion proposals)
-    "propose_agent_fusion": {"func": propose_agent_fusion, "desc": "Medic: propose fusing two agents into one (merged prompt, skills union, lower level); applied only after the user approves it"},
+    "propose_agent_fusion": {"func": propose_agent_fusion, "desc": "Only for the medic agent (others get an error): propose fusing two agents into one; applied only after the user approves it"},
     # Scheduling
     "schedule":             {"func": schedule,             "desc": "Schedule a future task (delay= or every=)"},
     "edit_schedule":        {"func": edit_schedule,        "desc": "Edit an active scheduled job (new task, delay, or every)"},

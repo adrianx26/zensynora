@@ -167,7 +167,29 @@ def rename_member(old: str, new: str) -> None:
             c.execute("UPDATE messages SET channel_id = ? WHERE channel_id = ?", (new_dm, old_dm))
 
 
-def move_member(old: str, new: str, note: str = "") -> dict[str, Any]:
+def plan_move(old: str, new: str, tag: str = "") -> dict[str, Any]:
+    """What :func:`move_member` would change, without changing anything (2026-10-28).
+
+    Agent fusion saves this before the move, so a crash in the middle can be
+    undone: :func:`restore_member` with a plan whose move never ran changes nothing."""
+    undo: dict[str, Any] = {"old": old, "new": new, "channels": [], "dm": None, "tag": tag, "planned": True}
+    old_dm, new_dm = f"dm-{slug(old)}", f"dm-{slug(new)}"
+    with _conn() as c:
+        for r in c.execute("SELECT id, members FROM channels").fetchall():
+            members = json.loads(r["members"] or "[]")
+            if old in members:
+                undo["channels"].append({"id": r["id"], "members": members})
+        row = c.execute("SELECT * FROM channels WHERE id = ?", (old_dm,)).fetchone()
+        if row is not None and old_dm != new_dm:
+            created = not c.execute("SELECT 1 FROM channels WHERE id = ?", (new_dm,)).fetchone()
+            ids = [m["id"] for m in c.execute("SELECT id FROM messages WHERE channel_id = ? ORDER BY id",
+                                              (old_dm,)).fetchall()]
+            undo["dm"] = {"from": old_dm, "to": new_dm, "row": dict(row), "message_ids": ids,
+                          "note_id": None, "created_target": created}
+    return undo
+
+
+def move_member(old: str, new: str, note: str = "", tag: str = "") -> dict[str, Any]:
     """Agent fusion (2026-10-27): ``old`` is replaced by ``new`` everywhere.
 
     * channels with ``old`` as member get ``new`` instead (no duplicates);
@@ -179,7 +201,7 @@ def move_member(old: str, new: str, note: str = "") -> dict[str, Any]:
     old member lists, the old conversation row and the moved message ids, for
     :func:`restore_member`.
     """
-    undo: dict[str, Any] = {"old": old, "new": new, "channels": [], "dm": None}
+    undo: dict[str, Any] = {"old": old, "new": new, "channels": [], "dm": None, "tag": tag}
     old_dm, new_dm = f"dm-{slug(old)}", f"dm-{slug(new)}"
     now = time.time()
     with _conn() as c:
@@ -206,8 +228,9 @@ def move_member(old: str, new: str, note: str = "") -> dict[str, Any]:
             if ids:
                 note_id = c.execute(
                     "INSERT INTO messages (channel_id, role, sender, text, meta, created) "
-                    "VALUES (?, 'system', '', ?, '{}', ?)",
-                    (new_dm, note or f"The conversation with @{old} was moved here ({len(ids)} messages).", now),
+                    "VALUES (?, 'system', '', ?, ?, ?)",
+                    (new_dm, note or f"The conversation with @{old} was moved here ({len(ids)} messages).",
+                     json.dumps({"fusion_note": tag} if tag else {}), now),
                 ).lastrowid
             c.execute("DELETE FROM channels WHERE id = ?", (old_dm,))
             undo["dm"] = {"from": old_dm, "to": new_dm, "row": dict(row), "message_ids": ids,
@@ -234,6 +257,9 @@ def restore_member(undo: dict[str, Any]) -> None:
                           f"({', '.join('?' * len(part))})", (dm["from"], dm["to"], *part))
             if dm.get("note_id"):
                 c.execute("DELETE FROM messages WHERE id = ? AND role = 'system'", (dm["note_id"],))
+            if undo.get("tag"):  # a move that ran after its plan was saved (crash before its record)
+                c.execute("DELETE FROM messages WHERE channel_id = ? AND role = 'system' AND meta = ?",
+                          (dm["to"], json.dumps({"fusion_note": undo["tag"]})))
             if dm.get("created_target") and not c.execute(
                     "SELECT 1 FROM messages WHERE channel_id = ? LIMIT 1", (dm["to"],)).fetchone():
                 c.execute("DELETE FROM channels WHERE id = ?", (dm["to"],))
