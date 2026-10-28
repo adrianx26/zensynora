@@ -368,3 +368,79 @@ def test_api_without_any_log_yet(home):
     assert st["accesses_30d"] == 0 and st["hit_rate"] is None
     assert c.get("/api/knowledge/benchmarks").json()["notes"] == 0
     assert c.get("/api/knowledge/usage/note/x").json()["count"] == 0
+
+# ── review fixes (2026-10-27) ───────────────────────────────────────────────
+
+def test_worker_pool_runs_each_call_in_the_callers_context():
+    import contextvars
+
+    from myclaw.worker_pool import WorkerPoolManager
+
+    var: contextvars.ContextVar[str] = contextvars.ContextVar("probe", default="none")
+
+    def sync_fn():
+        return var.get()
+
+    async def async_fn():
+        return var.get()
+
+    async def turn(pool, value):
+        tok = var.set(value)
+        try:
+            return await pool.submit(sync_fn), await pool.submit(async_fn)
+        finally:
+            var.reset(tok)
+
+    async def main():
+        pool = WorkerPoolManager(max_workers=1)
+        try:
+            first = await asyncio.create_task(turn(pool, "first"))   # the workers start here
+            second = await asyncio.create_task(turn(pool, "second"))
+            return first, second
+        finally:
+            await pool.shutdown(wait=False)
+
+    assert asyncio.run(main()) == (("first", "first"), ("second", "second"))
+
+
+def test_parallel_tool_calls_use_their_own_turn_and_base(home, monkeypatch):
+    from myclaw import events
+    from myclaw.knowledge import usage, write_note
+    from myclaw.knowledge.scope import KB_USER
+    from myclaw.tools import core
+
+    write_note("Docker", content="Container runtime in the shared base.", tags=["tools"])
+    write_note("Docker", content="Container runtime of the Telegram user.", user_id="tg-555")
+    monkeypatch.setattr(core, "_worker_pool_manager", None)
+    monkeypatch.setattr(core, "_parallel_executor", None)
+    import myclaw.tools.kb  # noqa: F401  (registers the knowledge tools)
+
+    def call(q):
+        return {"id": q, "function": {"name": "search_knowledge", "arguments": {"query": q}}}
+
+    async def turn(agent, base, msg):
+        t = usage.begin_turn(agent, msg)
+        k, a = KB_USER.set(base), events.CURRENT_AGENT.set(agent)
+        try:
+            r = await core.get_parallel_executor().execute_tools([call("docker"), call("runtime")], base)
+            return [x.get("error") or x["result"] for x in r]
+        finally:
+            events.CURRENT_AGENT.reset(a)
+            KB_USER.reset(k)
+            usage.end_turn(t)
+
+    async def main():
+        try:
+            first = await asyncio.create_task(turn("alpha", "default", "alpha question"))
+            second = await asyncio.create_task(turn("beta", "tg-555", "beta question"))
+            return first, second
+        finally:
+            await core._get_worker_pool_manager().shutdown(wait=False)
+
+    first, second = asyncio.run(main())
+    assert all("shared base" in r for r in first), first
+    assert all("Telegram user" in r for r in second), second
+    usage.flush(5)
+    assert {(r["agent"], r["reason"]) for r in usage.query_log("tg-555")["rows"]} == {("beta", "beta question")}
+    assert {(r["agent"], r["reason"]) for r in usage.query_log("default")["rows"]} == {("alpha", "alpha question")}
+
