@@ -9,9 +9,25 @@ nothing changes until you agree.
 
 * **Web UI → Rules** (📜 in the sidebar). The number next to it is the count of
   proposals waiting for you.
-* **Terminal**: `zensynora rules list | show SLUG | proposals | approve ID | reject ID`.
-* **Files**: `~/.myclaw/rules/<slug>.md`. You can edit them with any editor; the
-  change applies from the agents' next message.
+* **Terminal**: `zensynora rules list | show SLUG | proposals | approve ID | reject ID | accept SLUG | restore SLUG`.
+* **Files**: `~/.myclaw/rules/<slug>.md`. You can edit them with any editor, but
+  a file changed outside ZenSynora needs **one click to activate** (see below).
+
+## Rules changed outside ZenSynora
+
+ZenSynora remembers a fingerprint of every rule you saved or approved
+(`~/.myclaw/rules/.manifest.json`, written only by your own actions). A rule
+file that does not match — edited by hand, copied in, or changed by anything
+else — is **not given to agents** until you look at it. The Rules page shows it
+as *Changed outside ZenSynora — review* with the difference to the version you
+last approved, and two buttons:
+
+* **Keep this version** — use the file as it is now (`zensynora rules accept SLUG`);
+* **Restore approved version** — put back what you approved; the changed file
+  is kept in `.trash/` (`zensynora rules restore SLUG`).
+
+Symbolic links and files with other names (e.g. `My Rule.md`) are never used;
+the doctor lists them.
 
 ## Writing a rule
 
@@ -77,19 +93,39 @@ the Web UI, allowed Telegram users get a message about each new proposal (turn
 it off in Settings → Features → Rules).
 
 Limits: an agent may have at most 5 proposals waiting (setting
-`rules.max_pending_per_agent`); the same change cannot be proposed twice.
+`rules.max_pending_per_agent`); the same change cannot be proposed twice. If
+you changed a rule after an agent proposed a change to it, the proposal is
+marked *changed after this proposal was made* and the diff is against your
+newer text.
+
+### Only you can approve
+
+Agents cannot activate a rule by other means either:
+
+* approving, rejecting and changing rules in the Web UI needs a header that only
+  the Web UI sends, and requests coming from other web sites are refused;
+* the shell tool refuses arguments that point into `~/.myclaw` outside the
+  workspace (rules, settings, proposals), commands that write (`git`, `uniq`,
+  `curl`, `wget`) may only write inside the workspace, and `sort -o`, git's
+  `-C`/`-c`/`--git-dir`/`--work-tree` and `git config` changes are refused;
+* `curl`/`wget` (only when you allowed them in Settings → Security) may fetch
+  only public web addresses — never this computer or the local network;
+* tools agents build with `register_tool` cannot import ZenSynora's own code;
+* a rule file written by anything else is not used until you review it (above).
 
 ## Nothing is lost
 
 When a rule is changed or deleted — by you or by an approved proposal — the
 previous file is copied to `~/.myclaw/rules/.trash/` first. Proposals stay in
-`~/.myclaw/rules/.proposals/` as history. The rules folder is part of backups
+`~/.myclaw/rules/.proposals/` as history (the newest 500 decided ones). The rules folder is part of backups
 (*Jobs, own tools, skills & rules*).
 
 ## Doctor
 
 `zensynora doctor` (and the Doctor page) shows *Rules: N active, M proposal(s)
-waiting* and warns when a proposal has waited more than 7 days.
+waiting* and warns when a proposal has waited more than 7 days, when a rule was
+changed outside ZenSynora, or when a file in the folder is not used (wrong
+name, symbolic link, unreadable).
 
 ## Settings (Settings → Features → Rules)
 

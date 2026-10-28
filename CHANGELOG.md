@@ -23,6 +23,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Doctor check *Rules* (warns when a proposal waits more than 7 days); settings
   in Settings → Features → Rules; rules are part of backups.
   See the [Rules guide](docs/rules_guide.md).
+- A rule file changed outside ZenSynora is not used until you review it
+  (*Keep this version* / *Restore approved version*, `zensynora rules accept|restore`).
+
+### Security
+
+**Agents cannot approve their own changes (2026-10-28, rules review)**
+- The shell tool checks every argument, not only the command name: nothing in
+  `~/.myclaw` outside the workspace (rules, settings, proposals); `git`, `uniq`,
+  `curl`, `wget` write only inside the workspace; `sort -o`, git's
+  `-C`/`-c`/`--git-dir`/`--work-tree`, `git config` changes, curl `-L`/`-K`/
+  `--resolve`/proxies and wget `-e`/`-i` are refused; curl/wget may fetch only
+  public addresses (DNS checked), never localhost or the local network.
+- **Settings → Security → allowed/blocked commands are now applied** (at start-up
+  and after every save). Before, the shell used a built-in list that also
+  allowed `curl` and `wget`; with the default settings they are now **off** —
+  add them in Settings → Security if you need them.
+- Approving or changing rules and approving/installing code proposals needs the
+  `X-ZenSynora-UI` header the Web UI sends; changes from other web sites
+  (foreign `Origin`) are refused on all guarded routes.
+- `register_tool` code may not import `myclaw`, `builtins`, `inspect`, `gc`, `io`
+  and similar, or use dunder attributes (`__subclasses__`, `__globals__` …);
+  agent-made tools saved earlier are checked again when loaded.
+- `write_file` refuses files inside `.git` (aliases and hooks there run commands).
 
 ### Changed
 

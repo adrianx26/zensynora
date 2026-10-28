@@ -245,7 +245,7 @@ Details: [MEDIC_CHANGE_MGMT.md](MEDIC_CHANGE_MGMT.md).
 | Log: `Task '…' FAILED - exceeded 300s timeout` | Fixed 2026-10-23: the limit is `timeouts.task_seconds` (default 600, 60–7200), Settings → Features → *Timeouts & memory*. Jobs use their own timeout. |
 | Log: `File read error: [Errno 21] Is a directory` / `[Errno 2] No such file or directory` | Fixed 2026-10-23: `read_file` lists a folder, says what is in the folder when a file is missing, and explains that settings and logs outside the workspace are not readable by agents. These are no longer logged as errors. |
 | Log: `… is temporarily rate-limited upstream` | The (free) model is busy. ZenSynora retries once after 5 s; add models to the rotation list on the **Models** page so another model answers. Since 2026-10-18 this no longer starts a medic diagnosis. |
-| The same configuration warning many times in the log | Fixed 2026-10-18: it is logged once and again only when it changes. Remove `curl`/`wget` from Settings → Security → allowed commands if you don't need them. |
+| The same configuration warning many times in the log | Fixed 2026-10-18: it is logged once and again only when it changes. Since 2026-10-28 that list is really applied, and `curl`/`wget` are off unless you add them. |
 
 ---
 
