@@ -33,6 +33,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   default agent is only fused when you choose it explicitly. API:
   `/api/agents/fusions` (list, propose, preview, approve, reject, undo); CLI:
   `zensynora agents list | fuse | fusions | show | approve | reject | undo`.
+- Hardening after review (2026-10-28): one fusion at a time (thread and
+  process lock), backup written first and never overwritten, any error rolls
+  back (*failed*), a crash leaves an *interrupted* fusion that Undo restores;
+  Undo refuses to lose later edits without `force` and waits for later
+  fusions; only the Web UI / CLI may apply, reject or undo and only the medic
+  proposes. Questions only redirect your messages to agents that are members
+  of the chat, close once answered or after 24 h, several askers are handled,
+  and the limit is 3 per message of yours across agents; job questions are per
+  run and not scored. Tools act as the calling agent on Telegram and in the
+  CLI too. `create_skill` creates atomically and refuses secrets and Windows
+  device names. A bad level in `config.json` no longer stops ZenSynora (it is
+  clamped with a warning), a fresh install never gets masked API keys written
+  into the settings, and a settings reload right after a save no longer fails.
 
 ### Changed
 

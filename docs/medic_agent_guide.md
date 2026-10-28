@@ -149,7 +149,9 @@ All tools are registered in `myclaw/tools/__init__.py` and implemented in
 ### Agent fusion
 
 When two agents do the same work (overlapping descriptions, prompts and
-skills), the medic can propose making them one with
+skills), the medic — the agent called `medic`, or a job the medic created
+such as *Medic self-review*; every other agent gets an error — can propose
+making them one with
 `propose_agent_fusion(agent_a, agent_b, new_name, reason)` (a reason is
 required). The proposal is stored in `~/.myclaw/agent_fusions/<id>.json`:
 
@@ -167,7 +169,9 @@ proposals* (preview with prompt diff, skills, level and what moves) or with
 direct conversations to the fused agent and keeps both old definitions in
 `<id>.backup.json`; `zensynora agents undo ID` (or **Undo**) restores them.
 Agents can never fuse the default agent; only you can, by choosing it
-explicitly.
+explicitly. Applying, rejecting and undoing are only possible from the Web UI
+or the CLI (never from an agent's tool); an apply that fails is rolled back,
+and one that was interrupted is undone from its backup.
 
 ### Integrity and recovery
 

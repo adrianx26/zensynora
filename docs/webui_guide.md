@@ -379,13 +379,15 @@ New agents and agents from older settings start at **1**. The level is shown
 as a small **L3** badge next to the agent's name in the sidebar, the channel
 member chips and the chat, and the agent's prompt says "You are level N".
 **For now the level is only a label**: it changes no permissions — a level-1
-agent can do everything a level-9 agent can.
+agent can do everything a level-9 agent can. A level outside 1–9 typed into
+`config.json` by hand is read as the nearest valid level (or 1) with one
+warning in the log; Settings refuses it.
 
 **What every agent can do** (level 1 included):
 
 | | Tool |
 |---|---|
-| Create a skill (shown on the Skills page) | `create_skill(name, description, instructions)`; `assign_skill(skill)` gives it to the agent itself (never to others). An existing skill — yours or built-in — is never overwritten |
+| Create a skill (shown on the Skills page) | `create_skill(name, description, instructions)`; `assign_skill(skill)` gives it to the agent itself (never to others). An existing skill — yours or built-in — is never overwritten; text that looks like a password, token or API key is refused |
 | Create a tool | `register_tool(name, code, documentation)` |
 | Schedule jobs | `job_create(…)` and the other job tools (off when *Agents may create and change jobs* is off) |
 | Delegate | `delegate(agent_name, task)` |
@@ -393,13 +395,20 @@ agent can do everything a level-9 agent can.
 | Ask for more information | `request_information(topic, question, why)` |
 
 `request_information` posts the question in the chat where the agent works,
-marked **question** (in a job: in the run's result, and in the job's channel
-if it has one) and records the topic as a knowledge gap for the researcher
-(`~/.myclaw/knowledge_gaps.jsonl`). Your next message in that chat without an
-`@mention` goes to the agent that asked — also in a channel where another
-agent would answer first — and it is told which question you are answering.
-At most 3 questions per turn; every question is also logged in
-`~/.myclaw/agent_questions.jsonl`.
+marked **question** (in a job: in that run's result, and in the job's channel
+if it has one; the job's score ignores the questions) and records the topic
+as a knowledge gap for the researcher (`~/.myclaw/knowledge_gaps.jsonl`).
+When the asking agent is a member of the chat, your next message there
+without an `@mention` goes to it — also in a channel where another agent would
+answer first — and it is told which question you are answering. Several
+agents waiting for an answer: the one that asked last gets your message, and a
+line in the chat names the other open questions (mention an agent to answer
+its question). A question closes once answered or after 24 hours; a question
+from an agent that is not a member (e.g. a job reporting to another agent's
+conversation) never redirects your messages. At most 3 questions per message
+of yours, all agents together; every question is also logged in
+`~/.myclaw/agent_questions.jsonl`. Tools always act as the agent that calls
+them, also on Telegram and in the CLI.
 
 **Fusion: two agents become one.** Settings → Agents → *Fusion proposals*.
 Pick two agents (optionally a new name) → **Preview fusion**. The preview
@@ -415,13 +424,25 @@ both old definitions are saved in `~/.myclaw/agent_fusions/<id>.backup.json`.
 **Undo** puts both agents, their channels, jobs and conversations back. The
 agents' private conversation memory files are left as they are.
 
-The medic can propose a fusion too (tool `propose_agent_fusion`); it appears
-in the same list, waiting for you. The default agent is never fused unless
+Safety: one fusion is applied at a time (also across the Web UI and the CLI);
+the backup is written before anything changes and never overwritten. If
+anything fails while applying, everything is put back and the fusion shows
+*failed (rolled back)*. If ZenSynora stops in the middle, the fusion shows
+*interrupted — click Undo*, and Undo restores everything from the backup.
+Undo is refused while a later fusion uses the fused agent (undo that one
+first); if you changed the fused agent after the fusion, Undo lists the
+changes and asks before losing them (*Undo anyway*; CLI `undo ID --force`).
+At most 5 proposals wait at a time. Only you can apply, reject or undo — from
+Settings or the CLI; agents cannot.
+
+The medic can propose a fusion too (tool `propose_agent_fusion`, only for an
+agent called `medic` or the medic's own jobs such as *Medic self-review*); it
+appears in the same list, waiting for you. The default agent is never fused unless
 you tick *include the default agent*: it then stays the default agent (keeps
 its model and built-in prompt) and gets the other agent's skills, the lower
 level and the larger context length. From the command line:
 `zensynora agents list | fuse A B [--name N] | fusions | show ID | approve ID |
-reject ID | undo ID`.
+reject ID | undo ID [--force]`.
 
 ## Skills: instructions agents load when needed
 
