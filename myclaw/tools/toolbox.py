@@ -64,10 +64,41 @@ _FORBIDDEN_IMPORTS = frozenset({
     "ctypes",    # native code execution / sandbox escape
     "cffi",      # foreign function interface
     "mmap",      # direct memory access
+    # 2026-10-27 (rules review): ZenSynora itself (a tool could call
+    # myclaw.rules.save_rule / approve and bypass the user), and the ways to
+    # reach modules or frames indirectly.
+    "myclaw",
+    "builtins",
+    "gc",
+    "inspect",
+    "types",
+    "runpy",
+    "code",
+    "codeop",
+    "pickle",
+    "marshal",
+    "multiprocessing",
+    "posix",
+    "nt",
+    "io",
+    "_io",
+    "fcntl",
+    "tempfile",
+    "glob",
+    "zipimport",
+    "pkgutil",
 })
 
 _FORBIDDEN_CALLS = frozenset({
     "eval", "exec", "__import__", "globals", "locals", "compile", "getattr",
+    "vars", "setattr", "delattr", "breakpoint", "__build_class__",
+})
+
+# Dunder names a tool may use; every other ``__x__`` (``__subclasses__``,
+# ``__globals__``, ``__builtins__``, ``__class__`` …) leads out of the sandbox.
+_ALLOWED_DUNDERS = frozenset({
+    "__init__", "__name__", "__doc__", "__len__", "__iter__", "__next__", "__enter__", "__exit__",
+    "__str__", "__repr__", "__eq__", "__lt__", "__hash__", "__contains__", "__getitem__",
 })
 
 # Calls that are not forbidden outright but blocked in dynamic tools — file
@@ -114,7 +145,18 @@ def _validate_tool_ast(code: str) -> Optional[str]:
     except SyntaxError as e:
         return f"Syntax error in tool code: {e}"
 
+    def _bad_dunder(name: str) -> bool:
+        return name.startswith("__") and name.endswith("__") and name not in _ALLOWED_DUNDERS
+
     for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and _bad_dunder(node.attr):
+            return f"Error: Accessing '{node.attr}' is forbidden for security reasons."
+        if isinstance(node, ast.Name) and _bad_dunder(node.id):
+            return f"Error: Using '{node.id}' is forbidden for security reasons."
+        if isinstance(node, ast.Constant) and isinstance(node.value, str) and _bad_dunder(node.value.strip()):
+            return "Error: Dunder names in strings are forbidden for security reasons."
+        if isinstance(node, ast.ImportFrom) and node.level:
+            return "Error: Relative imports are forbidden in tools (they would reach ZenSynora's own code)."
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name.split(".")[0] in _FORBIDDEN_IMPORTS:
@@ -524,6 +566,19 @@ def load_custom_tools():
                 logger.warning(f"Tool file missing from TOOLBOX: {tool_path} — "
                                f"remove '{name}' from {TOOLBOX_REG.name} or set it to disabled")
                 continue
+
+            # 2026-10-27 (rules review): agent-made tools are checked again on load, so
+            # one saved before the stricter checks cannot reach ZenSynora's own code.
+            if not (isinstance(info, dict) and info.get("author") == "user"):
+                try:
+                    problem = _validate_tool_ast(tool_path.read_text(encoding="utf-8"))
+                except (OSError, UnicodeDecodeError) as e:
+                    problem = f"unreadable ({e})"
+                if problem:
+                    logger.warning(f"Not loading tool '{name}' from TOOLBOX: {problem} — rewrite it with "
+                                   f"register_tool, or set \"author\": \"user\" in {TOOLBOX_REG.name} if you "
+                                   "wrote it yourself.")
+                    continue
 
             try:
                 spec = importlib.util.spec_from_file_location(name, tool_path)

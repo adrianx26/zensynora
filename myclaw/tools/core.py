@@ -188,6 +188,28 @@ def update_allowlist(new_commands: List[str]) -> None:
     logger.info(f"Updated ALLOWED_COMMANDS with {len(new_commands)} commands")
 
 
+_DEFAULT_BLOCKED = BLOCKED_COMMANDS
+
+
+def apply_security_config(cfg) -> None:
+    """Use Settings → Security's command lists for the shell tool (2026-10-27).
+
+    ``security.allowed_commands`` / ``blocked_commands`` were never applied, so
+    the shell used the built-in list above (which includes curl and wget,
+    unlike the settings' default). Called at start-up and after every settings
+    save. Blocked commands always include the built-in ones.
+    """
+    global ALLOWED_COMMANDS, BLOCKED_COMMANDS
+    sec = getattr(cfg, "security", None)
+    if sec is None:
+        return
+    allowed = [str(c).strip().lower() for c in (getattr(sec, "allowed_commands", None) or []) if str(c).strip()]
+    blocked = [str(c).strip().lower() for c in (getattr(sec, "blocked_commands", None) or []) if str(c).strip()]
+    ALLOWED_COMMANDS = frozenset(allowed)
+    BLOCKED_COMMANDS = frozenset(_DEFAULT_BLOCKED | set(blocked))
+    logger.debug("Shell allow-list from settings: %s", ", ".join(sorted(ALLOWED_COMMANDS)))
+
+
 # ── 5.4 Tool Execution Audit Logging ─────────────────────────────────────────────
 
 
@@ -705,6 +727,7 @@ def set_config(cfg):
     """Inject runtime configuration for tools, worker pool, and sandbox."""
     global _runtime_config, _worker_pool_manager, _security_sandbox
     _runtime_config = cfg
+    apply_security_config(cfg)  # 2026-10-27: the settings' shell command lists
     _worker_pool_manager = None
     _security_sandbox = None
     # Phase 6.1: Initialise state store with config (triggers Redis if configured)

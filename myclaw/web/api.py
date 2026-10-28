@@ -63,6 +63,7 @@ def _ensure_registry() -> dict:
 
     load_custom_tools()
     set_registry(registry)
+    _apply_security(config)
     _agent_registry = registry
     logger.info(f"Web UI agent registry built: {list(registry.keys())}")
     return registry
@@ -83,9 +84,20 @@ async def _close_async_db_pool() -> None:
 app.router.add_event_handler("shutdown", _close_async_db_pool)
 
 
+def _apply_security(config) -> None:
+    """Settings → Security's shell command lists (2026-10-27: they were never applied)."""
+    try:
+        from myclaw.tools.core import apply_security_config
+
+        apply_security_config(config)
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Could not apply the shell command lists: %s", exc)
+
+
 async def _reset_agent_registry() -> None:
     """Drop cached agents so the next chat uses freshly saved settings."""
     global _agent_registry
+    _apply_security(load_config())
     old = _agent_registry
     _agent_registry = {}
     for agent in old.values():
@@ -268,6 +280,7 @@ setup_metrics_endpoint(app)
 # SECURITY FIX: CORS origins are now loaded from config instead of wildcard.
 # Wildcard + credentials is a security breach (any website can steal sessions).
 _config = load_config()
+_apply_security(_config)  # 2026-10-27: shell command lists from the settings, from the start
 _cors_origins = getattr(_config, "security", None)
 _cors_origins = _cors_origins.cors_origins if _cors_origins else ["http://localhost:5173"]
 app.add_middleware(

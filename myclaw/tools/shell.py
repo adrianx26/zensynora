@@ -18,6 +18,7 @@ import subprocess
 import logging
 import re
 import time
+from pathlib import Path
 from typing import List, Tuple
 
 from . import core as _core
@@ -117,7 +118,186 @@ def parse(cmd: str) -> List[Tuple[str, List[List[str]]]]:
             bad = FORBIDDEN_ARGS.get(name, set()) & set(args[1:])
             if bad:
                 raise ShellError(f"Error: '{name} {sorted(bad)[0]}' is not allowed.")
+            check_arguments(name, args)
     return groups
+
+
+# ── 2026-10-27 (rules review): arguments, not only command names ─────────────
+# An allowed command could still write anywhere (``sort -o``, ``git
+# --work-tree=…``, ``curl -o``) or reach ZenSynora's own API on localhost
+# (``curl -X POST http://127.0.0.1:…/approve``). Every argument that can be a
+# path is checked: commands that can write must stay in the workspace, and no
+# command may touch ~/.myclaw outside the workspace (rules, settings,
+# proposals). curl/wget may only fetch public web addresses.
+WRITERS = {"git", "uniq", "curl", "wget"}
+_GIT_FORBIDDEN = {"-c", "-C", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env",
+                  "--super-prefix", "--list-cmds"}
+_GIT_CONFIG_READ = {"--get", "--get-all", "--get-regexp", "--list", "-l", "--show-origin", "--show-scope",
+                    "--name-only", "--null", "-z", "get", "list"}
+_CURL_FORBIDDEN = {"-K", "--config", "-L", "--location", "--location-trusted", "--resolve", "--connect-to",
+                   "--unix-socket", "--abstract-unix-socket", "-x", "--proxy", "--preproxy", "--proxy1.0",
+                   "--socks4", "--socks4a", "--socks5", "--socks5-hostname", "--interface", "--dns-servers",
+                   "--doh-url", "-q", "--disable"}
+_WGET_FORBIDDEN = {"-e", "--execute", "--config", "-i", "--input-file", "-B", "--base", "--input-metalink",
+                   "--use-askpass", "--use-server-timestamps"}
+# Options of curl/wget whose value is NOT a URL (so it is checked as a path / left alone).
+_CURL_VALUE_OPTS = {"-o", "--output", "--output-dir", "-d", "--data", "--data-raw", "--data-binary",
+                    "--data-urlencode", "--json", "-H", "--header", "-X", "--request", "-u", "--user", "-A",
+                    "--user-agent", "-e", "--referer", "-b", "--cookie", "-c", "--cookie-jar", "-F", "--form",
+                    "-m", "--max-time", "--connect-timeout", "-w", "--write-out", "-T", "--upload-file",
+                    "-r", "--range", "-z", "--time-cond", "--retry", "--limit-rate", "-D", "--dump-header",
+                    "--max-filesize", "--trace", "--trace-ascii", "--stderr", "--cacert", "--cert", "--key"}
+_WGET_VALUE_OPTS = {"-O", "--output-document", "-o", "--output-file", "-a", "--append-output", "-P",
+                    "--directory-prefix", "-U", "--user-agent", "--header", "-t", "--tries", "-T", "--timeout",
+                    "-w", "--wait", "--post-data", "--post-file", "--body-data", "--body-file", "--method",
+                    "--user", "--password", "-l", "--level", "-A", "--accept", "-R", "--reject",
+                    "--load-cookies", "--save-cookies", "-Q", "--quota", "--limit-rate"}
+
+
+def _home_data() -> Path:
+
+    return (Path.home() / ".myclaw").resolve()
+
+
+def _resolve_arg(value: str) -> Path:
+
+    p = Path(value).expanduser()
+    return (p if p.is_absolute() else (WORKSPACE / p)).resolve()
+
+
+def _path_candidates(args: List[str]) -> List[str]:
+    """Every string in the arguments that a program could use as a file path."""
+    out: List[str] = []
+    for a in args:
+        if not a:
+            continue
+        if a.startswith("--"):
+            if "=" in a:
+                out.append(a.split("=", 1)[1])
+        elif a.startswith("-") and len(a) > 2:
+            out.append(a[2:])  # -o/path, -C/path
+        else:
+            out.append(a)
+            if a.startswith("@"):
+                out.append(a[1:])  # curl -d @file
+            if "=" in a:
+                out.append(a.split("=", 1)[1])  # name=value
+    return [c for c in out if c and "://" not in c]
+
+
+def _check_paths(name: str, args: List[str]) -> None:
+    workspace = WORKSPACE.resolve()
+    data = _home_data()
+    for c in _path_candidates(args[1:]):
+        try:
+            target = _resolve_arg(c)
+        except (OSError, RuntimeError, ValueError):
+            raise ShellError(f"Error: '{c}' cannot be checked as a path; use a simple file name in the workspace.")
+        in_ws = target == workspace or workspace in target.parents
+        if not in_ws and (target == data or data in target.parents):
+            raise ShellError(f"Error: '{c}' is in ZenSynora's data folder (~/.myclaw) — shell commands may "
+                             "only use it inside the workspace. Rules and settings are changed by the user.")
+        if name in WRITERS and not in_ws:
+            raise ShellError(f"Error: '{name}' may only use files inside the workspace (~/.myclaw/workspace); "
+                             f"'{c}' is outside. Use a relative path like out/file.txt.")
+
+
+def _check_url(url: str) -> None:
+    from ..knowledge.ingest.sources import IngestError, check_url
+
+    if "[" in url or "]" in url:
+        raise ShellError(f"Error: '{url}' — URL patterns ([…]) are not allowed.")
+    full = url if "://" in url else "http://" + url
+    try:
+        check_url(full)
+    except IngestError as e:
+        why = str(e).replace(" Only public web pages can be imported.", "").replace(
+            "; only public web pages can be imported.", ".")
+        raise ShellError(f"Error: {why} curl/wget may only fetch public web addresses.") from None
+
+
+def _url_args(name: str, args: List[str]) -> List[str]:
+    """Arguments of curl/wget that are URLs: everything that is not an option or an option's value.
+
+    The value of an option not listed as taking a value counts as a URL, so it
+    is checked too (fail closed).
+    """
+    value_opts = _CURL_VALUE_OPTS if name == "curl" else _WGET_VALUE_OPTS
+    rest, urls, i = args[1:], [], 0
+    while i < len(rest):
+        a = rest[i]
+        if a == "--url":
+            urls.append(rest[i + 1] if i + 1 < len(rest) else "")
+            i += 2
+            continue
+        if a.startswith("--url="):
+            urls.append(a.split("=", 1)[1])
+        elif a.startswith("-"):
+            if a in value_opts:
+                i += 1  # skip its value
+        else:
+            urls.append(a)
+        i += 1
+    return [u for u in urls if u]
+
+
+def check_arguments(name: str, args: List[str]) -> None:
+    """Refuse arguments that write outside the workspace, touch ~/.myclaw or reach local services."""
+    rest = args[1:]
+    if name == "git":
+        for a in rest:  # git's own options come before the subcommand
+            if not a.startswith("-"):
+                break
+            opt = a.split("=", 1)[0]
+            if opt in _GIT_FORBIDDEN or (a[:2] in ("-C", "-c") and not a.startswith("--")):
+                shown = opt if opt.startswith("--") else opt[:2]
+                raise ShellError(f"Error: 'git {shown}' is not allowed (it changes which files or settings git "
+                                 "uses). Run git inside the workspace without it.")
+        for a in rest:
+            opt = a.split("=", 1)[0]
+            if opt in ("--git-dir", "--work-tree", "--separate-git-dir", "--template", "--config-env"):
+                raise ShellError(f"Error: 'git … {opt}' is not allowed (it points git at other folders).")
+        sub = next((a for a in rest if not a.startswith("-")), "")
+        if sub == "config" and not (set(rest) & _GIT_CONFIG_READ):
+            raise ShellError("Error: 'git config' may only read settings (--get, --list); changing git settings "
+                             "is not allowed.")
+    elif name == "sort":
+        for a in rest:
+            if a == "-o" or (a.startswith("--o") and "--output".startswith(a.split("=", 1)[0])) \
+                    or (a.startswith("-") and not a.startswith("--") and "o" in a[1:]):
+                raise ShellError("Error: 'sort -o/--output' is not allowed (it writes files). Read the output "
+                                 "instead, or save it with write_file.")
+    elif name in ("curl", "wget"):
+        forbidden = _CURL_FORBIDDEN if name == "curl" else _WGET_FORBIDDEN
+        takes_value = {o[1] for o in (_CURL_VALUE_OPTS if name == "curl" else _WGET_VALUE_OPTS)
+                       if len(o) == 2}
+        bad_short = {o[1] for o in forbidden if len(o) == 2}
+        for a in rest:
+            opt = a.split("=", 1)[0]
+            in_cluster = ""
+            if a.startswith("-") and not a.startswith("--") and len(a) > 2:
+                for ch in a[1:]:  # -sL: flags; -o<path>: the rest is the value
+                    if ch in bad_short:
+                        in_cluster = f"-{ch}"
+                        break
+                    if ch in takes_value:
+                        break
+            if opt in forbidden or in_cluster:
+                opt = in_cluster or opt
+                raise ShellError(f"Error: '{name} {opt}' is not allowed (redirects, proxies, config files and "
+                                 "name overrides could reach local services).")
+        if name == "wget" and any(a.split("=", 1)[0] == "--max-redirect" for a in rest):
+            raise ShellError("Error: 'wget --max-redirect' is not allowed; redirects are not followed.")
+        urls = _url_args(name, args)
+        if not urls:
+            raise ShellError(f"Error: give {name} a public web address (https://…).")
+        for u in urls:
+            _check_url(u)
+        _check_paths(name, args)
+        if name == "wget":
+            args.insert(1, "--max-redirect=0")  # a redirect could lead to a local address
+        return
+    _check_paths(name, args)
 
 
 def _run_pipeline(pipeline: List[List[str]], deadline: float) -> Tuple[int, str]:

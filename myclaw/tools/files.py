@@ -111,6 +111,14 @@ def write_file(path: str, content: str) -> str:
     """
     try:
         p = validate_path(path)
+        # 2026-10-27 (rules review): a hand-written .git/config (aliases, hooks,
+        # filters) or a '.git' file pointing elsewhere makes git run commands or
+        # write outside the workspace. Use git itself for its own files.
+        from .core import WORKSPACE as _ws
+
+        if ".git" in p.relative_to(_ws.resolve()).parts:
+            return ("Error: files inside .git (or a file named .git) cannot be written with write_file — "
+                    "use git commands for the repository's own files.")
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(content)
         return f"File written: {path}"
