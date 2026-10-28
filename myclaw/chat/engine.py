@@ -223,13 +223,11 @@ class ChatEngine:
             if ch is None:
                 return
             targets = [only] if only else self.resolve_targets(ch, text)
-            # 2026-10-27: a reply to an agent's question (request_information) goes to that
-            # agent when the message names nobody, and it is told what was asked.
-            asked: dict[str, Any] | None = None
-            if not only and anchor is None and not _MENTION.findall(text):
-                asked = await self._answered_question(channel_id)
-                if asked is not None:
-                    targets = [asked["sender"]]
+            # 2026-10-27/28: a reply to an agent's open question (request_information)
+            # goes to the agent that asked; it is told which question it answers.
+            texts: dict[str, str] = {}
+            if not only and anchor is None:
+                targets, texts = await self._route_to_askers(ch, text, targets)
             new_members = [t for t in targets if t not in ch["members"]]
             if new_members:
                 ch = await asyncio.to_thread(store.update_channel, channel_id,
@@ -251,17 +249,17 @@ class ChatEngine:
                         if m["role"] == "agent" and m["sender"] != only and m["text"]:
                             replies[m["sender"]] = m["text"]
 
-            if asked is not None:
-                q = (asked.get("meta") or {}).get("question") or {}
-                text = (f"[This answers your question about \"{events.short(q.get('topic', ''), 200)}\": "
-                        f"\"{events.short(q.get('question', ''), 600)}\"]\n{text}")
+            from ..agent_caps import QUESTION_BUDGET, new_turn_budget
+
+            # One question budget for this message, shared by every agent that answers it.
+            budget_token = QUESTION_BUDGET.set(new_turn_budget())
             events.publish(channel_id, {"type": "turn_start", "agents": targets})
             try:
                 if ch["reply_mode"] == "parallel" and len(targets) > 1:
-                    await asyncio.gather(*(self._answer(ch, a, text, {}, history) for a in targets))
+                    await asyncio.gather(*(self._answer(ch, a, texts.get(a, text), {}, history) for a in targets))
                 else:
                     for agent in targets:
-                        replies[agent] = await self._answer(ch, agent, text, replies, history,
+                        replies[agent] = await self._answer(ch, agent, texts.get(agent, text), replies, history,
                                                             reuse if agent == only else None)
             except asyncio.CancelledError:
                 note = await asyncio.to_thread(store.add_message, channel_id, "system", "", "Stopped.")
@@ -273,21 +271,56 @@ class ChatEngine:
                         await self.resync_memory(channel_id, [only])
                     except Exception as e:  # pragma: no cover - resync_memory logs its own errors
                         logger.debug("memory resync after regenerate failed: %s", e)
+                QUESTION_BUDGET.reset(budget_token)
                 events.publish(channel_id, {"type": "turn_end"})
 
-    async def _answered_question(self, channel_id: str) -> dict[str, Any] | None:
-        """The agent question (request_information) your newest message answers, if any."""
-        from ..agent_caps import pending_question
+    async def _route_to_askers(self, ch: dict[str, Any], text: str,
+                               targets: list[str]) -> tuple[list[str], dict[str, str]]:
+        """Open agent questions (request_information) decide who answers (2026-10-28).
+
+        * Only askers that are members of this channel count, and routing never
+          adds a member (a job of another agent posting into a DM does not take
+          the DM over); questions close once answered or after 24 h.
+        * A message that mentions agents goes to them; mentioned askers are told
+          which of their questions it answers.
+        * Otherwise it goes to the agent that asked most recently; a system line
+          names the questions of other agents that are still open.
+        Returns the targets and the text each answering asker receives."""
+        from ..agent_caps import mark_answered, open_questions
 
         try:
-            msgs = await asyncio.to_thread(store.list_messages, channel_id, None, 30)
+            msgs = await asyncio.to_thread(store.list_messages, ch["id"], None, 80)
         except Exception as e:  # pragma: no cover - never block a turn
-            logger.debug("could not look for an open question: %s", e)
-            return None
-        asked = pending_question(msgs)
-        if asked is None or asked.get("sender") not in self._registry():
-            return None
-        return asked
+            logger.debug("could not look for open questions: %s", e)
+            return targets, {}
+        known = self._registry()
+        members = [m for m in ch["members"] if m in known]
+        found = open_questions(msgs, members)
+        if not found:
+            return targets, {}
+        askers = list(dict.fromkeys(m["sender"] for m in found))  # newest first
+        if _MENTION.findall(text):
+            answering = [a for a in askers if a in targets]
+        else:
+            answering = askers[:1]
+            targets = answering
+        texts: dict[str, str] = {}
+        for a in answering:
+            qs = [(m.get("meta") or {}).get("question") or {} for m in found if m["sender"] == a]
+            asked = "; ".join(f"\"{events.short(q.get('question', ''), 300)}\" (about "
+                              f"{events.short(q.get('topic', ''), 120)})" for q in reversed(qs))
+            texts[a] = f"[The user answers your question(s): {asked}]\n{text}"
+            await asyncio.to_thread(mark_answered, [m for m in found if m["sender"] == a], a)
+        still = [m for m in found if m["sender"] not in answering]
+        if still:
+            open_list = "; ".join(
+                f"@{m['sender']} about \"{events.short(((m.get('meta') or {}).get('question') or {}).get('topic', ''), 80)}\""
+                for m in still[:5])
+            note = await asyncio.to_thread(
+                store.add_message, ch["id"], "system", "",
+                f"Still open: {open_list}. Mention the agent (e.g. @{still[0]['sender']}) to answer it.")
+            events.publish(ch["id"], {"type": "message", "message": note})
+        return targets, texts
 
     def _prompt(self, ch: dict[str, Any], agent: str, text: str, replies: dict[str, str],
                 history: list[dict[str, Any]]) -> str:
@@ -342,9 +375,6 @@ class ChatEngine:
         events.publish(channel_id, {"type": "stream_start", "message": msg})
         tokens = (events.CURRENT_CHANNEL.set(channel_id), events.CURRENT_AGENT.set(agent_name),
                   MEMORY_SCOPE.set(memory_scope(channel_id, agent_name)))
-        from ..agent_caps import QUESTION_BUDGET
-
-        budget_token = QUESTION_BUDGET.set({"n": 0})  # 2026-10-27: request_information per turn
         parts: list[str] = []
         started = time.monotonic()
         first_at = last_at = None  # v0.7.5: token speed
@@ -370,7 +400,6 @@ class ChatEngine:
         finally:
             for var, tok in zip((events.CURRENT_CHANNEL, events.CURRENT_AGENT, MEMORY_SCOPE), tokens):
                 var.reset(tok)
-            QUESTION_BUDGET.reset(budget_token)
             full = "".join(parts).strip()
             used = getattr(agent, "last_model_used", None) or (getattr(agent, "_provider_name", ""), agent.model)
             meta = {"model": used[1], "provider": used[0], "ms": int((time.monotonic() - started) * 1000)}

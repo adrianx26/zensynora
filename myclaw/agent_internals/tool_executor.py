@@ -116,6 +116,34 @@ async def execute_tools(
     had_kb_results: bool,
     _round: int = 0,
 ) -> str:
+    """Run the tools as ``agent``: CURRENT_AGENT is the agent whose tools run.
+
+    2026-10-28: only the Web UI chat and the job runner set CURRENT_AGENT, so
+    on Telegram and in the CLI assign_skill / request_information acted as
+    @default. The executing agent is always the caller."""
+    from ..events import CURRENT_AGENT
+
+    name = getattr(agent, "name", None)
+    token = CURRENT_AGENT.set(name) if isinstance(name, str) and name else None
+    try:
+        return await _execute_tools(agent, tool_calls, messages, user_message, user_id, mem, _depth,
+                                    had_kb_results, _round)
+    finally:
+        if token is not None:
+            CURRENT_AGENT.reset(token)
+
+
+async def _execute_tools(
+    agent: "Agent",
+    tool_calls: list,
+    messages: list,
+    user_message: str,
+    user_id: str,
+    mem: "Memory",
+    _depth: int,
+    had_kb_results: bool,
+    _round: int = 0,
+) -> str:
     """Execute tool calls (parallel + sequential) and return final response.
 
     ``_round`` counts follow-up rounds for tool calls written as text

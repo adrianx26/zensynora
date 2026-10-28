@@ -167,10 +167,11 @@ class JobRunner:
 
         # the agent's task timer must not stop a job before its own timeout (2026-10-21)
         tmax_token = TASK_MAX_SECONDS.set(int(job.get("timeout_s") or 300) + 30)
-        from ..agent_caps import QUESTION_BUDGET, take_job_questions
+        from ..agent_caps import QUESTION_BUDGET, job_questions_text, new_turn_budget
 
-        budget_token = QUESTION_BUDGET.set({"n": 0})  # 2026-10-27: request_information per run
-        take_job_questions(scope)  # nothing left over from an earlier run
+        # 2026-10-28: questions (request_information) are collected per run (job-<id>-<run>).
+        budget = new_turn_budget(job_run=f"{job['id']}-{run_id}")
+        budget_token = QUESTION_BUDGET.set(budget)
         status, output, error = "error", "", ""
         try:
             if job.get("fresh_context", True) or kind != "run":
@@ -201,8 +202,8 @@ class JobRunner:
         finally:
             # 2026-10-27: questions the agent asked (request_information) are part of the result.
             # (In a channel they were already posted there as marked questions.)
-            questions = take_job_questions(scope)
-            recorded = (output.rstrip() + "\n\n---\n" + "\n\n".join(questions)).strip() if questions else output
+            questions = list(budget.get("questions") or [])
+            recorded = output.rstrip() + job_questions_text(questions) if questions else output
             QUESTION_BUDGET.reset(budget_token)
             used = getattr(agent, "last_model_used", None) or (getattr(agent, "_provider_name", ""), agent.model)
             await asyncio.to_thread(store.finish_run, run_id, status, recorded, error, used[0], used[1])
@@ -225,6 +226,7 @@ class JobRunner:
     async def evaluate_run(self, run_id: int, provider: str | None = None,
                            model: str | None = None) -> dict[str, Any]:
         """Ask an LLM (default: the main model) to score a run from 0 to 10."""
+        from ..agent_caps import strip_job_questions  # the judge scores the answer, not the questions
         from ..config import load_config
         run = await asyncio.to_thread(store.get_run, run_id)
         if run is None:
@@ -239,7 +241,7 @@ class JobRunner:
             return result
         cfg = load_config()
         content = (f"TASK:\n{job['prompt']}\n\nSUCCESS CRITERIA:\n{job.get('success_criteria') or '(none given)'}"
-                   f"\n\nRESULT:\n{run['output'][:12000]}")
+                   f"\n\nRESULT:\n{strip_job_questions(run['output'])[:12000]}")
         # v0.7.4: main model, then the rotation list (see complete_with_fallback).
         from ..provider import complete_with_fallback
 

@@ -13,10 +13,11 @@ the tools that were missing:
 * :func:`request_information` — post a question to the user, marked as a
   question from the agent, in the chat where the agent works (or in the job
   run's result) and record the topic as a knowledge gap for the researcher
-  (``myclaw.knowledge.researcher.GAP_FILE``). In a channel the user's next
-  message without ``@mentions`` goes to the agent that asked
-  (:func:`pending_question`, used by the chat engine). At most
-  :data:`MAX_QUESTIONS_PER_TURN` questions per turn.
+  (``myclaw.knowledge.researcher.GAP_FILE``). In a chat where the asking
+  agent is a member, the user's next message without ``@mentions`` goes to
+  it (:func:`open_questions`, used by the chat engine) until the question is
+  answered or 24 h old. At most :data:`MAX_QUESTIONS_PER_TURN` questions per
+  user message (all agents together) or per job run.
 
 Import stays cheap: everything heavy is imported inside the functions.
 """
@@ -35,16 +36,24 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 MAX_QUESTIONS_PER_TURN = 3
+# A question stays open (the user's next message goes to the asker) at most this long.
+QUESTION_TTL_S = 24 * 3600
 # Without a turn (CLI, Telegram): at most this many questions per agent in this window.
 _WINDOW_S = 600
-# Set to {"n": 0} at the start of each chat answer / job run (chat engine, job runner);
-# delegated agents inherit it, so a whole turn shares one budget.
-QUESTION_BUDGET: ContextVar[dict[str, int] | None] = ContextVar("question_budget", default=None)
+# One dict per user message in a chat (chat engine) or per job run (job runner),
+# shared by every agent that answers it and by delegated agents: the limit is
+# MAX_QUESTIONS_PER_TURN questions in total per user message (2026-10-28: it was
+# per agent answer). A job run also collects its questions here ("questions").
+QUESTION_BUDGET: ContextVar[dict[str, Any] | None] = ContextVar("question_budget", default=None)
+JOB_QUESTIONS_MARK = "\n\n---\nQuestions from the agent (request_information):\n"
 
 _lock = threading.Lock()
 _recent: dict[str, list[float]] = {}
-# Questions asked during a job run, keyed by memory scope ("job-<id>"); the runner adds them to the result.
-_job_questions: dict[str, list[str]] = {}
+
+
+def new_turn_budget(job_run: str = "") -> dict[str, Any]:
+    """A fresh budget for one user message (chat) or one job run (``job_run`` = "<job>-<run>")."""
+    return {"n": 0, "job_run": job_run, "questions": []} if job_run else {"n": 0}
 
 
 def questions_file() -> Path:
@@ -58,6 +67,8 @@ def _caller() -> str:
 
 
 # ── Skills ───────────────────────────────────────────────────────────────────
+_WINDOWS_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)), *(f"lpt{i}" for i in range(1, 10))}
+
 def create_skill(name: str, description: str, instructions: str) -> str:
     """Create a new skill (reusable instructions shown on the Skills page) that agents can load with use_skill.
 
@@ -75,20 +86,52 @@ def create_skill(name: str, description: str, instructions: str) -> str:
         return "Error: give a one-line description saying when the skill should be used."
     if not (instructions or "").strip():
         return "Error: write the skill's instructions (what to do, step by step)."
+    if key in _WINDOWS_RESERVED:
+        return f"Error: '{key}' is a reserved file name on Windows; pick another name."
+    # 2026-10-28: skills are plain files other agents load into their prompt — no secrets in them.
+    try:
+        from .knowledge.ingest.safety import redact
+
+        if redact(instructions) != instructions or redact(description) != description:
+            return ("Error: the skill text contains what looks like a password, token or API key. Skills are "
+                    "plain files shown to every agent — remove the secret (refer to the setting instead) and "
+                    "try again.")
+    except ImportError:  # pragma: no cover - the safety module is part of ZenSynora
+        pass
     existing = agent_skills.get_skill(key)
     if existing is not None:
         where = "a built-in skill" if existing.get("source") == "builtin" else "one of the user's skills"
         return (f"Error: '{key}' is already {where}; skills are never overwritten by agents. Load it with "
                 f"use_skill('{key}'), or create yours under another name (e.g. {key}-2). The user can change "
                 "it on the Skills page.")
-    # A skill of the user's with a built-in name would replace the built-in one: the check above covers it.
+    if len(instructions) > agent_skills.MAX_BODY:
+        return f"Error: a skill can be at most {agent_skills.MAX_BODY // 1000} kB; shorten the instructions."
+    # 2026-10-28: atomic, exclusive create — two agents creating the same name at the same
+    # time must not overwrite each other (save_skill, used by the Skills page, overwrites).
+    base = agent_skills.user_dir()
     try:
-        sk = agent_skills.save_skill(key, description, instructions)
-    except ValueError as e:
-        return f"Error: {e}"
+        base.mkdir(parents=True, exist_ok=True)
+        if (base / f"{key}.md").exists():
+            raise FileExistsError(key)
+        folder = base / key
+        folder.mkdir()  # fails if another agent (or the user) made it first
+        try:
+            with open(folder / "SKILL.md", "x", encoding="utf-8") as f:
+                f.write(agent_skills.render({"name": key, "description": description, "body": instructions}))
+        except BaseException:
+            try:
+                (folder / "SKILL.md").unlink(missing_ok=True)
+                folder.rmdir()
+            except OSError:
+                pass
+            raise
+    except FileExistsError:
+        return (f"Error: a skill called '{key}' already exists; skills are never overwritten by agents. "
+                f"Pick another name (e.g. {key}-2).")
     except OSError as e:
         logger.warning("Could not write skill %s: %s", key, e)
         return f"Error: the skill could not be saved ({e.__class__.__name__}: {e}). Check the disk and try again."
+    sk = agent_skills.get_skill(key) or {"name": key, "description": description}
     logger.info("Skill %s created by @%s", key, _caller())
     return (f"Created skill '{sk['name']}': {sk['description']}. It is on the Skills page; load it with "
             f"use_skill('{sk['name']}'). To list it in your own prompt call assign_skill('{sk['name']}').")
@@ -101,7 +144,7 @@ def assign_skill(skill: str, agent: str = "") -> str:
     agent: leave empty (only your own name is accepted)
     """
     from . import agent_skills
-    from .config import CONFIG_FILE, AppConfig, load_config, load_encrypted_or_plain, save_config
+    from .config import AppConfig, load_config, raw_for_update, save_config
 
     me = _caller()
     target = (agent or "").strip().lstrip("@") or me
@@ -116,9 +159,7 @@ def assign_skill(skill: str, agent: str = "") -> str:
     cfg = load_config()
     if key in agent_skills.skills_for(cfg, me):
         return f"You already have the skill '{key}'."
-    raw = (load_encrypted_or_plain(CONFIG_FILE) or {}) if CONFIG_FILE.exists() else {}
-    if not raw:
-        raw = cfg.model_dump(mode="json")
+    raw = raw_for_update(cfg)  # 2026-10-28: real secrets, never "**********"
     agents = raw.setdefault("agents", {})
     if me == "default":
         d = agents.setdefault("defaults", {})
@@ -213,17 +254,23 @@ def _log_question(rec: dict[str, Any]) -> None:
         logger.warning("Could not record the agent question: %s", e)
 
 
-def question_text(agent: str, topic: str, question: str, why: str = "") -> str:
-    text = f"**Question from @{agent}** — {topic}\n\n{question}"
+def question_text(agent: str, topic: str, question: str, why: str = "", reply_here: bool = True) -> str:
+    """Plain text: the chat shows a "question" badge and renders no Markdown emphasis (2026-10-28)."""
+    lines = [f"Question from @{agent} about {topic}:", question]
     if why:
-        text += f"\n\n_Why I ask: {why}_"
-    return text + f"\n\n(Reply here; your answer goes to @{agent}.)"
+        lines.append(f"Why I ask: {why}")
+    lines.append(f"Reply here; your answer goes to @{agent}." if reply_here
+                 else f"@{agent} is not in this chat: answer it in a conversation with @{agent}.")
+    return "\n\n".join(lines)
 
 
-def take_job_questions(scope: str) -> list[str]:
-    """Questions asked during a job run (memory scope ``job-<id>``); called by the job runner."""
-    with _lock:
-        return _job_questions.pop(scope, [])
+def job_questions_text(questions: list[str]) -> str:
+    return JOB_QUESTIONS_MARK + "\n\n".join(questions) if questions else ""
+
+
+def strip_job_questions(output: str) -> str:
+    """The run's answer without the questions added to it (the judge scores only the answer)."""
+    return (output or "").split(JOB_QUESTIONS_MARK, 1)[0]
 
 
 async def request_information(topic: str, question: str, why: str = "") -> str:
@@ -233,7 +280,6 @@ async def request_information(topic: str, question: str, why: str = "") -> str:
     question: the exact question for the user
     why: optional, what you need the answer for
     """
-    from .agent import MEMORY_SCOPE
     from .events import CURRENT_CHANNEL
 
     topic = " ".join((topic or "").split())[:200]
@@ -245,29 +291,36 @@ async def request_information(topic: str, question: str, why: str = "") -> str:
         return "Error: write the question you want the user to answer."
     agent = _caller()
     if not _take_budget(agent):
-        return (f"Not sent: you already asked {MAX_QUESTIONS_PER_TURN} questions in this turn. Put the rest in "
-                "one question or in your reply, and wait for the user's answer.")
+        return (f"Not sent: {MAX_QUESTIONS_PER_TURN} questions were already asked for this message. Put the "
+                "rest in one question or in your reply, and wait for the user's answer.")
     channel = CURRENT_CHANNEL.get()
-    scope = MEMORY_SCOPE.get() or ""
+    budget = QUESTION_BUDGET.get()
+    job_run = str((budget or {}).get("job_run") or "")
     await asyncio.to_thread(record_gap, topic, question, agent)
     rec = {"ts": time.time(), "agent": agent, "topic": topic, "question": question, "why": why,
-           "channel": channel or "", "scope": scope}
+           "channel": channel or "", "job_run": job_run}
     await asyncio.to_thread(_log_question, rec)
-    text = question_text(agent, topic, question, why)
     where = []
-    if scope.startswith("job-"):
+    if job_run and budget is not None:  # per run (job-<id>-<run>), never mixed with another run
         with _lock:
-            _job_questions.setdefault(scope, []).append(text)
+            budget.setdefault("questions", []).append(question_text(agent, topic, question, why, reply_here=False))
         where.append("added to this job run's result")
     if channel:
         try:
             from . import events
             from .chat import store
 
-            msg = await asyncio.to_thread(store.add_message, channel, "agent", agent, text, {
-                "question": {"topic": topic, "question": question, "why": why, "asked_by": agent}})
+            ch = await asyncio.to_thread(store.get_channel, channel)
+            member = bool(ch) and agent in ((ch or {}).get("members") or [])
+            msg = await asyncio.to_thread(
+                store.add_message, channel, "agent", agent,
+                question_text(agent, topic, question, why, reply_here=member),
+                {"question": {"topic": topic, "question": question, "why": why, "asked_by": agent,
+                              "asked_at": time.time(), "open": member}})
             events.publish(channel, {"type": "message", "message": msg})
-            where.append("posted in this chat")
+            where.append("posted in this chat" if member else
+                         "posted in this chat, but you are not a member of it, so the user's reply will not "
+                         "come to you here")
         except Exception as e:
             logger.warning("Could not post @%s's question in %s: %s", agent, channel, e)
     if not where:
@@ -278,24 +331,42 @@ async def request_information(topic: str, question: str, why: str = "") -> str:
             "Finish your reply by saying what you are waiting for; the answer will come in a later message.")
 
 
-def pending_question(messages: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """The agent question the newest user message answers, or None.
+def open_questions(messages: list[dict[str, Any]], members: list[str], now: float | None = None,
+                   ttl: float = QUESTION_TTL_S) -> list[dict[str, Any]]:
+    """Unanswered agent questions in a channel's messages, newest first.
 
-    ``messages`` are a channel's latest messages, oldest first, ending with the
-    user's new message. A question counts when no other user message came
-    between it and the new one.
-    """
-    seen_new = False
+    Only questions of agents that are members of the channel count (a job of
+    another agent posting into someone's DM never takes that DM over), at most
+    ``ttl`` seconds old and not answered yet (``meta.question.answered``)."""
+    now = now or time.time()
+    out = []
     for m in reversed(messages):
-        if m.get("role") == "user":
-            if seen_new:
-                return None
-            seen_new = True
+        q = (m.get("meta") or {}).get("question") or {}
+        if m.get("role") != "agent" or not q or q.get("answered") or q.get("open") is False:
             continue
-        if seen_new and m.get("role") == "agent" and (m.get("meta") or {}).get("question"):
-            return m
-    return None
+        if m.get("sender") not in members:
+            continue
+        if now - float(q.get("asked_at") or m.get("created") or 0) > ttl:
+            continue
+        out.append(m)
+    return out
 
 
-__all__ = ["create_skill", "assign_skill", "request_information", "pending_question",
-           "take_job_questions", "QUESTION_BUDGET", "MAX_QUESTIONS_PER_TURN", "record_gap"]
+def mark_answered(messages: list[dict[str, Any]], agent: str) -> list[int]:
+    """Close the open questions of ``agent`` among ``messages`` (the user answered). Returns their ids."""
+    from .chat import store
+
+    done = []
+    for m in messages:
+        q = (m.get("meta") or {}).get("question") or {}
+        if m.get("sender") == agent and q and not q.get("answered"):
+            meta = dict(m.get("meta") or {})
+            meta["question"] = {**q, "answered": True, "answered_at": time.time()}
+            store.update_message(m["id"], None, meta)
+            done.append(m["id"])
+    return done
+
+
+__all__ = ["create_skill", "assign_skill", "request_information", "open_questions", "mark_answered",
+           "new_turn_budget", "strip_job_questions", "job_questions_text", "QUESTION_BUDGET",
+           "MAX_QUESTIONS_PER_TURN", "QUESTION_TTL_S", "record_gap"]

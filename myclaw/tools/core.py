@@ -541,6 +541,12 @@ def is_tool_independent(tool_name: str) -> bool:
         "edit_schedule",
         "auto_schedule",
         "clear_checkpoint",
+        # 2026-10-28: they act for the calling agent (CURRENT_AGENT) and change
+        # settings/chats — run them in order, in the agent's context.
+        "create_skill",
+        "assign_skill",
+        "request_information",
+        "propose_agent_fusion",
     }
 
     return tool_name not in dependent_tools
