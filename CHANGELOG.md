@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `assimilate` / `import_knowledge`) — with the agent, channel / job, query,
   notes returned, result count, latency, search mode and **what it was for**
   (the message, job task or delegated task; secrets redacted). Stored in
-  `~/.myclaw/knowledge_usage.db`, kept 90 days / 200 000 lines. On by default
+  `~/.myclaw/knowledge-usage.db`, kept 90 days / 200 000 lines. On by default
   (`knowledge.usage_log`; local, no model calls, a few µs per access).
 - New **Usage** tab on the Knowledge page: tiles (accesses, hit rate, latency,
   notes used / never used, size), charts (accesses per day by kind, per agent,
@@ -26,6 +26,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   often agents used the note.
 - API: `GET /api/knowledge/usage`, `/api/knowledge/usage/stats`,
   `/api/knowledge/usage/note/{permalink}`, `/api/knowledge/benchmarks`.
+
+### Fixed
+
+- **Parallel tool calls ran in the first turn's context (2026-10-27).** The
+  tool worker pool started its workers inside whichever turn first used it,
+  and later parallel calls ran with that turn's settings: a Telegram user's
+  parallel knowledge tool calls searched the shared knowledge base instead of
+  their own, and the calls were attributed to the wrong agent. Each call now
+  runs in the context of the turn that made it.
 
 ### Changed
 

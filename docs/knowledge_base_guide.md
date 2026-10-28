@@ -502,40 +502,48 @@ Each line keeps the time, base, agent (and the agent that delegated to it), the
 web chat channel or job, the query or permalink, the notes returned (up to 20),
 the number of results, the time it took, the search mode, and **for**: the
 first 200 characters of the user message, job task or delegated task that
-caused it. Secrets (keys, tokens, passwords) are replaced by `[redacted]` with
-the same patterns as imports and the doctor.
+caused it (in a group channel: what the user wrote, not the group instructions
+around it; for the automatic context, the query is what was really searched).
+Secrets are replaced by `[redacted]`: the patterns of imports and the doctor,
+plus secrets in plain words ("the password is …", "api key: …"), AWS secret
+keys and 64-character hex secrets.
 
-**Where and how long.** `~/.myclaw/knowledge_usage.db` (separate from the
+**Where and how long.** `~/.myclaw/knowledge-usage.db` (separate from the
 notes and the index; deleting it loses only the log). Kept 90 days and at most
 200 000 lines (`knowledge.usage_retention_days`, `knowledge.usage_max_rows`;
-pruned once a day). Recording costs a few microseconds per access: a small
+pruned once a day, or at once when the log grows 10 % past the limit; a file
+over 50 MB is compacted at most weekly). Recording costs a few microseconds per access: a small
 queue is written by one background thread; a busy or broken log file only
 drops lines, the agent never waits for it.
 
-**Switch.** *Settings → Features → Knowledge usage log* (`knowledge.usage_log`,
-**on by default** — it is local, makes no model calls and changes nothing the
-agents see). Off, or the knowledge base off: nothing is recorded and no thread
-runs.
+**Switch.** *Settings → Features → Knowledge usage log* (`knowledge.usage_log`).
+It is **on by default** — an exception to the rule that background features
+are opt-in: it was asked for as a log of what agents do, it stays on this
+computer, makes no model calls, changes nothing the agents see, and its one
+writer thread only starts with the first record. Off, or the knowledge base
+off: nothing is recorded, no thread starts and no file is created.
 
 **The Usage tab:**
 
 * tiles — accesses in 7 / 30 days, **hit rate** (searches that found at least
-  one note), average and p95 latency, notes used vs never used, size;
+  one note), average and p95 latency, existing notes agents read in the chosen
+  period vs not read in it (writes do not count), size;
 * charts — accesses per day by kind, accesses per agent (click to filter the
   log), growth of notes / facts / links (one snapshot of the counts per day,
-  taken when the Usage tab or the API is opened; before there are two, notes
-  by creation month), search latency per day, facts by category;
-* lists — notes used most, notes never used, top queries and **queries that
+  updated hourly by the Web UI and when the Usage tab is opened; before there
+  are two, notes by creation month), search latency per day, facts by category;
+* lists — notes used most, notes not used in the period, top queries and **queries that
   found nothing** (topics the knowledge base is missing; click to see them in
   the log); click a note to open it;
 * **benchmarks** of the structure — tags, unlinked notes, waiting links, links
   per note, graph density, connected groups and the largest one, most linked
   notes, open conflicts, embeddings (semantic search on), distilled facts
   (distillation on); computed in well under a second, cached for a minute;
-* the **log** — filter by agent, kind or text (query, note or reason), 25 per
-  page.
+* the **log** — filter by agent (also *(no agent)*), kind or text (query,
+  note or reason), 25 per page.
 
-The note side panel shows *Used by agents: N times (last: @agent, 2 h ago)*.
+The note side panel shows *Used by agents: N times (last: @agent, 2 h ago)*;
+click it to see the log of exactly that note.
 
 API: `GET /api/knowledge/usage?base=&agent=&kind=&q=&since=&limit=&offset=`,
 `GET /api/knowledge/usage/stats?base=&days=`, `GET /api/knowledge/usage/note/{permalink}?base=`,
