@@ -41,10 +41,19 @@ class WorkerPoolManager:
         self._failed = 0
         self._submitted = 0
         self._started_at: Optional[float] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
 
     async def start(self) -> None:
-        if self._running:
+        loop = asyncio.get_running_loop()
+        if self._running and self._loop is loop:
             return
+        if self._running:
+            # 2026-10-29: the workers belonged to another event loop (closed or
+            # not ours) — work queued here would never run and every sync tool
+            # waited for the timeout. Start fresh workers in this loop.
+            logger.info("WorkerPoolManager: restarting workers in a new event loop")
+            self._queue = asyncio.PriorityQueue(maxsize=self.queue_size)
+        self._loop = loop
         self._running = True
         self._started_at = time.time()
         self._workers = [asyncio.create_task(self._worker_loop(i)) for i in range(self.max_workers)]
@@ -58,10 +67,10 @@ class WorkerPoolManager:
         timeout: Optional[float] = None,
         **kwargs: Any,
     ) -> Any:
-        if not self._running:
+        loop = asyncio.get_running_loop()
+        if not self._running or self._loop is not loop:
             await self.start()
 
-        loop = asyncio.get_running_loop()
         fut = loop.create_future()
         task = _QueuedTask(
             priority=int(priority),
