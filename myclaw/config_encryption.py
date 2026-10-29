@@ -247,7 +247,7 @@ def encrypt_config(config_path: Optional[Path] = None) -> None:
         {_ENCRYPTION_MARKER: True, "data": base64.b64encode(ciphertext).decode("ascii")}, indent=2
     )
 
-    path.write_text(encrypted, encoding="utf-8")
+    atomic_write_text(path, encrypted)
     logger.info(f"Config encrypted: {path}")
 
 
@@ -290,7 +290,7 @@ def decrypt_config(config_path: Optional[Path] = None) -> None:
             "The encryption key may have changed or the file is damaged."
         )
 
-    path.write_text(plaintext, encoding="utf-8")
+    atomic_write_text(path, plaintext)
     logger.info(f"Config decrypted: {path}")
 
 
@@ -349,6 +349,45 @@ def load_encrypted_or_plain(path: Path) -> Dict[str, Any]:
     return json.loads(text)
 
 
+def atomic_write_text(path: Path, text: str) -> None:
+    """Write a settings file so readers never see half of it (2026-10-28).
+
+    ``path.write_text`` truncates first: a reader at that moment (the file
+    watcher, another process) got invalid JSON and the app stopped with
+    SystemExit, and a crash left a broken config.json. Now: a temp file in the
+    same folder, fsync, ``os.replace`` (atomic), permissions 0600."""
+    import tempfile
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(text)
+            f.flush()
+            os.fsync(f.fileno())
+        try:
+            os.chmod(tmp, 0o600)
+        except OSError:  # pragma: no cover - e.g. some Windows file systems
+            pass
+        os.replace(tmp, path)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    if hasattr(os, "O_DIRECTORY"):  # make the rename itself durable
+        try:
+            dfd = os.open(str(path.parent), os.O_DIRECTORY)
+            try:
+                os.fsync(dfd)
+            finally:
+                os.close(dfd)
+        except OSError:  # pragma: no cover - best effort
+            pass
+
+
 def save_encrypted(path: Path, data: Dict[str, Any]) -> None:
     """Save config dict, encrypting if a key exists.
 
@@ -366,8 +405,8 @@ def save_encrypted(path: Path, data: Dict[str, Any]) -> None:
             {_ENCRYPTION_MARKER: True, "data": base64.b64encode(ciphertext).decode("ascii")},
             indent=2,
         )
-        path.write_text(encrypted, encoding="utf-8")
+        atomic_write_text(path, encrypted)
         logger.debug(f"Config saved encrypted: {path}")
     else:
-        path.write_text(text, encoding="utf-8")
+        atomic_write_text(path, text)
         logger.debug(f"Config saved plaintext: {path}")

@@ -452,7 +452,7 @@ class AgentDefaults(BaseModel):
     # 2026-10-27: agent level 1-9 (every agent starts at 1). Only a label for
     # now: shown in the Web UI and the agent's prompt; it grants no
     # permissions. A fused agent gets the lower level of the two.
-    level: int = Field(1, ge=1, le=9)
+    level: int = Field(1, ge=1, le=9, strict=True)  # strict: "5" / True are refused (422)
 
     @field_validator("level", mode="before")
     @classmethod
@@ -478,7 +478,10 @@ class NamedAgentConfig(BaseModel):
     # Context length in tokens (0 = the model's default) — see AgentDefaults.
     context_length: int = Field(0, ge=0, le=10_000_000)
     # 2026-10-27: level 1-9, a label only (see AgentDefaults.level).
-    level: int = Field(1, ge=1, le=9)
+    # 2026-10-28: who created the agent ("you" or "agent:<name>"); an agent made by
+    # create_agent can never be the medic, whatever its name.
+    created_by: str = "you"
+    level: int = Field(1, ge=1, le=9, strict=True)  # strict: "5" / True are refused (422)
 
     @field_validator("level", mode="before")
     @classmethod
@@ -1044,6 +1047,46 @@ def _apply_knowledge_watch(config: AppConfig) -> None:
         logger.warning("file watcher settings could not be applied (%s); it stays off", e)
 
 
+def _last_good_path() -> Path:
+    return CONFIG_FILE.with_name(CONFIG_FILE.name + ".last-good")
+
+
+def _keep_last_good() -> None:
+    """Before a save: copy the current file, if it is valid JSON, to config.json.last-good."""
+    from .config_encryption import atomic_write_text
+
+    try:
+        if not CONFIG_FILE.exists():
+            return
+        text = CONFIG_FILE.read_text(encoding="utf-8")
+        if not text.strip():
+            return
+        json.loads(text)
+        atomic_write_text(_last_good_path(), text)
+    except (OSError, ValueError) as e:
+        logger.debug("no last-good copy of the settings: %s", e)
+
+
+def _recover_last_good(err: Exception) -> dict:
+    from .config_encryption import atomic_write_text
+
+    good = _last_good_path()
+    try:
+        text = good.read_text(encoding="utf-8")
+        json.loads(text)
+    except (OSError, ValueError):
+        raise err
+    broken = CONFIG_FILE.with_name(f"{CONFIG_FILE.name}.broken-{time.strftime('%Y%m%d-%H%M%S')}")
+    try:
+        os.replace(CONFIG_FILE, broken)
+    except OSError:
+        pass
+    atomic_write_text(CONFIG_FILE, text)
+    logger.warning("Settings file %s was damaged (%s); restored the last good copy (the damaged file is %s).",
+                   CONFIG_FILE, err, broken.name)
+    return load_encrypted_or_plain(CONFIG_FILE)
+
+
 def load_config(force_reload: bool = False) -> AppConfig:
     """Load and validate config. Exits with clear message on schema errors.
 
@@ -1069,7 +1112,14 @@ def load_config(force_reload: bool = False) -> AppConfig:
             if not force_reload and _cached_config is not None and current_mtime == _config_mtime:
                 return _cached_config
 
-            raw = load_encrypted_or_plain(CONFIG_FILE)
+            try:
+                raw = load_encrypted_or_plain(CONFIG_FILE)
+            except json.JSONDecodeError as e:
+                # 2026-10-28: a broken file (a crash in the middle of an old,
+                # non-atomic save) is replaced by the last good copy instead of
+                # stopping ZenSynora; the broken one is kept next to it.
+                raw = _recover_last_good(e)
+                current_mtime = CONFIG_FILE.stat().st_mtime
             # Apply environment variable overrides
             raw = _apply_env_overrides(raw)
 
@@ -1137,9 +1187,10 @@ def raw_for_update(config: "AppConfig | None" = None) -> dict:
     Without a file (fresh install) it starts from the loaded settings with
     their real secrets — ``model_dump(mode="json")`` wrote "**********" in
     place of every API key. Bad agent levels from the file are clamped."""
+    loaded = load_config(force_reload=True)  # repairs a damaged file first
     raw = (load_encrypted_or_plain(CONFIG_FILE) or {}) if CONFIG_FILE.exists() else {}
     if not raw:
-        raw = plain_dump(config if config is not None else load_config())
+        raw = plain_dump(config if config is not None else loaded)
     return repair_levels(raw)
 
 
@@ -1166,4 +1217,5 @@ def save_config(config):
     else:
         raw = config
 
+    _keep_last_good()  # 2026-10-28: a damaged file can be replaced by the previous good one
     save_encrypted(CONFIG_FILE, raw)
