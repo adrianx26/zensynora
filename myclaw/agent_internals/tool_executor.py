@@ -221,6 +221,23 @@ async def execute_tools(
 
         try:
             func = TOOLS[tool_name]["func"]
+            # 2026-10-29: arguments the tool doesn't take are dropped (with a
+            # note for the model); a missing required argument is answered
+            # with how to call the tool — neither is an error in ZenSynora.
+            from ..tools.core import fit_tool_arguments, ignored_arguments_note, missing_arguments_message
+            sent_args = args
+            args, ignored_args, missing_args = fit_tool_arguments(func, args)
+            if missing_args:
+                content = (f"Tool {tool_name} was not run: missing required argument(s) "
+                           f"{', '.join(missing_args)}." + (_usage_hint(tool_name, sent_args)
+                           or " " + missing_arguments_message(tool_name, func, missing_args, sent_args)))
+                logger.info("Tool %s not run: missing %s", tool_name, ", ".join(missing_args))
+                tool_results_by_id[tool_call_id] = content
+                await mem.add("tool", content)
+                _emit_tool(agent, tool_name, sent_args, False, content, time.time() - start_time)
+                continue
+            if ignored_args:
+                logger.info("Tool %s: ignored arguments it does not take: %s", tool_name, ", ".join(ignored_args))
             if inspect.iscoroutinefunction(func):
                 result = await func(**args)
             else:
@@ -232,7 +249,7 @@ async def execute_tools(
             if inspect.isawaitable(result):
                 result = await result
 
-            tool_output = str(result)
+            tool_output = str(result) + ignored_arguments_note(tool_name, func, ignored_args)
 
             # Browse-specific: detect failure and append an alternative hint.
             if tool_name == "browse" and agent._detect_browse_failure(tool_output):

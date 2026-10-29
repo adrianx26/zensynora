@@ -33,3 +33,111 @@ def test_overlapping_runs_of_one_agent_complete_their_own_timers(tmp_path):
     replies, active = asyncio.run(run())
     assert all(replies)
     assert active == [], f"timers still running after both runs finished: {active}"
+
+
+# ── 2. Extra arguments the tool does not take ───────────────────────────────
+# Report: "shell() got an unexpected keyword argument 'description'" and 15×
+# "agent_reach_web_research() got an unexpected keyword argument 'url' /
+# 'platform' / 'tool' …" logged as ERROR; each failed call cost a tool step
+# until the jobs ran out of steps.
+def _run_tool_calls(tmp_path, calls, monkeypatch, caplog):
+    import logging
+
+    from myclaw.agent_internals.tool_executor import execute_tools
+
+    agent = create_mock_agent(tmp_path)
+
+    class Mem:
+        def __init__(self):
+            self.items = []
+
+        async def add(self, role, content):
+            self.items.append((role, content))
+
+    mem = Mem()
+
+    async def go():
+        with unittest.mock.patch("pathlib.Path.home", return_value=tmp_path):
+            return await execute_tools(agent, calls, [], "msg", "u1", mem, 0, False)
+
+    with caplog.at_level(logging.INFO):
+        try:
+            asyncio.run(go())
+        except Exception:
+            pass
+    return [c for r, c in mem.items if r == "tool"]
+
+
+def test_unknown_arguments_are_ignored_with_a_note(tmp_path, monkeypatch, caplog):
+    from myclaw.tools import TOOLS
+
+    seen = {}
+
+    def no_args_tool():
+        seen["called"] = True
+        return "description of the tool"
+
+    def shell_like(cmd: str, user_id: str = "default"):
+        seen["cmd"] = cmd
+        return "listing"
+
+    monkeypatch.setitem(TOOLS, "no_args_tool", {"func": no_args_tool, "desc": "t"})
+    monkeypatch.setitem(TOOLS, "shell_like", {"func": shell_like, "desc": "t"})
+    out = _run_tool_calls(tmp_path, [
+        {"id": "1", "function": {"name": "no_args_tool", "arguments": {"url": "https://x", "platform": "gh"}}},
+        {"id": "2", "function": {"name": "shell_like", "arguments": {"cmd": "ls", "description": "list"}}},
+    ], monkeypatch, caplog)
+    assert seen == {"called": True, "cmd": "ls"}, out
+    assert "description of the tool" in out[0] and "ignored" in out[0] and "url" in out[0]
+    assert "listing" in out[1] and "description" in out[1]
+    assert not [r for r in caplog.records if r.levelname in ("ERROR", "CRITICAL")]
+
+
+def test_missing_required_argument_gives_usage_without_error_log(tmp_path, monkeypatch, caplog):
+    from myclaw.tools import TOOLS
+
+    def needs_path(path: str):
+        return "read " + path
+
+    monkeypatch.setitem(TOOLS, "needs_path", {"func": needs_path, "desc": "t"})
+    out = _run_tool_calls(tmp_path, [
+        {"id": "1", "function": {"name": "needs_path", "arguments": {"file": "a.txt"}}},
+    ], monkeypatch, caplog)
+    assert "path" in out[0] and ("missing" in out[0].lower() or "required" in out[0].lower())
+    assert not [r for r in caplog.records if r.levelname in ("ERROR", "CRITICAL")]
+
+
+def test_parallel_executor_survives_a_loop_closed_mid_run():
+    """A loop closed while a run held a permit must not block later loops."""
+    from myclaw.tools.core import ParallelToolExecutor
+
+    ex = ParallelToolExecutor(max_concurrent=1, timeout=2)
+
+    async def hold():
+        async with ex._semaphore:
+            await asyncio.sleep(100)
+
+    loop = asyncio.new_event_loop()
+    task = loop.create_task(hold())
+    loop.run_until_complete(asyncio.sleep(0.05))
+    task.cancel()
+    loop.close()
+
+    async def run():
+        return await ex.execute_tools([{"function": {"name": "no_such_tool", "arguments": {}}}])
+
+    out = asyncio.run(run())
+    assert out and out[0]["tool_name"] != "parallel_executor", out
+
+
+def test_worker_pool_works_in_a_second_event_loop():
+    """Workers started in a finished loop must not swallow later submissions."""
+    from myclaw.worker_pool import WorkerPoolManager
+
+    pool = WorkerPoolManager(max_workers=1, task_timeout=5)
+
+    async def use():
+        return await asyncio.wait_for(pool.submit(lambda: 42), timeout=5)
+
+    assert asyncio.run(use()) == 42
+    assert asyncio.run(use()) == 42  # new loop: would hang before the fix
