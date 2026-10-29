@@ -150,6 +150,12 @@ export const AgentFusions: React.FC<Props> = ({ agents, dirty, onChanged }) => {
       </form>
       {notice && <div className={notice.kind === 'ok' ? 'probe-ok' : 'probe-err'}>{notice.text}</div>}
       {dirty && <div className="muted small">Save or discard your unsaved settings before applying or undoing a fusion.</div>}
+      {items.some(p => p.status === 'applying') && (
+        <div className="probe-err small">
+          A fusion {items.some(p => p.status === 'applying' && p.interrupted) ? 'was interrupted and is half done' : 'is being applied'}:
+          {' '}new fusions can be proposed or applied only after it is finished or undone (Undo below).
+        </div>
+      )}
       {visible.length === 0 && <div className="muted small">No open or applied fusions.</div>}
       {visible.map(p => (
         <div className="fusion-item" key={p.id}>

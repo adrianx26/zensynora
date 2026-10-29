@@ -400,6 +400,14 @@ def impact(moved: list[str], fused_name: str = "") -> dict[str, Any]:
     return out
 
 
+def _refuse_if_interrupted(except_id: str = "") -> None:
+    """Under the lock an "applying" fusion is one whose process died: undo it first (2026-10-28)."""
+    stuck = [p["id"] for p in list_fusions("applying") if p["id"] != except_id]
+    if stuck:
+        raise FusionError(f"Fusion {stuck[0]} was interrupted and is half done; undo it first (Settings → "
+                          f"Agents → Fusion proposals → Undo, or `zensynora agents undo {stuck[0]}`).")
+
+
 def create_fusion(agent_a: str, agent_b: str, new_name: str = "", reason: str = "", author: str = "you",
                   use_model: bool = True, allow_default: bool = False) -> dict[str, Any]:
     """Validate and store a fusion proposal (nothing changes yet). Raises FusionError."""
@@ -430,6 +438,7 @@ def create_fusion(agent_a: str, agent_b: str, new_name: str = "", reason: str = 
                                   "the two.")
             if taken is not None:
                 new_name = taken
+        _refuse_if_interrupted()
         pending = list_fusions("pending")
         for p in pending:
             if {p["agent_a"], p["agent_b"]} == {a_name, b_name}:
@@ -474,7 +483,7 @@ def undo_conflicts(fid: str) -> dict[str, Any]:
     prop = get_fusion(fid)
     backup = get_backup(fid)
     out: dict[str, Any] = {"changed": [], "blocked_by": []}
-    if prop is None or backup is None or prop["status"] != "applied":
+    if prop is None or backup is None or prop["status"] not in ("applied", "applying"):
         return out
     name = backup["fused_name"]
     cfg = load_config(force_reload=True)
@@ -485,7 +494,7 @@ def undo_conflicts(fid: str) -> dict[str, Any]:
     else:
         keys = _DEFAULT_FIELDS if name == "default" else _FIELDS
         out["changed"] += [f"@{name}: {k} changed" for k in keys if k in after and cur.get(k) != after.get(k)]
-    applied_at = float(prop.get("applied") or 0)
+    applied_at = float(prop.get("applied") or prop.get("applying_since") or 0)
     for p in list_fusions():
         if p["id"] != fid and p.get("status") in ("applied", "applying") and name in (p["agent_a"], p["agent_b"]) \
                 and float(p.get("applied") or p.get("applying_since") or 0) >= applied_at:
@@ -520,8 +529,9 @@ def preview(fid: str) -> dict[str, Any]:
 
 # ── Apply / reject / undo ────────────────────────────────────────────────────
 def _raw_config() -> dict[str, Any]:
-    from .config import CONFIG_FILE, load_encrypted_or_plain, repair_levels
+    from .config import CONFIG_FILE, load_config, load_encrypted_or_plain, repair_levels
 
+    load_config(force_reload=True)  # 2026-10-28: replaces a damaged file by the last good copy
     raw = (load_encrypted_or_plain(CONFIG_FILE) or {}) if CONFIG_FILE.exists() else {}
     if not raw:
         raise FusionError("There is no settings file yet — save the settings once, then try again.")
@@ -629,6 +639,7 @@ def apply_fusion(fid: str, origin: object = None) -> dict[str, Any]:
             raise FusionError("Fusion proposal not found.")
         if prop["status"] != "pending":
             raise FusionError(f"This fusion is {prop['status']}; only pending fusions can be applied.")
+        _refuse_if_interrupted()
         if _path(fid, ".backup.json").exists():
             raise FusionError(f"A backup of this fusion already exists ({_path(fid, '.backup.json')}); it is "
                               "never overwritten. Reject this proposal and propose the fusion again.")
@@ -650,6 +661,8 @@ def apply_fusion(fid: str, origin: object = None) -> dict[str, Any]:
         positions = {x.get("name"): i for i, x in enumerate(named)}
         before_named = [dict(x) for x in named if x.get("name") in (a_name, b_name)]
         defaults_before = {k: v for k, v in dict(agents.get("defaults") or {}).items() if k in _DEFAULT_FIELDS}
+        # the whole agents section as it was (no secrets live there: keys are only ids)
+        agents_snapshot = json.loads(json.dumps(agents))
         if name == "default":
             other = b_name if a_name == "default" else a_name
             d = agents.setdefault("defaults", {})
@@ -669,7 +682,8 @@ def apply_fusion(fid: str, origin: object = None) -> dict[str, Any]:
         backup: dict[str, Any] = {
             "id": fid, "created": time.time(), "agent_a": a_name, "agent_b": b_name, "fused_name": name,
             "originals": prop["originals"], "named_before": before_named, "positions": positions,
-            "defaults_before": defaults_before, "fused_after": fused_after, "config_saved": False,
+            "defaults_before": defaults_before, "agents_before": agents_snapshot, "fused_after": fused_after,
+            "config_saved": False,
             "chat_moves": [], "job_moves": [], "stage": "started"}
         bpath = _path(fid, ".backup.json")
         try:
@@ -686,10 +700,12 @@ def apply_fusion(fid: str, origin: object = None) -> dict[str, Any]:
             _write(bpath, backup)
 
         try:
-            # 2. settings
-            _save_raw(raw)
+            # 2. settings — recorded as (possibly) saved BEFORE the save: a crash right after
+            # it must still put the agents back (2026-10-28). _restore_config is a no-op when
+            # the save never happened.
             backup["config_saved"] = True
             record()
+            _save_raw(raw)
             # 3. channels, conversations, jobs — each recorded before (plan) and after it runs
             for old in _moved_names(a_name, b_name, name):
                 tag = f"{fid}:{old}"
@@ -786,21 +802,26 @@ def undo_fusion(fid: str, origin: object = None, force: bool = False) -> dict[st
         name = backup["fused_name"]
         interrupted = prop["status"] == "applying"
         lost: list[str] = []
-        if not interrupted:
-            check = undo_conflicts(fid)
-            if check["blocked_by"]:
-                raise FusionError(f"@{name} is part of a later fusion ({', '.join(check['blocked_by'])}); undo "
-                                  "that one first.")
+        # 2026-10-28: the safety checks hold for an interrupted fusion too.
+        check = undo_conflicts(fid)
+        if check["blocked_by"]:
+            raise FusionError(f"@{name} is part of a later fusion ({', '.join(check['blocked_by'])}); undo "
+                              "that one first.")
+        if not interrupted:  # an interrupted fusion is minutes old: nothing was edited on top of it
             if check["changed"] and not force:
                 raise FusionConflict(
                     f"@{name} was changed after the fusion ({'; '.join(check['changed'])}). Undo would lose "
                     "these changes — undo anyway with force (Web UI: Undo anyway; CLI: --force).",
                     check["changed"])
             lost = check["changed"]
-            cfg = load_config(force_reload=True)
-            for n in (prop["agent_a"], prop["agent_b"]):
-                if n != name and _canonical(cfg, n) is not None:
-                    raise FusionError(f"An agent called '{n}' exists again; rename or remove it, then undo.")
+        cfg = load_config(force_reload=True)
+        for n in (prop["agent_a"], prop["agent_b"]):
+            if n == name:
+                continue
+            cur = definition(cfg, n)
+            # the original itself (a save that never happened) is fine; anything else is a new agent
+            if cur is not None and (not interrupted or not _same(cur, prop["originals"][n])):
+                raise FusionError(f"An agent called '{n}' exists again; rename or remove it, then undo.")
         problems = _roll_back(backup) if (backup.get("config_saved") or backup.get("chat_moves")) else []
         if problems:
             prop["problems"] = problems
@@ -822,8 +843,17 @@ def _is_medic() -> bool:
     from .agent_caps import QUESTION_BUDGET
     from .events import CURRENT_AGENT
 
-    if (CURRENT_AGENT.get() or "").lower() == "medic":
-        return True
+    me = CURRENT_AGENT.get() or ""
+    if me.lower() == "medic":
+        # 2026-10-28: only a medic the user made — create_agent refuses the name and marks
+        # what agents create (created_by "agent:…"), so an agent cannot become the medic.
+        try:
+            from .config import load_config
+
+            entry = next((a for a in load_config().agents.named if a.name == me), None)
+        except Exception:
+            entry = None
+        return entry is not None and not str(getattr(entry, "created_by", "") or "").startswith("agent:")
     run = str((QUESTION_BUDGET.get() or {}).get("job_run") or "")
     if run:
         try:

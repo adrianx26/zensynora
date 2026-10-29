@@ -26,6 +26,8 @@ DELEGATION_DEPTH: ContextVar[int] = ContextVar("delegation_depth", default=0)
 MAX_DELEGATION_DEPTH = 2
 MAX_AGENTS = 30
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]{1,31}$")
+# Names create_agent refuses (any case): the medic has rights other agents do not.
+RESERVED_NAMES = {"medic", "default"}
 
 # Called with (name, agent) after create_agent; the Web UI adds it to its registry.
 _on_created: list[Callable[[str, Any], None]] = []
@@ -160,6 +162,10 @@ def create_agent(name: str, description: str, system_prompt: str = "", model: st
     name = (name or "").strip().lstrip("@").replace(" ", "_")
     if not NAME_RE.match(name):
         return "Error: the name must start with a letter and use 2-32 letters, digits, _ or - (e.g. Weather_Bot)."
+    if name.lower() in RESERVED_NAMES:
+        # 2026-10-28: an agent could make itself "medic" and propose fusions.
+        return (f"Error: '{name}' is reserved for an agent the user creates in Settings → Agents; "
+                "pick another name.")
     existing = ["default"] + [a.name for a in cfg.agents.named]
     if name.lower() in (n.lower() for n in existing):
         return f"Error: an agent called '{name}' already exists. Delegate to it instead, or pick another name."
@@ -195,7 +201,7 @@ def create_agent(name: str, description: str, system_prompt: str = "", model: st
         "and keep answers short and concrete.")
     entry = {"name": name, "description": description, "system_prompt": prompt[:8000],
              "model": (model or "").strip() or cfg.agents.defaults.model, "provider": (provider or "").strip(),
-             "skills": wanted, "key": key_id}
+             "skills": wanted, "key": key_id, "created_by": f"agent:{CURRENT_AGENT.get() or 'default'}"}
 
     from .config import raw_for_update
 

@@ -167,6 +167,10 @@ def rename_member(old: str, new: str) -> None:
             c.execute("UPDATE messages SET channel_id = ? WHERE channel_id = ?", (new_dm, old_dm))
 
 
+def _replaced(members: list[str], old: str, new: str) -> list[str]:
+    return list(dict.fromkeys(new if m == old else m for m in members))
+
+
 def plan_move(old: str, new: str, tag: str = "") -> dict[str, Any]:
     """What :func:`move_member` would change, without changing anything (2026-10-28).
 
@@ -178,7 +182,7 @@ def plan_move(old: str, new: str, tag: str = "") -> dict[str, Any]:
         for r in c.execute("SELECT id, members FROM channels").fetchall():
             members = json.loads(r["members"] or "[]")
             if old in members:
-                undo["channels"].append({"id": r["id"], "members": members})
+                undo["channels"].append({"id": r["id"], "members": members, "after": _replaced(members, old, new)})
         row = c.execute("SELECT * FROM channels WHERE id = ?", (old_dm,)).fetchone()
         if row is not None and old_dm != new_dm:
             created = not c.execute("SELECT 1 FROM channels WHERE id = ?", (new_dm,)).fetchone()
@@ -209,11 +213,12 @@ def move_member(old: str, new: str, note: str = "", tag: str = "") -> dict[str, 
             members = json.loads(r["members"] or "[]")
             if old not in members:
                 continue
-            undo["channels"].append({"id": r["id"], "members": members})
+            after = _replaced(members, old, new)
+            undo["channels"].append({"id": r["id"], "members": members, "after": after})
             if r["id"] == old_dm:
                 continue  # moved below
             c.execute("UPDATE channels SET members = ?, updated = ? WHERE id = ?",
-                      (json.dumps(list(dict.fromkeys(new if m == old else m for m in members))), now, r["id"]))
+                      (json.dumps(after), now, r["id"]))
         row = c.execute("SELECT * FROM channels WHERE id = ?", (old_dm,)).fetchone()
         if row is not None and old_dm != new_dm:
             created = False
@@ -268,6 +273,11 @@ def restore_member(undo: dict[str, Any]) -> None:
             if r is None:
                 continue
             current = json.loads(r["members"] or "[]")
+            if rec.get("after") is not None and current == rec["after"]:
+                # 2026-10-28: unchanged since the move — put back exactly the old list (order = who leads)
+                c.execute("UPDATE channels SET members = ?, updated = ? WHERE id = ?",
+                          (json.dumps(rec["members"]), now, rec["id"]))
+                continue
             if new not in current and rec["id"] != (dm or {}).get("from"):
                 continue  # the user removed the agent since: leave the channel as it is
             back = [m for m in rec["members"] if m in (old, new)]
