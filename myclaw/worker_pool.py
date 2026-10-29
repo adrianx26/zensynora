@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import contextvars
 import logging
 import time
 from dataclasses import dataclass, field
@@ -21,6 +22,9 @@ class _QueuedTask:
     kwargs: dict = field(compare=False, default_factory=dict)
     future: asyncio.Future = field(compare=False, default=None)
     timeout: Optional[float] = field(compare=False, default=None)
+    # 2026-10-27: the caller's context (agent turn, knowledge base, channel) —
+    # workers are created in the first caller's context and must not reuse it.
+    context: Optional[contextvars.Context] = field(compare=False, default=None)
 
 
 class WorkerPoolManager:
@@ -67,6 +71,7 @@ class WorkerPoolManager:
             kwargs=kwargs,
             future=fut,
             timeout=timeout if timeout is not None else self.task_timeout,
+            context=contextvars.copy_context(),
         )
         await self._queue.put(task)
         self._submitted += 1
@@ -92,8 +97,14 @@ class WorkerPoolManager:
         fn = queued_task.fn
         timeout = queued_task.timeout
 
+        ctx = queued_task.context
+        coro: Awaitable[Any]
         if asyncio.iscoroutinefunction(fn):
             coro = fn(*queued_task.args, **queued_task.kwargs)
+            if ctx is not None:  # run in the submitter's context, not the worker's
+                coro = asyncio.create_task(coro, context=ctx)
+        elif ctx is not None:
+            coro = asyncio.to_thread(ctx.run, fn, *queued_task.args, **queued_task.kwargs)
         else:
             coro = asyncio.to_thread(fn, *queued_task.args, **queued_task.kwargs)
 

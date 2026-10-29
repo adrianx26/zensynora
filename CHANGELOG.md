@@ -71,12 +71,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Parallel tool calls ran in the first turn's context (2026-10-27).** The
+  tool worker pool started its workers inside whichever turn first used it,
+  and later parallel calls ran with that turn's settings: a Telegram user's
+  parallel knowledge tool calls searched the shared knowledge base instead of
+  their own, and the calls were attributed to the wrong agent. Each call now
+  runs in the context of the turn that made it.
+
 **Agents' `send_telegram_message` never sent anything (2026-10-27)**
 - Async tools registered lazily (e.g. `send_telegram_message`) sit behind a
   plain wrapper, so the tool executors ran them in a thread and handed back the
   un-awaited coroutine: nothing was sent and the agent read
   `<coroutine object …>`. Both executors now await any awaitable result. The
   parallel executor also accepts OpenAI-style JSON-string arguments.
+
+### Changed
+
+**Jobs: delete from the list (2026-10-27)**
+- Every job row on the Jobs page has a **🗑 Delete** button with an inline
+  confirmation (*Delete it and its run history?*); before, Delete was only in
+  the job's detail panel behind a browser dialog. Disabled while the job runs.
 
 ### Changed
 

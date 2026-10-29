@@ -83,7 +83,11 @@ def save_items(items: List[Any], user_id: str, extra_tags: List[str], cap: int, 
     from .parser import Observation, Relation
     from .storage import write_note
 
+    import time
+
+    t0 = time.perf_counter()
     saved = 0
+    written: List[str] = []  # 2026-10-27: for the usage log
     for item in items[:cap]:
         if not isinstance(item, dict):
             continue
@@ -118,13 +122,19 @@ def save_items(items: List[Any], user_id: str, extra_tags: List[str], cap: int, 
             if target and target.lower() != title.lower():
                 rels.append(Relation(relation_type=rtype, target=target))
         try:
-            write_note(name=title, title=title, content=content, tags=tag_list,
-                       observations=obs[:8], relations=rels[:8], user_id=user_id,
-                       origin="extract")  # 2026-10-24 (KB phase 4 review)
+            permalink = write_note(name=title, title=title, content=content, tags=tag_list,
+                                   observations=obs[:8], relations=rels[:8], user_id=user_id,
+                                   origin="extract")  # 2026-10-24 (KB phase 4 review)
             saved += 1
+            written.append(str(permalink))
             logger.info(f"{log_prefix} Saved: '{title}' ({len(obs)} facts, {len(rels)} links)")
         except Exception as e:
             logger.debug(f"{log_prefix} Could not save '{title}': {e}")
+    if saved:
+        from . import usage  # 2026-10-27: agent writes in the usage log (never raises)
+
+        usage.record("write", "extraction", base=user_id, query=source or log_prefix.strip("[] "),
+                     notes=written, results=saved, latency_ms=(time.perf_counter() - t0) * 1000.0)
     return saved
 
 
