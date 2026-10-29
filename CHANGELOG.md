@@ -69,6 +69,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   against code on this computer is the tool sandbox and the shell checks.
 - `write_file` refuses files inside `.git` (aliases and hooks there run commands).
 
+### Fixed
+
+**Agents' `send_telegram_message` never sent anything (2026-10-27)**
+- Async tools registered lazily (e.g. `send_telegram_message`) sit behind a
+  plain wrapper, so the tool executors ran them in a thread and handed back the
+  un-awaited coroutine: nothing was sent and the agent read
+  `<coroutine object …>`. Both executors now await any awaitable result. The
+  parallel executor also accepts OpenAI-style JSON-string arguments.
+
 ### Changed
 
 **Chat: agent steps grouped into one line (2026-10-27)**
