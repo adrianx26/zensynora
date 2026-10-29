@@ -10,6 +10,10 @@ must be allowed; pipes are connected between the processes directly. Still
 refused: ``$``, backticks, ``\\``, ``{}``, newlines, redirection (``<``/``>``),
 subshells/grouping ``( )`` and background ``&``. Before, any ``|`` or ``&&``
 was refused, and agents spent many tool steps working around it.
+
+2026-10-29: the two harmless stderr forms are accepted after a command —
+``2>/dev/null`` (hide that command's error output) and ``2>&1`` (already the
+default: output includes errors). Any other redirection is still refused.
 """
 
 import asyncio
@@ -39,8 +43,52 @@ FORBIDDEN = re.compile(r"[\n\r`$\\{}]")
 FORBIDDEN_ARGS = {
     "find": {"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprintf", "-fls"},
 }
-HINT = ("Allowed between commands: | && || ; — not allowed: $ ` \\ { } < > ( ) "
-        "background & or new lines. Run one simple command or a chain of allowed commands.")
+HINT = ("Allowed between commands: | && || ; and after a command 2>/dev/null or 2>&1 — "
+        "not allowed: $ ` \\ { } other < > ( ) background & or new lines. "
+        "Run one simple command or a chain of allowed commands.")
+_STDERR_FORMS = {"2>/dev/null": True, "2>&1": False}  # form -> hide stderr
+_STDERR_MARK = "\x00zs-stderr-null"
+_STDERR_KEEP = "\x00zs-stderr-keep"
+
+
+class Argv(list):
+    """One command's arguments; ``hide_stderr`` when it ended in 2>/dev/null."""
+
+    hide_stderr: bool = False
+
+
+def _mark_stderr_forms(cmd: str) -> str:
+    """Replace unquoted ``2>/dev/null`` / ``2>&1`` words with marker words."""
+    out: List[str] = []
+    quote = ""
+    i = 0
+    while i < len(cmd):
+        ch = cmd[i]
+        if quote:
+            out.append(ch)
+            if ch == quote:
+                quote = ""
+            i += 1
+            continue
+        if ch in "'\"":
+            quote = ch
+            out.append(ch)
+            i += 1
+            continue
+        if ch == "2" and (i == 0 or cmd[i - 1].isspace()):
+            for form, hide in _STDERR_FORMS.items():
+                end = i + len(form)
+                if cmd.startswith(form, i) and (end == len(cmd) or cmd[end].isspace() or cmd[end] in ";&|"):
+                    out.append(f" {_STDERR_MARK if hide else _STDERR_KEEP} ")
+                    i = end
+                    break
+            else:
+                out.append(ch)
+                i += 1
+            continue
+        out.append(ch)
+        i += 1
+    return "".join(out)
 
 
 class ShellError(ValueError):
@@ -64,6 +112,9 @@ def parse(cmd: str) -> List[Tuple[str, List[List[str]]]]:
         raise ShellError(f"Error: Command contains dangerous characters. {HINT}")
     # Non-POSIX mode keeps the quotes on tokens, so a quoted "|" or "a;b" is an
     # argument and never an operator; the quotes are removed afterwards.
+    if "\x00" in cmd:
+        raise ShellError(f"Error: Command contains dangerous characters. {HINT}")
+    cmd = _mark_stderr_forms(cmd)
     lex = shlex.shlex(cmd, posix=False, punctuation_chars=";&|()<>")
     lex.whitespace_split = True
     try:
@@ -72,7 +123,7 @@ def parse(cmd: str) -> List[Tuple[str, List[List[str]]]]:
         raise ShellError(f"Error: Could not read the command ({e}).")
     groups: List[Tuple[str, List[List[str]]]] = []
     pipeline: List[List[str]] = []
-    argv: List[str] = []
+    argv: List[str] = Argv()
     op_before = ""
     count = 0
 
@@ -82,7 +133,7 @@ def parse(cmd: str) -> List[Tuple[str, List[List[str]]]]:
             raise ShellError(f"Error: Missing command around an operator. {HINT}")
         pipeline.append(argv)
         count += 1
-        argv = []
+        argv = Argv()
 
     for tok in tokens:
         if tok and set(tok) <= set(";&|()<>"):
@@ -93,6 +144,11 @@ def parse(cmd: str) -> List[Tuple[str, List[List[str]]]]:
                 groups.append((op_before, pipeline))
                 pipeline = []
                 op_before = tok
+            continue
+        if tok in (_STDERR_MARK, _STDERR_KEEP):
+            if not argv:
+                raise ShellError(f"Error: 2>/dev/null and 2>&1 go after a command. {HINT}")
+            argv.hide_stderr = tok == _STDERR_MARK  # type: ignore[attr-defined]
             continue
         try:
             argv.append("".join(shlex.split(tok)))
@@ -122,21 +178,26 @@ def parse(cmd: str) -> List[Tuple[str, List[List[str]]]]:
 
 def _run_pipeline(pipeline: List[List[str]], deadline: float) -> Tuple[int, str]:
     """Run argv1 | argv2 | … without a shell; returns (exit code of the last, output)."""
+    def hidden(argv: List[str]) -> bool:
+        return bool(getattr(argv, "hide_stderr", False))
+
     if len(pipeline) == 1:
-        r = subprocess.run(pipeline[0], shell=False, cwd=WORKSPACE, capture_output=True, text=True,
+        r = subprocess.run(list(pipeline[0]), shell=False, cwd=WORKSPACE, capture_output=True, text=True,
                            timeout=max(1.0, deadline - time.time()))
-        return r.returncode, (r.stdout or "") + (r.stderr or "")
+        return r.returncode, (r.stdout or "") + ("" if hidden(pipeline[0]) else (r.stderr or ""))
     procs: List[subprocess.Popen] = []
     prev = None
     try:
         for i, argv in enumerate(pipeline):
-            p = subprocess.Popen(argv, shell=False, cwd=WORKSPACE, stdin=prev,
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            p = subprocess.Popen(list(argv), shell=False, cwd=WORKSPACE, stdin=prev,
+                                 stdout=subprocess.PIPE,
+                                 stderr=subprocess.DEVNULL if hidden(argv) else subprocess.PIPE)
             if prev is not None:
                 prev.close()  # let the earlier command get SIGPIPE when this one exits
             prev = p.stdout
             procs.append(p)
         out, err_last = procs[-1].communicate(timeout=max(1.0, deadline - time.time()))
+        err_last = err_last or b""
         errs = []
         for p in procs[:-1]:
             p.wait(timeout=max(1.0, deadline - time.time()))
@@ -169,7 +230,8 @@ def shell(cmd: str) -> str:
 
     cmd: one command (e.g. 'ls -la', 'grep -rn TODO .') or a chain of allowed
          commands joined with | && || ; (e.g. 'ps aux | grep zensynora',
-         'pwd && ls -la'). Not allowed: $ ` \\ { } < > ( ), background &,
+         'pwd && ls -la'). After a command, 2>/dev/null hides its errors and
+         2>&1 is accepted. Not allowed: $ ` \\ { } other < > ( ), background &,
          new lines, and find -delete / -exec.
 
     Returns combined stdout+stderr, or an 'Error: …' that says what to change.

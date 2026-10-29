@@ -141,3 +141,42 @@ def test_worker_pool_works_in_a_second_event_loop():
 
     assert asyncio.run(use()) == 42
     assert asyncio.run(use()) == 42  # new loop: would hang before the fix
+
+
+@pytest.mark.parametrize("cmd,hidden", [
+    ('grep -rln "x" . 2>/dev/null | grep -v node_modules | head -30', [True, False, False]),
+    ("ls . 2>/dev/null | head -5", [True, False]),
+    ("ls /nonexistent 2>&1", [False]),
+])
+def test_shell_accepts_the_two_stderr_forms(cmd, hidden):
+    from myclaw.tools.shell import parse
+
+    groups = parse(cmd)
+    assert [getattr(a, "hide_stderr", False) for _, pl in groups for a in pl] == hidden
+    assert all("\x00" not in arg for _, pl in groups for a in pl for arg in a)
+
+
+@pytest.mark.parametrize("cmd", [
+    "ls 2>/tmp/x", "ls >/dev/null", "ls 2> /dev/null", "2>/dev/null ls",
+    "ls 2>/dev/nullx", "ls \x00zs-stderr-null", "cat < /etc/passwd",
+])
+def test_shell_still_refuses_other_redirections(cmd):
+    from myclaw.tools.shell import ShellError, parse
+
+    with pytest.raises(ShellError):
+        parse(cmd)
+
+
+def test_shell_quoted_stderr_form_is_an_argument():
+    from myclaw.tools.shell import parse
+
+    (_, [argv]), = parse('echo "2>/dev/null"')
+    assert list(argv) == ["echo", "2>/dev/null"] and not getattr(argv, "hide_stderr", False)
+
+
+def test_shell_2_dev_null_hides_errors():
+    import importlib
+
+    sh = importlib.import_module("myclaw.tools.shell")
+    assert sh.shell("ls /nonexistent-zs 2>/dev/null") == ""
+    assert "nonexistent-zs" in sh.shell("ls /nonexistent-zs 2>&1")
