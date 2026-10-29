@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+**Jobs: delete from the list (2026-10-27)**
+- Every job row on the Jobs page has a **🗑 Delete** button with an inline
+  confirmation (*Delete it and its run history?*); before, Delete was only in
+  the job's detail panel behind a browser dialog. Disabled while the job runs.
+
+### Changed
+
 **Chat: agent steps grouped into one line (2026-10-27)**
 - Tool calls, delegations and job steps that follow each other in a chat are
   shown as **one line** — *⚙ 12 steps · 1 failed · 2.0 s — @Executor: browse ×5 ·

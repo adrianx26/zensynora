@@ -233,7 +233,9 @@ in turn (v0.7.4); the message under the button names the model that wrote it.
 ![Jobs page](images/webui-jobs.png)
 
 A job is an instruction an agent carries out on a schedule or when you click
-**Run**. Scheduled jobs run while `zensynora webui` is running.
+**Run**. Scheduled jobs run while `zensynora webui` is running. Each row has
+**▶ Run**, **Pause/Resume**, **Edit** and **🗑 Delete** (asks *Delete it and
+its run history?* in the row; not possible while the job is running).
 
 | Field | Meaning |
 |---|---|
