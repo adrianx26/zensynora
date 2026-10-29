@@ -199,3 +199,50 @@ def test_unknown_tool_in_sequential_path_is_info_with_suggestion(tmp_path, monke
                           monkeypatch, caplog)
     assert "job_list" in str(out), out
     assert not [r for r in caplog.records if r.levelno >= logging.WARNING and "Unknown tool" in r.getMessage()]
+
+
+def test_health_skips_leftover_index_of_internal_ids(tmp_path, monkeypatch):
+    """knowledge_webui.db stays after its notes moved into 'default' — not a base."""
+    import sqlite3
+
+    from myclaw.knowledge import health
+
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    (tmp_path / ".myclaw" / "knowledge" / "default").mkdir(parents=True)
+    for name in ("default", "webui", "__delegate__", "alice"):
+        sqlite3.connect(tmp_path / ".myclaw" / f"knowledge_{name}.db").close()
+    monkeypatch.setattr("myclaw.knowledge.storage.knowledge_root", lambda: tmp_path / ".myclaw" / "knowledge")
+    assert health.bases() == ["default", "alice"]
+
+
+def test_semantic_stale_ids_on_an_index_without_checksum_column():
+    import sqlite3
+
+    from myclaw.knowledge import semantic
+
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute("CREATE TABLE entities (id INTEGER PRIMARY KEY, name TEXT, permalink TEXT, "
+                "file_path TEXT, created_at TEXT, updated_at TEXT)")
+    con.execute("INSERT INTO entities (name, updated_at) VALUES ('a', '1')")
+    con.execute("CREATE TABLE note_embed_state (entity_id INTEGER, model TEXT, file_checksum TEXT, "
+                "text_checksum TEXT)")
+    assert semantic._stale_ids(con, "m") == [1]
+
+
+def test_semantic_note_sources_on_an_old_index():
+    import sqlite3
+
+    from myclaw.knowledge import semantic
+
+    con = sqlite3.connect(":memory:")
+    con.row_factory = sqlite3.Row
+    con.execute("CREATE TABLE entities (id INTEGER PRIMARY KEY, name TEXT, permalink TEXT, "
+                "file_path TEXT, created_at TEXT, updated_at TEXT)")
+    con.execute("INSERT INTO entities (name) VALUES ('a')")
+    try:
+        out = semantic._note_sources(con, [1])
+    except sqlite3.OperationalError as e:  # later tables (observations…) are not the point here
+        assert "checksum" not in str(e) and "title" not in str(e), e
+        return
+    assert out[1]["title"] == "a" and out[1]["checksum"] is None
