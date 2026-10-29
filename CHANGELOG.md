@@ -46,6 +46,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   device names. A bad level in `config.json` no longer stops ZenSynora (it is
   clamped with a warning), a fresh install never gets masked API keys written
   into the settings, and a settings reload right after a save no longer fails.
+- Second review (2026-10-28): settings files are written atomically
+  (`config.json.last-good` restores a damaged file instead of stopping); the
+  backup marks the settings as saved before the save, so a crash right after
+  it is undone; interrupted fusions keep the undo checks and block new
+  fusions; undo restores channel member order exactly; `create_agent`
+  refuses the name `medic` and marks agent-made agents (`created_by`), which
+  can never act as the medic; Settings stores only whole-number levels
+  (`"5"`/`true` → 422). Depends on the separate guard/sandbox hardening
+  ("rules" change) for protection against agent-made tools calling the
+  settings routes.
 
 ### Changed
 

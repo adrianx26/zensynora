@@ -381,7 +381,8 @@ member chips and the chat, and the agent's prompt says "You are level N".
 **For now the level is only a label**: it changes no permissions — a level-1
 agent can do everything a level-9 agent can. A level outside 1–9 typed into
 `config.json` by hand is read as the nearest valid level (or 1) with one
-warning in the log; Settings refuses it.
+warning in the log; Settings refuses it (and anything that is not a whole
+number, such as `"5"` or `true`).
 
 **What every agent can do** (level 1 included):
 
@@ -432,12 +433,26 @@ anything fails while applying, everything is put back and the fusion shows
 Undo is refused while a later fusion uses the fused agent (undo that one
 first); if you changed the fused agent after the fusion, Undo lists the
 changes and asks before losing them (*Undo anyway*; CLI `undo ID --force`).
+While a fusion is interrupted, no other fusion can be proposed or applied
+(the card says why), and Undo of an interrupted fusion is refused if an agent
+with a removed name was created meanwhile (rename it first) or a later fusion
+uses the fused agent. Undo puts channel members back in their exact order.
 At most 5 proposals wait at a time. Only you can apply, reject or undo — from
-Settings or the CLI; agents cannot.
+Settings or the CLI; agents cannot. The fusion routes are ordinary settings
+routes (same guard as Settings); the separate hardening of that guard and of
+agent-made tools (sandboxed `register_tool`, no shell `curl` to this
+computer) comes with the "rules" change and covers them as well.
+
+Settings files are written atomically (temporary file, then rename; private
+permissions), and the previous good copy is kept as `config.json.last-good`:
+if `config.json` is ever damaged, ZenSynora restores that copy at start (the
+damaged file is kept as `config.json.broken-<time>`) instead of stopping.
 
 The medic can propose a fusion too (tool `propose_agent_fusion`, only for an
-agent called `medic` or the medic's own jobs such as *Medic self-review*); it
-appears in the same list, waiting for you. The default agent is never fused unless
+agent called `medic` that *you* created in Settings, or the medic's own jobs
+such as *Medic self-review* — agents cannot create an agent called `medic`,
+and agents they create are marked `created_by: agent:<name>`); it appears in
+the same list, waiting for you. The default agent is never fused unless
 you tick *include the default agent*: it then stays the default agent (keeps
 its model and built-in prompt) and gets the other agent's skills, the lower
 level and the larger context length. From the command line:

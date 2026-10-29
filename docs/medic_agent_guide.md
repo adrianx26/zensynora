@@ -149,7 +149,8 @@ All tools are registered in `myclaw/tools/__init__.py` and implemented in
 ### Agent fusion
 
 When two agents do the same work (overlapping descriptions, prompts and
-skills), the medic — the agent called `medic`, or a job the medic created
+skills), the medic — the agent called `medic` that the user created (agents
+cannot create one: the name is reserved for `create_agent`), or a job the medic created
 such as *Medic self-review*; every other agent gets an error — can propose
 making them one with
 `propose_agent_fusion(agent_a, agent_b, new_name, reason)` (a reason is
