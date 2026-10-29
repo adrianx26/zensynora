@@ -180,3 +180,22 @@ def test_shell_2_dev_null_hides_errors():
     sh = importlib.import_module("myclaw.tools.shell")
     assert sh.shell("ls /nonexistent-zs 2>/dev/null") == ""
     assert "nonexistent-zs" in sh.shell("ls /nonexistent-zs 2>&1")
+
+
+def test_unknown_tool_suggests_the_real_name(caplog):
+    import myclaw.tools  # noqa: F401  (registers the tools)
+    from myclaw.tools.core import unknown_tool_message
+
+    msg = unknown_tool_message("list_jobs")
+    assert msg.startswith("Unknown tool: list_jobs. Did you mean: job_list")
+    assert "Use only the tools" in unknown_tool_message("xyzzy_nothing")
+
+
+def test_unknown_tool_in_sequential_path_is_info_with_suggestion(tmp_path, monkeypatch, caplog):
+    import logging
+
+    import myclaw.tools  # noqa: F401
+    out = _run_tool_calls(tmp_path, [{"id": "c1", "function": {"name": "list_jobs", "arguments": {}}}],
+                          monkeypatch, caplog)
+    assert "job_list" in str(out), out
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING and "Unknown tool" in r.getMessage()]

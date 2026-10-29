@@ -204,10 +204,13 @@ async def execute_tools(
         tool_call_id = tc.get("id", "call_default")
 
         if tool_name not in TOOLS:
-            content = f"Unknown tool: {tool_name}"
+            from ..tools.core import unknown_tool_message
+
+            content = unknown_tool_message(tool_name)
             tool_results_by_id[tool_call_id] = content
             await mem.add("tool", content)
-            logger.warning(f"Unknown tool called: {tool_name}")
+            # Agent input, not a ZenSynora fault (AGENTS.md): INFO, not WARNING.
+            logger.info("Unknown tool called: %s", tool_name)
             continue
 
         # Delegation calls track their own depth to defeat infinite loops.

@@ -370,10 +370,11 @@ class ParallelToolExecutor:
 
             try:
                 if tool_name not in TOOLS:
+                    logger.info("Unknown tool called: %s", tool_name)
                     return {
                         "tool_name": tool_name,
                         "result": "",
-                        "error": f"Unknown tool: {tool_name}",
+                        "error": unknown_tool_message(tool_name),
                         "duration": time.time() - start_time,
                         "success": False,
                     }
@@ -618,6 +619,34 @@ def missing_arguments_message(tool_name: str, func: Any, missing: List[str], sen
     return (f"Tool {tool_name} was not run: missing required argument(s) {', '.join(missing)}. "
             f"Its arguments: {describe_tool_parameters(func)}. You sent: {shown}. "
             f"Call {tool_name} again with the required arguments.")
+
+
+def suggest_tool_names(name: str, limit: int = 3) -> List[str]:
+    """Registered tools close to ``name`` (2026-10-29): ``list_jobs`` → ``job_list``."""
+    import difflib
+
+    wanted = (name or "").strip().lower()
+    if not wanted:
+        return []
+    names = list(TOOLS)
+
+    def words(n: str) -> List[str]:
+        return sorted(w.rstrip("s") for w in re.split(r"[_\-\s.]+", n.lower()) if w)
+
+    out = [n for n in names if words(n) == words(wanted)]
+    out += [n for n in difflib.get_close_matches(wanted, names, n=limit, cutoff=0.6) if n not in out]
+    if len(out) < limit:
+        key = set(words(wanted))
+        out += [n for n in names if n not in out and key and key <= set(words(n))]
+    return out[:limit]
+
+
+def unknown_tool_message(name: str) -> str:
+    """Actionable reply for a call to a tool that does not exist."""
+    close = suggest_tool_names(name)
+    if close:
+        return f"Unknown tool: {name}. Did you mean: {', '.join(close)}? Call one of those instead."
+    return f"Unknown tool: {name}. Use only the tools listed in your tool definitions."
 
 
 def is_tool_independent(tool_name: str) -> bool:
