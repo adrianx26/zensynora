@@ -344,6 +344,13 @@ class ParallelToolExecutor:
         async with self._semaphore:
             tool_name = tool_call.get("function", {}).get("name", "")
             args = tool_call.get("function", {}).get("arguments", {})
+            if isinstance(args, str):  # 2026-10-27: OpenAI-style JSON string arguments
+                try:
+                    args = json.loads(args) if args.strip() else {}
+                except ValueError:
+                    args = {}
+            if not isinstance(args, dict):
+                args = {}
             start_time = time.time()
 
             try:
@@ -409,6 +416,8 @@ class ParallelToolExecutor:
                 else:
                     pool = _get_worker_pool_manager()
                     result = await pool.submit(func, **args)
+                if inspect.isawaitable(result):  # 2026-10-27: async tools behind lazy wrappers
+                    result = await result
 
                 duration = time.time() - start_time
 

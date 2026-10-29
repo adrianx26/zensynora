@@ -225,6 +225,12 @@ async def execute_tools(
                 result = await func(**args)
             else:
                 result = await asyncio.to_thread(func, **args)
+            # 2026-10-27: lazily registered tools are wrappers, so an async tool
+            # (e.g. send_telegram_message) is not seen as a coroutine function and
+            # returned an un-awaited coroutine: nothing was sent and the agent got
+            # "<coroutine object …>" as the result.
+            if inspect.isawaitable(result):
+                result = await result
 
             tool_output = str(result)
 

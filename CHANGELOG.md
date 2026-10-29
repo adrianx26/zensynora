@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   their own, and the calls were attributed to the wrong agent. Each call now
   runs in the context of the turn that made it.
 
+**Agents' `send_telegram_message` never sent anything (2026-10-27)**
+- Async tools registered lazily (e.g. `send_telegram_message`) sit behind a
+  plain wrapper, so the tool executors ran them in a thread and handed back the
+  un-awaited coroutine: nothing was sent and the agent read
+  `<coroutine object …>`. Both executors now await any awaitable result. The
+  parallel executor also accepts OpenAI-style JSON-string arguments.
+
 ### Changed
 
 **Chat: agent steps grouped into one line (2026-10-27)**
