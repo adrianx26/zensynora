@@ -507,6 +507,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#usage-log-and-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage log and benchmarks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#plans" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1293,6 +1304,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#usage-log-and-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage log and benchmarks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#plans" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2031,6 +2053,78 @@ under a second):</p>
 </tbody>
 </table>
 <p>API: <code>GET /api/knowledge/health?base=</code>.</p>
+<h2 id="usage-log-and-benchmarks">Usage log and benchmarks<a class="headerlink" href="#usage-log-and-benchmarks" title="Permanent link">&para;</a></h2>
+<p>Added 2026-10-27. The <strong>Usage</strong> tab on the Knowledge page shows which agent used
+which notes, and for what.</p>
+<p><strong>What is recorded.</strong> One line per knowledge access by an agent:</p>
+<table>
+<thead>
+<tr>
+<th>Kind</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>automatic context</td>
+<td>the search before an answer (<code>auto-context</code>; not for "hi"/"ok")</td>
+</tr>
+<tr>
+<td>tool</td>
+<td><code>search_knowledge</code>, <code>read_knowledge</code>, <code>get_knowledge_context</code>, <code>list_facts</code>, <code>drill_down</code> …</td>
+</tr>
+<tr>
+<td>write</td>
+<td><code>write_to_knowledge</code>, automatic extraction, the daily session summary, <code>assimilate</code> / <code>import_knowledge</code></td>
+</tr>
+</tbody>
+</table>
+<p>Each line keeps the time, base, agent (and the agent that delegated to it), the
+web chat channel or job, the query or permalink, the notes returned (up to 20),
+the number of results, the time it took, the search mode, and <strong>for</strong>: the
+first 200 characters of the user message, job task or delegated task that
+caused it (in a group channel: what the user wrote, not the group instructions
+around it; for the automatic context, the query is what was really searched).
+Secrets are replaced by <code>[redacted]</code>: the patterns of imports and the doctor,
+plus secrets in plain words ("the password is …", "api key: …"), AWS secret
+keys and 64-character hex secrets.</p>
+<p><strong>Where and how long.</strong> <code>~/.myclaw/knowledge-usage.db</code> (separate from the
+notes and the index; deleting it loses only the log). Kept 90 days and at most
+200 000 lines (<code>knowledge.usage_retention_days</code>, <code>knowledge.usage_max_rows</code>;
+pruned once a day, or at once when the log grows 10 % past the limit; a file
+over 50 MB is compacted at most weekly). Recording costs a few microseconds per access: a small
+queue is written by one background thread; a busy or broken log file only
+drops lines, the agent never waits for it.</p>
+<p><strong>Switch.</strong> <em>Settings → Features → Knowledge usage log</em> (<code>knowledge.usage_log</code>).
+It is <strong>on by default</strong> — an exception to the rule that background features
+are opt-in: it was asked for as a log of what agents do, it stays on this
+computer, makes no model calls, changes nothing the agents see, and its one
+writer thread only starts with the first record. Off, or the knowledge base
+off: nothing is recorded, no thread starts and no file is created.</p>
+<p><strong>The Usage tab:</strong></p>
+<ul>
+<li>tiles — accesses in 7 / 30 days, <strong>hit rate</strong> (searches that found at least
+  one note), average and p95 latency, existing notes agents read in the chosen
+  period vs not read in it (writes do not count), size;</li>
+<li>charts — accesses per day by kind, accesses per agent (click to filter the
+  log), growth of notes / facts / links (one snapshot of the counts per day,
+  updated hourly by the Web UI and when the Usage tab is opened; before there
+  are two, notes by creation month), search latency per day, facts by category;</li>
+<li>lists — notes used most, notes not used in the period, top queries and <strong>queries that
+  found nothing</strong> (topics the knowledge base is missing; click to see them in
+  the log); click a note to open it;</li>
+<li><strong>benchmarks</strong> of the structure — tags, unlinked notes, waiting links, links
+  per note, graph density, connected groups and the largest one, most linked
+  notes, open conflicts, embeddings (semantic search on), distilled facts
+  (distillation on); computed in well under a second, cached for a minute;</li>
+<li>the <strong>log</strong> — filter by agent (also <em>(no agent)</em>), kind or text (query,
+  note or reason), 25 per page.</li>
+</ul>
+<p>The note side panel shows <em>Used by agents: N times (last: @agent, 2 h ago)</em>;
+click it to see the log of exactly that note.</p>
+<p>API: <code>GET /api/knowledge/usage?base=&amp;agent=&amp;kind=&amp;q=&amp;since=&amp;limit=&amp;offset=</code>,
+<code>GET /api/knowledge/usage/stats?base=&amp;days=</code>, <code>GET /api/knowledge/usage/note/{permalink}?base=</code>,
+<code>GET /api/knowledge/benchmarks?base=</code>.</p>
 <h2 id="plans">Plans<a class="headerlink" href="#plans" title="Permanent link">&para;</a></h2>
 <p>What comes next (note editing tools — <code>edit_note</code>, <code>move_note</code>, <code>daily_note</code>,
 <code>recent_activity</code> —, hiding wrong distilled facts, an optional model pass for
