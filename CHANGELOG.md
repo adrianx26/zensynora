@@ -28,23 +28,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-**Agents cannot approve their own changes (2026-10-28, rules review)**
-- The shell tool checks every argument, not only the command name: nothing in
-  `~/.myclaw` outside the workspace (rules, settings, proposals); `git`, `uniq`,
-  `curl`, `wget` write only inside the workspace; `sort -o`, git's
-  `-C`/`-c`/`--git-dir`/`--work-tree`, `git config` changes, curl `-L`/`-K`/
-  `--resolve`/proxies and wget `-e`/`-i` are refused; curl/wget may fetch only
-  public addresses (DNS checked), never localhost or the local network.
+**Agents cannot approve their own changes (2026-10-28, rules review and re-review)**
+- **Agent-made tools run in a separate, locked-down process.** Tools made with
+  `register_tool` (also imported or hub skills) are no longer imported into
+  ZenSynora: each call starts `python -I` in the workspace with `HOME` inside it,
+  no proxy settings and a timeout (`sandbox.max_time_seconds`). Before the
+  tool's code runs, the process locks itself down — Landlock on Linux (writes
+  only in the workspace, no home folder, TCP only to `sandbox.tool_ports`,
+  default 80/443) and an audit hook everywhere (no programs, no ctypes, nothing
+  from `~/.myclaw`, no connections to this computer or the local network).
+  Arguments and results travel as JSON. The Tools page marks these tools
+  *sandboxed* and lists tools that were not loaded, with the reason; the doctor
+  check *Tool sandbox* shows both.
+- Tool code may import only an allow-list of modules (json, re, datetime, math,
+  requests, httpx, bs4, io, tempfile, …); names that lead to the operating
+  system (`.os`, `.system`, `attrgetter`, `create_subprocess_shell`, `open` …),
+  `eval`/`exec`/`open`/`vars` and most dunders are refused. Everyday code still
+  works: `if __name__ == "__main__":`, `x.__class__.__name__`, `__dict__`,
+  `__file__`, `__version__`, dataclasses, async tools.
+- The shell tool checks every argument, not only the command name: files that
+  hold secrets or decide what agents may do (`config.json`, `.config_key`,
+  `.env`, `mfa.db`, the rules' `.manifest.json`/`.proposals`, backups) cannot be
+  read — also not by `grep -r` on a folder above them; the rest of `~/.myclaw`
+  (logs!) can be read. `git`, `uniq`, `curl`, `wget` write only inside the
+  workspace (`git -C <folder in the workspace>` works); `sort -o`, git's
+  `-c`/`--git-dir`/`--work-tree` and `git config` changes other than
+  `user.name`/`user.email` are refused.
+- `curl` and `wget` stay **allowed by default**, now with checks: public
+  addresses only (also decimal/octal/hex IPs, IPv6 forms and names that resolve
+  to this computer are refused), no `-L` (the message points to the browse
+  tool), no `-K`/`--resolve`/proxies, wget `-e`/`-i` refused and redirects off.
 - **Settings → Security → allowed/blocked commands are now applied** (at start-up
-  and after every save). Before, the shell used a built-in list that also
-  allowed `curl` and `wget`; with the default settings they are now **off** —
-  add them in Settings → Security if you need them.
-- Approving or changing rules and approving/installing code proposals needs the
-  `X-ZenSynora-UI` header the Web UI sends; changes from other web sites
-  (foreign `Origin`) are refused on all guarded routes.
-- `register_tool` code may not import `myclaw`, `builtins`, `inspect`, `gc`, `io`
-  and similar, or use dunder attributes (`__subclasses__`, `__globals__` …);
-  agent-made tools saved earlier are checked again when loaded.
+  and after every save). Interpreters and shells (python, bash, sh, node, perl,
+  env, xargs, sudo, nc, awk …) are never run, even when listed; Settings →
+  Security and the doctor (*Shell commands*) show the ones skipped.
+- **Every change through the Web UI's protected routes needs the header
+  `X-ZenSynora-UI: 1`** (the Web UI sends it); changes from other web sites
+  (foreign `Origin`) are refused. Scripts that use the admin API key must add
+  the header. This protects against web pages in your browser; the protection
+  against code on this computer is the tool sandbox and the shell checks.
 - `write_file` refuses files inside `.git` (aliases and hooks there run commands).
 
 ### Changed

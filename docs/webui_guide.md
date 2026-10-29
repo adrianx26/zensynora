@@ -399,6 +399,14 @@ follows (title, priority, which agents, text); agents can only propose new rules
 changes or deletions, shown at the top with a diff for you to approve or reject.
 See the [Rules guide](rules_guide.md).
 
+### Scripts and the admin API key
+
+Changes through the protected routes (settings, rules, proposals, backups …)
+need the header `X-ZenSynora-UI: 1`, which the Web UI sends. A script that uses
+the admin API key from another computer must send it too
+(`curl -H 'X-API-Key: …' -H 'X-ZenSynora-UI: 1' -X PUT …`). Requests from other
+web sites are refused.
+
 ## Backups: settings, API keys, knowledge
 
 ![Backups page](images/webui-backups.png)

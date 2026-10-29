@@ -102,15 +102,21 @@ newer text.
 
 Agents cannot activate a rule by other means either:
 
-* approving, rejecting and changing rules in the Web UI needs a header that only
-  the Web UI sends, and requests coming from other web sites are refused;
-* the shell tool refuses arguments that point into `~/.myclaw` outside the
-  workspace (rules, settings, proposals), commands that write (`git`, `uniq`,
-  `curl`, `wget`) may only write inside the workspace, and `sort -o`, git's
-  `-C`/`-c`/`--git-dir`/`--work-tree` and `git config` changes are refused;
-* `curl`/`wget` (only when you allowed them in Settings → Security) may fetch
-  only public web addresses — never this computer or the local network;
-* tools agents build with `register_tool` cannot import ZenSynora's own code;
+* every change through the Web UI's protected routes (rules, settings, code
+  proposals …) needs a header only the Web UI sends, and requests coming from
+  other web sites are refused — this guards against web pages in your browser;
+* tools that agents build with `register_tool` run in a separate, locked-down
+  process: they cannot write outside the workspace, read `~/.myclaw`, start
+  programs or connect to this computer — this guards against code on your
+  computer;
+* the shell tool refuses to read the files that hold secrets or approvals
+  (settings, keys, the rules' `.manifest.json` and `.proposals`, backups);
+  commands that write (`git`, `uniq`, `curl`, `wget`) may only write inside the
+  workspace; `sort -o`, git's `-c`/`--git-dir`/`--work-tree` and `git config`
+  changes (other than `user.name`/`user.email`) are refused; interpreters and
+  shells are never run;
+* `curl`/`wget` may fetch only public web addresses — never this computer or
+  the local network, and without following redirects;
 * a rule file written by anything else is not used until you review it (above).
 
 ## Nothing is lost
