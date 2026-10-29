@@ -887,11 +887,21 @@ def _scoped(fn):
 
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
+        import time
+
+        from ..knowledge import usage
         from myclaw.knowledge.scope import for_tool
 
         bound = sig.bind_partial(*args, **kwargs)
         bound.arguments["user_id"] = for_tool(bound.arguments.get("user_id"))
-        return fn(*bound.args, **bound.kwargs)
+        if not usage.enabled():
+            return fn(*bound.args, **bound.kwargs)
+        # 2026-10-27: usage log — which agent used which notes, and why (never raises)
+        t0 = time.perf_counter()
+        out = fn(*bound.args, **bound.kwargs)
+        usage.record_tool(fn.__name__, dict(bound.arguments), out,
+                          (time.perf_counter() - t0) * 1000.0, str(bound.arguments["user_id"]))
+        return out
 
     return wrapper
 

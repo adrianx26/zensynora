@@ -1227,7 +1227,7 @@ class Agent:
                 text = text[-SESSION_SUMMARY_MAX_CHARS:]
                 cut = text.find("\n### ")
                 text = text[cut + 1:] if cut != -1 else text
-            return write_note(
+            permalink = write_note(
                 name=name,
                 title=f"Session summaries {now.strftime('%Y-%m-%d')}",
                 content=text,
@@ -1237,6 +1237,26 @@ class Agent:
                 relations=relations,
                 origin="session",  # 2026-10-24 (KB phase 4 review): written by the agent
             )
+        from .knowledge import usage as _kb_usage  # 2026-10-27: agent writes in the usage log
+
+        _kb_usage.record("write", "session_summary", base=user_id, query=name,
+                         notes=[permalink], results=1)
+        return permalink
+
+    @staticmethod
+    def _record_kb_usage(query: str, user_id: str, notes: list, metadata: dict,
+                         t0: float, distilled: bool) -> None:
+        """The automatic context search in the knowledge usage log (2026-10-27; never raises)."""
+        try:
+            from .knowledge import usage as _kb_usage
+
+            _kb_usage.record(
+                "context", "auto-context", base=user_id, query=query,
+                notes=[getattr(n, "permalink", "") for n in notes], results=len(notes),
+                latency_ms=(time.perf_counter() - t0) * 1000.0,
+                mode=str(metadata.get("search_mode") or "fts") + ("+distilled" if distilled else ""))
+        except Exception as e:
+            logger.debug("knowledge usage not recorded: %s", e)
 
     def _search_knowledge_context_sync(
         self, message: str, user_id: str, max_results: int = 3, return_structured: bool = False
@@ -1278,6 +1298,7 @@ class Agent:
             )
             return result if return_structured else ""
 
+        _t0 = time.perf_counter()  # 2026-10-27: latency for the usage log
         try:
             # Resolve explicit memory:// references
             memory_refs = re.findall(r"memory://([\w\-]+)", message)
@@ -1287,6 +1308,7 @@ class Agent:
             words = [w for w in cleaned.split() if len(w) > 3]
 
             notes = []
+            searched = message
             # 2026-10-24 (KB phase 2): with the hub penalty a few more candidates
             # are fetched, so a very linked note can be ranked below a specific one.
             from .knowledge.quality import hub_threshold, rank_with_hub_penalty
@@ -1314,6 +1336,7 @@ class Agent:
                     # 2026-10-23 (KB phase 0): boolean=True so OR means OR
                     # (as free text every word had to match).
                     notes = search_notes(query, user_id, limit=fetch, boolean=True)
+                    searched = query  # 2026-10-27: the usage log shows what was really searched
             if fetch != max_results and notes:
                 notes = rank_with_hub_penalty(notes, user_id)[:max_results]
 
@@ -1347,6 +1370,9 @@ class Agent:
                     if ref_note is not None:
                         notes = [ref_note] + list(notes)
                         found.add(ref)
+
+            if words or memory_refs:
+                self._record_kb_usage(searched, user_id, notes, metadata, _t0, bool(distilled))
 
             if not notes and distilled:
                 context = "## Relevant Knowledge" + distilled + "\n\n---\n"
@@ -1486,9 +1512,13 @@ class Agent:
         loop = asyncio.get_running_loop()
         executor = _get_kb_search_executor()
         from .observability import span as _span
+        # 2026-10-27: run in a copy of this context (as asyncio.to_thread does), so
+        # the usage log knows the agent, channel and job of the search
+        ctx = contextvars.copy_context()
         with _span("kb.search", user=user_id, max_results=max_results):
             return await loop.run_in_executor(
                 executor,
+                ctx.run,
                 self._search_knowledge_context_sync,
                 message,
                 user_id,
@@ -1876,14 +1906,18 @@ class Agent:
         the full request fan-out into provider/tool/KB child spans. The
         span is a no-op when OpenTelemetry is not installed/enabled.
         """
+        from .knowledge import usage as _kb_usage
         from .knowledge.scope import KB_USER, for_turn
         from .observability import span as _span
 
         kb_token = KB_USER.set(for_turn(user_id))  # v0.7.5: tools use this turn's knowledge base
+        # 2026-10-27: the knowledge usage log records this agent and message as "for what"
+        usage_token = _kb_usage.begin_turn(self.name, user_message, _depth)
         try:
             with _span("agent.think", agent=self.name, user=user_id, depth=_depth):
                 return await self._think_impl(user_message, user_id, _depth)
         finally:
+            _kb_usage.end_turn(usage_token)
             KB_USER.reset(kb_token)
 
     async def _think_impl(
@@ -1999,13 +2033,16 @@ class Agent:
         self, user_message: str, user_id: str = "default", _depth: int = 0
     ) -> AsyncIterator[str]:
         """Streaming answer; the tools it calls use this turn's knowledge base (v0.7.5)."""
+        from .knowledge import usage as _kb_usage
         from .knowledge.scope import KB_USER, for_turn
 
         kb_token = KB_USER.set(for_turn(user_id))
+        usage_token = _kb_usage.begin_turn(self.name, user_message, _depth)  # 2026-10-27
         try:
             async for chunk in self._stream_think_impl(user_message, user_id, _depth):
                 yield chunk
         finally:
+            _kb_usage.end_turn(usage_token)
             try:
                 KB_USER.reset(kb_token)
             except ValueError:  # generator closed from another context

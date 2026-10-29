@@ -317,6 +317,10 @@ class ChatEngine:
         events.publish(channel_id, {"type": "stream_start", "message": msg})
         tokens = (events.CURRENT_CHANNEL.set(channel_id), events.CURRENT_AGENT.set(agent_name),
                   MEMORY_SCOPE.set(memory_scope(channel_id, agent_name)))
+        from ..knowledge import usage as _kb_usage
+
+        # 2026-10-27: the usage log's "for what" is the user's text, not the group preamble
+        reason_token = _kb_usage.REASON.set(text)
         parts: list[str] = []
         started = time.monotonic()
         first_at = last_at = None  # v0.7.5: token speed
@@ -342,6 +346,7 @@ class ChatEngine:
         finally:
             for var, tok in zip((events.CURRENT_CHANNEL, events.CURRENT_AGENT, MEMORY_SCOPE), tokens):
                 var.reset(tok)
+            _kb_usage.REASON.reset(reason_token)
             full = "".join(parts).strip()
             used = getattr(agent, "last_model_used", None) or (getattr(agent, "_provider_name", ""), agent.model)
             meta = {"model": used[1], "provider": used[0], "ms": int((time.monotonic() - started) * 1000)}

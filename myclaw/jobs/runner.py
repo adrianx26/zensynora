@@ -162,6 +162,11 @@ class JobRunner:
         scope = f"job-{job['id']}" if kind == "run" else f"bench-{job['id']}-{run_id}"
         tokens = (events.CURRENT_CHANNEL.set(channel), events.CURRENT_AGENT.set(agent.name),
                   MEMORY_SCOPE.set(scope))
+        from ..knowledge import usage as _kb_usage
+
+        # 2026-10-27: a job started from inside an agent's turn is a job of its own
+        # in the knowledge usage log (not a delegation of that turn)
+        usage_tokens = (_kb_usage.TURN.set(None), _kb_usage.REASON.set(None))
         steps_token = MAX_ROUNDS.set(int(job.get("max_steps") or 8))  # v0.7.5
         from ..task_timer import TASK_MAX_SECONDS
 
@@ -202,6 +207,8 @@ class JobRunner:
                              "run_id": run_id, "result": events.short(output or error, 4000)})
             for var, tok in zip((events.CURRENT_CHANNEL, events.CURRENT_AGENT, MEMORY_SCOPE), tokens):
                 var.reset(tok)
+            _kb_usage.TURN.reset(usage_tokens[0])
+            _kb_usage.REASON.reset(usage_tokens[1])
             MAX_ROUNDS.reset(steps_token)
             TASK_MAX_SECONDS.reset(tmax_token)
         if channel and status == "ok" and self._chat:

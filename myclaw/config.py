@@ -498,6 +498,11 @@ class KnowledgeConfig(BaseModel):
     # 2026-10-25 (KB phase 6): the Web UI re-indexes note files changed by hand
     # (editor, Obsidian, git pull) within about a second. Off by default.
     watch_files: bool = False
+    # 2026-10-27: usage log — which agent used which notes, and why
+    # (~/.myclaw/knowledge-usage.db). Local, cheap, no model calls: on by default.
+    usage_log: bool = True
+    usage_retention_days: int = Field(90, ge=1, le=3650)
+    usage_max_rows: int = Field(200_000, ge=1000, le=10_000_000)
 
 
 class SwarmConfig(BaseModel):
@@ -982,6 +987,21 @@ def _apply_knowledge_watch(config: AppConfig) -> None:
         logger.warning("file watcher settings could not be applied (%s); it stays off", e)
 
 
+def _apply_knowledge_usage(config: AppConfig) -> None:
+    """Apply ``knowledge.usage_log`` / ``usage_retention_days`` / ``usage_max_rows``
+    (2026-10-27). Never makes loading the config fail."""
+    try:
+        kc = getattr(config, "knowledge", None)
+        from .knowledge.usage import set_options
+
+        set_options(usage_log=getattr(kc, "usage_log", True),
+                    kb_enabled=getattr(kc, "enabled", True),
+                    retention_days=getattr(kc, "usage_retention_days", 90),
+                    max_rows=getattr(kc, "usage_max_rows", 200_000))
+    except Exception as e:
+        logger.warning("knowledge usage log settings could not be applied (%s); using defaults", e)
+
+
 def load_config(force_reload: bool = False) -> AppConfig:
     """Load and validate config. Exits with clear message on schema errors.
 
@@ -1018,6 +1038,7 @@ def load_config(force_reload: bool = False) -> AppConfig:
             _apply_knowledge_semantic(_cached_config)
             _apply_knowledge_distill(_cached_config)
             _apply_knowledge_watch(_cached_config)
+            _apply_knowledge_usage(_cached_config)
 
             # Validate critical configuration
             _validate_config(_cached_config)
