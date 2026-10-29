@@ -305,6 +305,7 @@ def test_fusion_refuses_default_and_unknown_agents(team):
         agent_fusion.create_fusion("Writer", "Editor", "Other", use_model=False)
     from myclaw.events import CURRENT_AGENT
 
+    _write_config(team[0], [dict(a) for a in AGENTS] + [{"name": "medic"}])  # a medic the user made
     tok = CURRENT_AGENT.set("medic")
     try:
         out = asyncio.run(agent_fusion.propose_agent_fusion("default", "Writer", reason="x"))
@@ -329,6 +330,7 @@ def test_medic_tool_proposes_with_a_model_written_prompt(team, monkeypatch):
     from myclaw.events import CURRENT_AGENT
 
     monkeypatch.setattr(provider, "complete_with_fallback", fake_complete)
+    _write_config(team[0], [dict(a) for a in AGENTS] + [{"name": "medic"}])  # a medic the user made
     tok = CURRENT_AGENT.set("medic")
     try:
         out = asyncio.run(medic_agent.propose_agent_fusion("Writer", "Editor", reason="they overlap"))
@@ -338,7 +340,7 @@ def test_medic_tool_proposes_with_a_model_written_prompt(team, monkeypatch):
     p = agent_fusion.list_fusions("pending")[0]
     assert p["author"].startswith("agent:") and p["fused"]["system_prompt"].endswith("fix their grammar.")
     assert "information to merge" in seen[0][1]["content"]  # the prompts are quoted as information
-    assert len(load_config(force_reload=True).agents.named) == 3  # still only a proposal
+    assert len(load_config(force_reload=True).agents.named) == 4  # still only a proposal
 
     async def broken(*a, **k):
         raise RuntimeError("model down")
