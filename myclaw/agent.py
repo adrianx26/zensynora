@@ -322,6 +322,25 @@ _SESSION_SUMMARY_LOCK = threading.Lock()
 class Agent:
     """Personal AI agent with per-user memory, native tool calling, multi-agent delegation."""
 
+    # 2026-10-29 (report of 2026-10-29): one Agent object serves several runs at
+    # once (jobs started in the same second, Telegram and the Web UI). With the
+    # id in a plain attribute, the second run overwrote the first's id, the
+    # first timer was never completed and fired "Task … FAILED - exceeded 330s
+    # timeout" (CRITICAL) minutes after the run had ended. A ContextVar gives
+    # every asyncio task (every run) its own value.
+    @property
+    def _current_task_id(self) -> Optional[str]:
+        var = self.__dict__.get("_task_id_var")
+        return var.get() if var is not None else self.__dict__.get("_plain_task_id")
+
+    @_current_task_id.setter
+    def _current_task_id(self, value: Optional[str]) -> None:
+        var = self.__dict__.get("_task_id_var")
+        if var is not None:
+            var.set(value)
+        else:  # objects built without __init__ (tests, stubs)
+            self.__dict__["_plain_task_id"] = value
+
     @property
     def _kb_enabled(self) -> bool:
         """Is the knowledge base switched on (``config.knowledge.enabled``)?
@@ -452,7 +471,10 @@ class Agent:
 
         # Initialize task timer orchestrator for tracking user question timeouts
         self._task_timer = get_task_timer_orchestrator()
-        self._current_task_id: Optional[str] = None
+        # 2026-10-29: the running task's id is kept per asyncio task (see the
+        # _current_task_id property), not on the agent object.
+        self._task_id_var: contextvars.ContextVar[Optional[str]] = contextvars.ContextVar(
+            f"agent_task_id_{id(self)}", default=None)
 
         # ── Intelligent Routing ──────────────────────────────────────────────
         from .backends.router import IntelligentRouter
