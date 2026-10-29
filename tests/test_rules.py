@@ -643,7 +643,7 @@ def test_api_changes_need_the_ui_header_and_same_origin(home, as_agent):
     rules.propose_rule("Cite sources", "Cite them.", reason="r")
     app = FastAPI()
     app.include_router(rules_api.router)
-    plain = TestClient(app)  # like curl from the agent's shell
+    plain = TestClient(app, headers={})  # like curl from the agent's shell
     assert plain.get("/api/rules").status_code == 200  # reading is fine
     for method, url in [("post", "/api/rules/proposals/1/approve"), ("post", "/api/rules/proposals/1/reject"),
                         ("post", "/api/rules/be-brief/accept"), ("post", "/api/rules/be-brief/restore"),
@@ -664,7 +664,7 @@ def test_medic_approve_needs_the_ui_header(home):
 
     app = FastAPI()
     app.include_router(medic_api.router)
-    plain = TestClient(app)
+    plain = TestClient(app, headers={})
     assert plain.post("/api/medic/proposals/x-1/approve").status_code == 403
     assert plain.post("/api/medic/proposals/x-1/apply").status_code == 403
     ui = TestClient(app, headers={"X-ZenSynora-UI": "1"})

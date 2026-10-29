@@ -138,11 +138,14 @@ def _foreign_origin(request: Request) -> Optional[str]:
 
 
 async def require_ui(request: Request) -> None:
-    """Actions that only the user may take (approve rules or code changes) also need
-    the header ``X-ZenSynora-UI: 1``, which the Web UI sends and plain requests lack."""
+    """Changes through the guarded routes need the header ``X-ZenSynora-UI: 1``,
+    which the Web UI sends and plain requests lack (scripts with the admin key
+    add it themselves)."""
     if request.headers.get("x-zensynora-ui") != "1":
-        raise HTTPException(status_code=403, detail="This action is only available from the ZenSynora Web UI "
-                                                    "(or `zensynora` on this computer).")
+        raise HTTPException(status_code=403, detail="Changes are only accepted from the ZenSynora Web UI. "
+                                                    "Scripts using the admin API key must also send the header "
+                                                    "'X-ZenSynora-UI: 1'; on this computer use the `zensynora` "
+                                                    "command.")
 
 
 async def require_local_or_admin(request: Request) -> None:
@@ -152,6 +155,11 @@ async def require_local_or_admin(request: Request) -> None:
             logger.warning("Refused %s %s from another site (Origin: %s)", request.method, request.url.path,
                            foreign[:100])
             raise HTTPException(status_code=403, detail="Requests from other web sites are not allowed.")
+        # 2026-10-28 (re-review): every change through the guarded routes needs the
+        # Web UI header. This stops web pages in the browser (they cannot send a
+        # custom header to another origin without CORS consent) and plain
+        # requests; local *code* is stopped by the tool sandbox and shell checks.
+        await require_ui(request)
     host = request.client.host if request.client else ""
     if host in _LOOPBACK:
         return
