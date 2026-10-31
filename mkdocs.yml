@@ -7,6 +7,7 @@ nav:
   - Home: README.md
   - Using ZenSynora:
       - Web UI guide: webui_guide.md
+      - Rules: rules_guide.md
       - Knowledge base: knowledge_base_guide.md
       - Telegram: telegram_guide.md
       - Updating: UPDATING.md

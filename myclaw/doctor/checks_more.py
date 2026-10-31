@@ -152,6 +152,84 @@ def _skills(ctx):
     return OK, f"{len(names)} skill(s) available"
 
 
+# 2026-10-28 (rules re-review): agent-made tools run in a locked-down process
+@check("tool_sandbox", "Tool sandbox", "security")
+def _tool_sandbox(ctx):
+    from ..tools import tool_sandbox, toolbox
+
+    skipped = dict(toolbox.SKIPPED_TOOLS)
+    reg_path = toolbox.TOOLBOX_REG
+    if reg_path.exists():
+        try:
+            reg = json.loads(reg_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            reg = {}
+        for name, info in (reg.items() if isinstance(reg, dict) else []):
+            if not isinstance(info, dict) or not info.get("enabled", True):
+                continue
+            path = Path(info.get("path", ""))
+            if not path.exists():
+                continue
+            func, problem = toolbox.load_toolbox_tool(name, path, check_code=info.get("author") != "user")
+            if func is None:
+                skipped[name] = str(problem)
+    if not reg_path.exists() and not skipped:
+        return OK, "no agent-made tools"
+    st = tool_sandbox.status()
+    problems = []
+    if not st["ok"]:
+        problems.append(f"the sandbox does not start: {st['error'][:200]}")
+    if skipped:
+        problems.append("not loaded: " + "; ".join(f"{n} ({r[:80]})" for n, r in sorted(skipped.items())[:5]))
+    if problems:
+        return WARN, "; ".join(problems), \
+            "Ask an agent to rewrite the tool with register_tool, or disable it (Tools page lists them)."
+    return OK, f"agent-made tools run in a separate process; kernel lock-down (Landlock): {st['landlock']}"
+
+
+@check("shell_commands", "Shell commands", "security")
+def _shell_commands(ctx):
+    from ..tools.core import refused_command
+
+    allowed = list(ctx.get_config().security.allowed_commands or [])
+    bad = sorted({c for c in allowed if refused_command(c)})
+    if bad:
+        return WARN, f"not used (interpreters/shells): {', '.join(bad)}", \
+            "Remove them from Settings → Security → shell commands; they could run any program."
+    return OK, f"{len(allowed)} allowed command(s)"
+
+
+# 2026-10-27: the user's rules and the agents' proposals (myclaw/rules.py)
+@check("rules", "Rules", "configuration")
+def _rules(ctx):
+    from .. import rules
+
+    items = rules.list_rules()
+    active = sum(1 for r in items if r["enabled"] and not rules.needs_review(r))
+    off = sum(1 for r in items if not r["enabled"])
+    pending = rules.list_proposals("pending")
+    detail = f"{active} active" + (f" ({off} switched off)" if off else "") + \
+        f", {len(pending)} proposal(s) waiting"
+    problems, hints = [], []
+    review = [r["slug"] for r in items if rules.needs_review(r)]
+    if review:
+        problems.append(f"changed outside ZenSynora, not used until you review: {', '.join(review)}")
+        hints.append("Review them in the Web UI → Rules (Keep this version / Restore approved version) or "
+                     "with zensynora rules accept SLUG.")
+    skipped = rules.skipped_files()
+    if skipped:
+        problems.append("skipped: " + "; ".join(f"{n} ({why})" for n, why in skipped[:5]))
+        hints.append("Rule files are named like answer-in-romanian.md (lowercase letters, digits, dashes).")
+    stale = [p for p in pending if rules.waiting_since_days(p) > rules.STALE_DAYS]
+    if stale:
+        ids = ", ".join(f"#{p['id']}" for p in stale)
+        problems.append(f"{len(stale)} waiting more than {rules.STALE_DAYS} days ({ids})")
+        hints.append("Approve or reject them in the Web UI → Rules, or with zensynora rules approve/reject ID.")
+    if problems:
+        return WARN, f"{detail}; " + "; ".join(problems), " ".join(hints)
+    return OK, detail
+
+
 @check("mcp_servers", "MCP servers", "configuration")
 def _mcp_servers(ctx):
     mcp = ctx.get_config().mcp

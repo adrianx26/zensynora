@@ -3,8 +3,9 @@
 // Built-in skills ship with ZenSynora; yours live in ~/.myclaw/skills. Click an
 // agent chip on a skill to give it to (or take it from) that agent. Agents see
 // their skills' names in their system prompt and read one with use_skill.
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '../api';
+import React, { useCallback, useEffect, useState } from 'react';
+import { api, downloadFile } from '../api';
+import { useTransferImport } from './TransferImport';
 import { agentColor } from '../colors';
 
 interface SkillRow {
@@ -37,7 +38,6 @@ const SkillsView: React.FC = () => {
   const [draft, setDraft] = useState<Draft | null>(null);    // editor
   const [filter, setFilter] = useState('');
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     try {
@@ -52,6 +52,9 @@ const SkillsView: React.FC = () => {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect -- initial data load
   useEffect(() => { load(); }, [load]);
+
+  // 2026-10-31: import a SKILL.md or a ZenSynora export (.json with tools and skills)
+  const imp = useTransferImport(load);
 
   const act = async (fn: () => Promise<unknown>, ok?: string) => {
     setNotice(null);
@@ -99,8 +102,8 @@ const SkillsView: React.FC = () => {
 
   const remove = (s: SkillRow) => {
     const what = s.overrides_builtin ? 'your changed copy (the built-in version comes back)' : 'this skill';
-    if (!window.confirm(`Delete ${what}: ${s.name}?`)) return;
-    act(() => api(`/api/skills/${encodeURIComponent(s.name)}`, { method: 'DELETE' }), `${s.name} deleted.`);
+    if (!window.confirm(`Delete ${what}: ${s.name}? It is kept in skills/.trash.`)) return;
+    act(() => api(`/api/skills/${encodeURIComponent(s.name)}`, { method: 'DELETE' }), `${s.name} deleted (kept in skills/.trash).`);
     setOpen(null);
   };
 
@@ -111,13 +114,8 @@ const SkillsView: React.FC = () => {
     if (ok) setDraft(null);
   };
 
-  const importFile = async (f: File | undefined) => {
-    if (!f) return;
-    const text = await f.text();
-    const name = f.name.replace(/\.md$/i, '').replace(/^SKILL$/i, '');
-    act(() => api('/api/skills/import', { method: 'POST', body: JSON.stringify({ text, name }) }), `Imported ${f.name}.`);
-    if (fileRef.current) fileRef.current.value = '';
-  };
+  const exportSkill = (s: SkillRow) => act(() => downloadFile(`/api/skills/${encodeURIComponent(s.name)}/export`, `${s.name}.SKILL.md`));
+  const exportAll = () => act(() => downloadFile('/api/transfer/export?tools=', 'zensynora-skills.json'));
 
   const shown = skills.filter(s => !filter || `${s.name} ${s.description}`.toLowerCase().includes(filter.toLowerCase()));
 
@@ -130,9 +128,8 @@ const SkillsView: React.FC = () => {
           <div className="card-head">
             <h3>Skills</h3>
             <div className="row-actions">
-              <input ref={fileRef} type="file" accept=".md,text/markdown,text/plain" style={{ display: 'none' }}
-                onChange={e => importFile(e.target.files?.[0])} />
-              <button className="ghost-btn" onClick={() => fileRef.current?.click()} title="Add a SKILL.md file made elsewhere">Import…</button>
+              {imp.button}
+              <button className="ghost-btn" onClick={exportAll} title="Download all your skills as one file">Export skills</button>
               <button className="primary-btn" onClick={() => { setOpen(null); setDraft({ name: '', description: '', body: TEMPLATE, always: false, isNew: true }); }}>+ New skill</button>
             </div>
           </div>
@@ -145,6 +142,8 @@ const SkillsView: React.FC = () => {
           )}
           <input className="field-input" placeholder="Filter skills…" value={filter} onChange={e => setFilter(e.target.value)} />
         </div>
+
+        {imp.panel}
 
         {draft && (
           <div className="settings-card">
@@ -177,6 +176,7 @@ const SkillsView: React.FC = () => {
                 {open.source === 'builtin'
                   ? <button className="ghost-btn" onClick={() => copy(open)}>Copy to change</button>
                   : <button className="ghost-btn" onClick={() => edit(open)}>Edit</button>}
+                <button className="ghost-btn" onClick={() => exportSkill(open)}>Export</button>
                 <button className="ghost-btn" onClick={() => setOpen(null)}>Close</button>
               </div>
             </div>
@@ -208,6 +208,7 @@ const SkillsView: React.FC = () => {
               </div>
               <div className="row-actions">
                 <button className="ghost-btn" onClick={() => view(s)}>View</button>
+                <button className="ghost-btn" onClick={() => exportSkill(s)} title="Download as SKILL.md">Export</button>
                 {s.source === 'builtin'
                   ? <button className="ghost-btn" onClick={() => copy(s)}>Copy to change</button>
                   : <>

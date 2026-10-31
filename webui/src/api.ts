@@ -36,7 +36,8 @@ export class ApiError extends Error {
 }
 
 export async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // 2026-10-27: marks requests from this UI; rule and code approvals need it.
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-ZenSynora-UI': '1' };
   const key = getAdminKey();
   if (key) headers['X-API-Key'] = key;
   const res = await fetch(`${getApiBase()}${path}`, {
@@ -52,6 +53,37 @@ export async function api<T = unknown>(path: string, init: RequestInit = {}): Pr
     throw new ApiError(res.status, detail);
   }
   return res.json() as Promise<T>;
+}
+
+/** Download a file from the backend (sends the admin key, like api()). 2026-10-31 */
+export async function downloadFile(path: string, fallbackName: string): Promise<void> {
+  const headers: Record<string, string> = { 'X-ZenSynora-UI': '1' };
+  const key = getAdminKey();
+  if (key) headers['X-API-Key'] = key;
+  const res = await fetch(`${getApiBase()}${path}`, { headers });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const body = await res.json();
+      if (body?.detail) detail = typeof body.detail === 'string' ? body.detail : JSON.stringify(body.detail);
+    } catch { /* ignore */ }
+    throw new ApiError(res.status, detail);
+  }
+  const m = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') || '');
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = m ? m[1] : fallbackName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/** Result of POST /api/transfer/import (tools and skills from a file). */
+export interface ImportResult {
+  imported: { kind: 'tool' | 'skill'; name: string; enabled?: boolean; loaded?: boolean; replaced?: boolean; problem?: string | null }[];
+  skipped: { kind: 'tool' | 'skill'; name: string; reason: string }[];
 }
 
 export interface ProbeResult {

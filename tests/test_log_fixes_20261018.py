@@ -170,14 +170,14 @@ def test_config_warnings_logged_once(caplog):
     import myclaw.config as cfg
 
     c = cfg.AppConfig()
-    c.security.allowed_commands = ["ls", "curl"]
+    c.security.allowed_commands = ["ls", "python3"]  # 2026-10-28: curl is allowed again (URLs are checked)
     cfg._last_config_warnings = ()
     with caplog.at_level(logging.WARNING, logger="myclaw.config"):
         cfg._validate_config(c)
         cfg._validate_config(c)
         cfg._validate_config(c)
     warned = [r for r in caplog.records if r.levelno == logging.WARNING]
-    assert len(warned) == 1 and "curl" in warned[0].getMessage()
+    assert len(warned) == 1 and "python3" in warned[0].getMessage()
     cfg._last_config_warnings = ()
 
 

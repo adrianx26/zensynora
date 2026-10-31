@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from myclaw import selfupdate
-from myclaw.web.settings_api import guard
+from myclaw.web.settings_api import guard, ui_guard
 
 router = APIRouter()
 
@@ -51,7 +51,8 @@ class ApproveIn(BaseModel):
     apply: bool = True
 
 
-@router.post("/api/medic/proposals/{pid}/approve", dependencies=guard)
+# 2026-10-27 (rules review): approving/installing code needs the Web UI header too.
+@router.post("/api/medic/proposals/{pid}/approve", dependencies=ui_guard)
 async def approve(pid: str, req: ApproveIn = ApproveIn()):
     _get(pid)
     try:
@@ -76,7 +77,7 @@ async def reject(pid: str, req: RejectIn = RejectIn()):
         raise HTTPException(status_code=409, detail=str(e))
 
 
-@router.post("/api/medic/proposals/{pid}/apply", dependencies=guard)
+@router.post("/api/medic/proposals/{pid}/apply", dependencies=ui_guard)
 async def apply(pid: str):
     prop = _get(pid)
     if prop["status"] == "failed":
