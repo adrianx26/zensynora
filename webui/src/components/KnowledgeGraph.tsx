@@ -1,6 +1,9 @@
 // Force-directed graph of the knowledge base, drawn on a <canvas> (no extra
 // libraries). Drag the background to pan, the wheel to zoom, drag a note to
 // move it (it stays pinned; double-click it to release), click to select.
+// 2026-10-31: easier to read — notes do not overlap, unlinked notes sit on an
+// outer ring, links are coloured by type, thicker, curved when two notes link
+// both ways and keep their width when zooming; labels never overlap.
 import React, { useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 
 export interface GNode {
@@ -16,7 +19,9 @@ export interface GNode {
 }
 export interface GEdge { source: string; target: string; type: string }
 
-interface SimNode { id: string; x: number; y: number; vx: number; vy: number; pinned: boolean; r: number }
+interface SimNode { id: string; x: number; y: number; vx: number; vy: number; pinned: boolean; r: number; linked: boolean }
+
+export type LabelMode = 'auto' | 'all' | 'none';
 
 export interface GraphHandle { fit: () => void; reheat: () => void; focus: (id: string) => void }
 
@@ -28,9 +33,17 @@ interface Props {
   colorOf: (n: GNode) => string;
   showEdgeLabels: boolean;
   paused: boolean;
+  edgeColorOf?: (type: string) => string;  // colour of a link type
+  linkWeight?: number;                      // 1 normal, 2 bold
+  labelMode?: LabelMode;
 }
 
 const LINK_LEN = 110;
+
+/** Drawn radius: grows with the zoom only up to a point, so notes do not cover each other. */
+function radius(p: { r: number }, k: number): number {
+  return k > 1 ? p.r / Math.sqrt(k) : p.r;
+}
 
 function cssVar(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -38,7 +51,7 @@ function cssVar(name: string, fallback: string): string {
 }
 
 const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGraph(
-  { nodes, edges, selected, onSelect, colorOf, showEdgeLabels, paused }, ref,
+  { nodes, edges, selected, onSelect, colorOf, showEdgeLabels, paused, edgeColorOf, linkWeight = 1, labelMode = 'auto' }, ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -50,9 +63,11 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
   const hover = useRef<string | null>(null);
   const size = useRef({ w: 600, h: 400 });
   const theme = useRef({ text: '#c9d1d9', muted: '#8b949e', edge: 'rgba(139,148,158,0.35)', accent: '#58a6ff', bg: '#0d1117' });
-  const props = useRef({ nodes, edges, selected, colorOf, showEdgeLabels, paused });
-  props.current = { nodes, edges, selected, colorOf, showEdgeLabels, paused };
+  const props = useRef({ nodes, edges, selected, colorOf, showEdgeLabels, paused, edgeColorOf, linkWeight, labelMode });
+  props.current = { nodes, edges, selected, colorOf, showEdgeLabels, paused, edgeColorOf, linkWeight, labelMode };
   const didFit = useRef(false);
+  const settledFit = useRef(false);  // fit again when the layout has settled, unless the user moved the view
+  const userMoved = useRef(false);
   const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
 
   const readTheme = () => {
@@ -74,24 +89,27 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
     const cx = placed.length ? placed.reduce((s, n) => s + n.x, 0) / placed.length : 0;
     const cy = placed.length ? placed.reduce((s, n) => s + n.y, 0) / placed.length : 0;
     let i = 0;
+    const linkedIds = new Set<string>();
+    for (const e of edges) { linkedIds.add(e.source); linkedIds.add(e.target); }
     for (const n of nodes) {
-      const r = n.missing ? 5 : 6 + Math.min(14, Math.sqrt(n.degree) * 3 + n.observations * 0.3);
+      const r = n.missing ? 5 : 5 + Math.min(11, Math.sqrt(n.degree) * 2.6 + n.observations * 0.2);
+      const linked = linkedIds.has(n.id);
       const old = m.get(n.id);
-      if (old) { old.r = r; continue; }
+      if (old) { old.r = r; old.linked = linked; continue; }
       // Start new notes near a neighbour that already has a place, else on a spiral.
       const nb = edges.find(e => (e.source === n.id && m.has(e.target)) || (e.target === n.id && m.has(e.source)));
       const anchor = nb ? m.get(nb.source === n.id ? nb.target : nb.source) : null;
       const a = i * 2.39996;
       const d = 30 * Math.sqrt(i + 1);
       m.set(n.id, {
-        id: n.id, r, pinned: false, vx: 0, vy: 0,
+        id: n.id, r, linked, pinned: false, vx: 0, vy: 0,
         x: anchor ? anchor.x + (Math.random() - 0.5) * 60 : cx + Math.cos(a) * d,
         y: anchor ? anchor.y + (Math.random() - 0.5) * 60 : cy + Math.sin(a) * d,
       });
       i++;
     }
     alpha.current = Math.max(alpha.current, i > 0 ? 1 : 0.3);
-    if (i > 0 && placed.length === 0) didFit.current = false;
+    if (i > 0 && placed.length === 0) { didFit.current = false; settledFit.current = false; userMoved.current = false; }
     start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodes, edges]);
@@ -122,9 +140,15 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
         let d2 = dx * dx + dy * dy;
         if (d2 > 250000) continue; // far apart: ignore (keeps big graphs fast)
         if (d2 < 1) { dx = Math.random() - 0.5; dy = Math.random() - 0.5; d2 = 1; }
-        const f = rep / d2;
+        // unlinked notes push each other less: they only need not to overlap
+        const f = (p.linked && q.linked ? rep : rep * 0.35) / d2;
         const d = Math.sqrt(d2);
-        const fx = (dx / d) * f, fy = (dy / d) * f;
+        let fx = (dx / d) * f, fy = (dy / d) * f;
+        const minD = p.r + q.r + 6;
+        if (d < minD) { // collision: never draw notes on top of each other
+          const push = (minD - d) * 0.5;
+          fx += (dx / d) * push; fy += (dy / d) * push;
+        }
         p.vx -= fx; p.vy -= fy; q.vx += fx; q.vy += fy;
       }
     }
@@ -136,9 +160,18 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
       const f = ((d - LINK_LEN) / d) * 0.08 * a;
       s.vx += dx * f; s.vy += dy * f; t.vx -= dx * f; t.vy -= dy * f;
     }
+    // unlinked notes go to a ring around the linked ones
+    const linkedCount = list.filter(p => p.linked).length;
+    const ring = 140 + 34 * Math.sqrt(Math.max(1, linkedCount));
     for (const p of list) {
-      p.vx -= p.x * 0.004 * a;
-      p.vy -= p.y * 0.004 * a;
+      if (p.linked || linkedCount === 0) {
+        p.vx -= p.x * 0.005 * a;
+        p.vy -= p.y * 0.005 * a;
+      } else {
+        const d = Math.hypot(p.x, p.y) || 1;
+        const f = ((ring - d) / d) * 0.03 * a;
+        p.vx += p.x * f; p.vy += p.y * f;
+      }
       if (p.pinned) { p.vx = 0; p.vy = 0; continue; }
       p.vx *= 0.55; p.vy *= 0.55;
       p.x += Math.max(-40, Math.min(40, p.vx));
@@ -161,6 +194,9 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
     const focus = sel || hover.current;
     const near = neighbours(focus);
     const m = sim.current;
+    const { edgeColorOf: ecol, linkWeight: lw = 1, labelMode: lmode = 'auto' } = props.current;
+    const rr = (p: SimNode) => radius(p, k);
+    const pairs = new Set(es.map(e => `${e.source}\u0000${e.target}`));
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
@@ -173,33 +209,49 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
       if (!s || !t) continue;
       const on = focus ? (e.source === focus || e.target === focus) : false;
       const dim = focus && !on;
-      ctx.strokeStyle = on ? th.accent : th.edge;
-      ctx.globalAlpha = dim ? 0.15 : 1;
-      ctx.lineWidth = (on ? 1.8 : 1) / Math.sqrt(k);
+      const colour = ecol ? ecol(e.type) : th.edge;
+      ctx.strokeStyle = on ? th.accent : colour;
+      ctx.globalAlpha = dim ? 0.08 : on ? 1 : 0.72;
+      // same width on screen at every zoom level
+      ctx.lineWidth = (on ? 2.6 : 1.3 * lw) / k;
       const dx = t.x - s.x, dy = t.y - s.y;
       const d = Math.sqrt(dx * dx + dy * dy) || 1;
       const ux = dx / d, uy = dy / d;
-      const ex = t.x - ux * (t.r + 2), ey = t.y - uy * (t.r + 2);
+      // A→B and B→A both exist: bend each to its own side so both stay visible
+      const bend = pairs.has(`${e.target}\u0000${e.source}`) ? Math.min(40, d * 0.18) : 0;
+      const mx = (s.x + t.x) / 2 - uy * bend, my = (s.y + t.y) / 2 + ux * bend;
+      // end directions follow the curve
+      const ex0 = t.x - mx, ey0 = t.y - my, el = Math.hypot(ex0, ey0) || 1;
+      const sx0 = mx - s.x, sy0 = my - s.y, sl = Math.hypot(sx0, sy0) || 1;
+      const ex = t.x - (ex0 / el) * (rr(t) + 2 / k), ey = t.y - (ey0 / el) * (rr(t) + 2 / k);
+      const bx = s.x + (sx0 / sl) * rr(s), by = s.y + (sy0 / sl) * rr(s);
       ctx.beginPath();
-      ctx.moveTo(s.x + ux * s.r, s.y + uy * s.r);
-      ctx.lineTo(ex, ey);
+      ctx.moveTo(bx, by);
+      if (bend) ctx.quadraticCurveTo(mx, my, ex, ey); else ctx.lineTo(ex, ey);
       ctx.stroke();
-      // arrow head
-      const ah = 6 / Math.sqrt(k);
+      // arrow head (constant size on screen)
+      const ah = (on ? 9 : 7 + lw) / k;
+      const ax = ex0 / el, ay = ey0 / el;
       ctx.fillStyle = ctx.strokeStyle;
       ctx.beginPath();
       ctx.moveTo(ex, ey);
-      ctx.lineTo(ex - ux * ah - uy * ah * 0.55, ey - uy * ah + ux * ah * 0.55);
-      ctx.lineTo(ex - ux * ah + uy * ah * 0.55, ey - uy * ah - ux * ah * 0.55);
+      ctx.lineTo(ex - ax * ah - ay * ah * 0.5, ey - ay * ah + ax * ah * 0.5);
+      ctx.lineTo(ex - ax * ah + ay * ah * 0.5, ey - ay * ah - ax * ah * 0.5);
       ctx.closePath();
       ctx.fill();
-      if ((labels && k > 0.8) || on) {
-        ctx.font = `${10 / Math.sqrt(k)}px Inter, sans-serif`;
-        ctx.fillStyle = on ? th.accent : th.muted;
+      if ((labels && k > 0.6) || on) {
+        const fs = 11 / k;
+        ctx.font = `${on ? 600 : 400} ${fs}px Inter, sans-serif`;
         ctx.textAlign = 'center';
-        // offset to the side of the line, so A→B and B→A labels do not overlap
-        const off = 7 / Math.sqrt(k);
-        ctx.fillText(e.type.replace(/_/g, ' '), (s.x + t.x) / 2 - uy * off, (s.y + t.y) / 2 + ux * off + 3 / Math.sqrt(k));
+        const lx = bend ? (s.x + t.x) / 4 + mx / 2 : (s.x + t.x) / 2 - uy * (7 / k);
+        const ly = bend ? (s.y + t.y) / 4 + my / 2 : (s.y + t.y) / 2 + ux * (7 / k);
+        const text = e.type.replace(/_/g, ' ');
+        ctx.globalAlpha = dim ? 0.15 : 1;
+        ctx.lineWidth = 3 / k;
+        ctx.strokeStyle = th.bg;
+        ctx.strokeText(text, lx, ly + 3 / k);
+        ctx.fillStyle = on ? th.accent : colour;
+        ctx.fillText(text, lx, ly + 3 / k);
       }
     }
     ctx.globalAlpha = 1;
@@ -212,8 +264,9 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
       if (!n) continue;
       const dim = focus && !near.has(p.id);
       ctx.globalAlpha = dim ? 0.2 : 1;
+      const pr = rr(p);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, pr, 0, Math.PI * 2);
       if (n.missing) {
         ctx.fillStyle = th.bg;
         ctx.fill();
@@ -226,14 +279,14 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
         ctx.fillStyle = col(n);
         ctx.fill();
         ctx.strokeStyle = th.bg;
-        ctx.lineWidth = 1.5;
+        ctx.lineWidth = 1.5 / Math.max(1, k);
         ctx.stroke();
       }
       if (p.id === sel) {
         ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r + 4, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, pr + 4 / k, 0, Math.PI * 2);
         ctx.strokeStyle = th.accent;
-        ctx.lineWidth = 2.5;
+        ctx.lineWidth = 2.5 / k;
         ctx.stroke();
       }
       if (p.pinned) {
@@ -244,7 +297,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
       }
       if (n.conflicts) {
         // small amber badge at the top right: this note has contradicting facts
-        const bx = p.x + p.r * 0.75, by = p.y - p.r * 0.75, br = Math.max(3.5, 4.5 / Math.sqrt(k));
+        const bx = p.x + pr * 0.75, by = p.y - pr * 0.75, br = Math.max(3.5 / k, 4.5 / Math.sqrt(k));
         ctx.beginPath();
         ctx.arc(bx, by, br, 0, Math.PI * 2);
         ctx.fillStyle = '#d29922';
@@ -253,18 +306,43 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
         ctx.lineWidth = 1.2;
         ctx.stroke();
       }
-      const showLabel = near.has(p.id) || k > 1.1 || (k > 0.6 && n.degree >= 3) || ns.length <= 40;
-      if (showLabel && !(dim && k < 1.5)) {
-        const fs = 11 / Math.sqrt(k);
-        ctx.font = `${p.id === sel ? 600 : 400} ${fs}px Inter, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.lineWidth = 3 / k;
-        ctx.strokeStyle = th.bg;
-        const label = n.title.length > 28 ? n.title.slice(0, 27) + '…' : n.title;
-        ctx.strokeText(label, p.x, p.y + p.r + fs + 1);
-        ctx.fillStyle = n.missing ? th.muted : th.text;
-        ctx.fillText(label, p.x, p.y + p.r + fs + 1);
-      }
+    }
+    ctx.globalAlpha = 1;
+
+    // labels last, most important first, never on top of each other
+    if (lmode === 'none' && !focus) return;
+    const want = (p: SimNode, n: GNode) => {
+      if (near.has(p.id)) return true;
+      if (lmode === 'none') return false;
+      if (lmode === 'all') return true;
+      if (ns.length <= 40) return true;
+      if (!p.linked) return k > 1.6;
+      return k > 1.3 || (k > 0.75 && n.degree >= 2) || n.degree >= 5;
+    };
+    const cand = order.filter(p => { const n = byId.get(p.id); return n && want(p, n); })
+      .sort((a, b) => {
+        const pa = (a.id === sel ? 3 : 0) + (near.has(a.id) ? 2 : 0), pb = (b.id === sel ? 3 : 0) + (near.has(b.id) ? 2 : 0);
+        return pb - pa || (byId.get(b.id)!.degree - byId.get(a.id)!.degree);
+      });
+    const boxes: [number, number, number, number][] = [];
+    const fs = 12 / k;            // 12 px on screen
+    ctx.textAlign = 'center';
+    for (const p of cand) {
+      const n = byId.get(p.id)!;
+      const dim = focus && !near.has(p.id);
+      const label = n.title.length > 30 ? n.title.slice(0, 29) + '…' : n.title;
+      ctx.font = `${p.id === sel ? 600 : 400} ${fs}px Inter, sans-serif`;
+      const tw = ctx.measureText(label).width;
+      const lx = p.x, ly = p.y + rr(p) + fs + 1 / k;
+      const box: [number, number, number, number] = [lx - tw / 2 - 2 / k, ly - fs, lx + tw / 2 + 2 / k, ly + 3 / k];
+      if (boxes.some(b => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) continue;
+      boxes.push(box);
+      ctx.globalAlpha = dim ? 0.35 : 1;
+      ctx.lineWidth = 3.5 / k;
+      ctx.strokeStyle = th.bg;
+      ctx.strokeText(label, lx, ly);
+      ctx.fillStyle = n.missing ? th.muted : th.text;
+      ctx.fillText(label, lx, ly);
     }
     ctx.globalAlpha = 1;
   };
@@ -287,6 +365,10 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
       tick();
       // fit once while the first layout settles
       if (!didFit.current && alpha.current < 0.25) { didFit.current = true; fit(); }
+      if (didFit.current && !settledFit.current && alpha.current < 0.03) {
+        settledFit.current = true;
+        if (!userMoved.current) fit();
+      }
     }
     draw();
     if (!props.current.paused && alpha.current > 0.004) raf.current = requestAnimationFrame(loop);
@@ -351,7 +433,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
     let best: SimNode | null = null, bd = Infinity;
     for (const n of sim.current.values()) {
       const d = Math.hypot(n.x - p.x, n.y - p.y);
-      if (d < n.r + 4 / view.current.k && d < bd) { best = n; bd = d; }
+      if (d < radius(n, view.current.k) + 4 / view.current.k && d < bd) { best = n; bd = d; }
     }
     return best;
   };
@@ -375,6 +457,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
       if (Math.hypot(cx - d.sx, cy - d.sy) > 3) d.moved = true;
       if (!d.moved) return;
       if (d.mode === 'pan') {
+        userMoved.current = true;
         view.current = { ...view.current, x: d.vx + cx - d.sx, y: d.vy + cy - d.sy };
         draw();
       } else if (d.id) {
@@ -425,6 +508,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
   };
   const onWheel = (e: WheelEvent) => {
     e.preventDefault(); // zoom the graph, not the page
+    userMoved.current = true;
     const r = canvasRef.current!.getBoundingClientRect();
     const cx = e.clientX - r.left, cy = e.clientY - r.top;
     const { w, h } = size.current;
