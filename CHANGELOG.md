@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Files sent on Telegram reach the agent and the knowledge base (2026-10-31)**
+- Documents, photos, voice, audio and video sent to the bot were never
+  downloaded: the agent got only the caption ("the file is skill-creation.pdf,
+  use it as template") and `assimilate('skill-creation.pdf')` found nothing.
+  Files are now saved in the workspace (`inbox/telegram/<date>/<name>`) and the
+  agent's message says where, with the start of a document's text (quoted as
+  file content, not instructions). Telegram's 20 MB bot limit and failed
+  downloads are explained to the agent.
+- `read_file` reads PDF, Word and Excel files as text.
+- `pypdf`, `python-docx` and `openpyxl` are core dependencies (were the
+  optional `ingest` extra, missing on most installs — PDFs could not be read
+  or imported at all).
+- New setting `channels.telegram.files_to_knowledge` (Settings → Channels, off
+  by default): add every received document and photo to the knowledge base.
+
+### Fixed
+
 **Diagnostics report of 2026-10-29**
 - False "Task FAILED - exceeded 330s timeout" CRITICALs: two overlapping runs
   of the same agent shared one task id, so the first run's timer was never
