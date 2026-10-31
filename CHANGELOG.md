@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Semantic cache no longer needs sentence-transformers (2026-10-31)**
+- Every start logged the WARNING *"sentence-transformers not installed.
+  Semantic cache will use hash-based matching only"*. sentence-transformers
+  needs PyTorch (several GB), so it is not added; the cache now uses the
+  knowledge base's fastembed model (ONNX, ~67 MB, one per process, on the
+  shared inference thread; a lookup never waits for the model to load).
+- `fastembed` is a core dependency on 64-bit x86 / ARM (where ONNX Runtime has
+  wheels); elsewhere the cache answers identical questions only and says so
+  once at INFO level.
+- Fixed with it: the similarity search ran only for a sentence-transformers
+  model, and entries made with an embedding model of another size could break
+  a lookup.
+
 **Files sent on Telegram reach the agent and the knowledge base (2026-10-31)**
 - Documents, photos, voice, audio and video sent to the bot were never
   downloaded: the agent got only the caption ("the file is skill-creation.pdf,
