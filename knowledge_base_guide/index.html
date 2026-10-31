@@ -1794,13 +1794,13 @@ floor below).</p>
 <ol>
 <li><em>Settings → Features → Semantic search</em> (<code>knowledge.semantic_search</code>,
    default off).</li>
-<li>Knowledge page → <em>Tags &amp; types</em> → <em>Semantic search</em> card → <strong>Install</strong>
-   (installs the optional package <code>fastembed</code> into ZenSynora's virtual
-   environment; with ONNX Runtime about 150 MB on disk). The packages
-   ZenSynora already has keep their versions — the install only adds new
-   ones. By hand: <code>python -m pip install "fastembed&gt;=0.5,&lt;1.0"</code> in that
-   environment, or <code>pip install 'zensynora[semantic]'</code>. Updates keep it
-   installed (with the version range of the new release).</li>
+<li><code>fastembed</code> (with ONNX Runtime about 150 MB on disk) is installed with
+   ZenSynora on 64-bit x86 and ARM computers since 2026-10-31. On other
+   systems: Knowledge page → <em>Tags &amp; types</em> → <em>Semantic search</em> card →
+   <strong>Install</strong>, or by hand <code>python -m pip install "fastembed&gt;=0.5,&lt;1.0"</code> in
+   ZenSynora's virtual environment. The same model also lets the semantic
+   response cache match similar questions (it used to ask for
+   sentence-transformers, which needs PyTorch).</li>
 <li><strong>Backfill</strong> on the same card (or <code>zensynora knowledge embed</code>) computes
    the vectors of the existing notes. The first time, the model is
    downloaded once from Hugging Face into <code>~/.myclaw/models</code>.</li>
