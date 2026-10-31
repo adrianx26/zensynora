@@ -441,18 +441,33 @@ class FakeDoc:
 
 
 def _pdf_bytes(lines):
-    import io
+    """A small valid PDF with these text lines (no extra libraries needed)."""
+    def esc(t):
+        return t.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
 
-    from reportlab.pdfgen import canvas
-
-    buf = io.BytesIO()
-    c = canvas.Canvas(buf)
-    y = 800
+    ops = ["BT", "/F1 12 Tf", "72 800 Td", "14 TL"]
     for line in lines:
-        c.drawString(72, y, line)
-        y -= 18
-    c.save()
-    return buf.getvalue()
+        ops += [f"({esc(line)}) Tj", "T*"]
+    ops.append("ET")
+    stream = "\n".join(ops).encode("latin-1")
+    objs = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> "
+        b"/Contents 5 0 R >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, body in enumerate(objs, 1):
+        offsets.append(len(out))
+        out += f"{i} 0 obj\n".encode() + body + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode()
+    out += b"".join(f"{o:010d} 00000 n \n".encode() for o in offsets)
+    out += f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return bytes(out)
 
 
 @pytest.fixture
