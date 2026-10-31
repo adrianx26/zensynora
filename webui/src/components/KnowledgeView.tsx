@@ -3,7 +3,7 @@
 // panel to read, edit, create or trash a note. Data: /api/knowledge/*.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
-import KnowledgeGraph, { type GEdge, type GNode, type GraphHandle } from './KnowledgeGraph';
+import KnowledgeGraph, { type GEdge, type GNode, type GraphHandle, type LabelMode } from './KnowledgeGraph';
 import KnowledgeImport from './KnowledgeImport';
 import KnowledgeDistilled from './KnowledgeDistilled';
 import KnowledgeHealth from './KnowledgeHealth';
@@ -40,12 +40,28 @@ interface NoteDetail {
 }
 
 type Tab = 'graph' | 'notes' | 'tags' | 'distilled' | 'usage';
-type ColorBy = 'tag' | 'links' | 'none';
+type ColorBy = 'group' | 'tag' | 'links' | 'none';
 
 // Categorical palette (works on the dark and light themes).
 const PALETTE = ['#58a6ff', '#3fb950', '#d29922', '#f778ba', '#a371f7', '#39c5cf', '#ff7b72', '#e3b341', '#7ee787', '#79c0ff'];
 const BASE_KEY = 'zensynora_kb_base';
 const MODE_KEY = 'zensynora_kb_search_mode'; // KB phase 3: words / meaning / both
+const VIEW_KEY = 'zensynora_kb_graph_view';   // 2026-10-31: colour, links, labels
+// Link-type colours: distinct from the note colours' blue so links stand out.
+const LINK_PALETTE = ['#e3b341', '#3fb950', '#f778ba', '#39c5cf', '#ff7b72', '#a371f7', '#7ee787', '#79c0ff', '#d29922', '#58a6ff'];
+
+interface GraphPrefs { colorBy: ColorBy; linkWeight: number; labels: LabelMode }
+function loadPrefs(): GraphPrefs {
+  const def: GraphPrefs = { colorBy: 'group', linkWeight: 1, labels: 'auto' };
+  try {
+    const v = JSON.parse(stored(VIEW_KEY) || '{}');
+    return {
+      colorBy: ['group', 'tag', 'links', 'none'].includes(v.colorBy) ? v.colorBy : def.colorBy,
+      linkWeight: v.linkWeight === 2 ? 2 : 1,
+      labels: ['auto', 'all', 'none'].includes(v.labels) ? v.labels : def.labels,
+    };
+  } catch { return def; }
+}
 
 function hashColor(s: string): string {
   let h = 0;
@@ -93,7 +109,12 @@ const KnowledgeView: React.FC = () => {
   const [hideMissing, setHideMissing] = useState(false);
   const [hideOrphans, setHideOrphans] = useState(false);
   const [depth, setDepth] = useState(0); // 0 = whole graph, else hops around the selected note
-  const [colorBy, setColorBy] = useState<ColorBy>('tag');
+  const [prefs] = useState<GraphPrefs>(loadPrefs);
+  const [colorBy, setColorBy] = useState<ColorBy>(prefs.colorBy);
+  const [linkWeight, setLinkWeight] = useState<number>(prefs.linkWeight);
+  const [labelMode, setLabelMode] = useState<LabelMode>(prefs.labels);
+  const [bigGraph, setBigGraph] = useState(false); // 2026-10-31: graph over the whole window
+  const orphansAuto = useRef<string | null>(null); // base for which "hide unlinked" was set automatically
   const [edgeLabels, setEdgeLabels] = useState(false);
   const [paused, setPaused] = useState(false);
   const [sort, setSort] = useState<{ key: 'title' | 'observations' | 'degree' | 'updated'; dir: 1 | -1 }>({ key: 'degree', dir: -1 });
@@ -202,6 +223,54 @@ const KnowledgeView: React.FC = () => {
     return { nodes, edges };
   }, [data, tagFilter, catFilter, relFilter, hits, depth, selected, hideMissing, hideOrphans]);
 
+  useEffect(() => {
+    const t = window.setTimeout(() => graphRef.current?.fit(), 60);
+    if (!bigGraph) return () => window.clearTimeout(t);
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setBigGraph(false); };
+    window.addEventListener('keydown', esc);
+    return () => { window.clearTimeout(t); window.removeEventListener('keydown', esc); };
+  }, [bigGraph]);
+
+  // 2026-10-31: remember the graph's look
+  useEffect(() => { store(VIEW_KEY, JSON.stringify({ colorBy, linkWeight, labels: labelMode })); }, [colorBy, linkWeight, labelMode]);
+
+  // Many unlinked notes hide the linked ones: start with them hidden (once per base).
+  useEffect(() => {
+    if (!data || orphansAuto.current === base) return;
+    orphansAuto.current = base;
+    if (data.stats.notes > 30 && data.stats.orphans / data.stats.notes > 0.4) setHideOrphans(true);
+  }, [data, base]);
+
+  // Groups: notes connected by links (largest group first); unlinked notes are grey.
+  const groupOf = useMemo(() => {
+    const parent = new Map<string, string>();
+    const find = (x: string): string => {
+      let r = x;
+      while (parent.get(r) !== r) r = parent.get(r)!;
+      let c = x;
+      while (parent.get(c) !== r) { const n = parent.get(c)!; parent.set(c, r); c = n; }
+      return r;
+    };
+    for (const n of data?.nodes || []) parent.set(n.id, n.id);
+    for (const e of data?.edges || []) {
+      if (!parent.has(e.source) || !parent.has(e.target)) continue;
+      const a = find(e.source), b = find(e.target);
+      if (a !== b) parent.set(a, b);
+    }
+    const size = new Map<string, number>();
+    for (const id of parent.keys()) { const r = find(id); size.set(r, (size.get(r) || 0) + 1); }
+    const rank = new Map([...size.entries()].filter(([, n]) => n > 1).sort((a, b) => b[1] - a[1]).map(([r], i) => [r, i]));
+    const out = new Map<string, number>();
+    for (const id of parent.keys()) { const i = rank.get(find(id)); out.set(id, i === undefined ? -1 : i); }
+    return { of: out, groups: rank.size, sizes: [...size.values()].filter(n => n > 1).sort((a, b) => b - a) };
+  }, [data]);
+
+  const relColor = useMemo(() => {
+    const m = new Map<string, string>();
+    (data?.relation_types || []).forEach((t, i) => m.set(t.name, LINK_PALETTE[i % LINK_PALETTE.length]));
+    return (type: string) => m.get(type) || '#8b949e';
+  }, [data]);
+
   const tagColor = useMemo(() => {
     const m = new Map<string, string>();
     (data?.tags || []).forEach((t, i) => m.set(t.name, i < PALETTE.length ? PALETTE[i] : hashColor(t.name)));
@@ -211,13 +280,17 @@ const KnowledgeView: React.FC = () => {
   const tagRank = useMemo(() => new Map((data?.tags || []).map((t, i) => [t.name, i])), [data]);
 
   const colorOf = useCallback((n: GNode) => {
+    if (colorBy === 'group') {
+      const g = groupOf.of.get(n.id) ?? -1;
+      return g < 0 ? '#6e7681' : PALETTE[g % PALETTE.length];
+    }
     if (colorBy === 'links') return linkColor(n.degree);
     if (colorBy === 'none') return '#58a6ff';
     // the note's most used tag (the legend lists the most used tags first)
     const pool = tagFilter.length ? n.tags.filter(x => tagFilter.includes(x)) : n.tags;
     const t = [...(pool.length ? pool : n.tags)].sort((x, y) => (tagRank.get(x) ?? 1e9) - (tagRank.get(y) ?? 1e9))[0];
     return t ? tagColor.get(t) || hashColor(t) : '#8b949e';
-  }, [colorBy, tagColor, tagRank, tagFilter]);
+  }, [colorBy, tagColor, tagRank, tagFilter, groupOf]);
 
   const toggle = (list: string[], v: string, set: (x: string[]) => void) => set(list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
 
@@ -405,11 +478,22 @@ const KnowledgeView: React.FC = () => {
       <div className={`kb-main ${selected || creating || side ? 'with-panel' : ''}`}>
         <div className="kb-content">
           {tab === 'graph' && (
-            <div className="kb-graph-card">
+            <div className={`kb-graph-card ${bigGraph ? 'kb-graph-full' : ''}`}>
               <div className="kb-graph-controls">
                 <label>Colour
                   <select className="field-input" value={colorBy} onChange={e => setColorBy(e.target.value as ColorBy)}>
-                    <option value="tag">by tag</option><option value="links">by number of links</option><option value="none">one colour</option>
+                    <option value="group">by group (linked notes)</option><option value="tag">by tag</option>
+                    <option value="links">by number of links</option><option value="none">one colour</option>
+                  </select>
+                </label>
+                <label title="How strongly links are drawn">Links
+                  <select className="field-input" value={linkWeight} onChange={e => setLinkWeight(Number(e.target.value))}>
+                    <option value={1}>normal</option><option value={2}>bold</option>
+                  </select>
+                </label>
+                <label title="Which note names to show (they never overlap)">Names
+                  <select className="field-input" value={labelMode} onChange={e => setLabelMode(e.target.value as LabelMode)}>
+                    <option value="auto">auto</option><option value="all">all that fit</option><option value="none">only selected</option>
                   </select>
                 </label>
                 <label title="Show only the notes this many links away from the selected one">Around selected
@@ -422,6 +506,9 @@ const KnowledgeView: React.FC = () => {
                 <label className="kb-check"><input type="checkbox" checked={hideOrphans} onChange={e => setHideOrphans(e.target.checked)} /> hide unlinked</label>
                 <span className="kb-spacer" />
                 <button type="button" className="ghost-btn" onClick={() => graphRef.current?.fit()} title="Fit everything in view">⤢ Fit</button>
+                <button type="button" className="ghost-btn" onClick={() => setBigGraph(b => !b)} title={bigGraph ? 'Back to the page (Esc)' : 'Show the graph over the whole window'}>
+                  {bigGraph ? '✕ Close full screen' : '⛶ Full screen'}
+                </button>
                 <button type="button" className="ghost-btn" onClick={() => setPaused(p => !p)}>{paused ? '▶ Resume' : '⏸ Freeze'}</button>
                 <button type="button" className="ghost-btn" onClick={() => { setPaused(false); graphRef.current?.reheat(); }} title="Unpin every note and lay the graph out again">⟳ Re-layout</button>
               </div>
@@ -433,9 +520,32 @@ const KnowledgeView: React.FC = () => {
                 </div>
               ) : (
                 <KnowledgeGraph ref={graphRef} nodes={view.nodes} edges={view.edges} selected={selected} onSelect={select}
-                  colorOf={colorOf} showEdgeLabels={edgeLabels} paused={paused} />
+                  colorOf={colorOf} showEdgeLabels={edgeLabels} paused={paused}
+                  edgeColorOf={relColor} linkWeight={linkWeight} labelMode={labelMode} />
               )}
               <div className="kb-legend">
+                {hideOrphans && data && data.stats.orphans > 0 && (
+                  <button type="button" className="kb-legend-item kb-legend-note" onClick={() => setHideOrphans(false)}
+                    title="Show the notes that have no links (they go on an outer ring)">
+                    {data.stats.orphans} unlinked notes hidden — show them
+                  </button>
+                )}
+                {(data?.relation_types || []).length > 0 && (
+                  <span className="kb-legend-row">
+                    <span className="muted small">Links:</span>
+                    {(data?.relation_types || []).slice(0, 8).map(t => (
+                      <button type="button" key={t.name} className={`kb-legend-item ${relFilter.includes(t.name) ? 'active' : ''}`}
+                        onClick={() => toggle(relFilter, t.name, setRelFilter)} title="Show only this kind of link">
+                        <span className="kb-swatch kb-swatch-line" style={{ background: relColor(t.name) }} />{t.name.replace(/_/g, ' ')} <span className="muted small">{t.count}</span>
+                      </button>
+                    ))}
+                  </span>
+                )}
+                {colorBy === 'group' && groupOf.groups > 0 && (
+                  <span className="kb-legend-item muted small">
+                    {groupOf.groups} group{groupOf.groups === 1 ? '' : 's'} of linked notes (largest: {groupOf.sizes[0]}) · grey = no links
+                  </span>
+                )}
                 {colorBy === 'tag' && (data?.tags || []).slice(0, 10).map(t => (
                   <button type="button" key={t.name} className={`kb-legend-item ${tagFilter.includes(t.name) ? 'active' : ''}`}
                     onClick={() => toggle(tagFilter, t.name, setTagFilter)} title="Show only notes with this tag">

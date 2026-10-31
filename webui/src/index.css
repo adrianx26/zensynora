@@ -1171,3 +1171,14 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .ghost-btn.primary-outline { border-color: var(--accent-color); color: var(--accent-color); }
 .tool-item.own-tool .row-actions { display: flex; gap: 6px; }
 .tool-item.own-tool .muted { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 2026-10-31: Doctor → Errors: failures / failed jobs / restarts */
+.chip-count { margin-left: 6px; padding: 0 6px; border-radius: 8px; background: rgba(128, 128, 128, 0.18); font-size: 0.75em; font-variant-numeric: tabular-nums; }
+.restart-row { display: grid; grid-template-columns: auto 170px 1fr; gap: 12px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--panel-border); font-size: 0.85rem; }
+.restart-row:last-child { border-bottom: none; }
+
+/* 2026-10-31: knowledge graph legend — link types, hidden unlinked notes */
+.kb-legend-row { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; }
+.kb-swatch-line { width: 16px !important; height: 3px !important; border-radius: 2px; }
+.kb-legend-note { color: var(--accent-color); }
+.kb-graph-card.kb-graph-full { position: fixed; inset: 10px; z-index: 60; background: var(--bg-color); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }

@@ -2,7 +2,7 @@
 
 GET /api/doctor/report?hours=24                         full report (JSON)
 GET /api/doctor/report/download?format=md|json|zip     the report as a file
-GET /api/doctor/errors?hours=24&level=ERROR&q=text      grouped warnings/errors
+GET /api/doctor/errors?hours=24&level=ERROR&q=text&kind= grouped warnings/errors; kind=failures|jobs|restarts
 
 Secrets never leave the server: the report holds only "key set: yes/no" and
 log text is redacted (myclaw/doctor/logscan.py). Still guarded like the other
@@ -48,8 +48,10 @@ async def download_report(format: str = Query("md", pattern="^(md|json|zip)$"), 
 
 
 @router.get("/api/doctor/errors", dependencies=guard)
-async def errors(hours: float = 24, level: str = "", q: str = ""):
+async def errors(hours: float = 24, level: str = "", q: str = "", kind: str = ""):
     levels = [x.strip().upper() for x in level.split(",") if x.strip()]
     if any(lv not in _LEVELS for lv in levels):
         raise HTTPException(status_code=400, detail="level must be WARNING, ERROR or CRITICAL")
-    return await asyncio.to_thread(_report.error_view, _hours(hours), levels or None, q.strip()[:200])
+    if kind and kind not in _report.KINDS:
+        raise HTTPException(status_code=400, detail="kind must be failures, jobs or restarts")
+    return await asyncio.to_thread(_report.error_view, _hours(hours), levels or None, q.strip()[:200], 5, kind)

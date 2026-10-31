@@ -17,6 +17,7 @@ import json
 import os
 import platform
 import shutil
+import re
 import sys
 import time
 import zipfile
@@ -185,11 +186,49 @@ def _safe(fn, *a, default=None):
         return default if default is not None else {"error": logscan.redact(str(e))[:300]}
 
 
+# 2026-10-31: "Failures" button — every error / critical entry, plus warnings
+# about work that failed (a task, tool, job, request …), timed out or crashed,
+# or that carry a traceback.
+_FAILURE_RE = re.compile(r"fail|timed? ?out|timeout|exceeded|crash|traceback|exception|aborted|could not|cannot",
+                         re.IGNORECASE)
+KINDS = ("failures", "jobs", "restarts")
+
+
+def _is_failure(e: "logscan.Entry") -> bool:
+    return e.level in ("ERROR", "CRITICAL") or bool(e.exception) or bool(_FAILURE_RE.search(e.message))
+
+
+def _restart_events(starts: list[tuple[float, str]]) -> list[dict[str, Any]]:
+    """Each start of the long-running program, newest first."""
+    times = sorted(((t, cmd) for t, cmd in starts if cmd in logscan.SERVICE_COMMANDS and t), reverse=True)
+    out = []
+    for i, (t, cmd) in enumerate(times):
+        prev = times[i + 1][0] if i + 1 < len(times) else None
+        out.append({"time": _fmt_ts(t), "command": cmd or "zensynora",
+                    "after_s": round(t - prev) if prev else None})
+    return out
+
+
 def error_view(hours: float = 24, levels: list[str] | None = None, q: str = "",
-               samples: int = 5) -> dict[str, Any]:
-    """Grouped warnings/errors for the Errors viewer and the report."""
+               samples: int = 5, kind: str = "") -> dict[str, Any]:
+    """Grouped warnings/errors for the Errors viewer and the report.
+
+    ``kind`` (2026-10-31): ``failures`` (only entries about failed work),
+    ``jobs`` (failed job runs instead of log lines) or ``restarts`` (each start
+    of the program). ``kinds`` always holds the counts for the three buttons.
+    """
     sc = logscan.scan(hours, max_bytes=30_000_000)
     entries = sc.problems
+    job_runs = _safe(_job_runs, hours, default=[])
+    if not isinstance(job_runs, list):
+        job_runs = []
+    restart_events = _restart_events(sc.starts)
+    kinds = {"failures": sum(1 for e in entries if _is_failure(e)), "jobs": len(job_runs),
+             "restarts": len(restart_events)}
+    if kind == "failures":
+        entries = [e for e in entries if _is_failure(e)]
+    elif kind in ("jobs", "restarts"):
+        entries = []
     if levels:
         wanted = {lv.upper() for lv in levels}
         entries = [e for e in entries if e.level in wanted]
@@ -200,9 +239,14 @@ def error_view(hours: float = 24, levels: list[str] | None = None, q: str = "",
     groups = logscan.group(entries, samples=samples)
     restarts = logscan.restart_stats(sc.starts)
     restarts["last"] = _fmt_ts(restarts["last"]) if restarts["last"] else None
+    if q and kind == "jobs":
+        ql = q.lower()
+        job_runs = [r for r in job_runs if ql in f"{r['job']} {r['status']} {r['error']}".lower()]
     return {"hours": hours, "counts": sc.counts(), "groups": groups[:MAX_GROUPS],
             "total_groups": len(groups), "restarts": restarts, "log_exists": sc.exists,
-            "truncated": sc.truncated, "lines_read": sc.lines}
+            "truncated": sc.truncated, "lines_read": sc.lines, "kind": kind, "kinds": kinds,
+            "job_runs": job_runs if kind == "jobs" else [],
+            "restart_events": restart_events[:200] if kind == "restarts" else []}
 
 
 # ── the report ───────────────────────────────────────────────────────────────
