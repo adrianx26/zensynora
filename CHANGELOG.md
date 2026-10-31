@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Your tools and skills: create, edit, delete, migrate, export and import (2026-10-31)**
+- Tools page, *Your tools*: create and edit the Python tools in `~/.myclaw/TOOLBOX`
+  (code editor), turn them on/off, delete them (files move to `TOOLBOX/.trash`;
+  edits keep the previous version there).
+- **Make skill**: a tool that only returns a fixed text (instructions written as
+  Python) becomes a Markdown skill; the tool is turned off, not deleted. The code
+  is read, never run.
+- **Repair**: registry entries without a file, unregistered tool files, README
+  files without a tool, old registry formats, paths from another computer and
+  old single-file skills are fixed; nothing is erased.
+- **Export / import as a file**: one `zensynora-bundle` JSON file holds any mix
+  of tools and skills; import also takes a single `.py` tool or `SKILL.md`.
+  Imported tool code is checked like agent code — if the check fails it comes in
+  turned off with the reason, unless you mark it as trusted (still sandboxed).
+  Existing names are replaced only when you choose to.
+- Skills: **Export** (`SKILL.md`) per skill and **Export skills**; changing or
+  deleting a skill keeps the previous version in `skills/.trash` (it was erased).
+- API: `/api/toolbox…`, `/api/transfer/export`, `/api/transfer/import`,
+  `/api/skills/{name}/export`; changes need the Web UI header like other
+  user-only decisions.
+
 **Rules every agent follows (2026-10-27)**
 - New **Rules** page (and `zensynora rules list | show | proposals | approve | reject`):
   rules are Markdown files in `~/.myclaw/rules/` with a title, priority

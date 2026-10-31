@@ -173,6 +173,8 @@ from myclaw.web import knowledge_health_api as _knowledge_health_api  # noqa: E4
 app.include_router(_knowledge_health_api.router)  # 2026-10-25 (KB phase 6): index health, file watcher status
 from myclaw.web import rules_api as _rules_api  # noqa: E402
 app.include_router(_rules_api.router)  # 2026-10-27: the user's rules and agents' proposals
+from myclaw.web import toolbox_api as _toolbox_api  # noqa: E402
+app.include_router(_toolbox_api.router)  # 2026-10-31: your tools; export / import tools and skills
 
 
 _mcp_manager = None

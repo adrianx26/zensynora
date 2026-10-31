@@ -391,12 +391,42 @@ PowerShell script, how to review code.
   for small local models that rarely call tools, but it costs tokens.
 * **+ New skill** writes one; **Import…** adds a `SKILL.md` made elsewhere
   (the same format other agent tools use: a `name:` and `description:` header,
-  then Markdown). Built-in skills are read-only: **Copy to change** makes your
-  own version (deleting it brings the built-in one back).
+  then Markdown) or a ZenSynora export file (`.json`). Built-in skills are
+  read-only: **Copy to change** makes your own version (deleting it brings the
+  built-in one back).
+* **Export** downloads one skill as `SKILL.md`; **Export skills** downloads all
+  of yours as one file.
+* Changing or deleting a skill keeps the previous version in
+  `~/.myclaw/skills/.trash` — nothing is erased.
 
 Your skills are files in `~/.myclaw/skills/<name>/SKILL.md` and are included
 in backups (*Jobs, own tools, skills & rules*). `zensynora skills list` shows all
 skills and which agents have them.
+
+## Tools: your own tools, export and import
+
+**Tools** in the sidebar. *Your tools* are the Python tools in
+`~/.myclaw/TOOLBOX` — made by agents (`register_tool`) or by you. Below them is
+the list of every tool agents can call.
+
+* **+ New tool** / **Edit**: the code must define a function with the tool's
+  name; its docstring is what agents read. A tool you write or edit is marked
+  *yours*. Every own tool runs in a separate, locked-down process.
+* **Turn off / on**, **Delete**: deleting moves the files to
+  `TOOLBOX/.trash`; editing keeps the previous version there too.
+* **Make skill**: many agent-made tools only return a fixed text
+  (*instructions only*) — they work better as a skill. This makes a skill
+  from the tool's description and README (the code is read, never run) and
+  turns the tool off (it is kept).
+* **Repair** appears when something is inconsistent: a registry entry whose
+  file is gone, a tool file that is not registered (added turned off), a README
+  without a tool, paths from another computer, old formats. Nothing is erased.
+* **Export tools** / **Export all** / **Export** on one tool download a
+  `zensynora-bundle` JSON file; **Import…** takes such a file, one `.py` tool or
+  one `SKILL.md`. A name that already exists is skipped until you choose
+  **Replace existing** (the current one goes to the trash). Imported code that
+  fails the safety check comes in turned off with the reason; **I checked the
+  code — trust it** turns it on (still in the locked-down process).
 
 ## Rules: what every agent must follow
 
