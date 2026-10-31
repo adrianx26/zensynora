@@ -304,13 +304,21 @@ keep their own knowledge base.
 The **Knowledge** page (sidebar) shows the knowledge base visually:
 
 * **Graph** — every note is a dot, every link (`- uses [[Other note]]`) an
-  arrow. Bigger dots have more links and facts; colours are tags (or the
-  number of links). Drag the background to pan, use the wheel to zoom, drag a
-  note to pin it (double-click releases it), hover for a preview, click to
-  open it. *Around selected* shows only the notes 1–3 links away; *link
-  names*, *hide missing*, *hide unlinked*, *Fit*, *Freeze* and *Re-layout*
-  change the view. A dashed dot is a note that is linked to but does not
-  exist yet — click it and *Create this note*.
+  arrow. Bigger dots have more links and facts. *Colour*: **by group** (notes
+  connected by links share a colour; grey = no links), by tag, or by number
+  of links. Links are coloured by type (the legend under the graph lists the
+  types — click one to show only those links), curved when two notes link
+  both ways, and keep their width when you zoom; **Links: bold** draws them
+  thicker. *Names* (auto / all that fit / only selected) — names never
+  overlap. Unlinked notes sit on an outer ring; when more than 40 % of the
+  notes have no links they start hidden (*N unlinked notes hidden — show
+  them*). **⛶ Full screen** shows the graph over the whole window (Esc
+  closes it). Drag the background to pan, use the wheel to zoom, drag a note
+  to pin it (double-click releases it), hover for a preview, click to open
+  it. *Around selected* shows only the notes 1–3 links away; *link names*,
+  *hide missing*, *hide unlinked*, *Fit*, *Freeze* and *Re-layout* change
+  the view. A dashed dot is a note that is linked to but does not exist yet
+  — click it and *Create this note*.
 * **Notes** — all notes with tags, number of facts and links, and last
   change; click a column to sort.
 * **Tags & types** — tag cloud, fact categories (`- [category] text`) and
@@ -497,9 +505,14 @@ The Doctor page has two tabs. **Checks** is the health check (the same as
   last 24 h, restarts (marked *crash loop* when the service keeps
   restarting), failed jobs;
 * **Errors** — warnings and errors from the log, grouped (messages that
-  differ only in numbers count as one). Filter by period (1 h, 24 h, 7 days),
-  level and text; click a group to see its log lines and traceback, and
-  **Copy** them;
+  differ only in numbers count as one). Filter by period (1, 2, 4, 8, 12 or
+  24 hours, 7 days), level and text; click a group to see its log lines and
+  traceback, and **Copy** them. Three buttons (each with its count) narrow it
+  down: **Failures** — errors, plus warnings about work that failed, timed out
+  or crashed; **Failed jobs** — job runs that ended with an error, a timeout
+  or were interrupted (click one for its error); **Restarts** — each start of
+  ZenSynora with the time since the previous one (red = within 2 minutes;
+  many in a short time is a crash loop);
 * **View report** — the whole diagnostics report in the page;
 * **Download** — **Markdown**, **JSON** or **ZIP** (report + the last log
   lines). Keys and tokens are never included, so the file is safe to attach
