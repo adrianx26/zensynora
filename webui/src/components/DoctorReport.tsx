@@ -27,7 +27,16 @@ interface Restarts {
   typical_gap_s: number | null;
 }
 
+type Kind = '' | 'failures' | 'jobs' | 'restarts';
+
+interface JobRun { job: string; run: string | number; status: string; started: string; error: string }
+interface RestartEvent { time: string; command: string; after_s: number | null }
+
 interface ErrorView {
+  kind?: Kind;
+  kinds?: Record<'failures' | 'jobs' | 'restarts', number>;
+  job_runs?: JobRun[];
+  restart_events?: RestartEvent[];
   hours: number;
   counts: Record<Level, number>;
   groups: ErrorGroup[];
@@ -49,8 +58,22 @@ interface ReportSummary {
 }
 
 const PERIODS: { label: string; hours: number }[] = [
-  { label: '1 h', hours: 1 }, { label: '24 h', hours: 24 }, { label: '7 days', hours: 168 },
+  { label: '1 h', hours: 1 }, { label: '2 h', hours: 2 }, { label: '4 h', hours: 4 }, { label: '8 h', hours: 8 },
+  { label: '12 h', hours: 12 }, { label: '24 h', hours: 24 }, { label: '7 days', hours: 168 },
 ];
+// 2026-10-31: show only failures, failed job runs or program restarts
+const KINDS: { label: string; value: Exclude<Kind, ''>; help: string }[] = [
+  { label: 'Failures', value: 'failures', help: 'Errors, plus warnings about work that failed, timed out or crashed' },
+  { label: 'Failed jobs', value: 'jobs', help: 'Job runs that ended with an error, a timeout or were interrupted' },
+  { label: 'Restarts', value: 'restarts', help: 'Each start of ZenSynora — many in a short time means a crash loop' },
+];
+
+function gap(s: number | null): string {
+  if (s === null) return '';
+  if (s < 120) return `${s} s after the previous start`;
+  if (s < 7200) return `${Math.round(s / 60)} min after the previous start`;
+  return `${Math.round(s / 3600)} h after the previous start`;
+}
 const LEVELS: { label: string; value: '' | Level }[] = [
   { label: 'All', value: '' }, { label: 'Warnings', value: 'WARNING' }, { label: 'Errors', value: 'ERROR' },
   { label: 'Critical', value: 'CRITICAL' },
@@ -92,6 +115,7 @@ const DoctorReport: React.FC = () => {
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [hours, setHours] = useState(24);
   const [level, setLevel] = useState<'' | Level>('');
+  const [kind, setKind] = useState<Kind>('');
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [view, setView] = useState<ErrorView | null>(null);
@@ -112,13 +136,14 @@ const DoctorReport: React.FC = () => {
   const loadErrors = useCallback(async () => {
     try {
       const qs = new URLSearchParams({ hours: String(hours) });
-      if (level) qs.set('level', level);
+      if (level && kind !== 'jobs' && kind !== 'restarts') qs.set('level', level);
       if (search) qs.set('q', search);
+      if (kind) qs.set('kind', kind);
       setView(await api<ErrorView>(`/api/doctor/errors?${qs}`));
     } catch (e) {
       setNotice({ kind: 'error', text: (e as Error).message });
     }
-  }, [hours, level, search]);
+  }, [hours, level, search, kind]);
 
   useEffect(() => { loadSummary(); }, [loadSummary]);
   useEffect(() => { loadErrors(); }, [loadErrors]);
@@ -212,7 +237,16 @@ const DoctorReport: React.FC = () => {
           </div>
           <div className="chip-row">
             {LEVELS.map(l => (
-              <button key={l.label} className={`chip ${level === l.value ? 'active' : ''}`} onClick={() => setLevel(l.value)}>{l.label}</button>
+              <button key={l.label} className={`chip ${level === l.value && kind !== 'jobs' && kind !== 'restarts' ? 'active' : ''}`}
+                onClick={() => { setLevel(l.value); if (kind !== 'failures') setKind(''); }}>{l.label}</button>
+            ))}
+          </div>
+          <div className="chip-row">
+            {KINDS.map(k => (
+              <button key={k.value} title={k.help} className={`chip ${kind === k.value ? 'active' : ''}`}
+                onClick={() => setKind(kind === k.value ? '' : k.value)}>
+                {k.label}{view?.kinds ? <span className="chip-count">{view.kinds[k.value]}</span> : null}
+              </button>
             ))}
           </div>
           <form className="field-row" onSubmit={e => { e.preventDefault(); setSearch(query.trim()); }}>
@@ -223,13 +257,57 @@ const DoctorReport: React.FC = () => {
         {view && (
           <div className="muted small">
             {view.counts.CRITICAL} critical · {view.counts.ERROR} errors · {view.counts.WARNING} warnings
-            {' '}({view.total_groups} kind{view.total_groups === 1 ? '' : 's'})
+            {kind !== 'jobs' && kind !== 'restarts' && <>{' '}({view.total_groups} kind{view.total_groups === 1 ? '' : 's'})</>}
             {view.restarts.starts > 0 && <> · {view.restarts.starts} restart(s), at most {view.restarts.max_in_window} in {view.restarts.window_min} min</>}
             {view.truncated && <> · only the newest part of the log was read</>}
           </div>
         )}
-        {view && !view.log_exists && <div className="muted">No log file yet.</div>}
-        {view && view.log_exists && view.groups.length === 0 && <div className="muted">Nothing found for this filter.</div>}
+        {view && !view.log_exists && kind !== 'jobs' && <div className="muted">No log file yet.</div>}
+        {view && view.log_exists && kind !== 'jobs' && kind !== 'restarts' && view.groups.length === 0 && <div className="muted">Nothing found for this filter.</div>}
+        {view && kind === 'jobs' && (
+          (view.job_runs || []).length === 0
+            ? <div className="muted">No failed job runs in this period.</div>
+            : <div className="doctor-list">
+              {(view.job_runs || []).map(r => {
+                const id = `job|${r.run}`;
+                const expanded = open === id;
+                return (
+                  <div key={id} className="error-group">
+                    <button className="error-group-head" onClick={() => setOpen(expanded ? null : id)} aria-expanded={expanded}>
+                      <span className={`badge doctor-badge ${r.status === 'interrupted' ? 'warn' : 'fail'}`}>{r.status}</span>
+                      <span className="error-msg">{r.job}</span>
+                      <span className="muted small">{r.started}</span>
+                    </button>
+                    {expanded && (
+                      <div className="error-group-body">
+                        <div className="probe-row">
+                          <span className="muted small">run {r.run} · started {r.started}</span>
+                          <button className="ghost-btn small-btn" onClick={() => copy(`${r.job} ${r.status} ${r.started}\n${r.error}`)}>Copy</button>
+                        </div>
+                        <pre className="report-view">{r.error || 'No error text was stored for this run.'}</pre>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+        )}
+        {view && kind === 'restarts' && (
+          (view.restart_events || []).length === 0
+            ? <div className="muted">No restarts in this period.</div>
+            : <div className="doctor-list">
+              {view.restarts.max_in_window > 10 && (
+                <div className="notice error">Crash loop: {view.restarts.max_in_window} starts within {view.restarts.window_min} minutes.</div>
+              )}
+              {(view.restart_events || []).map((r, i) => (
+                <div key={`${r.time}-${i}`} className="restart-row">
+                  <span className={`badge doctor-badge ${r.after_s !== null && r.after_s < 120 ? 'fail' : 'ok'}`}>{r.command}</span>
+                  <span>{r.time}</span>
+                  <span className="muted small">{gap(r.after_s)}</span>
+                </div>
+              ))}
+            </div>
+        )}
         <div className="doctor-list">
           {view?.groups.map(g => {
             const id = `${g.level}|${g.key}`;

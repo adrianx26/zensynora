@@ -290,3 +290,81 @@ def test_recent_problems_sees_new_signals(home):  # noqa: F811
 def test_new_checks_are_fast_and_clean_on_empty_home(home, check_id):  # noqa: F811
     r = _run(check_id)[check_id]
     assert r.status in ("ok", "skip") and r.duration_ms < 1000
+
+
+# ── 2026-10-31: Errors viewer — failures, failed jobs, restarts ─────────────
+def _kinds_install(home):  # noqa: F811
+    from myclaw.jobs import store
+
+    recs = [
+        _rec("INFO", "ZenSynora v0.8.0 initialised (log_level=INFO, cmd=webui)", ago=5000),
+        _rec("INFO", "ZenSynora v0.8.0 initialised (log_level=INFO, cmd=webui)", ago=4970),
+        _rec("INFO", "ZenSynora v0.8.0 initialised (log_level=INFO, cmd=doctor)", ago=100),  # CLI: not a restart
+        _rec("CRITICAL", "Task 'task_1' FAILED - exceeded 330s timeout", ago=60, module="task_timer"),
+        _rec("ERROR", "Tool execution error (shell): boom", ago=50, module="tools",
+             exception="Traceback (most recent call last):\n  ValueError: boom"),
+        _rec("WARNING", "Rate limit exceeded for browse", ago=40, module="tools"),
+        _rec("WARNING", "Config file reloaded", ago=30, module="config"),           # not a failure
+        _rec("WARNING", "Something old failed", ago=11 * 3600, module="old"),    # outside 8 h
+    ]
+    _write_log(home, recs)
+    job = store.create_job({"name": "daily research", "prompt": "do it", "agent": "default"})
+    ok = store.start_run(job["id"])
+    store.finish_run(ok, "ok", output="fine")
+    bad = store.start_run(job["id"])
+    store.finish_run(bad, "error", error="Model server unreachable")
+    return job
+
+
+def test_error_view_kinds(home):  # noqa: F811
+    from myclaw.doctor import report
+
+    _kinds_install(home)
+    v = report.error_view(8)
+    assert v["kinds"] == {"failures": 3, "jobs": 1, "restarts": 2}
+    assert v["job_runs"] == [] and v["restart_events"] == []
+
+    f = report.error_view(8, kind="failures")
+    msgs = {g["message"] for g in f["groups"]}
+    assert any("FAILED" in m for m in msgs) and any("Rate limit exceeded" in m for m in msgs)
+    assert not any("reloaded" in m for m in msgs) and not any("old failed" in m for m in msgs)
+    assert len(report.error_view(8, ["CRITICAL"], kind="failures")["groups"]) == 1
+
+    j = report.error_view(8, kind="jobs")
+    assert j["groups"] == [] and len(j["job_runs"]) == 1
+    run = j["job_runs"][0]
+    assert run["job"] == "daily research" and run["status"] == "error" and "unreachable" in run["error"]
+    assert report.error_view(8, q="nothing-like-this", kind="jobs")["job_runs"] == []
+
+    r = report.error_view(8, kind="restarts")
+    assert [e["command"] for e in r["restart_events"]] == ["webui", "webui"]
+    assert r["restart_events"][0]["after_s"] == 30 and r["restart_events"][1]["after_s"] is None
+    assert report.error_view(12)["kinds"]["failures"] == 4  # the 11 h old one is inside 12 h
+
+
+def test_errors_api_kind_and_new_periods(home):  # noqa: F811
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from myclaw.web import doctor_api, settings_api
+
+    _kinds_install(home)
+    app = FastAPI()
+    app.include_router(doctor_api.router)
+    app.dependency_overrides[settings_api.require_local_or_admin] = lambda: None
+    with TestClient(app) as c:
+        for hours in (2, 4, 8, 12):
+            e = c.get(f"/api/doctor/errors?hours={hours}").json()
+            assert e["hours"] == hours and set(e["kinds"]) == {"failures", "jobs", "restarts"}
+        assert len(c.get("/api/doctor/errors?hours=8&kind=jobs").json()["job_runs"]) == 1
+        assert len(c.get("/api/doctor/errors?hours=8&kind=restarts").json()["restart_events"]) == 2
+        assert c.get("/api/doctor/errors?kind=bogus").status_code == 400
+
+
+def test_every_error_counts_as_a_failure(home):  # noqa: F811
+    from myclaw.doctor import report
+
+    _write_log(home, [_rec("ERROR", "Tool execution error (x): unexpected keyword argument 'url'", ago=10),
+                      _rec("WARNING", "Config file reloaded", ago=10)])
+    v = report.error_view(2, kind="failures")
+    assert v["kinds"]["failures"] == 1 and [g["level"] for g in v["groups"]] == ["ERROR"]
