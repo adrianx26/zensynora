@@ -19,6 +19,10 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+FASTEMBED_TIMEOUT = 2.0  # seconds a cache lookup may wait for an embedding
+_NO_MODEL_LOGGED = False
+
+
 @dataclass
 class CacheEntry:
     """A cached LLM response with its embedding."""
@@ -70,6 +74,9 @@ class SemanticCache:
         self._cache: OrderedDict[str, CacheEntry] = OrderedDict()
         self._embedding_model = None
         self._model_loaded = False
+        # 2026-10-31: "sentence-transformers" (PyTorch, several GB) or "fastembed"
+        # (ONNX, the knowledge base's model, shared) or None (exact matches only)
+        self._backend: Optional[str] = None
 
         # Stats
         self.hits = 0
@@ -134,6 +141,26 @@ class SemanticCache:
         if self._model_loaded:
             return
 
+        global _NO_MODEL_LOGGED
+        import importlib.util
+
+        if importlib.util.find_spec("sentence_transformers") is None:
+            # 2026-10-31: sentence-transformers pulls in PyTorch (several GB), so it
+            # is not a dependency. The knowledge base's fastembed model (ONNX, ~67 MB,
+            # one per process, run on the shared inference thread) is used instead.
+            from .knowledge import semantic as kb_semantic
+
+            self._model_loaded = True
+            if kb_semantic.library_installed():
+                self._backend = "fastembed"
+                logger.info("Semantic cache: using the knowledge base's embedding model (fastembed)")
+            elif not _NO_MODEL_LOGGED:
+                _NO_MODEL_LOGGED = True
+                logger.info("Semantic cache: no embedding library installed — only identical questions are "
+                            "answered from the cache. Install fastembed (Settings → Knowledge → semantic "
+                            "search, or pip install fastembed) to also match similar questions.")
+            return
+
         try:
             from sentence_transformers import SentenceTransformer
 
@@ -149,14 +176,12 @@ class SemanticCache:
                 device = "cpu"
 
             self._embedding_model = SentenceTransformer(self.embedding_model, device=device)
+            self._backend = "sentence-transformers"
             self._model_loaded = True
             logger.info("Embedding model loaded successfully")
-        except ImportError:
-            logger.warning(
-                "sentence-transformers not installed. "
-                "Semantic cache will use hash-based matching only. "
-                "Install with: pip install sentence-transformers"
-            )
+        except Exception as e:  # broken torch install etc.: exact matches still work
+            logger.info("Semantic cache: sentence-transformers could not be loaded (%s); "
+                        "only identical questions are answered from the cache", e)
             self._model_loaded = True  # Mark as loaded to prevent re-attempts
 
     def _cleanup_embedding_model(self):
@@ -195,6 +220,17 @@ class SemanticCache:
     def _get_embedding(self, text: str) -> Optional[np.ndarray]:
         """Get embedding for text using the model."""
         self._load_embedding_model()
+
+        if self._backend == "fastembed":
+            from .knowledge import semantic as kb_semantic
+
+            try:
+                # None while the model is still loading: this lookup is exact-match only
+                vec = kb_semantic.query_vector(text, timeout=FASTEMBED_TIMEOUT)
+            except Exception as e:
+                logger.info("Semantic cache: embedding failed: %s", e)
+                return None
+            return None if vec is None else np.asarray(vec, dtype=np.float32)
 
         if self._embedding_model is None:
             return None
@@ -273,8 +309,9 @@ class SemanticCache:
                     pass
                 return entry.response, entry.tool_calls
 
-        # Try semantic similarity match
-        if self._embedding_model is not None:
+        # Try semantic similarity match (2026-10-31: also with the fastembed backend)
+        self._load_embedding_model()
+        if self._embedding_model is not None or self._backend == "fastembed":
             # Construct query text from messages
             query_text = self._extract_query_text(messages)
             query_embedding = self._get_embedding(query_text)
@@ -304,6 +341,10 @@ class SemanticCache:
                         entries_to_remove.append(key)
                         continue
                     if entry.model != (model or ""):
+                        continue
+                    # 2026-10-31: entries made with another embedding model have
+                    # another size — skip them instead of failing the whole scan
+                    if getattr(entry.query_embedding, "shape", None) != query_embedding.shape:
                         continue
                     scan_keys.append(key)
                     scan_vectors.append(entry.query_embedding)

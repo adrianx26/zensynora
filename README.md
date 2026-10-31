@@ -139,8 +139,9 @@ search it before answering and save what is worth keeping.
   you that agents see — each traceable to its notes) and *live re-index* of
   notes you edit by hand. Both are off by default.
 
-Optional extras: `pip install 'zensynora[semantic]'` (search by meaning),
-`[ingest]` (PDF/Word/Excel import), `[watch]` (live re-index). Everything:
+Search by meaning (`fastembed`) and PDF/Word/Excel import are installed with
+ZenSynora (fastembed on 64-bit x86/ARM). Optional extra: `[watch]` (live
+re-index). Everything:
 [docs/knowledge_base_guide.md](docs/knowledge_base_guide.md).
 
 ## Updating and health
