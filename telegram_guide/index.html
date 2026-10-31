@@ -1467,9 +1467,19 @@ something goes wrong, you get a short explanation — the same wording as in the
 Web UI, for example that the model is rate-limited or the model server cannot
 be reached. Technical details go only to the log
 (<code>~/.myclaw/logs/zensynora.log</code>), never to the chat.</p>
-<p><strong>Photos, voice messages, documents.</strong> The bot reads only text for now. If you
-add a caption, the caption is used as the message; without one the bot says
-it can only read text.</p>
+<p><strong>Files, photos, voice messages.</strong> Send a document (PDF, Word, Excel, text,
+code…), a photo, a voice message, audio or video, with or without a caption.
+The bot saves it in the agent workspace under
+<code>inbox/telegram/&lt;date&gt;/&lt;file name&gt;</code> and tells the agent where it is. For
+documents the agent also gets the start of the text and can read all of it
+(<code>read_file</code>) or add it to the knowledge base (<code>assimilate</code>) — just ask, e.g.
+<em>"save this in the knowledge base"</em>. Start the caption with <code>@AgentName</code> to give
+the file to that agent. Agents cannot see images or hear audio yet (no OCR or
+transcription); they get the file's details. Telegram lets bots download files
+up to 20 MB.</p>
+<p>To add every document and photo you send to the knowledge base automatically,
+turn on <strong>Settings → Channels → Add files sent on Telegram to the knowledge
+base</strong> (<code>files_to_knowledge</code>).</p>
 <p><strong>Too many messages at once</strong> are slowed down: the bot answers <em>Too many
 messages. Please wait a moment.</em> Wait a few seconds and send again.</p>
 <h2 id="reminders">Reminders<a class="headerlink" href="#reminders" title="Permanent link">&para;</a></h2>
@@ -1582,6 +1592,7 @@ polling. If you are not sure, use polling.</p>
 <span class="w">    </span><span class="nt">"allowFrom"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"123456789"</span><span class="p">,</span><span class="w"> </span><span class="s2">"@yourname"</span><span class="p">],</span>
 <span class="w">    </span><span class="nt">"run_in_webui"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">"shared_knowledge"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"files_to_knowledge"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">"max_workers"</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span>
 <span class="w">  </span><span class="p">}</span>
 <span class="p">}</span>
@@ -1613,6 +1624,10 @@ polling. If you are not sure, use polling.</p>
 <tr>
 <td><code>shared_knowledge</code></td>
 <td><code>true</code>: same knowledge base as the Web UI (default)</td>
+</tr>
+<tr>
+<td><code>files_to_knowledge</code></td>
+<td><code>true</code>: documents and photos you send are added to the knowledge base right away (default <code>false</code>; files are always saved and shown to the agent)</td>
 </tr>
 <tr>
 <td><code>max_workers</code></td>
@@ -1682,8 +1697,12 @@ local fake server.</p>
 <td>Make sure every person is allowed, and check privacy mode (see <a href="#groups">Groups</a>).</td>
 </tr>
 <tr>
-<td>"I can only read text for now"</td>
-<td>You sent a photo, voice message or file without a caption. Add a caption or type the message.</td>
+<td>"I can read text and files…"</td>
+<td>You sent something the bot cannot use (a sticker, a location, a contact). Send text or a file.</td>
+</tr>
+<tr>
+<td>The agent says it cannot open a PDF / Word / Excel file</td>
+<td>Update ZenSynora: the readers (<code>pypdf</code>, <code>python-docx</code>, <code>openpyxl</code>) are installed with it since 2026-10-31.</td>
 </tr>
 <tr>
 <td>Reminders are gone</td>
