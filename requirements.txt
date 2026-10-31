@@ -25,3 +25,7 @@ paramiko>=3.4.0,<4.0
 # OpenAI-compatible client: used by llama.cpp, LM Studio, OpenAI, Groq and
 # OpenRouter providers. Without it those providers cannot be used at all.
 openai>=1.0,<3.0
+# Read PDF, Word and Excel files (sent on Telegram, imported into the knowledge base)
+pypdf>=4.0,<7.0
+python-docx>=1.1,<2.0
+openpyxl>=3.1,<4.0
