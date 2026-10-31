@@ -1846,13 +1846,21 @@ keep their own knowledge base.</p>
 <p>The <strong>Knowledge</strong> page (sidebar) shows the knowledge base visually:</p>
 <ul>
 <li><strong>Graph</strong> — every note is a dot, every link (<code>- uses [[Other note]]</code>) an
-  arrow. Bigger dots have more links and facts; colours are tags (or the
-  number of links). Drag the background to pan, use the wheel to zoom, drag a
-  note to pin it (double-click releases it), hover for a preview, click to
-  open it. <em>Around selected</em> shows only the notes 1–3 links away; <em>link
-  names</em>, <em>hide missing</em>, <em>hide unlinked</em>, <em>Fit</em>, <em>Freeze</em> and <em>Re-layout</em>
-  change the view. A dashed dot is a note that is linked to but does not
-  exist yet — click it and <em>Create this note</em>.</li>
+  arrow. Bigger dots have more links and facts. <em>Colour</em>: <strong>by group</strong> (notes
+  connected by links share a colour; grey = no links), by tag, or by number
+  of links. Links are coloured by type (the legend under the graph lists the
+  types — click one to show only those links), curved when two notes link
+  both ways, and keep their width when you zoom; <strong>Links: bold</strong> draws them
+  thicker. <em>Names</em> (auto / all that fit / only selected) — names never
+  overlap. Unlinked notes sit on an outer ring; when more than 40 % of the
+  notes have no links they start hidden (<em>N unlinked notes hidden — show
+  them</em>). <strong>⛶ Full screen</strong> shows the graph over the whole window (Esc
+  closes it). Drag the background to pan, use the wheel to zoom, drag a note
+  to pin it (double-click releases it), hover for a preview, click to open
+  it. <em>Around selected</em> shows only the notes 1–3 links away; <em>link names</em>,
+  <em>hide missing</em>, <em>hide unlinked</em>, <em>Fit</em>, <em>Freeze</em> and <em>Re-layout</em> change
+  the view. A dashed dot is a note that is linked to but does not exist yet
+  — click it and <em>Create this note</em>.</li>
 <li><strong>Notes</strong> — all notes with tags, number of facts and links, and last
   change; click a column to sort.</li>
 <li><strong>Tags &amp; types</strong> — tag cloud, fact categories (<code>- [category] text</code>) and
@@ -2096,9 +2104,14 @@ with <code>zensynora webui</code>. Details: <a href="../UPDATING/">UPDATING.md</
   last 24 h, restarts (marked <em>crash loop</em> when the service keeps
   restarting), failed jobs;</li>
 <li><strong>Errors</strong> — warnings and errors from the log, grouped (messages that
-  differ only in numbers count as one). Filter by period (1 h, 24 h, 7 days),
-  level and text; click a group to see its log lines and traceback, and
-  <strong>Copy</strong> them;</li>
+  differ only in numbers count as one). Filter by period (1, 2, 4, 8, 12 or
+  24 hours, 7 days), level and text; click a group to see its log lines and
+  traceback, and <strong>Copy</strong> them. Three buttons (each with its count) narrow it
+  down: <strong>Failures</strong> — errors, plus warnings about work that failed, timed out
+  or crashed; <strong>Failed jobs</strong> — job runs that ended with an error, a timeout
+  or were interrupted (click one for its error); <strong>Restarts</strong> — each start of
+  ZenSynora with the time since the previous one (red = within 2 minutes;
+  many in a short time is a crash loop);</li>
 <li><strong>View report</strong> — the whole diagnostics report in the page;</li>
 <li><strong>Download</strong> — <strong>Markdown</strong>, <strong>JSON</strong> or <strong>ZIP</strong> (report + the last log
   lines). Keys and tokens are never included, so the file is safe to attach
