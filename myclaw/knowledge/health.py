@@ -77,6 +77,12 @@ def bases() -> List[str]:
                         names.add(e.name)
     except OSError:
         pass
+    # 2026-10-29: internal ids ("webui", "__delegate__" …) use "default"; their
+    # notes were moved there (scope.migrate_internal_scopes) and a leftover
+    # knowledge_webui.db only reported every moved note as "without a file".
+    from .scope import SHARED, is_internal
+
+    names = {n for n in names if n == SHARED or not is_internal(n)}
     out = sorted(names, key=lambda n: (n != "default", n))
     return out[:MAX_BASES]
 

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+**Diagnostics report of 2026-10-29**
+- False "Task FAILED - exceeded 330s timeout" CRITICALs: two overlapping runs
+  of the same agent shared one task id, so the first run's timer was never
+  completed. The task id is now per run.
+- Tools no longer hang for 30 s ("parallel_executor: Execution timed out")
+  after an event loop ended: the worker pool restarts its workers in the
+  caller's loop, and the parallel executor keeps one semaphore per loop.
+- Arguments a tool does not take (`agent_reach_web_research(url=…)`,
+  `shell(description=…)`) are ignored with a note listing the real ones,
+  instead of a TypeError logged as ERROR; missing required arguments get a
+  usage message.
+- Shell: `2>/dev/null` and `2>&1` after a command are accepted; every other
+  redirection is still refused.
+- Unknown tool names get "Did you mean" suggestions (`list_jobs` → `job_list`),
+  logged as INFO.
+- Knowledge: the leftover `knowledge_webui.db` (its notes were moved into
+  `default`) is no longer reported as a base with hundreds of missing files;
+  semantic search works on indexes from older versions ("no such column:
+  e.checksum").
+
 ### Added
 
 **Your tools and skills: create, edit, delete, migrate, export and import (2026-10-31)**

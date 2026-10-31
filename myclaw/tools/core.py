@@ -6,6 +6,7 @@ and validation used by all tool submodules.
 """
 
 import asyncio
+import weakref
 import subprocess
 import shlex
 import logging
@@ -16,7 +17,7 @@ import inspect
 import threading
 from pathlib import Path
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from collections import defaultdict, deque
 
 from ..worker_pool import WorkerPoolManager
@@ -323,7 +324,21 @@ class ParallelToolExecutor:
     def __init__(self, max_concurrent: int = 5, timeout: float = 30.0):
         self.max_concurrent = max_concurrent
         self.timeout = timeout
-        self._semaphore = asyncio.Semaphore(max_concurrent)
+        # One semaphore per event loop (2026-10-29): the executor is a process
+        # singleton, and a loop that closed while tool runs held permits left
+        # a shared semaphore at 0 — every later run waited for the timeout.
+        self._semaphores: "weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore]" = (
+            weakref.WeakKeyDictionary()
+        )
+
+    @property
+    def _semaphore(self) -> asyncio.Semaphore:
+        loop = asyncio.get_running_loop()
+        sem = self._semaphores.get(loop)
+        if sem is None:
+            sem = asyncio.Semaphore(self.max_concurrent)
+            self._semaphores[loop] = sem
+        return sem
 
     async def execute_tools(
         self, tool_calls: List[Dict], user_id: str = "default"
@@ -400,10 +415,11 @@ class ParallelToolExecutor:
 
             try:
                 if tool_name not in TOOLS:
+                    logger.info("Unknown tool called: %s", tool_name)
                     return {
                         "tool_name": tool_name,
                         "result": "",
-                        "error": f"Unknown tool: {tool_name}",
+                        "error": unknown_tool_message(tool_name),
                         "duration": time.time() - start_time,
                         "success": False,
                     }
@@ -455,6 +471,21 @@ class ParallelToolExecutor:
                             "success": False,
                         }
 
+                # 2026-10-29: drop arguments the tool doesn't take; report missing ones.
+                sent_args = args
+                args, ignored_args, missing_args = fit_tool_arguments(func, args)
+                if missing_args:
+                    logger.info("Tool %s not run: missing %s", tool_name, ", ".join(missing_args))
+                    return {
+                        "tool_name": tool_name,
+                        "result": "",
+                        "error": missing_arguments_message(tool_name, func, missing_args, sent_args),
+                        "duration": time.time() - start_time,
+                        "success": False,
+                    }
+                if ignored_args:
+                    logger.info("Tool %s: ignored arguments it does not take: %s", tool_name, ", ".join(ignored_args))
+
                 # Execute the tool
                 if inspect.iscoroutinefunction(func):
                     result = await func(**args)
@@ -463,6 +494,7 @@ class ParallelToolExecutor:
                     result = await pool.submit(func, **args)
                 if inspect.isawaitable(result):  # 2026-10-27: async tools behind lazy wrappers
                     result = await result
+                result = str(result) + ignored_arguments_note(tool_name, func, ignored_args)
 
                 duration = time.time() - start_time
 
@@ -574,6 +606,92 @@ def _validate_skill_for_sandbox(tool_name: str) -> Optional[str]:
     if violations:
         return "; ".join(violations)
     return None
+
+
+
+# ── 2026-10-29: fit a model's tool arguments to the tool's real signature ────
+# Models often add arguments a tool doesn't take (shell(description=…)) or
+# guess parameters of a tool that takes none (an agent-made tool called with
+# url=, platform=, tool= … 15 times in the 2026-10-29 report). Each call failed
+# with "unexpected keyword argument", was logged as ERROR and cost a tool step.
+def fit_tool_arguments(func: Any, args: Dict[str, Any]) -> Tuple[Dict[str, Any], List[str], List[str]]:
+    """``(args_to_pass, ignored_names, missing_required_names)`` for a call.
+
+    Arguments the function does not accept are dropped (unless it takes
+    ``**kwargs``); required parameters that are absent are reported. Internal
+    keys (``_depth`` …) are kept when the function accepts them. When the
+    signature can't be read, the arguments are passed unchanged.
+    """
+    try:
+        sig = inspect.signature(func)
+    except (TypeError, ValueError):
+        return dict(args), [], []
+    params = sig.parameters
+    if any(p.kind == p.VAR_KEYWORD for p in params.values()):
+        accepted = dict(args)
+        ignored: List[str] = []
+    else:
+        names = {n for n, p in params.items() if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)}
+        accepted = {k: v for k, v in args.items() if k in names}
+        ignored = [k for k in args if k not in names and not str(k).startswith("_")]
+    missing = [n for n, p in params.items()
+               if p.default is p.empty and p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY)
+               and n not in accepted and n not in ("self", "user_id")]
+    return accepted, ignored, missing
+
+
+def describe_tool_parameters(func: Any) -> str:
+    """'cmd (required), user_id' — for messages to the model."""
+    try:
+        params = inspect.signature(func).parameters
+    except (TypeError, ValueError):
+        return "unknown"
+    parts = [f"{n}{' (required)' if p.default is p.empty else ''}" for n, p in params.items()
+             if p.kind in (p.POSITIONAL_OR_KEYWORD, p.KEYWORD_ONLY) and not n.startswith("_")
+             and n not in ("self", "user_id")]
+    return ", ".join(parts) or "none"
+
+
+def ignored_arguments_note(tool_name: str, func: Any, ignored: List[str]) -> str:
+    if not ignored:
+        return ""
+    return (f"\n[Note: {tool_name} does not take {', '.join(ignored)} — ignored. "
+            f"Its arguments: {describe_tool_parameters(func)}.]")
+
+
+def missing_arguments_message(tool_name: str, func: Any, missing: List[str], sent: Dict[str, Any]) -> str:
+    shown = ", ".join(k for k in sent if not str(k).startswith("_")) or "no arguments"
+    return (f"Tool {tool_name} was not run: missing required argument(s) {', '.join(missing)}. "
+            f"Its arguments: {describe_tool_parameters(func)}. You sent: {shown}. "
+            f"Call {tool_name} again with the required arguments.")
+
+
+def suggest_tool_names(name: str, limit: int = 3) -> List[str]:
+    """Registered tools close to ``name`` (2026-10-29): ``list_jobs`` → ``job_list``."""
+    import difflib
+
+    wanted = (name or "").strip().lower()
+    if not wanted:
+        return []
+    names = list(TOOLS)
+
+    def words(n: str) -> List[str]:
+        return sorted(w.rstrip("s") for w in re.split(r"[_\-\s.]+", n.lower()) if w)
+
+    out = [n for n in names if words(n) == words(wanted)]
+    out += [n for n in difflib.get_close_matches(wanted, names, n=limit, cutoff=0.6) if n not in out]
+    if len(out) < limit:
+        key = set(words(wanted))
+        out += [n for n in names if n not in out and key and key <= set(words(n))]
+    return out[:limit]
+
+
+def unknown_tool_message(name: str) -> str:
+    """Actionable reply for a call to a tool that does not exist."""
+    close = suggest_tool_names(name)
+    if close:
+        return f"Unknown tool: {name}. Did you mean: {', '.join(close)}? Call one of those instead."
+    return f"Unknown tool: {name}. Use only the tools listed in your tool definitions."
 
 
 def is_tool_independent(tool_name: str) -> bool:

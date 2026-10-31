@@ -746,7 +746,9 @@ def _note_sources(conn: sqlite3.Connection, ids: Sequence[int]) -> Dict[int, Dic
         return {}
     ids = list(ids)
     out: Dict[int, Dict[str, Any]] = {}
-    for r in conn.execute(f"SELECT id, name, title, checksum, entity_metadata FROM entities "
+    have = {r[1] for r in conn.execute("PRAGMA table_info(entities)")}
+    cols = ", ".join(c if c in have else f"NULL AS {c}" for c in ("title", "checksum", "entity_metadata"))
+    for r in conn.execute(f"SELECT id, name, {cols} FROM entities "  # old indexes lack columns
                           f"WHERE id IN ({_ph(len(ids))})", ids):
         tags: List[str] = []
         try:
@@ -791,9 +793,13 @@ def _stale_ids(conn: sqlite3.Connection, model: str, all_notes: bool = False,
         sql = "SELECT id FROM entities ORDER BY updated_at DESC"
         args: List[Any] = []
     else:
+        # 2026-10-29: an index from an old version has no checksum column
+        # ("no such column: e.checksum"); then only missing/other-model notes.
+        cols = {r[1] for r in conn.execute("PRAGMA table_info(entities)")}
+        changed = ("OR (e.checksum IS NOT NULL AND (s.file_checksum IS NULL OR "
+                   "s.file_checksum != e.checksum)) ") if "checksum" in cols else ""
         sql = ("SELECT e.id FROM entities e LEFT JOIN note_embed_state s ON s.entity_id = e.id "
-               "WHERE s.entity_id IS NULL OR s.model != ? OR (e.checksum IS NOT NULL AND "
-               "(s.file_checksum IS NULL OR s.file_checksum != e.checksum)) "
+               "WHERE s.entity_id IS NULL OR s.model != ? " + changed +
                "ORDER BY e.updated_at DESC")
         args = [model]
     if limit is not None:
