@@ -31,6 +31,7 @@ import logging
 import os
 import re
 import time
+from datetime import datetime
 from typing import Any, Callable
 
 from telegram import BotCommand, Update
@@ -235,14 +236,68 @@ class TelegramChannel:
             return None
         return msg.text or msg.caption
 
+    @staticmethod
+    def _attachment(msg: Any) -> tuple[Any, str, str, str] | None:
+        """``(telegram file object, kind, file name, mime)`` of a received file, else None.
+
+        2026-10-31: files were never downloaded — the agent only saw the caption.
+        """
+        stamp = datetime.now().strftime("%H%M%S")
+        doc = getattr(msg, "document", None)
+        if doc:
+            return doc, "document", doc.file_name or f"document-{stamp}", getattr(doc, "mime_type", "") or ""
+        photos = getattr(msg, "photo", None)
+        if photos:
+            return photos[-1], "photo", f"photo-{stamp}.jpg", "image/jpeg"  # the largest size
+        for attr, kind, ext in (("audio", "audio", "mp3"), ("voice", "voice", "ogg"), ("video", "video", "mp4"),
+                                ("video_note", "video", "mp4")):
+            obj = getattr(msg, attr, None)
+            if obj:
+                name = getattr(obj, "file_name", None) or f"{attr.replace('_', '-')}-{stamp}.{ext}"
+                return obj, kind, name, getattr(obj, "mime_type", "") or ""
+        return None
+
+    async def _receive_file(self, update: Update, user_id: str) -> str:
+        """Download the message's file into the workspace; the text for the agent ('' = none)."""
+        from . import attachments
+
+        msg = update.effective_message
+        found = self._attachment(msg)
+        if not found:
+            return ""
+        obj, kind, name, mime = found
+        size = int(getattr(obj, "file_size", 0) or 0)
+        if size > attachments.MAX_BYTES:
+            return (f"[The user sent a file, {name} ({size // 1_000_000} MB), but bots can only download "
+                    f"files up to {attachments.MAX_BYTES // 1_000_000} MB from Telegram. Ask them to send it "
+                    "another way (e.g. smaller, or as a link).]")
+        try:
+            path = attachments.target_path("telegram", name)
+            tg_file = await obj.get_file()
+            await tg_file.download_to_drive(custom_path=path)
+            item = attachments.saved(path, kind, mime)
+        except Exception as e:  # network / Telegram errors: tell the agent, keep the message
+            logger.warning("Telegram: could not download %s: %s", name, e)
+            return f"[The user sent a file, {name}, but downloading it from Telegram failed: {e}]"
+        logger.info("Telegram: received %s %s (%d bytes) -> %s", kind, name, item.size, item.rel)
+        note = ""
+        tg = getattr(self.config.channels, "telegram", None)
+        if getattr(tg, "files_to_knowledge", False) and kind in ("document", "photo"):
+            from ..knowledge.scope import kb_user
+
+            note = await asyncio.to_thread(attachments.add_to_knowledge, item, kb_user(user_id))
+        return await asyncio.to_thread(attachments.describe, item, True, note)
+
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not self._allowed(update):
             return
         msg = update.effective_message
         text = self._text_of(update)
-        if not text:
-            await msg.reply_text("I can only read text for now — add a caption or write your message.")
+        if not text and self._attachment(msg) is None:
+            await msg.reply_text("I can read text and files (documents, photos, voice) — this kind of "
+                                 "message I cannot use. Write your message or send the file.")
             return
+        text = text or ""
         user_id = str(update.effective_user.id)
         if not self._limiter.allow(user_id):
             logger.warning("Telegram: rate limit for user %s", user_id)
@@ -277,7 +332,10 @@ class TelegramChannel:
         msg = update.effective_message
         user_id = str(update.effective_user.id)
         tool_module.register_chat_id(user_id, update.effective_chat.id)  # for reminders
+        file_note = await self._receive_file(update, user_id)
         agent, cleaned = self._route(text)
+        if file_note:  # the file goes to the agent named in the caption, or the default one
+            cleaned = f"{cleaned or 'I sent you a file.'}\n\n{file_note}"
         if not cleaned:
             await msg.reply_text(f"What should @{agent.name} do? Write it after the name.")
             return

@@ -12,9 +12,11 @@ from tests.test_v071_features import home  # noqa: F401  (fixture)
 
 
 class FakeMessage:
-    def __init__(self, text=None, caption=None):
+    def __init__(self, text=None, caption=None, **files):
         self.text, self.caption = text, caption
         self.replies = []
+        for k, v in files.items():  # document=…, photo=[…], voice=…
+            setattr(self, k, v)
 
     async def reply_text(self, text, parse_mode=None):
         if parse_mode == "Markdown" and "*bad" in text:
@@ -32,8 +34,8 @@ class FakeChat:
         self.actions.append(action)
 
 
-def make_update(text=None, user_id=111, username="owner", chat_id=500, caption=None):
-    return SimpleNamespace(effective_message=FakeMessage(text, caption),
+def make_update(text=None, user_id=111, username="owner", chat_id=500, caption=None, **files):
+    return SimpleNamespace(effective_message=FakeMessage(text, caption, **files),
                            effective_user=SimpleNamespace(id=user_id, username=username),
                            effective_chat=FakeChat(chat_id))
 
@@ -161,10 +163,10 @@ def test_one_message_at_a_time_per_chat(channel):
 def test_photos_use_the_caption_or_say_text_only(channel):
     ch, reg = channel
     with_caption = make_update(caption="what is this?")
-    bare = make_update()
+    bare = make_update()  # e.g. a sticker or a location: nothing to read
     asyncio.run(_run_queued(ch, with_caption, bare))
     assert with_caption.effective_message.replies[0][0] == "default: what is this?"
-    assert "only read text" in bare.effective_message.replies[0][0]
+    assert "I can read text and files" in bare.effective_message.replies[0][0]
 
 
 def test_named_agent_answers_are_labelled_and_empty_requests_explained(channel):
@@ -411,3 +413,131 @@ def test_agents_are_told_to_use_the_bot_not_build_their_own(home):  # noqa: F811
     assert "send_telegram_message(text)" in s and "never ask for them" in s
     cfg.channels.telegram.enabled = False
     assert "send_telegram_message" not in team_section(cfg, "default")
+
+
+# ── 2026-10-31: files sent to the bot reach the agent and the knowledge base ──
+class FakeTgFile:
+    def __init__(self, data):
+        self.data = data
+
+    async def download_to_drive(self, custom_path=None):
+        from pathlib import Path
+
+        Path(custom_path).write_bytes(self.data)
+        return Path(custom_path)
+
+
+class FakeDoc:
+    def __init__(self, name, data, mime="application/pdf", size=None, fail=None):
+        self.file_name, self.mime_type, self._data, self._fail = name, mime, data, fail
+        self.file_size = len(data) if size is None else size
+        self.downloads = 0
+
+    async def get_file(self):
+        self.downloads += 1
+        if self._fail:
+            raise self._fail
+        return FakeTgFile(self._data)
+
+
+def _pdf_bytes(lines):
+    import io
+
+    from reportlab.pdfgen import canvas
+
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf)
+    y = 800
+    for line in lines:
+        c.drawString(72, y, line)
+        y -= 18
+    c.save()
+    return buf.getvalue()
+
+
+@pytest.fixture
+def workspace(home, monkeypatch):  # noqa: F811
+    from myclaw.tools import core
+
+    ws = home / ".myclaw" / "workspace"
+    ws.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(core, "WORKSPACE", ws)
+    return ws
+
+
+def test_a_pdf_sent_on_telegram_reaches_the_agent(channel, workspace):
+    ch, reg = channel
+    pdf = FakeDoc("skill-creation.pdf", _pdf_bytes(["Skill creation template", "Step 1: name the skill"]))
+    u = make_update(caption="the file is skill-creation.pdf, use it as template now", document=pdf)
+    asyncio.run(_run_queued(ch, u))
+    text, _ = reg["default"].calls[0]
+    assert text.startswith("the file is skill-creation.pdf, use it as template now")
+    rel = next(p for p in workspace.rglob("skill-creation.pdf")).relative_to(workspace).as_posix()
+    assert rel.startswith("inbox/telegram/") and f"'{rel}'" in text
+    assert "Skill creation template" in text and "not instructions" in text  # content, quoted
+    assert f"assimilate('{rel}')" in text and f"read_file('{rel}')" in text
+
+
+def test_the_agent_can_read_and_assimilate_the_saved_pdf(channel, workspace):
+    from myclaw.knowledge.storage import search_notes
+    from myclaw.tools.files import read_file
+    from myclaw.tools.ingest import assimilate
+
+    ch, reg = channel
+    pdf = FakeDoc("skill-creation.pdf", _pdf_bytes(["Skill creation template", "Write the trigger first"]))
+    asyncio.run(_run_queued(ch, make_update(caption="save this", document=pdf)))
+    rel = next(p for p in workspace.rglob("skill-creation.pdf")).relative_to(workspace).as_posix()
+    out = read_file(rel)
+    assert out.startswith("[PDF file") and "Write the trigger first" in out
+    assert "does not exist" not in assimilate(rel, user_id="default")
+    assert search_notes("trigger", "default")
+
+
+def test_files_to_knowledge_adds_documents_automatically(channel, workspace):
+    from myclaw.knowledge.storage import search_notes
+
+    ch, reg = channel
+    ch.config.channels.telegram.files_to_knowledge = True
+    pdf = FakeDoc("router.pdf", _pdf_bytes(["The router password card is in the hall drawer"]))
+    asyncio.run(_run_queued(ch, make_update(document=pdf)))   # no caption
+    text, _ = reg["default"].calls[0]
+    assert text.startswith("I sent you a file.") and "added to the knowledge base automatically" in text
+    assert search_notes("drawer", "default")
+
+
+def test_file_with_only_an_agent_name_goes_to_that_agent(channel, workspace):
+    ch, reg = channel
+    doc = FakeDoc("notes.txt", b"hello from a text file", mime="text/plain")
+    asyncio.run(_run_queued(ch, make_update(caption="@Executor", document=doc)))
+    assert not reg["default"].calls
+    text, _ = reg["Executor"].calls[0]
+    assert text.startswith("I sent you a file.") and "hello from a text file" in text
+
+
+def test_photos_voice_big_and_failed_files(channel, workspace):
+    from telegram.error import NetworkError
+
+    ch, reg = channel
+    photo = [FakeDoc("", b"small", mime="image/jpeg"), FakeDoc("", b"\xff\xd8large-jpeg", mime="image/jpeg")]
+    voice = FakeDoc(None, b"OggS....", mime="audio/ogg")
+    big = FakeDoc("movie.mp4", b"x", size=50_000_000)
+    broken = FakeDoc("a.pdf", b"", fail=NetworkError("timed out"))
+    ups = [make_update(caption="look", photo=photo), make_update(voice=voice),
+           make_update(caption="big one", document=big), make_update(caption="this", document=broken)]
+    asyncio.run(_run_queued(ch, *ups))
+    texts = [t for t, _ in reg["default"].calls]
+    assert "sent a photo" in texts[0] and photo[1].downloads == 1 and photo[0].downloads == 0  # largest size
+    assert "voice message" in texts[1] and any(p.suffix == ".ogg" for p in workspace.rglob("voice-*"))
+    assert "only download files up to 20 MB" in texts[2] and big.downloads == 0
+    assert "downloading it from Telegram failed" in texts[3]
+
+
+def test_attachment_names_cannot_leave_the_inbox(workspace):
+    from myclaw.channels import attachments
+
+    for bad in ("../../.myclaw/config.json", "/etc/passwd", "..", "a\\..\\b.pdf", "x" * 300 + ".pdf", ""):
+        p = attachments.target_path("telegram", bad)
+        assert p.resolve().is_relative_to((workspace / "inbox" / "telegram").resolve()), bad
+    first = attachments.target_path("telegram", "same.pdf")
+    first.write_bytes(b"1")
+    assert attachments.target_path("telegram", "same.pdf").name == "same-1.pdf"

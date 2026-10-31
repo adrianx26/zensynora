@@ -51,6 +51,10 @@ const CHANNEL_FIELDS: FieldDef[] = [
   },
   { path: 'channels.telegram.run_in_webui', label: 'Run the bot inside the Web UI', kind: 'bool', help: 'Turn off if you run the bot with zensynora gateway instead.' },
   { path: 'channels.telegram.shared_knowledge', label: 'Telegram uses the same knowledge base as the Web UI', kind: 'bool' },
+  {
+    path: 'channels.telegram.files_to_knowledge', label: 'Add files sent on Telegram to the knowledge base', kind: 'bool',
+    help: 'Files you send are always saved in the agent workspace (inbox/telegram/…) and shown to the agent. On: documents and photos are also added to the knowledge base right away.',
+  },
   { path: 'channels.telegram.max_workers', label: 'Telegram worker threads', kind: 'number' },
   { path: 'channels.whatsapp.enabled', label: 'WhatsApp enabled', kind: 'bool' },
   { path: 'channels.whatsapp.phone_number_id', label: 'WhatsApp phone number ID', kind: 'text' },
