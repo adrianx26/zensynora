@@ -14,6 +14,7 @@ interface SettingsResponse {
   providers: string[];
   config_file: string;
   config_file_exists: boolean;
+  security_warnings?: string[];
 }
 
 type Kind = 'text' | 'password' | 'number' | 'bool' | 'select' | 'list';
@@ -91,6 +92,7 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
       { path: 'semantic_cache.enabled', label: 'Semantic response cache', kind: 'bool' },
       { path: 'sandbox.enabled', label: 'Sandbox for generated tools', kind: 'bool' },
       { path: 'sandbox.allow_network', label: 'Sandbox may use the network', kind: 'bool' },
+      { path: 'sandbox.max_time_seconds', label: 'Longest an agent-made tool may run (s)', kind: 'number', help: 'Agent-made tools run in a separate, locked-down process (no ZenSynora data, writes only in the workspace, public internet only).' },
     ],
   },
   {
@@ -100,6 +102,16 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
       { path: 'medic.self_update.enabled', label: 'Agents may read the code and propose changes', kind: 'bool', help: 'Nothing is installed without your approval.' },
       { path: 'medic.self_update.auto_approve_low_risk', label: 'Install documentation-only changes without asking', kind: 'bool' },
       { path: 'medic.self_update.run_tests', label: 'Run the test suite before switching to a changed version', kind: 'bool', help: 'Needs pytest in the virtual environment.' },
+    ],
+  },
+  {
+    // 2026-10-27: the user's rules (Rules page)
+    title: 'Rules',
+    fields: [
+      { path: 'rules.enabled', label: 'Agents follow the rules', kind: 'bool', help: 'The enabled rules from the Rules page are added to every agent\'s instructions. Off: they are kept but not sent.' },
+      { path: 'rules.prompt_chars', label: 'Most characters of rules per prompt', kind: 'number', help: '500–20000, default 4000. Higher-priority rules come first; agents are told when some are left out.' },
+      { path: 'rules.max_pending_per_agent', label: 'Proposals one agent may have waiting', kind: 'number', help: 'Default 5.' },
+      { path: 'rules.notify_telegram', label: 'Tell me on Telegram about new proposals', kind: 'bool', help: 'Uses the Telegram bot running in the Web UI (allowed users only).' },
     ],
   },
   {
@@ -123,7 +135,7 @@ const SECURITY_FIELDS: FieldDef[] = [
     help: 'Lets other computers open these settings (sent as X-API-Key). Leave empty to allow settings only from this computer.',
   },
   { path: 'security.cors_origins', label: 'Allowed browser origins (CORS)', kind: 'list', help: 'One per line. Needs a Web UI restart.' },
-  { path: 'security.allowed_commands', label: 'Shell commands the agent may run', kind: 'list', help: 'One per line.' },
+  { path: 'security.allowed_commands', label: 'Shell commands the agent may run', kind: 'list', help: 'One per line. Interpreters and shells (python, bash, node, env, xargs, sudo, nc …) are never run. Every argument is checked: writes only in the workspace, no ZenSynora settings or rules, curl/wget only to public web addresses.' },
   { path: 'security.blocked_commands', label: 'Always-blocked shell commands', kind: 'list', help: 'One per line.' },
   { path: 'security.gdpr_enabled', label: 'GDPR helpers', kind: 'bool' },
 ];
@@ -747,6 +759,7 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
         {tab === 'Security' && (
           <div className="settings-card">
             <h3>Security</h3>
+            {(data.security_warnings || []).map(w => <div className="notice error" key={w}>{w}</div>)}
             {SECURITY_FIELDS.map(renderField)}
           </div>
         )}

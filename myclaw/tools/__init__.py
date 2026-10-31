@@ -134,6 +134,12 @@ _LAZY_AGENT_TOOLS = {
     "list_skills":               ("myclaw.agent_skills",         "list_agent_skills",         "List all skills (name and what each is for)"),
     "send_telegram_message":     ("myclaw.channels.telegram",    "send_telegram_message",     "Send a Telegram message to the user through ZenSynora's own bot (only to allowed users)"),
     "create_agent":              ("myclaw.agent_team",           "create_agent",              "Create a new named agent (specialist) that can then be talked to and given tasks with delegate"),
+    # 2026-10-27: the user's rules — agents read them and can only propose changes
+    "list_rules":                ("myclaw.rules",                "agent_list_rules",          "List the user's rules (title, priority, scope, on/off) and your proposals waiting for the user"),
+    "read_rule":                 ("myclaw.rules",                "agent_read_rule",           "Read one of the user's rules in full by its slug"),
+    "propose_rule":              ("myclaw.rules",                "propose_rule",              "Propose a new rule for agents; the user approves or rejects it (not active until approved)"),
+    "propose_rule_change":       ("myclaw.rules",                "propose_rule_change",       "Propose new text for an existing rule; the user approves or rejects it (not active until approved)"),
+    "propose_rule_deletion":     ("myclaw.rules",                "propose_rule_deletion",     "Propose deleting a rule; it stays active until the user approves"),
     # 2026-10-24 (KB phase 5): ingestion into the knowledge base
     "assimilate":                ("myclaw.tools.ingest",         "assimilate",                "Read a web page, a GitHub repository (https://github.com/owner/repo) or a local file/folder (PDF, Word, Excel, text, code, images) into linked knowledge notes plus a Mermaid diagram of its structure, in one call; returns the overview note and the diagram"),
     "import_knowledge":          ("myclaw.tools.ingest",         "import_knowledge",          "Import a ChatGPT or Claude.ai export (.zip/.json), an MCP memory file, a folder or zip of Markdown notes (Obsidian vault) or one document into the knowledge base (kind: auto, chatgpt, claude, mcp_memory, markdown, document)"),

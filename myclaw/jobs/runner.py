@@ -270,6 +270,7 @@ class JobRunner:
             agent = Agent(cfg, name=f"bench-{job['agent']}", model=pair["model"],
                           provider_name=pair["provider"], system_prompt=prompt)
             agent._rotation_candidates = lambda: []  # benchmark exactly this model, no rotation
+            agent.rules_name = job["agent"]  # 2026-10-27: the real agent's rules apply
             try:
                 async with self._sem:
                     status = await self._execute(job, run_id, agent=agent, kind="bench")

@@ -67,7 +67,7 @@ _PART_PATTERNS: dict[str, list[str]] = {
     "settings": ["config.json", ".config_key", ".migrations.json", "config.json.bak"],
     "knowledge": ["knowledge", "knowledge_*.db", "vectors.db", "knowledge_gaps.jsonl", "knowledge_spaces*"],
     "memory": ["memory*.db", "chat.db", "semantic_memory*"],
-    "jobs": ["jobs.db", "TOOLBOX", "skills", "profiles", "scheduler_jobs.jsonl", "prompts.jsonl", "hub"],
+    "jobs": ["jobs.db", "TOOLBOX", "skills", "rules", "profiles", "scheduler_jobs.jsonl", "prompts.jsonl", "hub"],
 }
 # Never copied (caches, sandboxes, logs, SQLite side files).
 _SKIP = {"__pycache__", "semantic_cache", "sandbox", "task_logs", "logs", "benchmarks"}

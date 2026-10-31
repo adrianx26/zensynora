@@ -35,6 +35,7 @@ from __future__ import annotations
 import logging
 import re
 import shutil
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -139,6 +140,35 @@ def get_skill(name: str) -> dict[str, Any] | None:
 
 
 # ── changing your skills ─────────────────────────────────────────────────────
+def trash_dir() -> Path:
+    """Where replaced and deleted skills are kept (2026-10-31): skills/.trash."""
+    return user_dir() / ".trash"
+
+
+def _keep(path: Path, key: str) -> str | None:
+    """Move a skill file or folder into the trash; returns its name there."""
+    if not path.exists():
+        return None
+    t = trash_dir()
+    t.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    dest = t / (f"{key}-{stamp}" + ("" if path.is_dir() else ".md"))
+    n = 1
+    while dest.exists():
+        dest = t / (f"{key}-{stamp}-{n}" + ("" if path.is_dir() else ".md"))
+        n += 1
+    shutil.move(str(path), str(dest))
+    return dest.name
+
+
+def export_skill(name: str) -> tuple[str, str]:
+    """(file name, SKILL.md text) of any skill — yours or built-in."""
+    sk = get_skill(name)
+    if sk is None:
+        raise ValueError(f"No skill named '{name}'.")
+    return f"{sk['name']}.SKILL.md", render(sk)
+
+
 def save_skill(name: str, description: str, body: str, always: bool = False) -> dict[str, Any]:
     key = slug(name)
     if not NAME_RE.match(key):
@@ -149,11 +179,17 @@ def save_skill(name: str, description: str, body: str, always: bool = False) -> 
         raise ValueError(f"A skill can be at most {MAX_BODY // 1000} kB.")
     folder = user_dir() / key
     folder.mkdir(parents=True, exist_ok=True)
-    (folder / "SKILL.md").write_text(
-        render({"name": key, "description": description, "body": body, "always": always}), encoding="utf-8")
+    text = render({"name": key, "description": description, "body": body, "always": always})
+    target = folder / "SKILL.md"
+    # 2026-10-31: the previous version is kept in skills/.trash, never overwritten
+    if target.is_file() and target.read_text(encoding="utf-8", errors="replace") != text:
+        t = trash_dir()
+        t.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(target, t / f"{key}-{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}.md")
+    target.write_text(text, encoding="utf-8")
     flat = user_dir() / f"{key}.md"  # an older flat file would shadow nothing but confuse
     if flat.exists():
-        flat.unlink()
+        _keep(flat, key)
     return get_skill(key)  # type: ignore[return-value]
 
 
@@ -168,12 +204,13 @@ def delete_skill(name: str) -> bool:
     key = slug(name)
     removed = False
     folder = user_dir() / key
+    # 2026-10-31: deleted skills move to skills/.trash (restorable), not erased
     if (folder / "SKILL.md").exists():
-        shutil.rmtree(folder)
+        _keep(folder, key)
         removed = True
     flat = user_dir() / f"{key}.md"
     if flat.exists():
-        flat.unlink()
+        _keep(flat, key)
         removed = True
     return removed
 

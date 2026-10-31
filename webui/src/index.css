@@ -1160,3 +1160,14 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 
 /* Jobs: inline delete confirmation (2026-10-27) */
 .inline-confirm { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+
+/* 2026-10-31: your tools, import results */
+.tool-item.own-tool { align-items: start; }
+.tool-item.own-tool .row-actions { margin-top: 6px; flex-wrap: wrap; }
+.tool-item.own-tool .badge { margin-left: 6px; }
+.notice.small { font-size: 12px; padding: 4px 8px; margin: 4px 0; }
+.plain-list { list-style: none; padding: 0; margin: 6px 0; display: flex; flex-direction: column; gap: 4px; }
+.plain-list .badge { margin-left: 6px; }
+.ghost-btn.primary-outline { border-color: var(--accent-color); color: var(--accent-color); }
+.tool-item.own-tool .row-actions { display: flex; gap: 6px; }
+.tool-item.own-tool .muted { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

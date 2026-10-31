@@ -21,7 +21,7 @@ const PART_LABELS: Record<string, string> = {
   settings: 'Settings & API keys',
   knowledge: 'Knowledge base',
   memory: 'Conversations & chat channels',
-  jobs: 'Jobs, own tools & skills',
+  jobs: 'Jobs, own tools, skills & rules',
 };
 
 interface Props { onRestored?: () => void }
@@ -108,7 +108,7 @@ const BackupsView: React.FC<Props> = ({ onRestored }) => {
   });
 
   const importFile = (file: File) => act('import', async () => {
-    const headers: Record<string, string> = { 'Content-Type': 'application/gzip' };
+    const headers: Record<string, string> = { 'Content-Type': 'application/gzip', 'X-ZenSynora-UI': '1' };
     const key = getAdminKey();
     if (key) headers['X-API-Key'] = key;
     const res = await fetch(`${getApiBase()}/api/backups/import`, { method: 'POST', headers, body: file });

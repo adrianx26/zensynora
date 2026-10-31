@@ -63,6 +63,7 @@ def _ensure_registry() -> dict:
 
     load_custom_tools()
     set_registry(registry)
+    _apply_security(config)
     _agent_registry = registry
     logger.info(f"Web UI agent registry built: {list(registry.keys())}")
     return registry
@@ -83,9 +84,20 @@ async def _close_async_db_pool() -> None:
 app.router.add_event_handler("shutdown", _close_async_db_pool)
 
 
+def _apply_security(config) -> None:
+    """Settings → Security's shell command lists (2026-10-27: they were never applied)."""
+    try:
+        from myclaw.tools.core import apply_security_config
+
+        apply_security_config(config)
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning("Could not apply the shell command lists: %s", exc)
+
+
 async def _reset_agent_registry() -> None:
     """Drop cached agents so the next chat uses freshly saved settings."""
     global _agent_registry
+    _apply_security(load_config())
     old = _agent_registry
     _agent_registry = {}
     for agent in old.values():
@@ -159,10 +171,10 @@ from myclaw.web import knowledge_distill_api as _knowledge_distill_api  # noqa: 
 app.include_router(_knowledge_distill_api.router)  # 2026-10-24 (KB phase 4): facts / scenarios / persona / drill-down
 from myclaw.web import knowledge_health_api as _knowledge_health_api  # noqa: E402
 app.include_router(_knowledge_health_api.router)  # 2026-10-25 (KB phase 6): index health, file watcher status
-from myclaw.web import knowledge_usage_api as _knowledge_usage_api  # noqa: E402
-app.include_router(_knowledge_usage_api.router)  # 2026-10-27: usage log (which agent used what, why), benchmarks
-app.router.add_event_handler("startup", _knowledge_usage_api.start_snapshots)  # growth snapshots, hourly
-app.router.add_event_handler("shutdown", _knowledge_usage_api.stop_snapshots)
+from myclaw.web import rules_api as _rules_api  # noqa: E402
+app.include_router(_rules_api.router)  # 2026-10-27: the user's rules and agents' proposals
+from myclaw.web import toolbox_api as _toolbox_api  # noqa: E402
+app.include_router(_toolbox_api.router)  # 2026-10-31: your tools; export / import tools and skills
 
 
 _mcp_manager = None
@@ -270,6 +282,7 @@ setup_metrics_endpoint(app)
 # SECURITY FIX: CORS origins are now loaded from config instead of wildcard.
 # Wildcard + credentials is a security breach (any website can steal sessions).
 _config = load_config()
+_apply_security(_config)  # 2026-10-27: shell command lists from the settings, from the start
 _cors_origins = getattr(_config, "security", None)
 _cors_origins = _cors_origins.cors_origins if _cors_origins else ["http://localhost:5173"]
 app.add_middleware(

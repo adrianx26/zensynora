@@ -112,7 +112,54 @@ def set_config_changed_hook(fn) -> None:
 
 
 # ── Access guard ─────────────────────────────────────────────────────────────
+_SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+
+def _foreign_origin(request: Request) -> Optional[str]:
+    """The Origin of a browser request from another site (None = same site / no browser).
+
+    2026-10-27 (rules review): a web page open in the user's browser could post
+    to the guarded routes (they trust localhost). Browsers always send Origin
+    on such requests, so one that is not this server or a configured UI origin
+    (security.cors_origins) is refused.
+    """
+    origin = request.headers.get("origin")
+    if not origin:
+        return None
+    host = request.headers.get("host", "")
+    if origin in (f"http://{host}", f"https://{host}"):
+        return None
+    try:
+        if origin in (load_config().security.cors_origins or []):
+            return None
+    except Exception:  # pragma: no cover - unreadable settings: refuse
+        pass
+    return origin
+
+
+async def require_ui(request: Request) -> None:
+    """Changes through the guarded routes need the header ``X-ZenSynora-UI: 1``,
+    which the Web UI sends and plain requests lack (scripts with the admin key
+    add it themselves)."""
+    if request.headers.get("x-zensynora-ui") != "1":
+        raise HTTPException(status_code=403, detail="Changes are only accepted from the ZenSynora Web UI. "
+                                                    "Scripts using the admin API key must also send the header "
+                                                    "'X-ZenSynora-UI: 1'; on this computer use the `zensynora` "
+                                                    "command.")
+
+
 async def require_local_or_admin(request: Request) -> None:
+    if request.method.upper() not in _SAFE_METHODS:
+        foreign = _foreign_origin(request)
+        if foreign:
+            logger.warning("Refused %s %s from another site (Origin: %s)", request.method, request.url.path,
+                           foreign[:100])
+            raise HTTPException(status_code=403, detail="Requests from other web sites are not allowed.")
+        # 2026-10-28 (re-review): every change through the guarded routes needs the
+        # Web UI header. This stops web pages in the browser (they cannot send a
+        # custom header to another origin without CORS consent) and plain
+        # requests; local *code* is stopped by the tool sandbox and shell checks.
+        await require_ui(request)
     host = request.client.host if request.client else ""
     if host in _LOOPBACK:
         return
@@ -129,6 +176,8 @@ async def require_local_or_admin(request: Request) -> None:
 
 
 guard = [Depends(require_local_or_admin)]
+# Settings guard + the Web UI header (user-only decisions: rules, code proposals).
+ui_guard = [Depends(require_local_or_admin), Depends(require_ui)]
 
 
 # ── Helpers: secrets & dotted paths ──────────────────────────────────────────
@@ -329,7 +378,19 @@ async def get_settings():
         "provider_presets": PROVIDER_PRESETS,
         "config_file": str(CONFIG_FILE),
         "config_file_exists": CONFIG_FILE.exists(),
+        "security_warnings": _security_warnings(cfg),
     }
+
+
+def _security_warnings(cfg: AppConfig) -> List[str]:
+    """2026-10-28: allowed commands that the shell tool skips (interpreters, shells)."""
+    from myclaw.tools.core import refused_command
+
+    bad = sorted({c for c in cfg.security.allowed_commands if refused_command(c)})
+    if not bad:
+        return []
+    return [f"Not used: {', '.join(bad)} — interpreters and shells could run any program, so the shell tool "
+            "never runs them. Remove them from the allowed commands."]
 
 
 @router.put("/api/settings", dependencies=guard)
@@ -684,10 +745,18 @@ async def list_tools():
 
         ensure_tool_schemas()
         tools = []
+        from myclaw.tools import TOOLS
+        from myclaw.tools.toolbox import SKIPPED_TOOLS
+
         for schema in TOOL_SCHEMAS:
             fn = schema.get("function", schema)
-            tools.append({"name": fn.get("name", ""), "description": (fn.get("description") or "").strip()})
-        return {"tools": sorted(tools, key=lambda t: t["name"])}
+            name = fn.get("name", "")
+            sandboxed = bool(getattr(TOOLS.get(name, {}).get("func"), "sandboxed", False))
+            tools.append({"name": name, "description": (fn.get("description") or "").strip(),
+                          "sandboxed": sandboxed})
+        # 2026-10-28: TOOLBOX tools that were not loaded, and why.
+        skipped = [{"name": n, "reason": r} for n, r in sorted(SKIPPED_TOOLS.items())]
+        return {"tools": sorted(tools, key=lambda t: t["name"]), "skipped": skipped}
     except Exception as e:
         from myclaw.tools import TOOLS
 

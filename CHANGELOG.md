@@ -31,23 +31,86 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-**Knowledge base: usage log and benchmarks (2026-10-27)**
-- Every knowledge access by an agent is logged: the automatic context search,
-  each knowledge tool (`search_knowledge`, `read_knowledge`, `list_facts` …)
-  and agent writes (`write_to_knowledge`, extraction, session summaries,
-  `assimilate` / `import_knowledge`) — with the agent, channel / job, query,
-  notes returned, result count, latency, search mode and **what it was for**
-  (the message, job task or delegated task; secrets redacted). Stored in
-  `~/.myclaw/knowledge-usage.db`, kept 90 days / 200 000 lines. On by default
-  (`knowledge.usage_log`; local, no model calls, a few µs per access).
-- New **Usage** tab on the Knowledge page: tiles (accesses, hit rate, latency,
-  notes used / never used, size), charts (accesses per day by kind, per agent,
-  growth from daily snapshots, latency, facts by category), top notes, top
-  queries, queries that found nothing, structure benchmarks (density,
-  connected groups, hubs …) and the filterable log. The note panel shows how
-  often agents used the note.
-- API: `GET /api/knowledge/usage`, `/api/knowledge/usage/stats`,
-  `/api/knowledge/usage/note/{permalink}`, `/api/knowledge/benchmarks`.
+**Your tools and skills: create, edit, delete, migrate, export and import (2026-10-31)**
+- Tools page, *Your tools*: create and edit the Python tools in `~/.myclaw/TOOLBOX`
+  (code editor), turn them on/off, delete them (files move to `TOOLBOX/.trash`;
+  edits keep the previous version there).
+- **Make skill**: a tool that only returns a fixed text (instructions written as
+  Python) becomes a Markdown skill; the tool is turned off, not deleted. The code
+  is read, never run.
+- **Repair**: registry entries without a file, unregistered tool files, README
+  files without a tool, old registry formats, paths from another computer and
+  old single-file skills are fixed; nothing is erased.
+- **Export / import as a file**: one `zensynora-bundle` JSON file holds any mix
+  of tools and skills; import also takes a single `.py` tool or `SKILL.md`.
+  Imported tool code is checked like agent code — if the check fails it comes in
+  turned off with the reason, unless you mark it as trusted (still sandboxed).
+  Existing names are replaced only when you choose to.
+- Skills: **Export** (`SKILL.md`) per skill and **Export skills**; changing or
+  deleting a skill keeps the previous version in `skills/.trash` (it was erased).
+- API: `/api/toolbox…`, `/api/transfer/export`, `/api/transfer/import`,
+  `/api/skills/{name}/export`; changes need the Web UI header like other
+  user-only decisions.
+
+**Rules every agent follows (2026-10-27)**
+- New **Rules** page (and `zensynora rules list | show | proposals | approve | reject`):
+  rules are Markdown files in `~/.myclaw/rules/` with a title, priority
+  (high/normal/low), the agents they apply to and an on/off switch. Every agent
+  (chat, jobs, delegation, Telegram) gets the enabled rules that apply to it in a
+  "Rules you must follow" section of its instructions, highest priority first.
+- Agents can only **propose** rules, changes and deletions (`propose_rule`,
+  `propose_rule_change`, `propose_rule_deletion`; read with `list_rules`,
+  `read_rule`). Proposals show who and why with a diff; nothing changes until you
+  approve. Changed or deleted rules are kept in `~/.myclaw/rules/.trash/`;
+  rejected proposals stay as history. Optional Telegram notice of new proposals.
+- Doctor check *Rules* (warns when a proposal waits more than 7 days); settings
+  in Settings → Features → Rules; rules are part of backups.
+  See the [Rules guide](docs/rules_guide.md).
+- A rule file changed outside ZenSynora is not used until you review it
+  (*Keep this version* / *Restore approved version*, `zensynora rules accept|restore`).
+
+### Security
+
+**Agents cannot approve their own changes (2026-10-28, rules review and re-review)**
+- **Agent-made tools run in a separate, locked-down process.** Tools made with
+  `register_tool` (also imported or hub skills) are no longer imported into
+  ZenSynora: each call starts `python -I` in the workspace with `HOME` inside it,
+  no proxy settings and a timeout (`sandbox.max_time_seconds`). Before the
+  tool's code runs, the process locks itself down — Landlock on Linux (writes
+  only in the workspace, no home folder, TCP only to `sandbox.tool_ports`,
+  default 80/443) and an audit hook everywhere (no programs, no ctypes, nothing
+  from `~/.myclaw`, no connections to this computer or the local network).
+  Arguments and results travel as JSON. The Tools page marks these tools
+  *sandboxed* and lists tools that were not loaded, with the reason; the doctor
+  check *Tool sandbox* shows both.
+- Tool code may import only an allow-list of modules (json, re, datetime, math,
+  requests, httpx, bs4, io, tempfile, …); names that lead to the operating
+  system (`.os`, `.system`, `attrgetter`, `create_subprocess_shell`, `open` …),
+  `eval`/`exec`/`open`/`vars` and most dunders are refused. Everyday code still
+  works: `if __name__ == "__main__":`, `x.__class__.__name__`, `__dict__`,
+  `__file__`, `__version__`, dataclasses, async tools.
+- The shell tool checks every argument, not only the command name: files that
+  hold secrets or decide what agents may do (`config.json`, `.config_key`,
+  `.env`, `mfa.db`, the rules' `.manifest.json`/`.proposals`, backups) cannot be
+  read — also not by `grep -r` on a folder above them; the rest of `~/.myclaw`
+  (logs!) can be read. `git`, `uniq`, `curl`, `wget` write only inside the
+  workspace (`git -C <folder in the workspace>` works); `sort -o`, git's
+  `-c`/`--git-dir`/`--work-tree` and `git config` changes other than
+  `user.name`/`user.email` are refused.
+- `curl` and `wget` stay **allowed by default**, now with checks: public
+  addresses only (also decimal/octal/hex IPs, IPv6 forms and names that resolve
+  to this computer are refused), no `-L` (the message points to the browse
+  tool), no `-K`/`--resolve`/proxies, wget `-e`/`-i` refused and redirects off.
+- **Settings → Security → allowed/blocked commands are now applied** (at start-up
+  and after every save). Interpreters and shells (python, bash, sh, node, perl,
+  env, xargs, sudo, nc, awk …) are never run, even when listed; Settings →
+  Security and the doctor (*Shell commands*) show the ones skipped.
+- **Every change through the Web UI's protected routes needs the header
+  `X-ZenSynora-UI: 1`** (the Web UI sends it); changes from other web sites
+  (foreign `Origin`) are refused. Scripts that use the admin API key must add
+  the header. This protects against web pages in your browser; the protection
+  against code on this computer is the tool sandbox and the shell checks.
+- `write_file` refuses files inside `.git` (aliases and hooks there run commands).
 
 ### Fixed
 

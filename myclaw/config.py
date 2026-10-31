@@ -555,9 +555,12 @@ class SecurityConfig(BaseModel):
         "git",
         "echo",
         "pwd",
-        # SECURITY: Removed python, python3, pip, curl, wget — an AI agent
-        # executing arbitrary code or downloading files is a remote-code-execution
-        # vulnerability. Use dedicated tools (e.g. browse, download) instead.
+        # 2026-10-28: curl and wget are allowed again — the shell tool checks
+        # every URL (public addresses only, no redirects/proxies/config files)
+        # and every output path (workspace only). Interpreters (python, pip,
+        # bash, node …) are never run, even when listed here.
+        "curl",
+        "wget",
     ]
     blocked_commands: list[str] = [
         "rm",
@@ -656,6 +659,9 @@ class SandboxConfig(BaseModel):
     max_time_seconds: int = 30
     allow_network: bool = False
     trusted_skills: list[str] = []
+    # 2026-10-28: agent-made tools run in a separate process; they may connect
+    # only to public addresses on these TCP ports (Landlock, Linux).
+    tool_ports: list[int] = [80, 443]
 
 
 class LogRotationConfig(BaseModel):
@@ -745,9 +751,22 @@ class BackupConfig(BaseModel):
     # What a backup contains. Settings + API keys are always included.
     include_knowledge: bool = True
     include_memory: bool = True  # conversations, chat channels
-    include_jobs: bool = True  # jobs, self-made tools, skills
+    include_jobs: bool = True  # jobs, self-made tools, skills, rules
     before_update: bool = True  # the updater always backs up; this adds a full app backup
     dir: str = ""  # empty = <install base>/backups or ~/.myclaw-backups
+
+
+class RulesConfig(BaseModel):
+    """Rules every agent follows (2026-10-27) — see myclaw/rules.py.
+
+    The rules are files in ~/.myclaw/rules; agents can only propose changes,
+    which you approve or reject (Web UI → Rules, ``zensynora rules``).
+    """
+
+    enabled: bool = True  # put the enabled rules in every agent's system prompt
+    prompt_chars: int = 4000  # at most this many characters of rules per prompt (500-20000)
+    max_pending_per_agent: int = 5  # proposals one agent may have waiting at once
+    notify_telegram: bool = True  # tell allowed Telegram users about new proposals (bot in this process)
 
 
 class AppConfig(BaseModel):
@@ -770,6 +789,7 @@ class AppConfig(BaseModel):
     mcp: MCPConfig = MCPConfig()
     intelligence: IntelligenceConfig = IntelligenceConfig()
     backup: BackupConfig = BackupConfig()
+    rules: RulesConfig = RulesConfig()  # 2026-10-27
 
     def get(self, key: str, default=None):
         """Dict-style .get() for backward compatibility."""
@@ -870,8 +890,6 @@ def _validate_config(config: AppConfig) -> None:
         "python",
         "python3",
         "pip",
-        "curl",
-        "wget",
         "sh",
         "bash",
         "zsh",
