@@ -14,7 +14,7 @@
         <link rel="prev" href="..">
       
       
-        <link rel="next" href="../knowledge_base_guide/">
+        <link rel="next" href="../rules_guide/">
       
       
         
@@ -458,6 +458,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tools-your-own-tools-export-and-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools: your own tools, export and import
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rules-what-every-agent-must-follow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rules: what every agent must follow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rules: what every agent must follow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scripts-and-the-admin-api-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts and the admin API key
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#backups-settings-api-keys-knowledge" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -505,6 +544,34 @@
   
 </nav>
       
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rules_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
     </li>
   
 
@@ -1284,6 +1351,45 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tools-your-own-tools-export-and-import" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tools: your own tools, export and import
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rules-what-every-agent-must-follow" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rules: what every agent must follow
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Rules: what every agent must follow">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scripts-and-the-admin-api-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scripts and the admin API key
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#backups-settings-api-keys-knowledge" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1874,12 +1980,52 @@ PowerShell script, how to review code.</p>
   for small local models that rarely call tools, but it costs tokens.</li>
 <li><strong>+ New skill</strong> writes one; <strong>Import…</strong> adds a <code>SKILL.md</code> made elsewhere
   (the same format other agent tools use: a <code>name:</code> and <code>description:</code> header,
-  then Markdown). Built-in skills are read-only: <strong>Copy to change</strong> makes your
-  own version (deleting it brings the built-in one back).</li>
+  then Markdown) or a ZenSynora export file (<code>.json</code>). Built-in skills are
+  read-only: <strong>Copy to change</strong> makes your own version (deleting it brings the
+  built-in one back).</li>
+<li><strong>Export</strong> downloads one skill as <code>SKILL.md</code>; <strong>Export skills</strong> downloads all
+  of yours as one file.</li>
+<li>Changing or deleting a skill keeps the previous version in
+  <code>~/.myclaw/skills/.trash</code> — nothing is erased.</li>
 </ul>
 <p>Your skills are files in <code>~/.myclaw/skills/&lt;name&gt;/SKILL.md</code> and are included
-in backups (<em>Jobs, own tools &amp; skills</em>). <code>zensynora skills list</code> shows all
+in backups (<em>Jobs, own tools, skills &amp; rules</em>). <code>zensynora skills list</code> shows all
 skills and which agents have them.</p>
+<h2 id="tools-your-own-tools-export-and-import">Tools: your own tools, export and import<a class="headerlink" href="#tools-your-own-tools-export-and-import" title="Permanent link">&para;</a></h2>
+<p><strong>Tools</strong> in the sidebar. <em>Your tools</em> are the Python tools in
+<code>~/.myclaw/TOOLBOX</code> — made by agents (<code>register_tool</code>) or by you. Below them is
+the list of every tool agents can call.</p>
+<ul>
+<li><strong>+ New tool</strong> / <strong>Edit</strong>: the code must define a function with the tool's
+  name; its docstring is what agents read. A tool you write or edit is marked
+  <em>yours</em>. Every own tool runs in a separate, locked-down process.</li>
+<li><strong>Turn off / on</strong>, <strong>Delete</strong>: deleting moves the files to
+  <code>TOOLBOX/.trash</code>; editing keeps the previous version there too.</li>
+<li><strong>Make skill</strong>: many agent-made tools only return a fixed text
+  (<em>instructions only</em>) — they work better as a skill. This makes a skill
+  from the tool's description and README (the code is read, never run) and
+  turns the tool off (it is kept).</li>
+<li><strong>Repair</strong> appears when something is inconsistent: a registry entry whose
+  file is gone, a tool file that is not registered (added turned off), a README
+  without a tool, paths from another computer, old formats. Nothing is erased.</li>
+<li><strong>Export tools</strong> / <strong>Export all</strong> / <strong>Export</strong> on one tool download a
+  <code>zensynora-bundle</code> JSON file; <strong>Import…</strong> takes such a file, one <code>.py</code> tool or
+  one <code>SKILL.md</code>. A name that already exists is skipped until you choose
+  <strong>Replace existing</strong> (the current one goes to the trash). Imported code that
+  fails the safety check comes in turned off with the reason; <strong>I checked the
+  code — trust it</strong> turns it on (still in the locked-down process).</li>
+</ul>
+<h2 id="rules-what-every-agent-must-follow">Rules: what every agent must follow<a class="headerlink" href="#rules-what-every-agent-must-follow" title="Permanent link">&para;</a></h2>
+<p><strong>Rules</strong> in the sidebar (the number = proposals waiting). Write rules every agent
+follows (title, priority, which agents, text); agents can only propose new rules,
+changes or deletions, shown at the top with a diff for you to approve or reject.
+See the <a href="../rules_guide/">Rules guide</a>.</p>
+<h3 id="scripts-and-the-admin-api-key">Scripts and the admin API key<a class="headerlink" href="#scripts-and-the-admin-api-key" title="Permanent link">&para;</a></h3>
+<p>Changes through the protected routes (settings, rules, proposals, backups …)
+need the header <code>X-ZenSynora-UI: 1</code>, which the Web UI sends. A script that uses
+the admin API key from another computer must send it too
+(<code>curl -H 'X-API-Key: …' -H 'X-ZenSynora-UI: 1' -X PUT …</code>). Requests from other
+web sites are refused.</p>
 <h2 id="backups-settings-api-keys-knowledge">Backups: settings, API keys, knowledge<a class="headerlink" href="#backups-settings-api-keys-knowledge" title="Permanent link">&para;</a></h2>
 <p><img alt="Backups page" src="../images/webui-backups.png" /></p>
 <ul>

@@ -326,6 +326,34 @@
   
   
     <li class="md-nav__item">
+      <a href="../rules_guide/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rules
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
       <a href="../knowledge_base_guide/" class="md-nav__link">
         
   
@@ -1878,7 +1906,7 @@ disable it, or <code>MYCLAW_LOG_FILE=/path/file.log</code> to move it.</p>
 </tr>
 <tr>
 <td>The same configuration warning many times in the log</td>
-<td>Fixed 2026-10-18: it is logged once and again only when it changes. Remove <code>curl</code>/<code>wget</code> from Settings → Security → allowed commands if you don't need them.</td>
+<td>Fixed 2026-10-18: it is logged once and again only when it changes. Since 2026-10-28 that list is really applied; <code>curl</code>/<code>wget</code> are allowed but may only fetch public web addresses, and interpreters are never run.</td>
 </tr>
 </tbody>
 </table>
