@@ -60,6 +60,8 @@ def read_file(path: str) -> str:
             return (f"Error: No file '{path}' in the workspace. In '{rel or '.'}' there is: "
                     f"{', '.join(near) or '(nothing)'}. Paths are relative to {_core.WORKSPACE}.")
         size = p.stat().st_size
+        if p.suffix.lower() in (".pdf", ".docx", ".xlsx", ".xlsm"):
+            return _document_as_text(p, path, size)
         with open(p, "rb") as f:
             head = f.read(MAX_READ_BYTES)
         if b"\x00" in head[:8192]:
@@ -75,6 +77,21 @@ def read_file(path: str) -> str:
 
 
 MAX_READ_BYTES = 200_000
+
+
+def _document_as_text(p, path: str, size: int) -> str:
+    """2026-10-31: PDF, Word and Excel files are read as text (files sent on Telegram)."""
+    from ..channels.attachments import document_text
+
+    kind, text = document_text(p, limit=MAX_READ_BYTES)
+    if not text:
+        return (f"Error: no text could be read from '{path}' ({size:,} bytes) — it may be scanned images. "
+                f"assimilate('{path}') stores its details in the knowledge base.")
+    if text.startswith("[") and "pip install" in text:
+        return f"Error: {text.strip('[]')}"
+    note = "" if not text.endswith("…") else (f"\n\n[… only the first {MAX_READ_BYTES:,} characters are shown — "
+                                               f"assimilate('{path}') stores all of it in the knowledge base]")
+    return f"[{kind.upper()} file '{path}', text extracted]\n\n{text}{note}"
 
 
 def _listing(p, path: str) -> str:

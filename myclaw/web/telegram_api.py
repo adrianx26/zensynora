@@ -55,7 +55,8 @@ def _token(tg) -> str:
 
 def _settings_fingerprint(tg) -> tuple:
     return (bool(tg.enabled), _token(tg), tuple(tg.allowFrom or []), bool(tg.run_in_webui),
-            bool(getattr(tg, "shared_knowledge", True)), int(getattr(tg, "max_workers", 0) or 0))
+            bool(getattr(tg, "shared_knowledge", True)), int(getattr(tg, "max_workers", 0) or 0),
+            bool(getattr(tg, "files_to_knowledge", False)))
 
 
 def should_run(tg=None) -> bool:

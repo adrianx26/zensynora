@@ -63,6 +63,13 @@ dependencies = [
     # Needed by every OpenAI-compatible provider (llama.cpp, LM Studio,
     # OpenAI, Groq, OpenRouter) — not optional.
     "openai>=1.0,<3.0",
+    # 2026-10-31: read PDF, Word and Excel files people send (Telegram) and
+    # import into the knowledge base. Were the optional 'ingest' extra, which
+    # most installs never had — a PDF sent on Telegram could not be read.
+    # Small, pure Python. pypdf: BSD-3-Clause; python-docx, openpyxl: MIT.
+    "pypdf>=4.0,<7.0",
+    "python-docx>=1.1,<2.0",
+    "openpyxl>=3.1,<4.0",
 ]
 
 [project.optional-dependencies]
@@ -85,6 +92,7 @@ security = ["cryptography>=42.0.0", "keyring>=25.0.0"]
 mfa = ["pyotp>=2.9.0", "qrcode>=7.4"]
 # KB phase 5 (2026-10-24) — read PDF, Word and Excel files into the knowledge base
 # (assimilate / import). pypdf: BSD-3-Clause; python-docx, openpyxl: MIT.
+# (2026-10-31: pypdf, python-docx and openpyxl are core dependencies now; kept here for old commands)
 ingest = ["pypdf>=4.0,<7.0", "python-docx>=1.1,<2.0", "openpyxl>=3.1,<4.0", "ijson>=3.2,<4.0"]
 # KB phase 3 (2026-10-24) — semantic search of the knowledge base: local
 # embeddings (ONNX Runtime, CPU). fastembed: Apache-2.0; default model

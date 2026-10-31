@@ -95,9 +95,20 @@ Web UI, for example that the model is rate-limited or the model server cannot
 be reached. Technical details go only to the log
 (`~/.myclaw/logs/zensynora.log`), never to the chat.
 
-**Photos, voice messages, documents.** The bot reads only text for now. If you
-add a caption, the caption is used as the message; without one the bot says
-it can only read text.
+**Files, photos, voice messages.** Send a document (PDF, Word, Excel, text,
+code…), a photo, a voice message, audio or video, with or without a caption.
+The bot saves it in the agent workspace under
+`inbox/telegram/<date>/<file name>` and tells the agent where it is. For
+documents the agent also gets the start of the text and can read all of it
+(`read_file`) or add it to the knowledge base (`assimilate`) — just ask, e.g.
+*"save this in the knowledge base"*. Start the caption with `@AgentName` to give
+the file to that agent. Agents cannot see images or hear audio yet (no OCR or
+transcription); they get the file's details. Telegram lets bots download files
+up to 20 MB.
+
+To add every document and photo you send to the knowledge base automatically,
+turn on **Settings → Channels → Add files sent on Telegram to the knowledge
+base** (`files_to_knowledge`).
 
 **Too many messages at once** are slowed down: the bot answers *Too many
 messages. Please wait a moment.* Wait a few seconds and send again.
@@ -206,6 +217,7 @@ The Web UI writes these for you; you can also edit the file.
     "allowFrom": ["123456789", "@yourname"],
     "run_in_webui": true,
     "shared_knowledge": true,
+    "files_to_knowledge": false,
     "max_workers": 4
   }
 }
@@ -218,6 +230,7 @@ The Web UI writes these for you; you can also edit the file.
 | `allowFrom` | Allowed users: numeric ids or `@usernames` |
 | `run_in_webui` | `true`: `zensynora webui` runs the bot (default) |
 | `shared_knowledge` | `true`: same knowledge base as the Web UI (default) |
+| `files_to_knowledge` | `true`: documents and photos you send are added to the knowledge base right away (default `false`; files are always saved and shown to the agent) |
 | `max_workers` | How many chats are answered at the same time |
 
 ## Advanced: your own Telegram Bot API server
@@ -248,7 +261,8 @@ local fake server.
 | Status: *Error: …* | Click **Test bot**. *The token is wrong — copy it again from @BotFather.*: send `/token` to @BotFather, paste the token and Save. *Cannot reach Telegram — check the internet connection.*: this computer cannot reach Telegram. |
 | The bot answers with a model error (rate-limited, server cannot be reached) | The bot works; the model does not. Open the **Models** page and click **Test** on the default model, or pick another one. |
 | Nothing happens in a group | Make sure every person is allowed, and check privacy mode (see [Groups](#groups)). |
-| "I can only read text for now" | You sent a photo, voice message or file without a caption. Add a caption or type the message. |
+| "I can read text and files…" | You sent something the bot cannot use (a sticker, a location, a contact). Send text or a file. |
+| The agent says it cannot open a PDF / Word / Excel file | Update ZenSynora: the readers (`pypdf`, `python-docx`, `openpyxl`) are installed with it since 2026-10-31. |
 | Reminders are gone | The bot was restarted. Set them again, or use a job in the Web UI. |
 
 More help: `zensynora doctor` has a **Telegram bot** check (category

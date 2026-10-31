@@ -249,6 +249,10 @@ class TelegramConfig(BaseModel):
     # Allowed users share the main knowledge base with the Web UI (conversation
     # memory stays per user). False = every Telegram user has their own.
     shared_knowledge: bool = True
+    # 2026-10-31: received files are saved in the workspace (inbox/telegram/…)
+    # and shown to the agent; this also adds documents and photos to the
+    # knowledge base automatically (off by default: background work is opt-in).
+    files_to_knowledge: bool = False
 
 
 class WhatsAppConfig(BaseModel):
