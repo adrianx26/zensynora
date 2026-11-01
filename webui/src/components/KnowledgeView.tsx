@@ -86,7 +86,7 @@ const KnowledgeView: React.FC = () => {
   const [data, setData] = useState<GraphData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [tab, setTab] = useState<Tab>('graph');
+  const [tab, setTab] = useState<Tab>('overview');   // the infographic is the landing view
   const [usageQuery, setUsageQuery] = useState(''); // 2026-10-27: usage log filter from a note
   const [selected, setSelected] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);  // KB phase 5: import dialog
