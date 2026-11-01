@@ -319,6 +319,18 @@ keep their own knowledge base.
 
 The **Knowledge** page (sidebar) shows the knowledge base visually:
 
+* **Overview** — the knowledge base at a glance: notes, facts, links, tags
+  and groups of linked notes, each with this week's change; growth by
+  **Days / Weeks / Months** (counted by each note's own date, so a re-index
+  does not make everything look new); how often agents' knowledge searches
+  found something (30 days) and how often the response cache answered
+  (since the start); the largest groups (click to open the main note); groups
+  that are new or grew this week; and **Needs attention or more data** —
+  notes without links, facts or tags, links to notes that do not exist,
+  open conflicts, two-note islands, notes no agent used in 30 days, notes
+  not changed in 90 days — each with examples to click and what to do.
+  **Show as table** lists the numbers; **⬇ Download as image** saves the
+  whole panel as a PNG.
 * **Graph** — every note is a dot, every link (`- uses [[Other note]]`) an
   arrow. Bigger dots have more links and facts. *Colour*: **by group** (notes
   connected by links share a colour; grey = no links), by tag, or by number
@@ -518,12 +530,19 @@ with `zensynora webui`. Details: [UPDATING.md](UPDATING.md).
 The Doctor page has two tabs. **Checks** is the health check (the same as
 `zensynora doctor`). **Report** shows:
 
+* the period (1, 2, 4, 8, 12 or 24 hours, 7 days) at the top; it applies to
+  the whole page;
+* **Health overview** — Overall status, errors + critical, failures, job
+  runs, restarts and models failing; warnings / errors / critical over time
+  (▲ marks a restart); job runs OK / failed over time; the checks; the
+  **biggest problems** (click one to show it in the error list below); and,
+  per model, the share of calls that failed (⚠ = failing now). **Show as
+  table** and **⬇ Download as image** as on the Knowledge overview;
 * summary cards — checks OK / warnings / failures, errors and warnings in the
   last 24 h, restarts (marked *crash loop* when the service keeps
   restarting), failed jobs;
 * **Errors** — warnings and errors from the log, grouped (messages that
-  differ only in numbers count as one). Filter by period (1, 2, 4, 8, 12 or
-  24 hours, 7 days), level and text; click a group to see its log lines and
+  differ only in numbers count as one). Filter by level and text; click a group to see its log lines and
   traceback, and **Copy** them. Three buttons (each with its count) narrow it
   down: **Failures** — errors, plus warnings about work that failed, timed out
   or crashed; **Failed jobs** — job runs that ended with an error, a timeout

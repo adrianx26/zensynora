@@ -3,6 +3,7 @@
 // (myclaw/web/doctor_api.py). Secrets are removed on the server.
 import React, { useCallback, useEffect, useState } from 'react';
 import { api, getAdminKey, getApiBase } from '../api';
+import DoctorOverview from './DoctorOverview';
 
 type Level = 'WARNING' | 'ERROR' | 'CRITICAL';
 
@@ -227,14 +228,20 @@ const DoctorReport: React.FC = () => {
         )}
       </div>
 
+      {/* 2026-11-01: one period for the health overview and the errors below */}
+      <div className="chip-row report-period">
+        <span className="muted small">Period:</span>
+        {PERIODS.map(p => (
+          <button key={p.hours} className={`chip ${hours === p.hours ? 'active' : ''}`} onClick={() => setHours(p.hours)}>{p.label}</button>
+        ))}
+      </div>
+
+      <DoctorOverview hours={hours} summary={summary}
+        onProblem={m => { setKind(''); setLevel(''); setQuery(m); setSearch(m); }} />
+
       <div className="settings-card">
         <h3>Errors</h3>
         <div className="report-filters">
-          <div className="chip-row">
-            {PERIODS.map(p => (
-              <button key={p.hours} className={`chip ${hours === p.hours ? 'active' : ''}`} onClick={() => setHours(p.hours)}>{p.label}</button>
-            ))}
-          </div>
           <div className="chip-row">
             {LEVELS.map(l => (
               <button key={l.label} className={`chip ${level === l.value && kind !== 'jobs' && kind !== 'restarts' ? 'active' : ''}`}

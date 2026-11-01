@@ -41,4 +41,5 @@ rules when changing ZenSynora:
 - Every model call has a fallback and a time limit (nothing waits > 180 s); only permanent failures change settings, logged with the old value.
 - Validate settings that only work together (provider + model) when saved and in the Doctor.
 - What agents create (tools, skills, notes) the user can see, edit, remove to a trash and export/import.
+- Every router in `myclaw/web/` is included in the app (`tests/test_web_routes_registered.py`); test new endpoints through the app.
 

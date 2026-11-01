@@ -2,6 +2,7 @@
 
 GET /api/doctor/report?hours=24                         full report (JSON)
 GET /api/doctor/report/download?format=md|json|zip     the report as a file
+GET /api/doctor/timeline?hours=24                       health over time (infographic)
 GET /api/doctor/errors?hours=24&level=ERROR&q=text&kind= grouped warnings/errors; kind=failures|jobs|restarts
 
 Secrets never leave the server: the report holds only "key set: yes/no" and
@@ -45,6 +46,12 @@ async def download_report(format: str = Query("md", pattern="^(md|json|zip)$"), 
     else:
         body, media = _report.to_markdown(rep).encode("utf-8"), "text/markdown; charset=utf-8"
     return Response(body, media_type=media, headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+@router.get("/api/doctor/timeline", dependencies=guard)
+async def health_timeline(hours: float = 24):
+    """2026-11-01: errors, failures, restarts and job runs per time bucket (infographic)."""
+    return await asyncio.to_thread(_report.timeline, _hours(hours))
 
 
 @router.get("/api/doctor/errors", dependencies=guard)

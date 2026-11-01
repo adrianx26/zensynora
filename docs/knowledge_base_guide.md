@@ -550,7 +550,13 @@ click it to see the log of exactly that note.
 
 API: `GET /api/knowledge/usage?base=&agent=&kind=&q=&since=&limit=&offset=`,
 `GET /api/knowledge/usage/stats?base=&days=`, `GET /api/knowledge/usage/note/{permalink}?base=`,
-`GET /api/knowledge/benchmarks?base=`.
+`GET /api/knowledge/benchmarks?base=`, `GET /api/knowledge/overview?base=`
+(the **Overview** tab: totals and change, growth per day by note date, search
+and response-cache hit / miss, groups of linked notes, what needs attention —
+see the [Web UI guide](webui_guide.md#knowledge-page-graph-notes-tags)).
+
+Before 2026-11-01 these endpoints were not registered, so the Usage tab and
+the daily growth snapshots did not work in the Web UI.
 
 ## Plans
 

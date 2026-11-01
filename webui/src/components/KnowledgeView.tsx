@@ -8,6 +8,7 @@ import KnowledgeImport from './KnowledgeImport';
 import KnowledgeDistilled from './KnowledgeDistilled';
 import KnowledgeHealth from './KnowledgeHealth';
 import KnowledgeUsage, { NoteUsageLine } from './KnowledgeUsage';
+import KnowledgeOverview from './KnowledgeOverview';
 import { CategoriesCard, CategoryMergePanel, ConflictsSection, DuplicatesPanel, type Conflict } from './KnowledgeQuality';
 import { SearchModePicker, SemanticCard } from './KnowledgeSemantic';
 import { useSemanticStatus, type SearchMode } from '../knowledgeSemantic';
@@ -39,7 +40,7 @@ interface NoteDetail {
   conflicts?: Conflict[]; // 2026-10-24 (KB phase 2)
 }
 
-type Tab = 'graph' | 'notes' | 'tags' | 'distilled' | 'usage';
+type Tab = 'overview' | 'graph' | 'notes' | 'tags' | 'distilled' | 'usage';
 type ColorBy = 'group' | 'tag' | 'links' | 'none';
 
 // Categorical palette (works on the dark and light themes).
@@ -424,9 +425,9 @@ const KnowledgeView: React.FC = () => {
         <SearchModePicker mode={mode} status={semantic.st} note={query.trim() ? modeNote : null}
           onChange={m => { setMode(m); store(MODE_KEY, m); }} />
         <div className="kb-tabs" role="tablist">
-          {(['graph', 'notes', 'tags', 'distilled', 'usage'] as Tab[]).map(t => (
+          {(['overview', 'graph', 'notes', 'tags', 'distilled', 'usage'] as Tab[]).map(t => (
             <button key={t} role="tab" aria-selected={tab === t} className={`settings-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-              {t === 'graph' ? 'Graph' : t === 'notes' ? 'Notes' : t === 'tags' ? 'Tags & types' : t === 'distilled' ? 'Distilled' : 'Usage'}
+              {t === 'overview' ? 'Overview' : t === 'graph' ? 'Graph' : t === 'notes' ? 'Notes' : t === 'tags' ? 'Tags & types' : t === 'distilled' ? 'Distilled' : 'Usage'}
             </button>
           ))}
         </div>
@@ -588,6 +589,11 @@ const KnowledgeView: React.FC = () => {
             <KnowledgeDistilled base={base} onOpenNote={p => { setCreating(null); setSide(null); select(p); }} />
           )}
 
+          {tab === 'overview' && (
+            // 2026-11-01: the knowledge base on one screen (infographic)
+            <KnowledgeOverview key={base} base={base}
+              onOpenNote={p => { setCreating(null); setSide(null); select(p); }} />
+          )}
           {tab === 'usage' && (
             // 2026-10-27: usage log (which agent used which notes, for what) and benchmarks
             <KnowledgeUsage key={`${base}:${usageQuery}`} base={base} initialNote={usageQuery}
