@@ -1182,3 +1182,65 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .kb-swatch-line { width: 16px !important; height: 3px !important; border-radius: 2px; }
 .kb-legend-note { color: var(--accent-color); }
 .kb-graph-card.kb-graph-full { position: fixed; inset: 10px; z-index: 60; background: var(--bg-color); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5); }
+
+/* 2026-11-01: infographics (Knowledge → Overview, Doctor → Health overview).
+   Validated palette (dataviz reference instance) on the app's card surfaces;
+   dark is the app default, the light theme overrides. Status colours are only
+   used for status, always with a label. */
+.viz {
+  --viz-surface: #161b22; --viz-grid: #2c2c2a; --viz-axis: #383835; --viz-muted: #898781;
+  --viz-s1: #3987e5; --viz-s2: #d95926; --viz-s3: #199e70; --viz-s7: #9085e9;
+  --viz-good: #0ca30c; --viz-warning: #fab219; --viz-serious: #ec835a; --viz-critical: #d03b3b;
+  --viz-rest: #3a4149;
+}
+[data-theme="light"] .viz {
+  --viz-surface: #fdfdfe; --viz-grid: #e1e0d9; --viz-axis: #c3c2b7; --viz-muted: #898781;
+  --viz-s1: #2a78d6; --viz-s2: #eb6834; --viz-s3: #1baf7a; --viz-s7: #6250d6;
+  --viz-rest: #d9dce0;
+}
+.viz-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.viz-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0 4px; }
+.viz-tile { border: 1px solid var(--panel-border); border-radius: 10px; padding: 10px 12px; background: rgba(128, 128, 128, 0.04); min-width: 0; }
+.viz-tile-label { font-size: 0.75rem; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+.viz-tile-value { font-size: 1.45rem; font-weight: 600; margin-top: 4px; color: var(--text-primary); }
+.viz-tile-sub { font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; }
+.viz-delta { font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; }
+.viz-delta.good::before { content: "▲ "; color: var(--viz-good); }
+.viz-delta.bad::before { content: "▲ "; color: var(--viz-critical); }
+.viz-spark { display: block; margin-top: 6px; }
+.viz-status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--viz-muted); flex: none; }
+.viz-status-good .viz-status-dot { background: var(--viz-good); }
+.viz-status-warning .viz-status-dot { background: var(--viz-warning); }
+.viz-status-critical .viz-status-dot { background: var(--viz-critical); }
+.viz-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 12px; }
+.viz-block h4 { font-size: 0.85rem; margin: 0 0 6px; color: var(--text-primary); }
+.viz-block .muted.small { margin-bottom: 6px; }
+.viz-chart { position: relative; width: 100%; }
+.viz-axis { font-size: 10px; fill: var(--viz-muted); font-variant-numeric: tabular-nums; }
+.viz-tip { position: absolute; pointer-events: none; z-index: 5; background: var(--bg-color); border: 1px solid var(--panel-border); border-radius: 8px; padding: 6px 9px; font-size: 0.75rem; color: var(--text-primary); box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25); white-space: nowrap; }
+.viz-tip-head { font-weight: 600; margin-bottom: 2px; }
+.viz-seg { display: flex; gap: 2px; height: 14px; border-radius: 4px; overflow: hidden; }
+.viz-seg span { min-width: 3px; }
+.viz-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.78rem; color: var(--text-secondary); margin-top: 6px; }
+.viz-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+.viz-legend b { color: var(--text-primary); font-weight: 600; }
+.viz-hbars { display: flex; flex-direction: column; gap: 6px; }
+.viz-hbar { display: grid; grid-template-columns: minmax(120px, 38%) 1fr auto; gap: 8px; align-items: center; font-size: 0.8rem; }
+.viz-hbar.clickable { cursor: pointer; }
+.viz-hbar.clickable:hover .viz-hbar-label { color: var(--accent-color); }
+.viz-hbar-label { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.viz-hbar-track { height: 10px; background: var(--viz-grid); border-radius: 4px; overflow: hidden; }
+.viz-hbar-track span { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+.viz-hbar-value { color: var(--text-primary); font-variant-numeric: tabular-nums; min-width: 2.5em; text-align: right; }
+.viz-hbar-note { grid-column: 1 / -1; font-size: 0.74rem; color: var(--text-secondary); margin-top: -2px; }
+.viz-toggle { display: inline-flex; gap: 2px; }
+.viz-table-toggle { margin-top: 4px; }
+.viz-table-wrap { max-height: 240px; overflow: auto; margin-top: 6px; }
+@media (max-width: 768px) { .viz-hbar { grid-template-columns: 1fr auto; } .viz-hbar-track { grid-column: 1 / -1; } }
+.report-period { margin: 4px 0 -4px; align-items: center; }
+.viz a { color: var(--accent-color); text-decoration: none; }
+.viz a:hover { text-decoration: underline; }
+.viz-hbars.stacked .viz-hbar { grid-template-columns: 1fr auto; row-gap: 3px; }
+.viz-hbars.stacked .viz-hbar-label { grid-column: 1 / -1; white-space: normal; }
+.viz-hbars.stacked .viz-hbar-track { grid-column: 1; }
+.viz .plain-list { font-size: 0.82rem; }
