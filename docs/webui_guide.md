@@ -123,9 +123,25 @@ what is there when a file is missing.
     server down, model missing) the next model in the list answers.
   * *Round-robin*: requests are spread over all models.
   * *Rotate now* makes the next model the default.
-  Rotation applies to the default agent and to agents that use the default
-  model; agents with their own model keep it. A model that was just refused,
-  unknown or rate-limited is skipped for a while.
+  Agents with their own model use it first; when it fails they fall back to
+  the default model and then the rotation list (since 2026-11-01). A model
+  that was just refused, unknown or rate-limited is skipped for a while.
+* **Model health** (2026-11-01) — calls, failures, average answer time and
+  last error of every model since ZenSynora started. Fallbacks are tried best
+  first by these numbers (an agent's own model stays first while it works).
+  One model gets 90 s to start answering and a whole call at most 170 s, so
+  no agent or job waits longer for a model. On *context too long*, models
+  with a bigger known context are tried first.
+* **Model gone for good** — when a model is unknown or refused for this app
+  or account (404, 403, "only available on agentic harnesses"), it is
+  replaced automatically, in every agent, the default and the rotation list,
+  by the model that answered instead. Rate limits, timeouts and a server
+  that is down only cause a fallback, never a replacement. Every replacement
+  is listed under *Replacements* and in `~/.myclaw/model_changes.jsonl`
+  (old and new model). **Replace in all agents…** does the same by hand.
+* **Cannot work with their provider** — e.g. an OpenRouter name
+  (`vendor/model`) on Gemini, or `gpt-4o` on OpenRouter (it needs
+  `openai/gpt-4o`). Shown here, on Settings → Agents and by `zensynora doctor`.
 * **Test / Test all** (v0.7.3) sends a tiny real request. A model can be
   listed and still refuse to work with ZenSynora (OpenRouter answers some
   free models with "only available on agentic harnesses"), need credits or not

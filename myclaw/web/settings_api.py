@@ -379,7 +379,18 @@ async def get_settings():
         "config_file": str(CONFIG_FILE),
         "config_file_exists": CONFIG_FILE.exists(),
         "security_warnings": _security_warnings(cfg),
+        "model_warnings": _model_warnings(cfg),
     }
+
+
+def _model_warnings(cfg: AppConfig) -> List[str]:
+    """2026-11-01: agents whose model their provider cannot serve (e.g. vendor/model on Gemini)."""
+    try:
+        from myclaw.model_health import mismatches
+
+        return [f"{who}: {p}/{m} — {why}" for who, p, m, why in mismatches(cfg)]
+    except Exception:  # pragma: no cover - a warning must never break the settings page
+        return []
 
 
 def _security_warnings(cfg: AppConfig) -> List[str]:

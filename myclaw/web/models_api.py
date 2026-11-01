@@ -70,6 +70,38 @@ async def models_overview():
     }
 
 
+# 2026-11-01: model health (latency, failures) and replacing a model everywhere.
+# Registered before /api/models/{provider}, which would otherwise match "health".
+@router.get("/api/models/health", dependencies=guard)
+async def models_health():
+    from myclaw import model_health
+
+    cfg = load_config()
+    return {"models": model_health.snapshot(), "history": model_health.history(20),
+            "mismatches": [{"who": w, "provider": p, "model": m, "why": why}
+                           for w, p, m, why in model_health.mismatches(cfg)],
+            "attempt_seconds": model_health.ATTEMPT_SECONDS, "budget_seconds": model_health.CALL_BUDGET_SECONDS}
+
+
+class ReplaceIn(BaseModel):
+    old_provider: str
+    old_model: str
+    new_provider: str
+    new_model: str
+
+
+@router.post("/api/models/replace", dependencies=guard)
+async def replace_everywhere(body: ReplaceIn):
+    """Use another model wherever this one is set (default, agents, rotation list)."""
+    from myclaw import model_health
+
+    try:
+        return await model_health.replace_model(body.old_provider.strip(), body.old_model.strip(),
+                                                body.new_provider.strip(), body.new_model.strip(), reason="by hand")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @router.get("/api/models/{provider}", dependencies=guard)
 async def provider_models(provider: str, key: str | None = None):
     return await settings_api._probe(provider, None, None, None, key or None)

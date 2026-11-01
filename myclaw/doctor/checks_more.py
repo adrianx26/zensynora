@@ -120,6 +120,22 @@ def _custom_tools(ctx):
 
 
 # ── configuration ────────────────────────────────────────────────────────────
+@check("model_mismatch", "Agent models match their providers", "configuration")
+def _model_mismatch(ctx):
+    """2026-11-01: e.g. an OpenRouter model name sent to Gemini (404 on every call)."""
+    from ..model_health import mismatches
+
+    bad = mismatches(ctx.get_config())
+    if not bad:
+        return OK, "every agent's model looks right for its provider"
+    detail = "; ".join(f"{who}: {p}/{m} — {why}" for who, p, m, why in bad[:12])
+    if len(bad) > 12:
+        detail += f"; … and {len(bad) - 12} more"
+    return WARN, detail, (
+        "These agents fall back to other models on every call. Pick the right provider for the model "
+        "(e.g. openrouter for vendor/model names) in Settings → Agents, or use Models → Replace in all agents.")
+
+
 @check("skills", "Agent skills", "configuration")
 def _skills(ctx):
     from .. import agent_skills

@@ -15,6 +15,7 @@ interface SettingsResponse {
   config_file: string;
   config_file_exists: boolean;
   security_warnings?: string[];
+  model_warnings?: string[];
 }
 
 type Kind = 'text' | 'password' | 'number' | 'bool' | 'select' | 'list';
@@ -604,6 +605,13 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
           </div>
         ))}
 
+        {tab === 'Agents' && (data.model_warnings || []).length > 0 && (
+          <div className="notice error">
+            <b>These models cannot work with their provider</b> — the agents fall back to other models on every call.
+            Pick the right provider (OpenRouter models are named vendor/model), or use Models → Replace in all agents.
+            <ul className="skipped-tools">{(data.model_warnings || []).map(w => <li key={w}>{w}</li>)}</ul>
+          </div>
+        )}
         {tab === 'Agents' && (
           <div className="settings-card">
             <h3>Default agent</h3>

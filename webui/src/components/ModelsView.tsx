@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api, type ModelChoice, type ModelsOverview, type ProbeResult, type ProviderKeysMap } from '../api';
 import { KeySelect, ProviderKeysPanel } from './ProviderKeys';
+import ModelHealthCard from './ModelHealthCard';
 
 // Name of a provider key for display ("" for the default key).
 const keyLabel = (keysMap: ProviderKeysMap | null, provider: string, key?: string): string =>
@@ -62,6 +63,9 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
   const [rotAdd, setRotAdd] = useState<ModelChoice>({ provider: '', model: '' });
   // custom provider whose "Keys" list is open
   const [keysOpen, setKeysOpen] = useState<string | null>(null);
+  // 2026-11-01: replace a model in every agent (old → to)
+  const [replacing, setReplacing] = useState<{ old: ModelChoice; to: ModelChoice } | null>(null);
+  const [healthKey, setHealthKey] = useState(0);
 
   const load = useCallback(async () => {
     try {
@@ -239,6 +243,32 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
               onClick={() => setRotation([...rot.entries, rotAdd])}>+ Add to rotation</button>
           </div>
         </div>
+
+        <ModelHealthCard refreshKey={healthKey}
+          onReplace={(provider, model) => setReplacing({ old: { provider, model }, to: { provider: ov.default.provider, model: '' } })} />
+
+        {replacing && (
+          <div className="settings-card">
+            <h3>Replace <code>{replacing.old.provider}/{replacing.old.model}</code> in all agents</h3>
+            <p className="muted">Every agent, the default model and the rotation list that use it get this model instead.</p>
+            {modelPicker('replace', replacing.to, to => setReplacing({ ...replacing, to }))}
+            <div className="save-actions">
+              <span>{testResult(replacing.to)}</span>
+              <button className="ghost-btn" onClick={() => setReplacing(null)}>Cancel</button>
+              <button className="ghost-btn" disabled={!replacing.to.model} onClick={() => testModel(replacing.to)}>Test</button>
+              <button className="primary-btn" disabled={!replacing.to.model}
+                onClick={() => run(async () => {
+                  const r = await api<{ changed: string[] }>('/api/models/replace', {
+                    method: 'POST', body: JSON.stringify({ old_provider: replacing.old.provider, old_model: replacing.old.model,
+                      new_provider: replacing.to.provider, new_model: replacing.to.model }),
+                  });
+                  if (!r.changed.length) throw new Error('No agent uses that model.');
+                  setReplacing(null);
+                  setHealthKey(k => k + 1);
+                }, `Replaced ${replacing.old.provider}/${replacing.old.model} with ${choiceText(replacing.to)}.`)}>Replace</button>
+            </div>
+          </div>
+        )}
 
         <div className="settings-card">
           <div className="card-head">
