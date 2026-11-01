@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 **Infographics for the knowledge base and the app's health (2026-11-01)**
-- Knowledge → **Overview**: size and weekly change, growth by day / week /
+- Knowledge → **Overview** (the page now opens on it): size and weekly change, growth by day / week /
   month (by note date), knowledge-search and response-cache hit / miss,
   largest / new / growing groups of linked notes, and what needs attention
   or more data, with examples. `GET /api/knowledge/overview`.

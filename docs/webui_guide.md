@@ -319,7 +319,7 @@ keep their own knowledge base.
 
 The **Knowledge** page (sidebar) shows the knowledge base visually:
 
-* **Overview** — the knowledge base at a glance: notes, facts, links, tags
+* **Overview** (the page opens here) — the knowledge base at a glance: notes, facts, links, tags
   and groups of linked notes, each with this week's change; growth by
   **Days / Weeks / Months** (counted by each note's own date, so a re-index
   does not make everything look new); how often agents' knowledge searches
