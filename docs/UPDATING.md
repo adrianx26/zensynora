@@ -127,6 +127,12 @@ of ZenSynora's optional extras (`semantic`, `ingest`, `watch` in
 `pyproject.toml`), it is installed with the version range of the **new**
 release, so an update can never pull an incompatible version.
 
+**Readers and embeddings are part of ZenSynora (2026-10-31).** `pypdf`,
+`python-docx`, `openpyxl` (PDF, Word and Excel — files sent on Telegram and
+knowledge imports) and, on 64-bit x86 and ARM, `fastembed` (semantic search
+and the semantic response cache) are now normal dependencies, so the next
+update installs them; nothing to do by hand.
+
 ## Layout
 
 ```

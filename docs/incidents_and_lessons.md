@@ -1,7 +1,7 @@
 # Incidents and lessons learned
 
 Real problems found on a running installation (Linux, `~/.local/share/zensynora`,
-Web UI + Telegram, OpenRouter free models), October 2026. For each one: what
+Web UI + Telegram, OpenRouter free models), October–November 2026. For each one: what
 was seen, why it happened, how it was fixed, how it is caught now, and the
 rule that keeps it from coming back. The rules are collected at the end and,
 in short form, in `AGENTS.md`.
@@ -303,6 +303,80 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 
 ---
 
+## 8. Models, files and runtime (2026-10-29 – 2026-11-01)
+
+### 8.1 False "Task FAILED – exceeded 330s timeout" (2026-10-29, PR #45)
+
+| | |
+|---|---|
+| **Symptom** | Four CRITICALs for two jobs that had answered; their timers ran to the limit. |
+| **Root cause** | One `Agent` object served two runs at once; the current task id was a plain attribute, so the second run overwrote the first's and its timer was never completed. |
+| **Fix** | The task id is per run (`contextvars`). |
+| **Detected by** | `tests/test_report_fixes_20261029.py` (two overlapping runs). |
+| **Rule** | State of one run on a shared object lives in a context variable, never a plain attribute. |
+
+### 8.2 Tools hung for 30 s after an event loop ended (2026-10-29, PR #45)
+
+| | |
+|---|---|
+| **Symptom** | *"parallel_executor: Execution timed out after 30.0s"*; the tool never ran. |
+| **Root cause** | The worker pool and the executor's semaphore were process singletons bound to the first event loop; after it closed, work was queued for workers that no longer existed. |
+| **Fix** | Workers restart in the caller's loop; one semaphore per loop. |
+| **Detected by** | Regression tests that use two event loops. |
+| **Rule** | Singletons that hold asyncio objects (queues, locks, tasks) must be per event loop. |
+
+### 8.3 Agents wasted tool steps on small mistakes (2026-10-29, PR #45)
+
+| | |
+|---|---|
+| **Symptom** | ERROR *"unexpected keyword argument 'url'"*; WARNING *"Unknown tool called: list_jobs"*; `grep … 2>/dev/null` refused three times. |
+| **Root cause** | Extra arguments raised TypeError; unknown names got no hint; the shell refused every `>`. |
+| **Fix** | Extra arguments are dropped with a note listing the real ones; *"Did you mean: job_list"*; `2>/dev/null` and `2>&1` are accepted after a command (all other redirection still refused). |
+| **Detected by** | `tests/test_report_fixes_20261029.py`. |
+| **Rule** | When agents keep making the same harmless mistake, accept it or answer with the fix — don't just refuse. |
+
+### 8.4 Agents wrote instructions as Python tools (2026-10-31, PR #46)
+
+| | |
+|---|---|
+| **Symptom** | TOOLBOX tools such as `agent_coordination_skill` only returned a fixed description; one registry entry pointed at a deleted file; READMEs without tools. |
+| **Root cause** | Agents had no way to write a skill, and nobody could edit, delete or repair tools. |
+| **Fix** | Tools page: create, edit, delete (to `TOOLBOX/.trash`), **Make skill** (code read, never run), **Repair**, export/import; deleted and replaced skills go to `skills/.trash`. |
+| **Detected by** | `tests/test_toolbox_manage.py`; the page lists "instructions only" tools and repair actions. |
+| **Rule** | Every stored thing agents can create, the user can see, edit, remove (to a trash) and move to another install. |
+
+### 8.5 Files sent on Telegram never reached the agent (2026-10-31, PR #48)
+
+| | |
+|---|---|
+| **Symptom** | *"the file is skill-creation.pdf, use it as template"* → the agent called `assimilate('skill-creation.pdf')`: *does not exist*. |
+| **Root cause** | The bot used only the caption and never downloaded files; the PDF/Word/Excel readers were an optional extra not installed on the machine. |
+| **Fix** | Files are saved in `workspace/inbox/telegram/<date>/` and the agent is told where, with the start of the text; `read_file` reads PDF/Word/Excel; the readers are core dependencies; opt-in `files_to_knowledge`. |
+| **Detected by** | `tests/test_telegram_channel.py` (the exact case); checking the user's installed packages. |
+| **Rule** | A feature users expect to just work (reading a file they send) must not depend on an optional extra; check what is really installed on the user's machine. |
+
+### 8.6 Semantic cache warning on every start (2026-10-31, PR #49)
+
+| | |
+|---|---|
+| **Symptom** | WARNING *"sentence-transformers not installed. Semantic cache will use hash-based matching only."* |
+| **Root cause** | The cache only knew sentence-transformers (PyTorch, several GB); also, its similarity search ran only for that model. |
+| **Fix** | It uses the knowledge base's fastembed model (shared, ONNX); `fastembed` is a core dependency on 64-bit x86/ARM; without it, one INFO line. |
+| **Detected by** | `tests/test_semantic_cache_fastembed.py`. |
+| **Rule** | Before adding a dependency, check whether one already in the app does the job; limit platform-specific ones with markers. |
+
+### 8.7 Agents with their own model had no fallback (2026-11-01, PR #50)
+
+| | |
+|---|---|
+| **Symptom** | 404 *"models/cohere/north-mini-code:free is not found"* from Gemini; the turn failed. |
+| **Root cause** | 9 agents had an OpenRouter model name with the default provider (Gemini); rotation only covered agents using the default model (2 of 15). |
+| **Fix** | Every agent falls back (own model → default → rotation), ordered by measured health and latency, at most 170 s per call; a model gone for good (404/403) is replaced in all agents by the one that answered; mismatch check in Doctor, Settings and the Models page. |
+| **Detected by** | `tests/test_model_failover.py`; Doctor check *Agent models match their providers*. |
+| **Rule** | Every model call has a fallback and a time limit; validate provider/model pairs when they are saved. |
+
+---
+
 ## Rules for future changes
 
 1. **Imports:** inside `myclaw/tools/`, imports of other `myclaw` modules use `..`. Never import lazily registered tools from `myclaw.tools` — import from the defining module. The static import test must stay green.
@@ -326,4 +400,8 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 19. **Heuristics:** run them on a realistic corpus (notes shaped like the real ones) and count false positives before shipping; when in doubt, flag less.
 20. **Prompt hygiene:** text derived from notes, imports or web pages that reaches a prompt is quoted and labelled as information, never as instructions; it never speaks as the user.
 21. **Check the next step too:** a URL check must hold at connect time (pin the address, re-check redirects), a path check must hold after following symlinks, and every entry path (agent, CLI, upload) uses the same rules.
-22. **Optional and off by default:** features that change what agents see or run in the background are opt-in; heavy libraries are optional extras; no thread runs while a feature is off.
+22. **Optional and off by default:** features that change what agents see or run in the background are opt-in; heavy libraries (PyTorch) are optional extras; no thread runs while a feature is off. A library a core feature needs (reading a PDF the user sends) is a core dependency, limited by platform markers where wheels are missing.
+23. **Per-run state:** state of one run on a shared object lives in a context variable; singletons that hold asyncio objects are per event loop.
+24. **Model calls:** every model call has a fallback and a time limit (no workflow waits more than 180 s); only permanent failures (404, 403, refused) change settings, and every automatic change is logged with the old value.
+25. **Validate pairs at save time:** settings that only work together (provider + model) are checked when saved and by the Doctor.
+26. **Users can manage what agents create:** see, edit, remove (to a trash) and export/import.

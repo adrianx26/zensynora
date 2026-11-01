@@ -188,17 +188,22 @@ sequenceDiagram
 
 How a request reaches a model, and what happens when that fails. Changed in
 0.5.0: the agent never silently switches to another provider *unless you
-asked for it* — 0.7.1 adds an explicit rotation list (Models page).
+asked for it* — 0.7.1 adds an explicit rotation list (Models page). Since
+2026-11-01 every agent falls back (its own model, the default model, the
+rotation list), ordered by measured health; no call waits longer than 170 s,
+and a model that is gone for good is replaced in every agent
+(`myclaw/model_health.py`).
 
 ```mermaid
 flowchart TD
-    start(["Agent needs a reply"]) --> rot{"Rotation on and this agent<br/>uses the default model?"}
-    rot -- yes --> order["Candidates = default + rotation list<br/>(round-robin: start at the next one)"]
-    order --> tryc["provider.chat() with candidate"]
+    start(["Agent needs a reply"]) --> rot{"Fallbacks? (own model,<br/>or rotation on)"}
+    rot -- yes --> order["Candidates = own model + default + rotation list<br/>ordered by measured health and latency<br/>(own model first while it works)"]
+    order --> tryc["provider.chat() with candidate<br/>90 s to start answering · 170 s per call"]
     tryc -- ok --> replied(["Stream reply<br/>(model shown on the message)"])
-    tryc -- "error: rate limit, down,<br/>missing model, in-stream error" --> nextc{"more candidates?"}
+    tryc -- "error: rate limit, down, too slow,<br/>missing model, in-stream error" --> nextc{"more candidates?<br/>(context too long:<br/>bigger context first)"}
     nextc -- yes --> tryc
     nextc -- no --> fail(["Error shown in chat"])
+    replied -. "own model gone for good<br/>(404 · 403 · refused for this app)" .-> replace["Replace it in every agent<br/>by the model that answered<br/>(background · model_changes.jsonl)"]
     rot -- no --> pick["Provider = agent's own, else agents.defaults.provider<br/>(built-in or one of your providers)"]
     pick --> init{"Provider can start?<br/>(SDK installed, API key set)"}
     init -- no --> err["ProviderUnavailableError<br/>clear message shown in chat"]
@@ -573,8 +578,11 @@ sequenceDiagram
 
 * `/start`, `/help` and `/whoami` answer everyone; all other commands need an
   allowed user.
-* Photos, voice messages and documents: the caption is used as the message;
-  without a caption the bot says it can only read text for now.
+* Documents, photos, voice, audio and video are downloaded into the agent
+  workspace (`inbox/telegram/<date>/<name>`); the agent's message says where
+  the file is, with the start of a document's text (quoted as file content).
+  `channels.telegram.files_to_knowledge` also adds documents and photos to the
+  knowledge base (2026-10-31).
 * Agents created later (`create_agent`, Settings) are found without a restart.
 * Answers from a named agent start with `@Name: `.
 * Polling is the default; `zensynora gateway --webhook-url … --port 8443`

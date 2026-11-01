@@ -36,7 +36,8 @@ myclaw/
 ├── backup.py                # Backups of settings, API keys, knowledge, chat, jobs [0.7.1]
 ├── caching/                 # Shared BaseTTLCache + PersistentCacheMixin [Sprint 11]
 ├── channels/                # telegram / whatsapp / discord / web adapters [Sprint 6]
-│   └── telegram.py          # Telegram bot: allowFrom, per-chat queue + workers, @agent
+│   ├── attachments.py       # Received files → workspace inbox/<channel>/<date>/, text for the agent [Unreleased]
+│   └── telegram.py          # Telegram bot: allowFrom, per-chat queue + workers, @agent, downloads files
 │                            #   routing, commands + / menu, reply splitting [Unreleased]
 ├── chat/                    # Web UI chat channels: store (chat.db) + multi-agent engine [0.7.1]
 ├── config.py                # Pydantic config + hot-reload (watchdog)
@@ -52,6 +53,8 @@ myclaw/
 ├── jobs/                    # Jobs: store (jobs.db) + runner (schedule, evaluate, benchmark) [0.7.1]
 │                            #   + medic.py: diagnose / fix failed runs [0.7.5]
 ├── llm_errors.py            # Readable model-server errors + rotation cooldowns [0.7.3]
+├── model_health.py          # Model health, automatic fallback order, time limits, replace a model in all agents, mismatch check [Unreleased]
+├── rules.py                 # Rules every agent follows; agents propose, the user approves [Unreleased]
 ├── knowledge/               # scope.py: one shared knowledge base for internal ids [0.7.5]
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
 │   ├── quality.py           # fact sources, categories, conflicts, hub penalty, duplicates [0.8.0]
@@ -79,14 +82,17 @@ myclaw/
 ├── tools/
 │   ├── browser.py           # Playwright headless browser [Sprint 3]
 │   ├── jobs.py              # job_create / job_list / job_run / job_status / job_update [Unreleased]
-│   ├── shell.py             # Allow-list, no shell; chains with | && || ; of allowed commands [Unreleased]
+│   ├── shell.py             # Allow-list, no shell; chains with | && || ; of allowed commands; 2>/dev/null, 2>&1 [Unreleased]
+│   ├── tool_policy.py       # Which modules and calls agent-made tools may use [Unreleased]
+│   ├── tool_sandbox.py      # Agent-made tools run in a separate, locked-down process [Unreleased]
+│   ├── toolbox_manage.py    # Your tools: create/edit/delete (trash), make a skill, repair, export/import bundles [Unreleased]
 │   └── ...
 ├── vector/                  # Pluggable backends: memory / sqlite / qdrant [Sprint 4]
 ├── web/
 │   ├── api.py               # Web UI backend: wiring, agents, legacy chat socket, static SPA
 │   ├── settings_api.py      # Settings, health, doctor, costs, history [0.5.0]
 │   ├── chat_api.py          # Channels REST + /ws/channels/{id} [0.7.1]
-│   ├── models_api.py        # Default model, rotation, prompt generator [0.7.1]
+│   ├── models_api.py        # Default model, rotation, prompt generator [0.7.1]; model health, replace in all agents [Unreleased]
 │   ├── provider_keys_api.py # Add / rename / delete / test a provider's API keys [0.7.5]
 │   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
 │   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
@@ -96,6 +102,8 @@ myclaw/
 │   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [Unreleased]
 │   ├── knowledge_api.py     # Knowledge page: graph, notes, edit, trash, search, conflicts, duplicates [0.8.0]
 │   ├── knowledge_{import,semantic,distill,health}_api.py  # import jobs, semantic status/backfill/install, distillation, health [0.8.0]
+│   ├── rules_api.py         # Rules page: rules, proposals, approve / reject [Unreleased]
+│   ├── toolbox_api.py       # Your tools; export / import tools and skills as a file [Unreleased]
 │   └── skills_api.py        # Skills page: list, edit, import, assign [0.7.5]
 └── ... (~50 utility modules)
 
@@ -115,6 +123,7 @@ webui/src/
 └── components/
     ├── ChatView.tsx         # Channel chat, @mentions, activity panel [0.7.1]
     ├── ModelsView.tsx       # Default model, rotation, your providers [0.7.1]
+    ├── ModelHealthCard.tsx  # Model health, replacements, mismatches [Unreleased]
     ├── JobsView.tsx         # Jobs, runs, evaluation, benchmark [0.7.1]
     ├── BackupsView.tsx      # Backups [0.7.1]
     ├── ProposalsPanel.tsx   # Change proposals + lessons (Doctor page) [0.7.1]
@@ -128,7 +137,8 @@ webui/src/
     ├── SettingsView.tsx     # Settings page [0.5.0]
     ├── DoctorView.tsx       # Doctor page [0.7.0]
     ├── DoctorReport.tsx     # Doctor → Report: errors viewer, report view, download [Unreleased]
-    ├── ToolsView.tsx        # Tool list [0.5.0]
+    ├── ToolsView.tsx        # Your tools (editor, on/off, make skill, repair) + all tools [0.5.0, Unreleased]
+    ├── TransferImport.tsx   # Import tools/skills from a file (bundle, .py, SKILL.md) [Unreleased]
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
