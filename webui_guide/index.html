@@ -1861,6 +1861,18 @@ keep their own knowledge base.</p>
 <p><img alt="Knowledge graph" src="../images/webui-knowledge-graph.png" /></p>
 <p>The <strong>Knowledge</strong> page (sidebar) shows the knowledge base visually:</p>
 <ul>
+<li><strong>Overview</strong> — the knowledge base at a glance: notes, facts, links, tags
+  and groups of linked notes, each with this week's change; growth by
+  <strong>Days / Weeks / Months</strong> (counted by each note's own date, so a re-index
+  does not make everything look new); how often agents' knowledge searches
+  found something (30 days) and how often the response cache answered
+  (since the start); the largest groups (click to open the main note); groups
+  that are new or grew this week; and <strong>Needs attention or more data</strong> —
+  notes without links, facts or tags, links to notes that do not exist,
+  open conflicts, two-note islands, notes no agent used in 30 days, notes
+  not changed in 90 days — each with examples to click and what to do.
+  <strong>Show as table</strong> lists the numbers; <strong>⬇ Download as image</strong> saves the
+  whole panel as a PNG.</li>
 <li><strong>Graph</strong> — every note is a dot, every link (<code>- uses [[Other note]]</code>) an
   arrow. Bigger dots have more links and facts. <em>Colour</em>: <strong>by group</strong> (notes
   connected by links share a colour; grey = no links), by tag, or by number
@@ -2120,12 +2132,19 @@ with <code>zensynora webui</code>. Details: <a href="../UPDATING/">UPDATING.md</
 <p>The Doctor page has two tabs. <strong>Checks</strong> is the health check (the same as
 <code>zensynora doctor</code>). <strong>Report</strong> shows:</p>
 <ul>
+<li>the period (1, 2, 4, 8, 12 or 24 hours, 7 days) at the top; it applies to
+  the whole page;</li>
+<li><strong>Health overview</strong> — Overall status, errors + critical, failures, job
+  runs, restarts and models failing; warnings / errors / critical over time
+  (▲ marks a restart); job runs OK / failed over time; the checks; the
+  <strong>biggest problems</strong> (click one to show it in the error list below); and,
+  per model, the share of calls that failed (⚠ = failing now). <strong>Show as
+  table</strong> and <strong>⬇ Download as image</strong> as on the Knowledge overview;</li>
 <li>summary cards — checks OK / warnings / failures, errors and warnings in the
   last 24 h, restarts (marked <em>crash loop</em> when the service keeps
   restarting), failed jobs;</li>
 <li><strong>Errors</strong> — warnings and errors from the log, grouped (messages that
-  differ only in numbers count as one). Filter by period (1, 2, 4, 8, 12 or
-  24 hours, 7 days), level and text; click a group to see its log lines and
+  differ only in numbers count as one). Filter by level and text; click a group to see its log lines and
   traceback, and <strong>Copy</strong> them. Three buttons (each with its count) narrow it
   down: <strong>Failures</strong> — errors, plus warnings about work that failed, timed out
   or crashed; <strong>Failed jobs</strong> — job runs that ended with an error, a timeout

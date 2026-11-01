@@ -2155,7 +2155,12 @@ off: nothing is recorded, no thread starts and no file is created.</p>
 click it to see the log of exactly that note.</p>
 <p>API: <code>GET /api/knowledge/usage?base=&amp;agent=&amp;kind=&amp;q=&amp;since=&amp;limit=&amp;offset=</code>,
 <code>GET /api/knowledge/usage/stats?base=&amp;days=</code>, <code>GET /api/knowledge/usage/note/{permalink}?base=</code>,
-<code>GET /api/knowledge/benchmarks?base=</code>.</p>
+<code>GET /api/knowledge/benchmarks?base=</code>, <code>GET /api/knowledge/overview?base=</code>
+(the <strong>Overview</strong> tab: totals and change, growth per day by note date, search
+and response-cache hit / miss, groups of linked notes, what needs attention —
+see the <a href="../webui_guide/#knowledge-page-graph-notes-tags">Web UI guide</a>).</p>
+<p>Before 2026-11-01 these endpoints were not registered, so the Usage tab and
+the daily growth snapshots did not work in the Web UI.</p>
 <h2 id="plans">Plans<a class="headerlink" href="#plans" title="Permanent link">&para;</a></h2>
 <p>What comes next (note editing tools — <code>edit_note</code>, <code>move_note</code>, <code>daily_note</code>,
 <code>recent_activity</code> —, hiding wrong distilled facts, an optional model pass for

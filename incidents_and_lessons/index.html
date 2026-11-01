@@ -1409,6 +1409,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#88-knowledge-usage-tab-never-worked-in-the-web-ui-2026-11-01-branch-infographics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.8 Knowledge Usage tab never worked in the Web UI (2026-11-01, branch infographics)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2065,6 +2076,17 @@
     <span class="md-ellipsis">
       
         8.7 Agents with their own model had no fallback (2026-11-01, PR #50)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#88-knowledge-usage-tab-never-worked-in-the-web-ui-2026-11-01-branch-infographics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.8 Knowledge Usage tab never worked in the Web UI (2026-11-01, branch infographics)
       
     </span>
   </a>
@@ -3149,6 +3171,37 @@ in short form, in <code>AGENTS.md</code>.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="88-knowledge-usage-tab-never-worked-in-the-web-ui-2026-11-01-branch-infographics">8.8 Knowledge Usage tab never worked in the Web UI (2026-11-01, branch infographics)<a class="headerlink" href="#88-knowledge-usage-tab-never-worked-in-the-web-ui-2026-11-01-branch-infographics" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td><code>/api/knowledge/usage*</code>, <code>/api/knowledge/benchmarks</code> returned 404; the Usage tab stayed empty and no daily growth snapshots were taken.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td><code>knowledge_usage_api.router</code> (and its snapshot start/stop) was written and unit-tested but never included in <code>myclaw/web/api.py</code>.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Router and startup/shutdown handlers registered.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_web_routes_registered.py</code> — every route of every <code>myclaw/web/*</code> router must be served by the app.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>A new router must be registered and have a test that calls it through the app, not only its functions.</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="rules-for-future-changes">Rules for future changes<a class="headerlink" href="#rules-for-future-changes" title="Permanent link">&para;</a></h2>
 <ol>
@@ -3178,6 +3231,7 @@ in short form, in <code>AGENTS.md</code>.</p>
 <li><strong>Model calls:</strong> every model call has a fallback and a time limit (no workflow waits more than 180 s); only permanent failures (404, 403, refused) change settings, and every automatic change is logged with the old value.</li>
 <li><strong>Validate pairs at save time:</strong> settings that only work together (provider + model) are checked when saved and by the Doctor.</li>
 <li><strong>Users can manage what agents create:</strong> see, edit, remove (to a trash) and export/import.</li>
+<li><strong>Registered or it does not exist:</strong> every web router is included in the app; <code>tests/test_web_routes_registered.py</code> checks it.</li>
 </ol>
 
 
