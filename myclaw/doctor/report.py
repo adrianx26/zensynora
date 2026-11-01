@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import os
 import platform
 import shutil
@@ -22,12 +23,14 @@ import sys
 import time
 import zipfile
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, SecretStr
 
 from . import logscan
 from .paths import active_release, data_dir, install_base, install_root, log_file, stale_release
+
+logger = logging.getLogger(__name__)
 
 MAX_GROUPS = 100
 TAIL_LINES = 200
@@ -247,6 +250,70 @@ def error_view(hours: float = 24, levels: list[str] | None = None, q: str = "",
             "truncated": sc.truncated, "lines_read": sc.lines, "kind": kind, "kinds": kinds,
             "job_runs": job_runs if kind == "jobs" else [],
             "restart_events": restart_events[:200] if kind == "restarts" else []}
+
+
+_BUCKETS = (300, 900, 1800, 3600, 3 * 3600, 6 * 3600, 12 * 3600, 86_400)
+
+
+def timeline(hours: float = 24, max_buckets: int = 48) -> dict[str, Any]:
+    """Health over time for the Doctor infographic (2026-11-01).
+
+    Per time bucket: warnings / errors / critical entries, failures, restarts of
+    the program, and job runs (ok / failed). About ``max_buckets`` buckets of
+    5 minutes … 1 day, aligned to the bucket size.
+    """
+    now = time.time()
+    span = hours * 3600
+    size = next((b for b in _BUCKETS if span / b <= max_buckets), _BUCKETS[-1])
+    start = (int((now - span) // size)) * size
+    n = int((now - start) // size) + 1
+    rows = [{"t": start + i * size, "WARNING": 0, "ERROR": 0, "CRITICAL": 0, "failures": 0,
+             "restarts": 0, "jobs_ok": 0, "jobs_failed": 0} for i in range(n)]
+
+    def slot(ts: Any) -> Optional[dict[str, Any]]:
+        try:
+            i = int((float(ts) - start) // size)
+        except (TypeError, ValueError):
+            return None
+        return rows[i] if 0 <= i < n else None
+
+    sc = logscan.scan(hours, max_bytes=30_000_000)
+    for e in sc.problems:
+        r = slot(e.ts)
+        if r is not None:
+            r[e.level] = r.get(e.level, 0) + 1
+            if _is_failure(e):
+                r["failures"] += 1
+    for ts, cmd in sc.starts:
+        if cmd in logscan.SERVICE_COMMANDS:
+            r = slot(ts)
+            if r is not None:
+                r["restarts"] += 1
+    jobs = {"ok": 0, "failed": 0, "other": 0}
+    try:
+        from ..jobs import store
+
+        if store.db_path().exists():
+            for job in store.list_jobs():
+                for run in store.list_runs(job["id"], limit=200):
+                    if (run.get("started") or 0) < now - span:
+                        continue
+                    st = run.get("status")
+                    key = "ok" if st == "ok" else "failed" if st in ("error", "timeout", "interrupted") else "other"
+                    jobs[key] += 1
+                    r = slot(run.get("started"))
+                    if r is not None and key != "other":
+                        r["jobs_" + key] += 1
+    except Exception as e:  # the jobs database is optional for this view
+        logger.debug("timeline: job runs not read: %s", e)
+    for r in rows:
+        r["label"] = time.strftime("%d %b" if size >= 86_400 else "%d %b %H:%M", time.localtime(r["t"]))
+    top = [{"level": g["level"], "count": g["count"], "message": g["message"], "module": g["module"],
+            "failure": bool(g.get("traceback")) or bool(_FAILURE_RE.search(g["message"])) or g["level"] != "WARNING"}
+           for g in sorted(logscan.group(sc.problems, samples=0), key=lambda g: -g["count"])[:8]]
+    return {"hours": hours, "bucket_seconds": size, "buckets": rows, "jobs": jobs, "top": top,
+            "totals": {k: sum(r[k] for r in rows) for k in ("WARNING", "ERROR", "CRITICAL", "failures", "restarts")},
+            "log_exists": sc.exists, "truncated": sc.truncated}
 
 
 # ── the report ───────────────────────────────────────────────────────────────

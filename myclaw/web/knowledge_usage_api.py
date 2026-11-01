@@ -121,6 +121,14 @@ async def usage_of_note(permalink: str, base: str | None = None):
         raise _unavailable(e)
 
 
+@router.get("/api/knowledge/overview", dependencies=guard)
+async def knowledge_overview(base: str | None = None):
+    """2026-11-01: size, growth, groups, attention and hit/miss for the infographic."""
+    from myclaw.knowledge.overview import overview
+
+    return await asyncio.to_thread(overview, _base(base))
+
+
 @router.get("/api/knowledge/benchmarks", dependencies=guard)
 async def knowledge_benchmarks(base: str | None = None):
     return await asyncio.to_thread(_benchmarks, _base(base))
