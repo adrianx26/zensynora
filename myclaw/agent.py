@@ -968,11 +968,15 @@ class Agent:
                 return await self._rotating_chat(candidates, messages, stream)
 
             async def _primary():
+                from . import model_health
                 from .llm_errors import is_rate_limit
 
+                started = time.monotonic()
                 with span("provider.chat", provider=self._provider_name, model=model):
                     try:
-                        return await self.provider.chat(messages, model, stream=stream)
+                        # 2026-11-01: never wait longer than the call budget for one model
+                        return await asyncio.wait_for(self.provider.chat(messages, model, stream=stream),
+                                                      timeout=model_health.CALL_BUDGET_SECONDS)
                     except Exception as e:
                         # 2026-10-18: free models are often "temporarily rate-limited
                         # upstream"; without rotation the turn (and delegations)
@@ -982,7 +986,9 @@ class Agent:
                         logger.warning("%s/%s is rate-limited; retrying once in %ss",
                                        self._provider_name, model, RATE_LIMIT_RETRY_SECONDS)
                         await asyncio.sleep(RATE_LIMIT_RETRY_SECONDS)
-                        return await self.provider.chat(messages, model, stream=stream)
+                        left = model_health.CALL_BUDGET_SECONDS - (time.monotonic() - started)
+                        return await asyncio.wait_for(self.provider.chat(messages, model, stream=stream),
+                                                      timeout=max(1.0, left))
 
             # Fast path: no breaker, no fallback — direct call.
             if self._provider_breaker is None and not self._offline_mode:
@@ -1056,24 +1062,41 @@ class Agent:
         The key part is only present for a named key (v0.7.5), so setups with
         default keys keep plain (provider, model) pairs.
         """
+        from . import model_health
         from .provider_keys import normalize_key_id
 
         try:
             rot = self.config.agents.rotation
+            d = self.config.agents.defaults
         except AttributeError:
             return []
-        if not (rot.enabled and rot.entries) or not self._follows_default_model():
-            return []
         pairs = [self._own_candidate()]
-        for e in rot.entries:
+        rotation_on = bool(rot.enabled and rot.entries)
+        if self._follows_default_model():
+            if not rotation_on:
+                return []
+        else:
+            # 2026-11-01: an agent with its own model falls back to the default
+            # model (and the rotation list) instead of failing — 9 agents had a
+            # model their provider did not know and no fallback at all.
+            kid = normalize_key_id(getattr(d, "key", "") or "")
+            pair = (d.provider, d.model) + ((kid,) if kid else ())
+            if d.provider and d.model and pair not in pairs:
+                pairs.append(pair)
+        for e in (rot.entries if rotation_on else []):
             kid = normalize_key_id(getattr(e, "key", "") or "")
             pair = (e.provider, e.model) + ((kid,) if kid else ())
             if e.provider and e.model and pair not in pairs:
                 pairs.append(pair)
-        if rot.strategy == "round_robin" and len(pairs) > 1:
+        if len(pairs) < 2:
+            return []
+        if rot.strategy == "round_robin":
             start = next(_ROUND_ROBIN) % len(pairs)
             pairs = pairs[start:] + pairs[:start]
-        return pairs
+            return model_health.order(pairs)
+        # 2026-11-01: fully automatic order by measured health and latency; the
+        # agent's own model stays first while it works.
+        return model_health.order(pairs, keep_first=True)
 
     async def _rotating_chat(self, candidates: List[tuple], messages, stream: bool):
         """Try each (provider, model) until one answers; remember which one did.
@@ -1083,7 +1106,8 @@ class Agent:
         for a while (see llm_errors.cooldown_for), so every request does not
         first wait for the same failure again.
         """
-        from .llm_errors import cooldown_for, cooldown_key, describe_llm_error, is_key_error
+        from . import model_health
+        from .llm_errors import cooldown_for, cooldown_key, describe_llm_error, is_context_overflow, is_key_error
         from .provider_keys import key_chain
 
         # v0.7.5: each candidate may carry a key id; with the provider's
@@ -1106,22 +1130,52 @@ class Agent:
             skipped = {(p, m) for p, m, _ in plan} - {(p, m) for p, m, _ in usable}
             logger.info("Rotation: skipping %s (failed recently)", ", ".join(f"{p}/{m}" for p, m in skipped))
         errors: List[str] = []
-        for prov_name, model, keys in (usable or plan):
+        # 2026-11-01: no call waits longer than CALL_BUDGET_SECONDS in all, one
+        # model at most ATTEMPT_SECONDS to start answering; every attempt is
+        # recorded (model_health) to order the next calls.
+        deadline = time.monotonic() + model_health.CALL_BUDGET_SECONDS
+        own = tuple(self._own_candidate()[:2])
+        own_gone: Optional[Exception] = None
+        queue = list(usable or plan)
+        while queue:
+            prov_name, model, keys = queue.pop(0)
             for i, key in enumerate(keys):
+                left = deadline - time.monotonic()
+                if left < min(1.0, model_health.ATTEMPT_SECONDS / 4):  # too little time to start another
+                    errors.append(f"stopped after {model_health.CALL_BUDGET_SECONDS:.0f} s without an answer")
+                    queue = []
+                    break
+                t0 = time.monotonic()
                 try:
-                    return await self._chat_once(prov_name, model, key, messages, stream, errors)
-                except Exception as e:  # rate limit, server down, missing model, bad key…
+                    result = await asyncio.wait_for(
+                        self._chat_once(prov_name, model, key, messages, stream, errors),
+                        timeout=min(model_health.ATTEMPT_SECONDS, left))
+                except Exception as e:  # rate limit, server down, missing model, bad key, too slow…
+                    if isinstance(e, asyncio.TimeoutError):
+                        e = TimeoutError(f"no answer within {min(model_health.ATTEMPT_SECONDS, left):.0f} s "
+                                         "(timed out)")
+                    model_health.record(prov_name, model, False, time.monotonic() - t0, str(e))
                     wait = cooldown_for(e)
                     if wait:
                         _MODEL_COOLDOWN[cooldown_key(prov_name, model, key)] = time.time() + wait
                     where = f"{prov_name}/{model}" + (f" (key {key})" if key else "")
                     errors.append(describe_llm_error(e, where))
+                    if (prov_name, model) == own and model_health.is_permanent(e):
+                        own_gone = e
+                    if is_context_overflow(e):  # try models with a bigger known context first
+                        queue.sort(key=lambda c: -(model_health.known_context(c[0], c[1]) or 0))
                     if i + 1 < len(keys) and is_key_error(e):
                         logger.info("Rotation: %s failed (%s); trying %s with another key",
                                     where, e, model)
                         continue
                     logger.info("Rotation: %s failed (%s); trying the next model", where, e)
                     break
+                model_health.record(prov_name, model, True, time.monotonic() - t0)
+                if own_gone is not None and (prov_name, model) != own:
+                    # the agent's model will not come back: use the one that answered,
+                    # in every agent that has it (in the background, never blocking)
+                    model_health.start_replacement(own[0], own[1], prov_name, model, str(own_gone)[:300])
+                return result
         raise ProviderUnavailableError("All models in the rotation failed — " + " | ".join(errors))
 
     async def _chat_once(self, prov_name: str, model: str, key: Optional[str], messages,

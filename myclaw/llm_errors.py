@@ -88,6 +88,14 @@ def is_provider_error(err: BaseException | str) -> bool:
     return _match(err)[0] is not None
 
 
+_CONTEXT_RE = re.compile(r"context length|maximum context|too many tokens|context_length_exceeded|context window")
+
+
+def is_context_overflow(err: BaseException | str) -> bool:
+    """True when the conversation is too long for the model (2026-11-01)."""
+    return bool(_CONTEXT_RE.search(str(err).lower()))
+
+
 def is_key_error(err: BaseException | str) -> bool:
     """True when trying the same model with another key of the provider may help."""
     return bool(_KEY_ERROR_RE.search(str(err).lower()))
