@@ -158,15 +158,16 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">4. Provider selection, rotation and fallback</h2>
-  <p class="diagram-desc">How a request reaches a model, and what happens when that fails. Changed in 0.5.0: the agent never silently switches to another provider *unless you asked for it* — 0.7.1 adds an explicit rotation list (Models page).</p>
+  <p class="diagram-desc">How a request reaches a model, and what happens when that fails. Changed in 0.5.0: the agent never silently switches to another provider *unless you asked for it* — 0.7.1 adds an explicit rotation list (Models page). Since 2026-11-01 every </p>
   <div class="mermaid">flowchart TD
-    start([&quot;Agent needs a reply&quot;]) --&gt; rot{&quot;Rotation on and this agent&lt;br/&gt;uses the default model?&quot;}
-    rot -- yes --&gt; order[&quot;Candidates = default + rotation list&lt;br/&gt;(round-robin: start at the next one)&quot;]
-    order --&gt; tryc[&quot;provider.chat() with candidate&quot;]
+    start([&quot;Agent needs a reply&quot;]) --&gt; rot{&quot;Fallbacks? (own model,&lt;br/&gt;or rotation on)&quot;}
+    rot -- yes --&gt; order[&quot;Candidates = own model + default + rotation list&lt;br/&gt;ordered by measured health and latency&lt;br/&gt;(own model first while it works)&quot;]
+    order --&gt; tryc[&quot;provider.chat() with candidate&lt;br/&gt;90 s to start answering · 170 s per call&quot;]
     tryc -- ok --&gt; replied([&quot;Stream reply&lt;br/&gt;(model shown on the message)&quot;])
-    tryc -- &quot;error: rate limit, down,&lt;br/&gt;missing model, in-stream error&quot; --&gt; nextc{&quot;more candidates?&quot;}
+    tryc -- &quot;error: rate limit, down, too slow,&lt;br/&gt;missing model, in-stream error&quot; --&gt; nextc{&quot;more candidates?&lt;br/&gt;(context too long:&lt;br/&gt;bigger context first)&quot;}
     nextc -- yes --&gt; tryc
     nextc -- no --&gt; fail([&quot;Error shown in chat&quot;])
+    replied -. &quot;own model gone for good&lt;br/&gt;(404 · 403 · refused for this app)&quot; .-&gt; replace[&quot;Replace it in every agent&lt;br/&gt;by the model that answered&lt;br/&gt;(background · model_changes.jsonl)&quot;]
     rot -- no --&gt; pick[&quot;Provider = agent&#x27;s own, else agents.defaults.provider&lt;br/&gt;(built-in or one of your providers)&quot;]
     pick --&gt; init{&quot;Provider can start?&lt;br/&gt;(SDK installed, API key set)&quot;}
     init -- no --&gt; err[&quot;ProviderUnavailableError&lt;br/&gt;clear message shown in chat&quot;]

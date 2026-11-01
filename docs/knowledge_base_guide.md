@@ -275,10 +275,13 @@ taken gets `permalink: <folder>-…`.
   checked, and the connection goes to exactly the checked address. Behind an
   HTTP(S) proxy the proxy resolves the name itself, so what it connects to
   cannot be checked from here.
-* PDF, Word and Excel need an optional package:
-  `pip install 'zensynora[ingest]'` (or, in ZenSynora's virtual environment,
-  `python -m pip install pypdf python-docx openpyxl`). Without it you get a
-  message saying exactly that; everything else works.
+* PDF, Word and Excel are read with `pypdf`, `python-docx` and `openpyxl`,
+  installed with ZenSynora since 2026-10-31 (before, they were the optional
+  `[ingest]` extra). On an older install: `python -m pip install pypdf
+  python-docx openpyxl` in ZenSynora's virtual environment, or update.
+* Files sent to the Telegram bot are saved in the workspace under
+  `inbox/telegram/<date>/` — `assimilate('inbox/telegram/…')` imports one; with
+  *Add files sent on Telegram to the knowledge base* on, it happens by itself.
 * Every run is logged as one line in `~/.myclaw/logs/knowledge_ingest.jsonl`.
 
 | Where | How |

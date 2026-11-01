@@ -7,10 +7,10 @@
 
 | Guide | What it covers |
 |---|---|
-| [Web UI guide](webui_guide.md) | Chat channels with several agents, agent-to-agent activity, Models (switch, rotate, your own providers), Jobs, Backups, the Telegram bot in Settings → Channels |
+| [Web UI guide](webui_guide.md) | Chat channels with several agents, agent-to-agent activity, Models (switch, rotate, your own providers, model health and automatic fallback), Tools and Skills (create, edit, export/import), Jobs, Backups, Doctor (errors, failures, failed jobs, restarts), the Telegram bot in Settings → Channels |
 | [Rules](rules_guide.md) | Rules every agent must follow; agents propose changes, you approve or reject them |
 | [Knowledge base](knowledge_base_guide.md) | Note format (tags, aliases, metadata, facts, links), search syntax, what agents see, CLI, `.trash`, `.bmignore` |
-| [Telegram bot](telegram_guide.md) | Set up the Telegram bot, allow users, commands, `@agent` messages, reminders, knowledge, troubleshooting |
+| [Telegram bot](telegram_guide.md) | Set up the Telegram bot, allow users, commands, `@agent` messages, files and photos, reminders, knowledge, troubleshooting |
 | [Updating](UPDATING.md) | `zensynora update`, rollback, data and program-folder backups, how updates stay safe |
 | [Medic & Doctor](medic_agent_guide.md) | `zensynora doctor`, the Doctor page, medic tools, integrity and recovery, self-update proposals and learning |
 | [Choosing an LLM](llm_recommendations.md) | Which local model for which hardware; llama.cpp / Ollama / LM Studio setup |
@@ -31,6 +31,7 @@
 | [Architecture — visual guide](architecture_diagram.md) | Diagrams of every major flow: chat, channels, providers and rotation, tools, settings, data, updates, doctor, jobs, self-update |
 | [Architecture — reference](ARCHITECTURE.md) | Module map, request lifecycle, optional dependencies, test inventory |
 | [Medic change management](MEDIC_CHANGE_MGMT.md) | Change plans, approvals, log analysis (Python API) |
+| [Incidents and lessons](incidents_and_lessons.md) | Real problems on a running install: cause, fix, how it is caught now, and the rules that follow |
 
 ## Contributing
 

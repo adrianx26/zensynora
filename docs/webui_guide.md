@@ -380,6 +380,7 @@ after changing WhatsApp settings.
 | **Allowed Telegram users** | Your numeric user id — send `/whoami` to the bot to see it — or `@username`. Nobody else can use the bot. |
 | **Run the bot inside the Web UI** | On (default). Turn off if you run the bot with `zensynora gateway` instead. |
 | **Telegram uses the same knowledge base as the Web UI** | On (default): notes are shared; each Telegram user keeps their own conversation memory |
+| **Add files sent on Telegram to the knowledge base** | Off (default). Files you send are always saved in the agent workspace (`inbox/telegram/…`) and shown to the agent; on: documents and photos also go into the knowledge base right away |
 | **Test bot** | Checks the token with Telegram — the token you just typed, or else the saved one. Success: *Token works — bot @name (Name)*. |
 | **Restart bot** | Starts the bot again. Not available when the bot is turned off, runs in `zensynora gateway`, or has no saved token. |
 | **Send test message** | The running bot writes a short message to every numeric id in *Allowed Telegram users* — proves the whole path works. If it says the bot cannot write first, open the bot in Telegram and press **Start**. |

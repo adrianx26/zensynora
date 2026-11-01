@@ -36,5 +36,9 @@ rules when changing ZenSynora:
 - Run heuristics (conflicts, duplicates, persona) on a realistic corpus and count false positives before shipping.
 - Text derived from notes/imports/web pages that reaches a prompt is quoted and labelled as information, never instructions.
 - Security checks must hold for the next step (connect-time address, symlink target) and apply on every entry path.
-- Features that change agent context or run in the background are opt-in; optional libraries are extras; no thread while off.
+- Features that change agent context or run in the background are opt-in; heavy optional libraries are extras; no thread while off. A library a core feature needs is a core dependency (platform markers where wheels are missing).
+- Per-run state on a shared object uses a context variable; singletons holding asyncio objects are per event loop.
+- Every model call has a fallback and a time limit (nothing waits > 180 s); only permanent failures change settings, logged with the old value.
+- Validate settings that only work together (provider + model) when saved and in the Doctor.
+- What agents create (tools, skills, notes) the user can see, edit, remove to a trash and export/import.
 

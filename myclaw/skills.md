@@ -40,7 +40,8 @@
 - **Input Contract**: `path` — relative path string within workspace
 - **Output Contract**: File contents as string, or `"Error: ..."` on failure
 - **Edge Cases Handled**: path traversal (`../`), non-existent files, permission errors. Since 2026-10-23: a folder returns a listing of its entries; a missing file returns what is in that folder; a path outside the workspace explains that ZenSynora's settings and logs are not readable by agents (use `check_system_health`, `get_health_report`, `get_recent_problems`); binary files are refused; files over 200 KB are cut with a note. These cases are logged as INFO/WARNING, not ERROR.
-- **Known Limitations**: Text only (UTF-8, invalid bytes replaced); no encoding detection
+- **Documents (2026-10-31)**: PDF, Word (.docx) and Excel (.xlsx) are returned as extracted text (`[PDF file '…', text extracted]`); a scanned PDF without text says so. Files sent on Telegram are in `inbox/telegram/<date>/`.
+- **Known Limitations**: Text files: UTF-8 (invalid bytes replaced), no encoding detection; images and audio cannot be read
 - **Baseline Score**: 0.880 → **Improved: 1.000** ✅ KEEP
 
 ### SK-1.2 — `write_file`
@@ -66,7 +67,8 @@
 - **Allowed Commands**: `ls`, `dir`, `cat`, `type`, `find`, `grep`, `findstr`, `head`, `tail`, `wc`, `sort`, `uniq`, `cut`, `git`, `echo`, `pwd`, `python`, `python3`, `pip`, `curl`, `wget`
 - **Blocked Commands**: `rm`, `del`, `powershell`, `cmd`, `net`, `reg`, `schtasks`, `shutdown`, and others
 - **Edge Cases Handled**: empty command, blocked command, not-in-allowlist command (checked for every command in a chain; the allowlist is read at each call), subprocess timeout, quoted operators (`grep "a|b"` is an argument, not a pipe)
-- **Refused**: `$`, backticks, `\`, `{ }`, `< >` (redirection), `( )`, background `&`, new lines; `find -delete`, `-exec`, `-execdir`, `-ok`, `-okdir`, `-fprint`, `-fprintf`, `-fls`
+- **Accepted after a command (2026-10-29)**: `2>/dev/null` (hide that command's errors) and `2>&1` (already the default)
+- **Refused**: `$`, backticks, `\`, `{ }`, any other `< >` redirection, `( )`, background `&`, new lines; `find -delete`, `-exec`, `-execdir`, `-ok`, `-okdir`, `-fprint`, `-fprintf`, `-fls`
 - **Known Limitations**: No redirection to files (use `write_file`); 10 calls per minute — combine steps in one chain.
 - **Baseline Score**: 0.880 → **Improved: 1.000** ✅ KEEP
 

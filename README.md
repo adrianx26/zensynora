@@ -86,7 +86,9 @@ for a kind of task, Skills page) when a task needs them. Tour of the pages:
 
 **Telegram:** paste a bot token in Settings → Channels and the Web UI runs your
 Telegram bot too — chat with your agents from your phone, with the same
-knowledge base. Step by step: [docs/telegram_guide.md](docs/telegram_guide.md).
+knowledge base. Send documents, photos or voice messages too: they are saved
+for the agent (and, if you turn it on, added to the knowledge base). Step by
+step: [docs/telegram_guide.md](docs/telegram_guide.md).
 
 > **llama.cpp tip:** start `llama-server` with `--jinja` so agents can use
 > tools; use provider `llamacpp` with the server's `/v1` URL.
@@ -183,7 +185,9 @@ Details: [docs/medic_agent_guide.md](docs/medic_agent_guide.md).
 ## Configuration
 
 The easiest way is the Web UI: **Models** (default model, rotation, your own
-providers) and **Settings** (built-in providers and API keys, agents with
+providers, model health — every agent falls back to other models when its own
+fails, and a model that is gone for good is replaced in all agents),
+**Tools** and **Skills** (create, edit, export and import your own) and **Settings** (built-in providers and API keys, agents with
 ✨ prompt generation, channels such as the Telegram bot, features, security). Everything is stored in
 `~/.myclaw/config.json`; API keys are never sent back to the browser, and
 settings are only reachable from the same computer unless you set an admin
@@ -239,6 +243,7 @@ flowchart LR
 | Jobs (schedule, evaluate, benchmark) | `myclaw/jobs/`, `myclaw/web/jobs_api.py` |
 | Backups | `myclaw/backup.py`, `myclaw/web/backup_api.py` |
 | LLM providers, fallback, circuit breaker | `myclaw/provider.py`, `myclaw/offline.py`, `myclaw/resilience/` |
+| Model health, fallback order, replacing a model in all agents | `myclaw/model_health.py`, `myclaw/llm_errors.py` |
 | Tools | `myclaw/tools/` |
 | Memory and knowledge | `myclaw/memory.py`, `myclaw/knowledge/` |
 | Swarms and agent profiles | `myclaw/swarm/`, `myclaw/agents/data/agents.yaml` |
