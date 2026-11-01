@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Agents switch models by themselves (2026-11-01)**
+- Every agent falls back when its model fails: its own model, then the
+  default model, then the rotation list. Before, only agents using the
+  default model had a fallback (live: 9 agents sent an OpenRouter model name
+  to Gemini, got 404 and simply failed).
+- Fully automatic order by measured health (failure rate and answer time);
+  an agent's own model stays first while it works.
+- No call waits longer than 170 s in all (90 s for one model to start
+  answering), also without fallbacks.
+- Context too long: models with a bigger known context are tried first.
+- A model that is gone for good (unknown, refused for this app/account) is
+  replaced in every agent, the default and the rotation list by the model
+  that answered, in the background; logged in `~/.myclaw/model_changes.jsonl`.
+  `POST /api/models/replace` / **Replace in all agents…** does it by hand.
+- Models page: **Model health** (calls, failures, latency, last error,
+  replacements). Doctor check `model_mismatch` and a warning on Settings →
+  Agents for provider/model pairs that cannot work.
+
 ### Fixed
 
 **Semantic cache no longer needs sentence-transformers (2026-10-31)**
