@@ -175,6 +175,13 @@ from myclaw.web import rules_api as _rules_api  # noqa: E402
 app.include_router(_rules_api.router)  # 2026-10-27: the user's rules and agents' proposals
 from myclaw.web import toolbox_api as _toolbox_api  # noqa: E402
 app.include_router(_toolbox_api.router)  # 2026-10-31: your tools; export / import tools and skills
+# 2026-11-01: the knowledge usage log / benchmarks / overview routes and the hourly
+# growth snapshots were added in 2026-10-27 but never registered in the app (the
+# Usage tab could not load); see tests/test_web_routes_registered.py.
+from myclaw.web import knowledge_usage_api as _knowledge_usage_api  # noqa: E402
+app.include_router(_knowledge_usage_api.router)
+app.router.add_event_handler("startup", _knowledge_usage_api.start_snapshots)
+app.router.add_event_handler("shutdown", _knowledge_usage_api.stop_snapshots)
 
 
 _mcp_manager = None
