@@ -375,6 +375,16 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 | **Detected by** | `tests/test_model_failover.py`; Doctor check *Agent models match their providers*. |
 | **Rule** | Every model call has a fallback and a time limit; validate provider/model pairs when they are saved. |
 
+### 8.8 Knowledge Usage tab never worked in the Web UI (2026-11-01, branch infographics)
+
+| | |
+|---|---|
+| **Symptom** | `/api/knowledge/usage*`, `/api/knowledge/benchmarks` returned 404; the Usage tab stayed empty and no daily growth snapshots were taken. |
+| **Root cause** | `knowledge_usage_api.router` (and its snapshot start/stop) was written and unit-tested but never included in `myclaw/web/api.py`. |
+| **Fix** | Router and startup/shutdown handlers registered. |
+| **Detected by** | `tests/test_web_routes_registered.py` — every route of every `myclaw/web/*` router must be served by the app. |
+| **Rule** | A new router must be registered and have a test that calls it through the app, not only its functions. |
+
 ---
 
 ## Rules for future changes
@@ -405,3 +415,4 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 24. **Model calls:** every model call has a fallback and a time limit (no workflow waits more than 180 s); only permanent failures (404, 403, refused) change settings, and every automatic change is logged with the old value.
 25. **Validate pairs at save time:** settings that only work together (provider + model) are checked when saved and by the Doctor.
 26. **Users can manage what agents create:** see, edit, remove (to a trash) and export/import.
+27. **Registered or it does not exist:** every web router is included in the app; `tests/test_web_routes_registered.py` checks it.

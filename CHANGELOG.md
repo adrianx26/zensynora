@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Infographics for the knowledge base and the app's health (2026-11-01)**
+- Knowledge → **Overview**: size and weekly change, growth by day / week /
+  month (by note date), knowledge-search and response-cache hit / miss,
+  largest / new / growing groups of linked notes, and what needs attention
+  or more data, with examples. `GET /api/knowledge/overview`.
+- Doctor → Report → **Health overview** for the chosen period: overall
+  status, warnings / errors / critical over time with restarts, job runs,
+  checks, biggest problems (click to filter the error list), model failure
+  share. `GET /api/doctor/timeline?hours=`. The period now sits at the top
+  and applies to the whole report.
+- Both: tooltips, **Show as table**, **Download as image** (PNG), light and
+  dark theme.
+
 **Agents switch models by themselves (2026-11-01)**
 - Every agent falls back when its model fails: its own model, then the
   default model, then the rotation list. Before, only agents using the
@@ -28,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Agents for provider/model pairs that cannot work.
 
 ### Fixed
+
+**Knowledge Usage tab and growth snapshots (2026-11-01)**
+- The knowledge usage API (Usage tab, benchmarks) was never registered in
+  the Web UI, so it returned 404 and no daily growth snapshots were taken.
+  A new test checks that every web router is served.
 
 **Semantic cache no longer needs sentence-transformers (2026-10-31)**
 - Every start logged the WARNING *"sentence-transformers not installed.
