@@ -1653,15 +1653,20 @@ the per-agent socket shown here still works for scripts.</p>
 <h2 id="4-provider-selection-rotation-and-fallback">4. Provider selection, rotation and fallback<a class="headerlink" href="#4-provider-selection-rotation-and-fallback" title="Permanent link">&para;</a></h2>
 <p>How a request reaches a model, and what happens when that fails. Changed in
 0.5.0: the agent never silently switches to another provider <em>unless you
-asked for it</em> — 0.7.1 adds an explicit rotation list (Models page).</p>
+asked for it</em> — 0.7.1 adds an explicit rotation list (Models page). Since
+2026-11-01 every agent falls back (its own model, the default model, the
+rotation list), ordered by measured health; no call waits longer than 170 s,
+and a model that is gone for good is replaced in every agent
+(<code>myclaw/model_health.py</code>).</p>
 <pre class="mermaid"><code>flowchart TD
-    start(["Agent needs a reply"]) --&gt; rot{"Rotation on and this agent&lt;br/&gt;uses the default model?"}
-    rot -- yes --&gt; order["Candidates = default + rotation list&lt;br/&gt;(round-robin: start at the next one)"]
-    order --&gt; tryc["provider.chat() with candidate"]
+    start(["Agent needs a reply"]) --&gt; rot{"Fallbacks? (own model,&lt;br/&gt;or rotation on)"}
+    rot -- yes --&gt; order["Candidates = own model + default + rotation list&lt;br/&gt;ordered by measured health and latency&lt;br/&gt;(own model first while it works)"]
+    order --&gt; tryc["provider.chat() with candidate&lt;br/&gt;90 s to start answering · 170 s per call"]
     tryc -- ok --&gt; replied(["Stream reply&lt;br/&gt;(model shown on the message)"])
-    tryc -- "error: rate limit, down,&lt;br/&gt;missing model, in-stream error" --&gt; nextc{"more candidates?"}
+    tryc -- "error: rate limit, down, too slow,&lt;br/&gt;missing model, in-stream error" --&gt; nextc{"more candidates?&lt;br/&gt;(context too long:&lt;br/&gt;bigger context first)"}
     nextc -- yes --&gt; tryc
     nextc -- no --&gt; fail(["Error shown in chat"])
+    replied -. "own model gone for good&lt;br/&gt;(404 · 403 · refused for this app)" .-&gt; replace["Replace it in every agent&lt;br/&gt;by the model that answered&lt;br/&gt;(background · model_changes.jsonl)"]
     rot -- no --&gt; pick["Provider = agent's own, else agents.defaults.provider&lt;br/&gt;(built-in or one of your providers)"]
     pick --&gt; init{"Provider can start?&lt;br/&gt;(SDK installed, API key set)"}
     init -- no --&gt; err["ProviderUnavailableError&lt;br/&gt;clear message shown in chat"]
@@ -1998,8 +2003,11 @@ stops its own.</p>
 <ul>
 <li><code>/start</code>, <code>/help</code> and <code>/whoami</code> answer everyone; all other commands need an
   allowed user.</li>
-<li>Photos, voice messages and documents: the caption is used as the message;
-  without a caption the bot says it can only read text for now.</li>
+<li>Documents, photos, voice, audio and video are downloaded into the agent
+  workspace (<code>inbox/telegram/&lt;date&gt;/&lt;name&gt;</code>); the agent's message says where
+  the file is, with the start of a document's text (quoted as file content).
+  <code>channels.telegram.files_to_knowledge</code> also adds documents and photos to the
+  knowledge base (2026-10-31).</li>
 <li>Agents created later (<code>create_agent</code>, Settings) are found without a restart.</li>
 <li>Answers from a named agent start with <code>@Name:</code>.</li>
 <li>Polling is the default; <code>zensynora gateway --webhook-url … --port 8443</code>

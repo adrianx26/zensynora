@@ -1470,6 +1470,11 @@ are installed again into the new release. When such a package belongs to one
 of ZenSynora's optional extras (<code>semantic</code>, <code>ingest</code>, <code>watch</code> in
 <code>pyproject.toml</code>), it is installed with the version range of the <strong>new</strong>
 release, so an update can never pull an incompatible version.</p>
+<p><strong>Readers and embeddings are part of ZenSynora (2026-10-31).</strong> <code>pypdf</code>,
+<code>python-docx</code>, <code>openpyxl</code> (PDF, Word and Excel — files sent on Telegram and
+knowledge imports) and, on 64-bit x86 and ARM, <code>fastembed</code> (semantic search
+and the semantic response cache) are now normal dependencies, so the next
+update installs them; nothing to do by hand.</p>
 <h2 id="layout">Layout<a class="headerlink" href="#layout" title="Permanent link">&para;</a></h2>
 <div class="highlight"><pre><span></span><code>~/.local/share/zensynora/
   source -&gt; releases/0.6.0-20261013T203000   # what everything runs from
