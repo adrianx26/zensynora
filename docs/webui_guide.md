@@ -324,7 +324,11 @@ The **Knowledge** page (sidebar) shows the knowledge base visually:
   **Days / Weeks / Months** (counted by each note's own date, so a re-index
   does not make everything look new); how often agents' knowledge searches
   found something (30 days) and how often the response cache answered
-  (since the start); the largest groups (click to open the main note); groups
+  (since the start); **embeddings** (notes ready for semantic search vs
+  waiting, and the model); **tags** (how many, share of notes tagged, tags
+  per note, tags used only once, the most used ones); **duplicates** (pairs
+  of notes that look the same, by kind of evidence, with examples and
+  **Review and merge…**, which opens *Find duplicates*); the largest groups (click to open the main note); groups
   that are new or grew this week; and **Needs attention or more data** —
   notes without links, facts or tags, links to notes that do not exist,
   open conflicts, two-note islands, notes no agent used in 30 days, notes

@@ -602,7 +602,8 @@ const KnowledgeView: React.FC = () => {
           {tab === 'overview' && (
             // 2026-11-01: the knowledge base on one screen (infographic)
             <KnowledgeOverview key={base} base={base}
-              onOpenNote={p => { setCreating(null); setSide(null); select(p); }} />
+              onOpenNote={p => { setCreating(null); setSide(null); select(p); }}
+              onReviewDuplicates={() => { setCreating(null); setSelected(null); setSide({ type: 'dups' }); }} />
           )}
           {tab === 'usage' && (
             // 2026-10-27: usage log (which agent used which notes, for what) and benchmarks
