@@ -1645,6 +1645,20 @@ complete. Nothing is merged automatically: pick a pair, check the preview
 <code>## Merged from &lt;title&gt;</code>), then <em>Merge</em>. The merged note's title, aliases and
 file name become aliases of the kept note, so <code>[[links]]</code> to it keep working;
 its file goes to <code>.trash/</code>.</p>
+<p><strong>🤖 AI resolve</strong> (2026-11-03) asks the default model about up to 10 open
+conflicts and duplicate pairs per click. It doesn't write text. For a
+conflict it picks <em>keep a</em>, <em>keep b</em> or <em>both are true</em>. For a pair it picks
+<em>merge into note 1</em>, <em>merge into note 2</em> or <em>different notes</em>. Each choice
+comes with a reason and how sure the model is. Nothing changes until you
+tick items (one by one, <em>Select all</em>, or <em>Select ≥ 80 % sure</em>) and click
+<em>Apply</em>. You can change any choice first. Applying uses the same actions as
+the buttons above, so previous versions go to <code>.trash/</code>. Pairs marked
+<em>different notes</em> are stored in <code>&lt;base&gt;/.not-duplicates.json</code> and never
+listed again. Note text is sent to the model as quoted information, never
+as instructions. One model call per item; the first model error stops the
+batch and says why.
+API: <code>POST /api/knowledge/ai-resolve/propose?base=</code> (<code>{limit ≤ 10, kinds}</code>),
+<code>POST /api/knowledge/ai-resolve/apply?base=</code> (<code>{proposals}</code>).</p>
 <p><strong>Hub notes.</strong> A note with more than 25 links (a "hub" such as <em>Homelab</em>)
 matches many questions but says little about each one. In the automatic
 <em>Relevant Knowledge</em> it is ranked lower (never left out on purpose), and
