@@ -20,16 +20,17 @@ import UpdatesView from './components/UpdatesView';
 import SkillsView from './components/SkillsView';
 import RulesView from './components/RulesView';
 import KnowledgeView from './components/KnowledgeView';
+import EvolveView from './components/EvolveView';
 import { restartServer } from './updates';
 import { api, getAdminKey, getApiBase, type AgentInfo, type Channel, type SystemHealth } from './api';
 
-type View = 'chat' | 'channels' | 'models' | 'jobs' | 'skills' | 'rules' | 'knowledge' | 'backups' | 'updates' | 'settings' | 'costs' | 'tools' | 'doctor';
-const VIEWS: View[] = ['chat', 'channels', 'models', 'jobs', 'skills', 'rules', 'knowledge', 'backups', 'updates', 'settings', 'costs', 'tools', 'doctor'];
+type View = 'chat' | 'channels' | 'models' | 'jobs' | 'skills' | 'rules' | 'knowledge' | 'evolve' | 'backups' | 'updates' | 'settings' | 'costs' | 'tools' | 'doctor';
+const VIEWS: View[] = ['chat', 'channels', 'models', 'jobs', 'skills', 'rules', 'knowledge', 'evolve', 'backups', 'updates', 'settings', 'costs', 'tools', 'doctor'];
 const VIEW_KEY = 'zensynora_view';
 const CHANNEL_KEY = 'zensynora_channel';
 const THEME_KEY = 'zensynora_theme';
 const VIEW_TITLES: Record<View, string> = {
-  chat: 'Chat', channels: 'Channels', models: 'Models', jobs: 'Jobs', skills: 'Skills', rules: 'Rules', knowledge: 'Knowledge base', backups: 'Backups', updates: 'Updates', settings: 'Settings',
+  chat: 'Chat', channels: 'Channels', models: 'Models', jobs: 'Jobs', skills: 'Skills', rules: 'Rules', knowledge: 'Knowledge base', evolve: 'Evolve', backups: 'Backups', updates: 'Updates', settings: 'Settings',
   costs: 'Costs & usage', tools: 'Tools', doctor: 'Doctor',
 };
 
@@ -246,6 +247,7 @@ function App() {
             <NavButton id="skills" icon="📚" label="Skills" view={view} go={go} />
             <NavButton id="rules" icon="📜" label="Rules" count={rulesPending} view={view} go={go} />
             <NavButton id="knowledge" icon="🕸" label="Knowledge" view={view} go={go} />
+            <NavButton id="evolve" icon="🧬" label="Evolve" view={view} go={go} />
             <NavButton id="backups" icon="💾" label="Backups" view={view} go={go} />
             <NavButton id="updates" icon="⬆️" label="Updates" count={health?.update_installed ? 1 : undefined} view={view} go={go} />
             <NavButton id="settings" icon="⚙️" label="Settings" view={view} go={go} />
@@ -328,6 +330,7 @@ function App() {
           {view === 'skills' && <SkillsView />}
           {view === 'rules' && <RulesView onChanged={loadHealth} />}
           {view === 'knowledge' && <KnowledgeView />}
+          {view === 'evolve' && <EvolveView onOpenModels={() => go('models')} onOpenJobs={() => go('jobs')} />}
           {view === 'backups' && <BackupsView onRestored={() => { loadAgents(); loadChannels(); loadHealth(); }} />}
           {view === 'settings' && <SettingsView onSaved={onSettingsSaved} />}
           {view === 'tools' && <ToolsView />}
