@@ -18,8 +18,12 @@ interface Overview {
   attention: Attention[];
   usage: { enabled?: boolean; searches?: number; hits?: number; misses?: number; hit_rate?: number | null; accesses_7d?: number; accesses_30d?: number; notes_used?: number };
   cache: { active: boolean; hits: number; misses: number; entries: number };
+  embeddings: { notes: number; embedded: number; waiting: number; model?: string } | null;   // null: semantic search off
+  tags_stats: { distinct: number; notes_with_tags: number; single_use: number; per_note: number; top: { name: string; count: number }[] };
   error?: string | null;
 }
+interface DupNote { permalink: string; title: string }
+interface Dups { pairs: { keep: DupNote; drop: DupNote; reasons: string[] }[]; partial: boolean }
 
 type Span = 'day' | 'week' | 'month';
 
@@ -45,19 +49,35 @@ function group(rows: Growth[], span: Span): Row[] {
   return [...out.values()];
 }
 
+/** "very similar text (99 %)" → "very similar text": pairs per kind of evidence. */
+function dupReasons(d: Dups): { name: string; count: number }[] {
+  const c = new Map<string, number>();
+  for (const p of d.pairs) for (const r of p.reasons) {
+    const k = r.replace(/\s*\(.*\)\s*$/, '');
+    c.set(k, (c.get(k) || 0) + 1);
+  }
+  return [...c.entries()].map(([name, count]) => ({ name, count })).sort((a, b) => b.count - a.count);
+}
+
 const SERIES = {
   notes: { key: 'notes', label: 'Notes added', color: 'var(--viz-s1)' },
   facts: { key: 'facts', label: 'Facts added', color: 'var(--viz-s2)' },
   links: { key: 'links', label: 'Links added', color: 'var(--viz-s3)' },
 };
 
-const KnowledgeOverview: React.FC<{ base: string; onOpenNote: (permalink: string) => void }> = ({ base, onOpenNote }) => {
+const KnowledgeOverview: React.FC<{
+  base: string; onOpenNote: (permalink: string) => void; onReviewDuplicates: () => void;
+}> = ({ base, onOpenNote, onReviewDuplicates }) => {
   const [data, setData] = useState<Overview | null>(null);
+  const [dups, setDups] = useState<Dups | null>(null);   // slower (up to ~20 s): loaded on its own
   const [error, setError] = useState<string | null>(null);
   const [span, setSpan] = useState<Span>('day');
   const panel = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
+    setDups(null);
+    api<Dups>(`/api/knowledge/duplicates?base=${encodeURIComponent(base)}&limit=500`)
+      .then(setDups).catch(() => setDups({ pairs: [], partial: true }));
     try {
       setData(await api<Overview>(`/api/knowledge/overview?base=${encodeURIComponent(base)}`));
       setError(null);
@@ -77,6 +97,8 @@ const KnowledgeOverview: React.FC<{ base: string; onOpenNote: (permalink: string
   const att = [...data.attention].sort((a, b) => b.count - a.count);
   const g = data.groups;
   const u = data.usage;
+  const emb = data.embeddings;
+  const ts = data.tags_stats;
 
   return (
     <div className="viz settings-card" ref={panel}>
@@ -139,6 +161,45 @@ const KnowledgeOverview: React.FC<{ base: string; onOpenNote: (permalink: string
           <SegBar empty={data.cache.active ? 'No lookups yet.' : 'The cache has not been used since the start.'}
             parts={[{ label: 'Hit', value: data.cache.hits, color: 'var(--viz-s1)' },
               { label: 'Miss', value: data.cache.misses, color: 'var(--viz-rest)' }]} />
+        </div>
+      </div>
+
+      <div className="viz-grid3">
+        <div className="viz-block">
+          <h4>Embeddings <span className="muted small">semantic search</span></h4>
+          {!emb ? <div className="muted small">Semantic search is off (Settings → Features → Semantic search).</div> : (
+            <>
+              <div className="muted small">{emb.model || 'model'} · {fmt(emb.embedded)} of {fmt(emb.notes)} notes</div>
+              <SegBar parts={[{ label: 'Embedded', value: emb.embedded || 0, color: 'var(--viz-s1)' },
+                { label: 'Waiting', value: emb.waiting || 0, color: 'var(--viz-warning)' }]} />
+            </>
+          )}
+        </div>
+        <div className="viz-block">
+          <h4>Tags <span className="muted small">notes per tag · top {Math.min(8, ts.top.length)}</span></h4>
+          <div className="muted small">
+            {fmt(ts.distinct)} tags · {pct(ts.notes_with_tags / Math.max(1, t.notes))} of notes tagged · {ts.per_note} per note · {fmt(ts.single_use)} used once
+          </div>
+          {ts.top.length === 0 ? <div className="muted small">No tags yet.</div> : (
+            <HBars rows={ts.top.slice(0, 8).map(x => ({ key: x.name, label: `#${x.name}`, value: x.count }))} valueText={v => `${fmt(v)}`} />
+          )}
+        </div>
+        <div className="viz-block">
+          <h4>Duplicates <span className="muted small">notes that look the same</span></h4>
+          {!dups ? <div className="muted small">Looking for duplicates…</div> : dups.pairs.length === 0 ? (
+            <div className="muted small">{dups.partial ? 'The check stopped early; open Find duplicates for the full list.' : '✓ No duplicate notes found.'}</div>
+          ) : (
+            <>
+              <div className="muted small">{fmt(dups.pairs.length)}{dups.partial ? '+' : ''} pairs · {pct(dups.pairs.length / Math.max(1, t.notes))} of notes</div>
+              <HBars rows={dupReasons(dups).map(r => ({ key: r.name, label: r.name, value: r.count, color: 'var(--viz-warning)' }))} />
+              <ul className="plain-list">
+                {dups.pairs.slice(0, 3).map((p, i) => (
+                  <li key={i}><a href="#" onClick={e => { e.preventDefault(); onOpenNote(p.drop.permalink); }}>{p.drop.title}</a> <span className="muted small">≈ {p.keep.title}</span></li>
+                ))}
+              </ul>
+              <button className="ghost-btn small-btn" data-no-export="1" onClick={onReviewDuplicates}>Review and merge…</button>
+            </>
+          )}
         </div>
       </div>
 
