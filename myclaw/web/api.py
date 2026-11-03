@@ -182,6 +182,8 @@ from myclaw.web import knowledge_usage_api as _knowledge_usage_api  # noqa: E402
 app.include_router(_knowledge_usage_api.router)
 app.router.add_event_handler("startup", _knowledge_usage_api.start_snapshots)
 app.router.add_event_handler("shutdown", _knowledge_usage_api.stop_snapshots)
+from myclaw.web import evolve_api as _evolve_api  # noqa: E402  (2026-11-03: Evolve page)
+app.include_router(_evolve_api.router)
 
 
 _mcp_manager = None
