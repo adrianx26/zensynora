@@ -68,6 +68,27 @@ def test_knowledge_overview(home):  # noqa: F811
     assert att["stale"]["count"] == 0 and 0 <= att["unlinked"]["share"] <= 1
     assert set(o["usage"]) >= {"searches", "hits", "misses"} and o["cache"]["active"] in (True, False)
 
+    # tags (2026-11-03): every note but "Bare" has the tag "t"; "Lonely" also has a one-off tag
+    t = o["tags_stats"]
+    assert t["notes_with_tags"] == 7 and t["top"][0] == {"name": "t", "count": 7}
+    assert t["single_use"] == 0 and t["distinct"] == 1
+
+
+def test_knowledge_overview_tag_stats(home):  # noqa: F811
+    from myclaw.knowledge import benchmarks as bm
+    from myclaw.knowledge.overview import overview
+    from myclaw.knowledge.sync import sync_knowledge
+
+    _note("A", tags=("python", "Web"))
+    _note("B", tags=("python",))
+    _note("C", tags=("once",))
+    sync_knowledge("default", force=True)
+    bm.clear_cache()
+    t = overview("default")["tags_stats"]
+    assert t["distinct"] == 3 and t["single_use"] == 2 and t["notes_with_tags"] == 3
+    assert t["top"][0] == {"name": "python", "count": 2}
+    assert t["per_note"] == round(4 / 3, 2)
+
 
 def test_knowledge_overview_empty_base(home):  # noqa: F811
     from myclaw.knowledge.overview import overview

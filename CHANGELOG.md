@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and applies to the whole report.
 - Both: tooltips, **Show as table**, **Download as image** (PNG), light and
   dark theme.
+- 2026-11-03: the Knowledge overview also shows embeddings, tags and
+  duplicates. Fixed: the Overview and Usage tabs were cut off below the
+  first screen (their area did not scroll); they now fit the window and
+  scroll.
 
 **Agents switch models by themselves (2026-11-01)**
 - Every agent falls back when its model fails: its own model, then the

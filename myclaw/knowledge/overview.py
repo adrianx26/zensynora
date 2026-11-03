@@ -49,7 +49,9 @@ def overview(base: str = "default") -> Dict[str, Any]:
         "change": {"7d": {"notes": 0, "facts": 0, "links": 0}, "30d": {"notes": 0, "facts": 0, "links": 0}},
         "growth": [], "groups": {"count": b.get("components", 0), "largest": b.get("largest_component", 0),
                                  "new": [], "growing": [], "sizes": []},
-        "attention": [], "usage": _usage(base), "cache": _cache(), "embeddings": b.get("embeddings"),
+        "attention": [], "tags_stats": {"distinct": 0, "notes_with_tags": 0, "single_use": 0,
+                                        "per_note": 0.0, "top": []},
+        "usage": _usage(base), "cache": _cache(), "embeddings": b.get("embeddings"),
         "computed_at": now, "error": b.get("error"),
     }
     path = db_path(base)
@@ -73,6 +75,7 @@ def _fill(con: sqlite3.Connection, out: Dict[str, Any], b: Dict[str, Any], now: 
     meta = "entity_metadata" if "entity_metadata" in cols else "NULL"
     title = "COALESCE(title, name)" if "title" in cols else "name"
     notes: Dict[int, Dict[str, Any]] = {}
+    tag_count: Counter = Counter()   # tag -> number of notes
     for i, permalink, t, created, updated, mt, md in con.execute(
             f"SELECT id, permalink, {title}, created_at, updated_at, {mtime}, {meta} FROM entities"):
         dates = [d for d in (_ts(created), _ts(mt)) if d]
@@ -84,8 +87,18 @@ def _fill(con: sqlite3.Connection, out: Dict[str, Any], b: Dict[str, Any], now: 
         when = own or (min(dates) if dates else now)
         changed = max([d for d in (_ts(updated), _ts(mt)) if d] or [when])
         tags = m.get("tags") if isinstance(m, dict) else None
+        if isinstance(tags, str):
+            tags = tags.replace(",", " ").split()
+        tag_list = [str(x).strip() for x in (tags or []) if str(x).strip()]
+        tag_count.update(set(tag_list))
         notes[i] = {"permalink": permalink, "title": t or permalink, "date": when, "changed": changed,
-                    "tags": bool(tags), "facts": 0, "links": 0}
+                    "tags": bool(tag_list), "n_tags": len(set(tag_list)), "facts": 0, "links": 0}
+    out["tags_stats"] = {
+        "distinct": len(tag_count), "notes_with_tags": sum(1 for n in notes.values() if n["tags"]),
+        "single_use": sum(1 for c in tag_count.values() if c == 1),
+        "per_note": round(sum(n["n_tags"] for n in notes.values()) / max(1, len(notes)), 2),
+        "top": [{"name": k, "count": c} for k, c in tag_count.most_common(15)],
+    }
     tables = _tables(con)
     facts_per: Counter = Counter()
     if "observations" in tables:
