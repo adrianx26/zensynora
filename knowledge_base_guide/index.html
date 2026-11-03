@@ -1659,6 +1659,61 @@ as instructions. One model call per item; the first model error stops the
 batch and says why.
 API: <code>POST /api/knowledge/ai-resolve/propose?base=</code> (<code>{limit ≤ 10, kinds}</code>),
 <code>POST /api/knowledge/ai-resolve/apply?base=</code> (<code>{proposals}</code>).</p>
+<p><strong>✔ Evaluate</strong> (2026-11-03) checks notes and marks each one <strong>valid</strong> or
+<strong>invalid</strong>. An invalid note gets one line per problem: what is wrong, why,
+and a proposed fix. Nothing changes until you tick fixes and click <em>Apply</em>.
+Applying writes through the normal note functions, so previous versions go
+to <code>.trash/</code>, and the note is checked again afterwards.</p>
+<table>
+<thead>
+<tr>
+<th>Checked</th>
+<th>Invalid when</th>
+<th>Proposed fix</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Note</td>
+<td>no text, no facts and no links</td>
+<td>move to the trash</td>
+</tr>
+<tr>
+<td>Links</td>
+<td>the note links to itself, or to a note that does not exist</td>
+<td>remove the link</td>
+</tr>
+<tr>
+<td>Tags</td>
+<td>the same tag twice in other letter case; spaces or punctuation</td>
+<td>remove / rename the tag</td>
+</tr>
+<tr>
+<td>Embeddings (semantic search on)</td>
+<td>missing or out of date</td>
+<td>prepare it again</td>
+</tr>
+<tr>
+<td>AI mode</td>
+<td>the default model finds a tag or link that does not fit the text, or text that is empty or meaningless</td>
+<td>remove the tag / link, trash, or only flag</td>
+</tr>
+</tbody>
+</table>
+<p><em>Check 1 / 10 / 100</em> runs in the background, with <em>Rules</em> (fast, no model
+calls) or <em>AI</em> (rules plus one model call per note). Notes never checked
+come first, then notes changed since their check (and in AI mode, notes so
+far checked only by rules). Unchanged notes are skipped. An AI issue only
+counts when it names a tag or link the note really has, and the note goes to
+the model as quoted information, never as instructions.</p>
+<p><strong>At idle time</strong> (<em>Settings → Features → Evaluate notes at idle time</em>,
+<code>knowledge.evaluate_idle</code>, off by default): when no agent has worked for
+<code>evaluate_idle_minutes</code> (default 15), the next <code>evaluate_batch</code> notes (default
+10) of the shared base are checked in <code>evaluate_mode</code> (<code>rules</code> or <code>ai</code>),
+at most every 5 minutes. This only marks notes and proposes fixes.
+Results are stored in <code>~/.myclaw/knowledge-eval.db</code>.
+API: <code>POST /api/knowledge/evaluate?base=</code> (<code>{count: 1|10|100, mode: rules|ai}</code>),
+<code>GET /api/knowledge/evaluate/status?base=</code>, <code>POST /api/knowledge/evaluate/apply?base=</code> (<code>{fixes}</code>).</p>
 <p><strong>Hub notes.</strong> A note with more than 25 links (a "hub" such as <em>Homelab</em>)
 matches many questions but says little about each one. In the automatic
 <em>Relevant Knowledge</em> it is ranked lower (never left out on purpose), and
