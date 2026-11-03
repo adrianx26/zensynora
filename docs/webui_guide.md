@@ -365,7 +365,9 @@ The **Knowledge** page (sidebar) shows the knowledge base visually:
   changed) — useful for notes saved before 2026-10-23, which were stored as
   plain text. **🤖 AI resolve** proposes how to settle conflicts and
   duplicates (with a reason and how sure the model is); you tick what to
-  apply ([details](knowledge_base_guide.md)). The picker at the top switches between the shared base and the
+  apply ([details](knowledge_base_guide.md)). **✔ Evaluate** checks notes,
+  links, tags and embeddings and marks them valid or invalid with a proposed
+  fix (1 / 10 / 100 at a time, rules or AI, or at idle time). The picker at the top switches between the shared base and the
   separate bases of Telegram/WhatsApp users.
 
 **MCP memory servers.** Any MCP server (a memo/notes server, a database, a
