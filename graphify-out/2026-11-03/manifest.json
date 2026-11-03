@@ -390,9 +390,9 @@
     "semantic_hash": ""
   },
   "myclaw/config.py": {
-    "mtime": 1793736710.4984539,
-    "seen": 1793737356.6989808,
-    "ast_hash": "81a5acf613a3269f24f78dc72b7c8b61",
+    "mtime": 1793737400.5504382,
+    "seen": 1793737809.898423,
+    "ast_hash": "f5a396dc6ef6b5ae35f802f23713a02c",
     "semantic_hash": ""
   },
   "myclaw/config_encryption.py": {
@@ -1002,9 +1002,9 @@
     "semantic_hash": ""
   },
   "myclaw/web/api.py": {
-    "mtime": 1793736767.1910121,
-    "seen": 1793737356.6992464,
-    "ast_hash": "420c34f24f1871e1f5b3252207a60722",
+    "mtime": 1793737400.5504382,
+    "seen": 1793737809.8988414,
+    "ast_hash": "f38a5eb0f8a3d4124dad32393e2118db",
     "semantic_hash": ""
   },
   "myclaw/web/auth.py": {
@@ -1308,9 +1308,9 @@
     "semantic_hash": ""
   },
   "webui/src/App.tsx": {
-    "mtime": 1793736864.2116225,
-    "seen": 1793737356.699492,
-    "ast_hash": "798018440c0dbcfe4c19aa4fd5994c59",
+    "mtime": 1793737400.5504382,
+    "seen": 1793737809.8991616,
+    "ast_hash": "69515bf063c55dab3efcf335fb4d4f78",
     "semantic_hash": ""
   },
   "webui/src/api.ts": {
@@ -1446,9 +1446,9 @@
     "semantic_hash": ""
   },
   "CHANGELOG.md": {
-    "mtime": 1793737161.8674374,
-    "seen": 1793737356.699595,
-    "ast_hash": "7840ed213e91829f1917b195e3b97efb",
+    "mtime": 1793737773.4224296,
+    "seen": 1793737809.8993194,
+    "ast_hash": "27e5f27cd0101db31104db40a6e2eff5",
     "semantic_hash": ""
   },
   "CONTRIBUTING.md": {
@@ -1554,9 +1554,9 @@
     "semantic_hash": ""
   },
   "docs/ARCHITECTURE.md": {
-    "mtime": 1793737161.8648658,
-    "seen": 1793737356.6996253,
-    "ast_hash": "a329cd37ca61f3ed2c08805a2004106f",
+    "mtime": 1793737400.4944382,
+    "seen": 1793737809.8993545,
+    "ast_hash": "a5822e80221cc3a3af60842ba515729e",
     "semantic_hash": ""
   },
   "docs/MEDIC_CHANGE_MGMT.md": {
@@ -2310,9 +2310,9 @@
     "semantic_hash": ""
   },
   "docs/webui_guide.md": {
-    "mtime": 1793737161.864124,
-    "seen": 1793737356.6997554,
-    "ast_hash": "77670db5c3f9b731b30047bbb2d88d32",
+    "mtime": 1793737773.4224296,
+    "seen": 1793737809.8995008,
+    "ast_hash": "f06a946432c2ce857b0064b39362c170",
     "semantic_hash": ""
   },
   "docs/images/webui-backups.png": {
@@ -2646,9 +2646,9 @@
     "semantic_hash": ""
   },
   "myclaw/web/knowledge_api.py": {
-    "mtime": 1793736660.466455,
-    "seen": 1793737356.6992593,
-    "ast_hash": "4c3ad6f46b4477fff5031ed7851ca76f",
+    "mtime": 1793737772.7104297,
+    "seen": 1793737809.898859,
+    "ast_hash": "00465d72d0be05538bcb78e0bc57860a",
     "semantic_hash": ""
   },
   "tests/test_agent_jobs.py": {
@@ -2760,9 +2760,9 @@
     "semantic_hash": ""
   },
   "webui/src/components/KnowledgeView.tsx": {
-    "mtime": 1793736660.466455,
-    "seen": 1793737356.6995347,
-    "ast_hash": "576ee2e006269c66fd3c2277cc12f8f6",
+    "mtime": 1793737773.4784296,
+    "seen": 1793737809.8992448,
+    "ast_hash": "759fb8d03960d4f5656cb533e5400aa3",
     "semantic_hash": ""
   },
   "webui/src/components/ModelPicker.tsx": {
@@ -2802,9 +2802,9 @@
     "semantic_hash": ""
   },
   "docs/knowledge_base_guide.md": {
-    "mtime": 1793736660.4144552,
-    "seen": 1793737356.6997416,
-    "ast_hash": "9c7e846e3c9dbdea8cc6f51be0f5ac5f",
+    "mtime": 1793737772.6264296,
+    "seen": 1793737809.8994842,
+    "ast_hash": "d9d5f979142c7f2215186a0a264619e0",
     "semantic_hash": ""
   },
   "docs/images/webui-agent-context.png": {
@@ -2898,9 +2898,9 @@
     "semantic_hash": ""
   },
   "myclaw/knowledge/quality.py": {
-    "mtime": 1793736660.466455,
-    "seen": 1793737356.6990895,
-    "ast_hash": "df28aa89e36aadd3bacc78fe3c177917",
+    "mtime": 1793737772.7104297,
+    "seen": 1793737809.8985786,
+    "ast_hash": "8c8efabd6b4e410426a6399f7b34823a",
     "semantic_hash": ""
   },
   "myclaw/knowledge/semantic.py": {
@@ -3204,15 +3204,15 @@
     "semantic_hash": ""
   },
   "myclaw/knowledge/overview.py": {
-    "mtime": 1793735456.4504826,
-    "seen": 1793735864.4962723,
-    "ast_hash": "e7fed2d26f97979f6661eb7ce9f1797e",
+    "mtime": 1793737773.4744296,
+    "seen": 1793737809.8985727,
+    "ast_hash": "a0ae77a3d7bd2297e483e6df3fd381d3",
     "semantic_hash": ""
   },
   "tests/test_infographics.py": {
-    "mtime": 1793735456.4504826,
-    "seen": 1793735864.496548,
-    "ast_hash": "516a23792ecf759b5f98b31146978dcc",
+    "mtime": 1793737773.4784296,
+    "seen": 1793737809.8989568,
+    "ast_hash": "04ff52034b2ea0a93014f1585c411cc5",
     "semantic_hash": ""
   },
   "tests/test_web_routes_registered.py": {
@@ -3228,9 +3228,9 @@
     "semantic_hash": ""
   },
   "webui/src/components/KnowledgeOverview.tsx": {
-    "mtime": 1793735456.4504826,
-    "seen": 1793735864.4968324,
-    "ast_hash": "f91c1779d43eb98af00659537152c527",
+    "mtime": 1793737773.4784296,
+    "seen": 1793737809.899228,
+    "ast_hash": "54c713d27625d9f31cab24e506c4bd9f",
     "semantic_hash": ""
   },
   "webui/src/components/viz.tsx": {
@@ -3245,28 +3245,22 @@
     "ast_hash": "194c439c447da68c181f9e32b3381033",
     "semantic_hash": ""
   },
-  "myclaw/evolve.py": {
-    "mtime": 1793737071.4769464,
-    "seen": 1793737356.6990204,
-    "ast_hash": "b4a9325e192e4e89369ab584f0eebd38",
+  "myclaw/knowledge/ai_resolve.py": {
+    "mtime": 1793737772.7104297,
+    "seen": 1793737809.898488,
+    "ast_hash": "3870cb039a98c68d81b29574b96867d3",
     "semantic_hash": ""
   },
-  "myclaw/web/evolve_api.py": {
-    "mtime": 1793736967.5259237,
-    "seen": 1793737356.6992552,
-    "ast_hash": "6f32e71b980efcee6ebbf67cfe89a3ef",
+  "tests/test_ai_resolve.py": {
+    "mtime": 1793737772.7104297,
+    "seen": 1793737809.8989305,
+    "ast_hash": "38b2d22ac1a417d142c73245a3e8d230",
     "semantic_hash": ""
   },
-  "tests/test_evolve.py": {
-    "mtime": 1793737071.4776971,
-    "seen": 1793737356.6993315,
-    "ast_hash": "19d2dadcb24a295873b9f5f7e0ccc6fc",
-    "semantic_hash": ""
-  },
-  "webui/src/components/EvolveView.tsx": {
-    "mtime": 1793737091.2762022,
-    "seen": 1793737356.6995165,
-    "ast_hash": "7b729e3926e6d6deecbded1d18025c89",
+  "webui/src/components/KnowledgeAIResolve.tsx": {
+    "mtime": 1793737772.7104297,
+    "seen": 1793737809.8992114,
+    "ast_hash": "3a470e0984a85d18d07c608615bec50c",
     "semantic_hash": ""
   }
 }

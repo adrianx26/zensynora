@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**✔ Evaluate notes, links, tags and embeddings (2026-11-03)**
+- Knowledge page: marks each note valid or invalid, with the reason and a
+  proposed fix per problem (rules: empty notes, self-links, links to missing
+  notes, duplicate or malformed tags, missing or old embeddings; AI mode adds
+  the default model's review). Fixes apply only when ticked (previous
+  versions in `.trash`).
+- Check 1 / 10 / 100 in the background, or automatically at idle time
+  (`knowledge.evaluate_idle`, off by default: no agent turn for
+  `evaluate_idle_minutes`). Unchanged notes are skipped.
+
 **🤖 AI resolve for conflicts and duplicate notes (2026-11-03)**
 - Knowledge page button: the default model proposes, for up to 10 items,
   which fact to keep or whether two notes should be merged (and which one

@@ -42,7 +42,7 @@ import shutil
 import time
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi import Path as PathParam, Query
@@ -579,6 +579,41 @@ async def ai_resolve_apply(req: AIResolveApply, base: str | None = None):
     from myclaw.knowledge.ai_resolve import apply
 
     return await asyncio.to_thread(apply, _base(base), req.proposals[:50])
+
+
+class EvaluateRequest(BaseModel):
+    count: Literal[1, 10, 100] = 10
+    mode: Literal["rules", "ai"] = "rules"
+
+
+class EvaluateFixes(BaseModel):
+    fixes: list[dict[str, Any]]
+
+
+@router.post("/api/knowledge/evaluate", dependencies=guard)
+async def evaluate(req: EvaluateRequest, base: str | None = None):
+    """Check the next 1 / 10 / 100 notes in the background (rules, or rules + the default model)."""
+    from myclaw.config import load_config
+    from myclaw.knowledge import evaluate as ev
+
+    started = ev.start(load_config(), _base(base), req.count, req.mode)
+    return {"started": started, "run": ev.run_state(_base(base))}
+
+
+@router.get("/api/knowledge/evaluate/status", dependencies=guard)
+async def evaluate_status(base: str | None = None):
+    from myclaw.knowledge import evaluate as ev
+
+    b = _base(base)
+    return {**await asyncio.to_thread(ev.results, b), "run": ev.run_state(b), "options": dict(ev._OPTIONS)}
+
+
+@router.post("/api/knowledge/evaluate/apply", dependencies=guard)
+async def evaluate_apply(req: EvaluateFixes, base: str | None = None):
+    """Apply chosen fixes (previous versions in .trash); the notes are checked again."""
+    from myclaw.knowledge import evaluate as ev
+
+    return await asyncio.to_thread(ev.apply_fixes, _base(base), req.fixes[:500])
 
 
 @router.get("/api/knowledge/categories", dependencies=guard)
