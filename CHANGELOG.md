@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**🤖 AI resolve for conflicts and duplicate notes (2026-11-03)**
+- Knowledge page button: the default model proposes, for up to 10 items,
+  which fact to keep or whether two notes should be merged (and which one
+  kept) or are different notes, with a reason and a confidence.
+- You approve: per item, *Select all* or *≥ 80 % sure*; any choice can be
+  changed. Applying uses the existing conflict / merge actions (previous
+  versions in `.trash`). "Different notes" is remembered
+  (`.not-duplicates.json`) and not listed again.
+
 **Infographics for the knowledge base and the app's health (2026-11-01)**
 - Knowledge → **Overview** (the page now opens on it): size and weekly change, growth by day / week /
   month (by note date), knowledge-search and response-cache hit / miss,

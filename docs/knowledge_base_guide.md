@@ -199,6 +199,21 @@ complete. Nothing is merged automatically: pick a pair, check the preview
 file name become aliases of the kept note, so `[[links]]` to it keep working;
 its file goes to `.trash/`.
 
+**🤖 AI resolve** (2026-11-03) asks the default model about up to 10 open
+conflicts and duplicate pairs per click. It doesn't write text. For a
+conflict it picks *keep a*, *keep b* or *both are true*. For a pair it picks
+*merge into note 1*, *merge into note 2* or *different notes*. Each choice
+comes with a reason and how sure the model is. Nothing changes until you
+tick items (one by one, *Select all*, or *Select ≥ 80 % sure*) and click
+*Apply*. You can change any choice first. Applying uses the same actions as
+the buttons above, so previous versions go to `.trash/`. Pairs marked
+*different notes* are stored in `<base>/.not-duplicates.json` and never
+listed again. Note text is sent to the model as quoted information, never
+as instructions. One model call per item; the first model error stops the
+batch and says why.
+API: `POST /api/knowledge/ai-resolve/propose?base=` (`{limit ≤ 10, kinds}`),
+`POST /api/knowledge/ai-resolve/apply?base=` (`{proposals}`).
+
 **Hub notes.** A note with more than 25 links (a "hub" such as *Homelab*)
 matches many questions but says little about each one. In the automatic
 *Relevant Knowledge* it is ranked lower (never left out on purpose), and
