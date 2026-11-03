@@ -1176,8 +1176,11 @@ def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 
         message = ("Stopped early (too many notes to compare in one go); the list is not "
                    "complete — merge some of these and look again.")
 
+    dismissed = dismissed_duplicates(user_id)
     out = []
     for (a, b), why in reasons.items():
+        if (a, b) in dismissed:          # "different notes" (AI resolve or the user)
+            continue
         na, nb = by_perm[a], by_perm[b]
 
         def rank(n: Any) -> tuple:
@@ -1194,6 +1197,33 @@ def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 
     if len(out) > limit and not message:
         message = f"Showing {limit} of {len(out)} pairs."
     return _result(out[:limit], partial, message)
+
+
+_NOT_DUPLICATES = ".not-duplicates.json"   # in the base folder; ignored by the index (not .md)
+
+
+def dismissed_duplicates(user_id: str = "default") -> set:
+    """Pairs ``(a, b)`` (a < b) marked as different notes; never listed again."""
+    from .storage import get_knowledge_dir
+
+    try:
+        rows = json.loads((get_knowledge_dir(user_id) / _NOT_DUPLICATES).read_text(encoding="utf-8"))
+        return {tuple(sorted(r)) for r in rows if isinstance(r, list) and len(r) == 2}
+    except (OSError, ValueError):
+        return set()
+
+
+def dismiss_duplicate(user_id: str, a: str, b: str) -> None:
+    """Mark two notes as different (not duplicates)."""
+    from .storage import get_knowledge_dir
+
+    if not a or not b or a == b:
+        raise ValueError("Give two different notes.")
+    pairs = dismissed_duplicates(user_id) | {tuple(sorted((a, b)))}
+    path = get_knowledge_dir(user_id) / _NOT_DUPLICATES
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(sorted(list(p) for p in pairs)), encoding="utf-8")
+    tmp.replace(path)
 
 
 def _fold_names(note: Any) -> set:

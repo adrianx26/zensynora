@@ -9,6 +9,7 @@ import KnowledgeDistilled from './KnowledgeDistilled';
 import KnowledgeHealth from './KnowledgeHealth';
 import KnowledgeUsage, { NoteUsageLine } from './KnowledgeUsage';
 import KnowledgeOverview from './KnowledgeOverview';
+import KnowledgeAIResolve from './KnowledgeAIResolve';
 import { CategoriesCard, CategoryMergePanel, ConflictsSection, DuplicatesPanel, type Conflict } from './KnowledgeQuality';
 import { SearchModePicker, SemanticCard } from './KnowledgeSemantic';
 import { useSemanticStatus, type SearchMode } from '../knowledgeSemantic';
@@ -97,7 +98,7 @@ const KnowledgeView: React.FC = () => {
   const [creating, setCreating] = useState<{ name: string; tags: string; content: string } | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   // 2026-10-24 (KB phase 2): quality tools in the side panel
-  const [side, setSide] = useState<{ type: 'dups' } | { type: 'catmerge'; from: string; to: string } | null>(null);
+  const [side, setSide] = useState<{ type: 'dups' } | { type: 'ai' } | { type: 'catmerge'; from: string; to: string } | null>(null);
   const [catFilter, setCatFilter] = useState<string[]>([]);
   // filters
   const [query, setQuery] = useState('');
@@ -440,6 +441,10 @@ const KnowledgeView: React.FC = () => {
             <button type="button" className="ghost-btn" onClick={() => { setCreating(null); setSelected(null); setSide({ type: 'dups' }); }}
               title="List notes that look like duplicates; preview and merge them one pair at a time">⧉ Find duplicates</button>
           )}
+          {data && data.stats.notes > 1 && (
+            <button type="button" className="ghost-btn" onClick={() => { setCreating(null); setSelected(null); setSide({ type: 'ai' }); }}
+              title="The default model proposes how to settle conflicts and duplicates; you approve before anything changes">🤖 AI resolve</button>
+          )}
           {data && data.stats.notes > 0 && (
             <button type="button" className="ghost-btn" disabled={enriching}
               title="Ask the default model to add tags, facts and links to notes that have none (10 per click; the text is not changed)"
@@ -642,6 +647,9 @@ const KnowledgeView: React.FC = () => {
             {!creating && side?.type === 'dups' && (
               <DuplicatesPanel base={base} onDone={qualityDone} onCancel={() => setSide(null)}
                 onOpen={id => { setSide(null); select(id); }} />
+            )}
+            {!creating && side?.type === 'ai' && (
+              <KnowledgeAIResolve base={base} onDone={qualityDone} onOpen={id => { setSide(null); select(id); }} />
             )}
             {!creating && side?.type === 'catmerge' && (
               <CategoryMergePanel base={base} from={side.from} to={side.to} onCancel={() => setSide(null)}
