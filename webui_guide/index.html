@@ -530,6 +530,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#evolve-let-the-ai-improve-zensynora" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evolve: let the AI improve ZenSynora
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#doctor-change-proposals" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1423,6 +1434,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#evolve-let-the-ai-improve-zensynora" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evolve: let the AI improve ZenSynora
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#doctor-change-proposals" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2164,6 +2186,51 @@ with <code>zensynora webui</code>. Details: <a href="../UPDATING/">UPDATING.md</
   lines). Keys and tokens are never included, so the file is safe to attach
   to a bug report.</li>
 </ul>
+<h2 id="evolve-let-the-ai-improve-zensynora">Evolve: let the AI improve ZenSynora<a class="headerlink" href="#evolve-let-the-ai-improve-zensynora" title="Permanent link">&para;</a></h2>
+<p>The <strong>Evolve</strong> page (🧬 in the sidebar, 2026-11-03) has everything that lets
+the AI improve ZenSynora. <strong>Nothing in the program changes until you approve
+it.</strong> An approved change is installed like an update: a full backup, the new
+version installed next to the current one, checks (and the test suite when
+<code>medic.self_update.run_tests</code> is on), the switch, and automatic rollback if
+anything fails. <em>Updates → Roll back</em> undoes it later.</p>
+<ol>
+<li><strong>Ask the AI for a change.</strong> Pick <em>what to do</em> (optimise: faster, simpler
+   or more reliable with the same behaviour; change; add; move or rename;
+   remove), <em>to what</em> (a module, a function, a script, code anywhere, or the
+   LLM setup), <em>where</em> (a file such as <code>myclaw/knowledge/overview.py</code>, a
+   function such as <code>myclaw/knowledge/overview.py:_fill</code>, or empty), the
+   agent that does the work, and the <strong>goal</strong>: what should be different
+   afterwards and how to tell. The request becomes a one-off job (<em>Evolve: …</em>
+   on the Jobs page; up to 30 steps and 15 minutes). The agent gets precise
+   instructions: read the code and its tests first, make the smallest change
+   that reaches the goal, add or update tests, file it with
+   <code>propose_code_change</code>, and finish with a report (what it found, the
+   proposal, the risks, how to check it). If the goal is unclear or unsafe it
+   explains why instead of proposing. For the <em>LLM setup</em> it does not change
+   code; it recommends which model each agent should use and why.</li>
+<li><strong>Change proposals.</strong> The same panel as on the Doctor page: the reason,
+   the exact diff, <em>Approve &amp; install</em> or <em>Reject</em>.</li>
+<li><strong>Models (LLMs).</strong> Health of every model (calls, failures, answer time,
+   last error). <em>Replace in all agents</em> opens the Models page;
+   <em>Ask the AI to review the model setup</em> starts an LLM-setup request.</li>
+<li><strong>Agents: levels and fusion.</strong> Every agent has a level from 1 to 9 (new
+   agents start at 1; for now it is a label), changed here
+   (<code>agents.named[].level</code>, <code>agents.defaults.level</code>). <strong>Fuse two agents into
+   one:</strong> pick two named agents and <em>Draft the merged agent</em>. The default
+   model writes a name, description and one system prompt that keeps the
+   duties and rules of both; if the model is unavailable, both prompts are
+   joined. You edit the draft and pick whose model (provider, key, context
+   length) to keep. Skills are combined and the level is the lower of the
+   two. <em>Replace A and B by …</em> saves it. Channels, direct messages and jobs
+   of both move to the new agent, and the two originals go to the <strong>agent
+   trash</strong> (<code>~/.myclaw/agents-trash.json</code>). <em>Restore</em> brings one back (its
+   channels and jobs stay with the fused agent). The default agent cannot be
+   fused.</li>
+</ol>
+<p>API: <code>GET /api/evolve/overview</code>, <code>PUT /api/evolve/agents/{name}/level</code>,
+<code>POST /api/evolve/request</code>, <code>POST /api/evolve/fuse/preview</code>,
+<code>POST /api/evolve/fuse</code>, <code>POST /api/evolve/trash/restore</code>; proposals use
+<code>/api/medic/proposals</code>.</p>
 <h2 id="doctor-change-proposals">Doctor: change proposals<a class="headerlink" href="#doctor-change-proposals" title="Permanent link">&para;</a></h2>
 <p><img alt="Change proposals" src="../images/webui-proposals.png" /></p>
 <p>Below the health checks, <strong>Change proposals</strong> lists code changes that agents
