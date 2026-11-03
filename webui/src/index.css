@@ -1250,3 +1250,4 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .ai-resolve .ai-item.picked { border-color: var(--accent-color); }
 .ai-resolve .ai-item-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.86rem; }
 .ai-resolve select.field-input { padding: 4px 6px; font-size: 0.82rem; }
+.ai-resolve .ai-fix { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; line-height: 1.45; }
