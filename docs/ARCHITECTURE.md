@@ -75,6 +75,7 @@ myclaw/
 ├── provider.py              # LLM providers (+ your own, providers.custom) + Message TypedDict
 ├── provider_keys.py         # Several API keys per provider: lookup, key fallback order, who uses which key [0.7.5]
 ├── resilience/              # Circuit breaker + fallback chain — wired Sprint 10
+├── evolve.py                # Evolve: agent levels, agent fusion (+ agent trash), AI change requests as jobs [Unreleased]
 ├── selfupdate.py            # Agents' code-change proposals → approval → safe updater [0.7.1]
 ├── structured_output/       # extract_json / validate / repair_json [Sprint 3]
 ├── swarm/                   # Multi-agent orchestrator + strategies
@@ -97,6 +98,7 @@ myclaw/
 │   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
 │   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
 │   ├── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
+│   ├── evolve_api.py        # Evolve page: overview, levels, change requests, fusion, restore [Unreleased]
 │   ├── doctor_api.py        # Doctor report, errors viewer, report download, health timeline [Unreleased]
 │   ├── knowledge_usage_api.py # Knowledge usage log, benchmarks, overview infographic [Unreleased]
 │   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]

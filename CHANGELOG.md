@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**🧬 Evolve page (2026-11-03)**
+- One page for everything that lets the AI improve ZenSynora:
+  - ask for a change (optimise / change / add / move / remove a module,
+    function, script or code, or review the LLM setup), which becomes a
+    one-off job with precise instructions; the agent files a change proposal;
+  - review and approve the proposals (installed by the safe updater with
+    backup, checks and automatic rollback);
+  - model health, and replacing a model;
+  - agent levels and fusion.
+- Agent **levels** 1–9 (`level` on every agent, default 1; a label for now).
+- **Fusion** of two agents: the AI drafts one prompt that you edit; skills
+  are combined, the model comes from the agent you pick, the level is the
+  lower one. Channels, DMs and jobs move along, and the originals go to an
+  agent trash and can be restored.
+
 **✔ Evaluate notes, links, tags and embeddings (2026-11-03)**
 - Knowledge page: marks each note valid or invalid, with the reason and a
   proposed fix per problem (rules: empty notes, self-links, links to missing

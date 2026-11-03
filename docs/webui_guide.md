@@ -562,6 +562,53 @@ The Doctor page has two tabs. **Checks** is the health check (the same as
   lines). Keys and tokens are never included, so the file is safe to attach
   to a bug report.
 
+## Evolve: let the AI improve ZenSynora
+
+The **Evolve** page (🧬 in the sidebar, 2026-11-03) has everything that lets
+the AI improve ZenSynora. **Nothing in the program changes until you approve
+it.** An approved change is installed like an update: a full backup, the new
+version installed next to the current one, checks (and the test suite when
+`medic.self_update.run_tests` is on), the switch, and automatic rollback if
+anything fails. *Updates → Roll back* undoes it later.
+
+1. **Ask the AI for a change.** Pick *what to do* (optimise: faster, simpler
+   or more reliable with the same behaviour; change; add; move or rename;
+   remove), *to what* (a module, a function, a script, code anywhere, or the
+   LLM setup), *where* (a file such as `myclaw/knowledge/overview.py`, a
+   function such as `myclaw/knowledge/overview.py:_fill`, or empty), the
+   agent that does the work, and the **goal**: what should be different
+   afterwards and how to tell. The request becomes a one-off job (*Evolve: …*
+   on the Jobs page; up to 30 steps and 15 minutes). The agent gets precise
+   instructions: read the code and its tests first, make the smallest change
+   that reaches the goal, add or update tests, file it with
+   `propose_code_change`, and finish with a report (what it found, the
+   proposal, the risks, how to check it). If the goal is unclear or unsafe it
+   explains why instead of proposing. For the *LLM setup* it does not change
+   code; it recommends which model each agent should use and why.
+2. **Change proposals.** The same panel as on the Doctor page: the reason,
+   the exact diff, *Approve & install* or *Reject*.
+3. **Models (LLMs).** Health of every model (calls, failures, answer time,
+   last error). *Replace in all agents* opens the Models page;
+   *Ask the AI to review the model setup* starts an LLM-setup request.
+4. **Agents: levels and fusion.** Every agent has a level from 1 to 9 (new
+   agents start at 1; for now it is a label), changed here
+   (`agents.named[].level`, `agents.defaults.level`). **Fuse two agents into
+   one:** pick two named agents and *Draft the merged agent*. The default
+   model writes a name, description and one system prompt that keeps the
+   duties and rules of both; if the model is unavailable, both prompts are
+   joined. You edit the draft and pick whose model (provider, key, context
+   length) to keep. Skills are combined and the level is the lower of the
+   two. *Replace A and B by …* saves it. Channels, direct messages and jobs
+   of both move to the new agent, and the two originals go to the **agent
+   trash** (`~/.myclaw/agents-trash.json`). *Restore* brings one back (its
+   channels and jobs stay with the fused agent). The default agent cannot be
+   fused.
+
+API: `GET /api/evolve/overview`, `PUT /api/evolve/agents/{name}/level`,
+`POST /api/evolve/request`, `POST /api/evolve/fuse/preview`,
+`POST /api/evolve/fuse`, `POST /api/evolve/trash/restore`; proposals use
+`/api/medic/proposals`.
+
 ## Doctor: change proposals
 
 ![Change proposals](images/webui-proposals.png)
