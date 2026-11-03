@@ -199,6 +199,51 @@ complete. Nothing is merged automatically: pick a pair, check the preview
 file name become aliases of the kept note, so `[[links]]` to it keep working;
 its file goes to `.trash/`.
 
+**🤖 AI resolve** (2026-11-03) asks the default model about up to 10 open
+conflicts and duplicate pairs per click. It doesn't write text. For a
+conflict it picks *keep a*, *keep b* or *both are true*. For a pair it picks
+*merge into note 1*, *merge into note 2* or *different notes*. Each choice
+comes with a reason and how sure the model is. Nothing changes until you
+tick items (one by one, *Select all*, or *Select ≥ 80 % sure*) and click
+*Apply*. You can change any choice first. Applying uses the same actions as
+the buttons above, so previous versions go to `.trash/`. Pairs marked
+*different notes* are stored in `<base>/.not-duplicates.json` and never
+listed again. Note text is sent to the model as quoted information, never
+as instructions. One model call per item; the first model error stops the
+batch and says why.
+API: `POST /api/knowledge/ai-resolve/propose?base=` (`{limit ≤ 10, kinds}`),
+`POST /api/knowledge/ai-resolve/apply?base=` (`{proposals}`).
+
+**✔ Evaluate** (2026-11-03) checks notes and marks each one **valid** or
+**invalid**. An invalid note gets one line per problem: what is wrong, why,
+and a proposed fix. Nothing changes until you tick fixes and click *Apply*.
+Applying writes through the normal note functions, so previous versions go
+to `.trash/`, and the note is checked again afterwards.
+
+| Checked | Invalid when | Proposed fix |
+|---|---|---|
+| Note | no text, no facts and no links | move to the trash |
+| Links | the note links to itself, or to a note that does not exist | remove the link |
+| Tags | the same tag twice in other letter case; spaces or punctuation | remove / rename the tag |
+| Embeddings (semantic search on) | missing or out of date | prepare it again |
+| AI mode | the default model finds a tag or link that does not fit the text, or text that is empty or meaningless | remove the tag / link, trash, or only flag |
+
+*Check 1 / 10 / 100* runs in the background, with *Rules* (fast, no model
+calls) or *AI* (rules plus one model call per note). Notes never checked
+come first, then notes changed since their check (and in AI mode, notes so
+far checked only by rules). Unchanged notes are skipped. An AI issue only
+counts when it names a tag or link the note really has, and the note goes to
+the model as quoted information, never as instructions.
+
+**At idle time** (*Settings → Features → Evaluate notes at idle time*,
+`knowledge.evaluate_idle`, off by default): when no agent has worked for
+`evaluate_idle_minutes` (default 15), the next `evaluate_batch` notes (default
+10) of the shared base are checked in `evaluate_mode` (`rules` or `ai`),
+at most every 5 minutes. This only marks notes and proposes fixes.
+Results are stored in `~/.myclaw/knowledge-eval.db`.
+API: `POST /api/knowledge/evaluate?base=` (`{count: 1|10|100, mode: rules|ai}`),
+`GET /api/knowledge/evaluate/status?base=`, `POST /api/knowledge/evaluate/apply?base=` (`{fixes}`).
+
 **Hub notes.** A note with more than 25 links (a "hub" such as *Homelab*)
 matches many questions but says little about each one. In the automatic
 *Relevant Knowledge* it is ranked lower (never left out on purpose), and

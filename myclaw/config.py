@@ -35,7 +35,7 @@ import time
 import threading
 from pathlib import Path
 from pydantic import BaseModel, Field, SecretStr, ValidationError, field_validator
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Literal
 
 from .exceptions import ConfigurationError
 from .config_encryption import load_encrypted_or_plain, save_encrypted
@@ -511,6 +511,12 @@ class KnowledgeConfig(BaseModel):
     usage_log: bool = True
     usage_retention_days: int = Field(90, ge=1, le=3650)
     usage_max_rows: int = Field(200_000, ge=1000, le=10_000_000)
+    # 2026-11-03: evaluate notes, links, tags and embeddings at idle time
+    # (no agent turn for evaluate_idle_minutes). Off by default; "ai" mode uses the default model.
+    evaluate_idle: bool = False
+    evaluate_idle_minutes: float = Field(15.0, ge=1.0, le=10080.0)
+    evaluate_mode: Literal["rules", "ai"] = "rules"
+    evaluate_batch: int = Field(10, ge=1, le=100)
 
 
 class SwarmConfig(BaseModel):
@@ -1000,6 +1006,19 @@ def _apply_knowledge_distill(config: AppConfig) -> None:
         logger.warning("distillation settings could not be applied (%s); it stays off", e)
 
 
+def _apply_knowledge_evaluate(config: AppConfig) -> None:
+    """Apply ``knowledge.evaluate_*`` (2026-11-03). Never makes loading the config fail."""
+    try:
+        kc = getattr(config, "knowledge", None)
+        from .knowledge.evaluate import set_options
+
+        set_options(idle=getattr(kc, "evaluate_idle", False) and getattr(kc, "enabled", True),
+                    idle_minutes=getattr(kc, "evaluate_idle_minutes", 15.0),
+                    mode=getattr(kc, "evaluate_mode", "rules"), batch=getattr(kc, "evaluate_batch", 10))
+    except Exception as e:
+        logger.warning("knowledge evaluation settings could not be applied (%s); it stays off", e)
+
+
 def _apply_knowledge_watch(config: AppConfig) -> None:
     """Apply ``knowledge.watch_files`` (2026-10-25, KB phase 6): starts / stops the
     file watcher in the Web UI process. Never makes loading the config fail."""
@@ -1063,6 +1082,7 @@ def load_config(force_reload: bool = False) -> AppConfig:
             _apply_knowledge_quality(_cached_config)
             _apply_knowledge_semantic(_cached_config)
             _apply_knowledge_distill(_cached_config)
+            _apply_knowledge_evaluate(_cached_config)
             _apply_knowledge_watch(_cached_config)
             _apply_knowledge_usage(_cached_config)
 

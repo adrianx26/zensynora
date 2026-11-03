@@ -2006,6 +2006,7 @@ class Agent:
         the full request fan-out into provider/tool/KB child spans. The
         span is a no-op when OpenTelemetry is not installed/enabled.
         """
+        from . import activity as _activity
         from .knowledge import usage as _kb_usage
         from .knowledge.scope import KB_USER, for_turn
         from .observability import span as _span
@@ -2013,10 +2014,12 @@ class Agent:
         kb_token = KB_USER.set(for_turn(user_id))  # v0.7.5: tools use this turn's knowledge base
         # 2026-10-27: the knowledge usage log records this agent and message as "for what"
         usage_token = _kb_usage.begin_turn(self.name, user_message, _depth)
+        _activity.turn_started()  # 2026-11-03: idle-time work waits while agents work
         try:
             with _span("agent.think", agent=self.name, user=user_id, depth=_depth):
                 return await self._think_impl(user_message, user_id, _depth)
         finally:
+            _activity.turn_ended()
             _kb_usage.end_turn(usage_token)
             KB_USER.reset(kb_token)
 
@@ -2133,15 +2136,18 @@ class Agent:
         self, user_message: str, user_id: str = "default", _depth: int = 0
     ) -> AsyncIterator[str]:
         """Streaming answer; the tools it calls use this turn's knowledge base (v0.7.5)."""
+        from . import activity as _activity
         from .knowledge import usage as _kb_usage
         from .knowledge.scope import KB_USER, for_turn
 
         kb_token = KB_USER.set(for_turn(user_id))
         usage_token = _kb_usage.begin_turn(self.name, user_message, _depth)  # 2026-10-27
+        _activity.turn_started()
         try:
             async for chunk in self._stream_think_impl(user_message, user_id, _depth):
                 yield chunk
         finally:
+            _activity.turn_ended()
             _kb_usage.end_turn(usage_token)
             try:
                 KB_USER.reset(kb_token)

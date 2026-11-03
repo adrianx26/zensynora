@@ -324,7 +324,11 @@ The **Knowledge** page (sidebar) shows the knowledge base visually:
   **Days / Weeks / Months** (counted by each note's own date, so a re-index
   does not make everything look new); how often agents' knowledge searches
   found something (30 days) and how often the response cache answered
-  (since the start); the largest groups (click to open the main note); groups
+  (since the start); **embeddings** (notes ready for semantic search vs
+  waiting, and the model); **tags** (how many, share of notes tagged, tags
+  per note, tags used only once, the most used ones); **duplicates** (pairs
+  of notes that look the same, by kind of evidence, with examples and
+  **Review and merge…**, which opens *Find duplicates*); the largest groups (click to open the main note); groups
   that are new or grew this week; and **Needs attention or more data** —
   notes without links, facts or tags, links to notes that do not exist,
   open conflicts, two-note islands, notes no agent used in 30 days, notes
@@ -363,7 +367,11 @@ The **Knowledge** page (sidebar) shows the knowledge base visually:
   hand). **✨ Add tags & links** asks the default model to add tags, facts
   and links to notes that have none (10 per click; the note text is not
   changed) — useful for notes saved before 2026-10-23, which were stored as
-  plain text. The picker at the top switches between the shared base and the
+  plain text. **🤖 AI resolve** proposes how to settle conflicts and
+  duplicates (with a reason and how sure the model is); you tick what to
+  apply ([details](knowledge_base_guide.md)). **✔ Evaluate** checks notes,
+  links, tags and embeddings and marks them valid or invalid with a proposed
+  fix (1 / 10 / 100 at a time, rules or AI, or at idle time). The picker at the top switches between the shared base and the
   separate bases of Telegram/WhatsApp users.
 
 **MCP memory servers.** Any MCP server (a memo/notes server, a database, a

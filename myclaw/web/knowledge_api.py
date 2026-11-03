@@ -42,7 +42,7 @@ import shutil
 import time
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException
 from fastapi import Path as PathParam, Query
@@ -552,6 +552,68 @@ async def resolve_conflict(req: ConflictResolution, base: str | None = None,
         raise HTTPException(status_code=400, detail=str(e))
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+class AIResolveRequest(BaseModel):
+    limit: int = Field(10, ge=1, le=10)
+    kinds: list[str] = ["conflicts", "duplicates"]
+
+
+class AIResolveApply(BaseModel):
+    proposals: list[dict[str, Any]]
+
+
+@router.post("/api/knowledge/ai-resolve/propose", dependencies=guard)
+async def ai_resolve_propose(req: AIResolveRequest, base: str | None = None):
+    """The model's choice for up to 10 open conflicts / duplicate pairs (changes nothing)."""
+    from myclaw.config import load_config
+    from myclaw.knowledge.ai_resolve import propose
+
+    kinds = tuple(k for k in req.kinds if k in ("conflicts", "duplicates")) or ("conflicts", "duplicates")
+    return await propose(load_config(), _base(base), req.limit, kinds)
+
+
+@router.post("/api/knowledge/ai-resolve/apply", dependencies=guard)
+async def ai_resolve_apply(req: AIResolveApply, base: str | None = None):
+    """Apply approved proposals (same actions as the manual buttons; previous versions in .trash)."""
+    from myclaw.knowledge.ai_resolve import apply
+
+    return await asyncio.to_thread(apply, _base(base), req.proposals[:50])
+
+
+class EvaluateRequest(BaseModel):
+    count: Literal[1, 10, 100] = 10
+    mode: Literal["rules", "ai"] = "rules"
+
+
+class EvaluateFixes(BaseModel):
+    fixes: list[dict[str, Any]]
+
+
+@router.post("/api/knowledge/evaluate", dependencies=guard)
+async def evaluate(req: EvaluateRequest, base: str | None = None):
+    """Check the next 1 / 10 / 100 notes in the background (rules, or rules + the default model)."""
+    from myclaw.config import load_config
+    from myclaw.knowledge import evaluate as ev
+
+    started = ev.start(load_config(), _base(base), req.count, req.mode)
+    return {"started": started, "run": ev.run_state(_base(base))}
+
+
+@router.get("/api/knowledge/evaluate/status", dependencies=guard)
+async def evaluate_status(base: str | None = None):
+    from myclaw.knowledge import evaluate as ev
+
+    b = _base(base)
+    return {**await asyncio.to_thread(ev.results, b), "run": ev.run_state(b), "options": dict(ev._OPTIONS)}
+
+
+@router.post("/api/knowledge/evaluate/apply", dependencies=guard)
+async def evaluate_apply(req: EvaluateFixes, base: str | None = None):
+    """Apply chosen fixes (previous versions in .trash); the notes are checked again."""
+    from myclaw.knowledge import evaluate as ev
+
+    return await asyncio.to_thread(ev.apply_fixes, _base(base), req.fixes[:500])
 
 
 @router.get("/api/knowledge/categories", dependencies=guard)

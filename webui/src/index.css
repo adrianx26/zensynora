@@ -1029,7 +1029,7 @@ textarea.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; fon
 .kb-stats b { color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .kb-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; gap: 14px; }
 .kb-main.with-panel { grid-template-columns: minmax(0, 1fr) 380px; }
-.kb-content { min-height: 0; display: flex; flex-direction: column; }
+.kb-content { min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }  /* long tabs (Overview, Usage) scroll */
 .kb-graph-card, .kb-table-card {
   flex: 1; min-height: 360px; display: flex; flex-direction: column; border: 1px solid var(--panel-border);
   border-radius: 12px; overflow: hidden; background: rgba(128, 128, 128, 0.03);
@@ -1213,6 +1213,7 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .viz-status-warning .viz-status-dot { background: var(--viz-warning); }
 .viz-status-critical .viz-status-dot { background: var(--viz-critical); }
 .viz-grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; margin-top: 12px; }
+.viz-grid3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 12px; }
 .viz-block h4 { font-size: 0.85rem; margin: 0 0 6px; color: var(--text-primary); }
 .viz-block .muted.small { margin-bottom: 6px; }
 .viz-chart { position: relative; width: 100%; }
@@ -1251,3 +1252,9 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .evolve .evolve-h { margin: 18px 0 6px; font-size: 1rem; }
 .evolve .evolve-agents select.field-input { width: 64px; padding: 3px 6px; }
 .evolve .evolve-preview { border-color: var(--accent-color); }
+/* 2026-11-03: AI resolve panel */
+.ai-resolve .ai-item { border: 1px solid var(--panel-border); border-radius: 10px; padding: 8px 10px; margin: 8px 0; display: flex; flex-direction: column; gap: 4px; }
+.ai-resolve .ai-item.picked { border-color: var(--accent-color); }
+.ai-resolve .ai-item-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.86rem; }
+.ai-resolve select.field-input { padding: 4px 6px; font-size: 0.82rem; }
+.ai-resolve .ai-fix { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; line-height: 1.45; }

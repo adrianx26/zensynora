@@ -24,6 +24,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lower one. Channels, DMs and jobs move along, and the originals go to an
   agent trash and can be restored.
 
+**✔ Evaluate notes, links, tags and embeddings (2026-11-03)**
+- Knowledge page: marks each note valid or invalid, with the reason and a
+  proposed fix per problem (rules: empty notes, self-links, links to missing
+  notes, duplicate or malformed tags, missing or old embeddings; AI mode adds
+  the default model's review). Fixes apply only when ticked (previous
+  versions in `.trash`).
+- Check 1 / 10 / 100 in the background, or automatically at idle time
+  (`knowledge.evaluate_idle`, off by default: no agent turn for
+  `evaluate_idle_minutes`). Unchanged notes are skipped.
+
+**🤖 AI resolve for conflicts and duplicate notes (2026-11-03)**
+- Knowledge page button: the default model proposes, for up to 10 items,
+  which fact to keep or whether two notes should be merged (and which one
+  kept) or are different notes, with a reason and a confidence.
+- You approve: per item, *Select all* or *≥ 80 % sure*; any choice can be
+  changed. Applying uses the existing conflict / merge actions (previous
+  versions in `.trash`). "Different notes" is remembered
+  (`.not-duplicates.json`) and not listed again.
+
 **Infographics for the knowledge base and the app's health (2026-11-01)**
 - Knowledge → **Overview** (the page now opens on it): size and weekly change, growth by day / week /
   month (by note date), knowledge-search and response-cache hit / miss,
@@ -36,6 +55,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and applies to the whole report.
 - Both: tooltips, **Show as table**, **Download as image** (PNG), light and
   dark theme.
+- 2026-11-03: the Knowledge overview also shows embeddings, tags and
+  duplicates. Fixed: the Overview and Usage tabs were cut off below the
+  first screen (their area did not scroll); they now fit the window and
+  scroll.
 
 **Agents switch models by themselves (2026-11-01)**
 - Every agent falls back when its model fails: its own model, then the
