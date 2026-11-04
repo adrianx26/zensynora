@@ -42,4 +42,5 @@ rules when changing ZenSynora:
 - Validate settings that only work together (provider + model) when saved and in the Doctor.
 - What agents create (tools, skills, notes) the user can see, edit, remove to a trash and export/import.
 - Every router in `myclaw/web/` is included in the app (`tests/test_web_routes_registered.py`); test new endpoints through the app.
+- The tool loop stops identical calls that keep giving the same result (`SAME_RESULT_LIMIT`); tools that create things (jobs, agents, notes) return the existing one instead of a duplicate.
 

@@ -385,6 +385,16 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 | **Detected by** | `tests/test_web_routes_registered.py` — every route of every `myclaw/web/*` router must be served by the app. |
 | **Rule** | A new router must be registered and have a test that calls it through the app, not only its functions. |
 
+
+### 8.9 Agent blocked by "50 jobs" while the Jobs page showed 6 (2026-11-04, branch no-repeat-tool-calls)
+
+| | |
+|---|---|
+| **Symptom** | An agent said it could not create a job: "agents already created 50 jobs". The Jobs page showed fewer than 10. |
+| **Root cause** | The agent repeated the identical `job_create` call in every tool step: 51 calls per message (501 after the step limit was raised to 500). The first bursts created 50 identical jobs. After that every call returned the limit error and the model retried until its steps ran out. The user had since deleted the duplicates, but the agent kept repeating its earlier answer. |
+| **Fix** | A call (same tool, same arguments) that already gave the same result twice in one message is not run again, and the model is told to use that result. Two rounds in a row made only of such repeats end the tool loop. Polling (same call, new result) still works. `job_create` returns the existing job instead of creating an identical one. |
+| **Detected by** | `tests/test_repeat_tool_calls.py` |
+| **Rule** | The tool loop must notice an agent repeating itself; tools that create things must not create the same thing twice. |
 ---
 
 ## Rules for future changes
@@ -416,3 +426,4 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 25. **Validate pairs at save time:** settings that only work together (provider + model) are checked when saved and by the Doctor.
 26. **Users can manage what agents create:** see, edit, remove (to a trash) and export/import.
 27. **Registered or it does not exist:** every web router is included in the app; `tests/test_web_routes_registered.py` checks it.
+28. **No endless repeats:** an identical tool call that keeps giving the same result is not run again; creating tools do not create duplicates.
