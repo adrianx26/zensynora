@@ -3,7 +3,7 @@
 // panel to read, edit, create or trash a note. Data: /api/knowledge/*.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api';
-import KnowledgeGraph, { type GEdge, type GNode, type GraphHandle, type LabelMode } from './KnowledgeGraph';
+import KnowledgeGraph, { type GEdge, type GNode, type GraphHandle, type GraphStyle, type LabelMode } from './KnowledgeGraph';
 import KnowledgeImport from './KnowledgeImport';
 import KnowledgeDistilled from './KnowledgeDistilled';
 import KnowledgeHealth from './KnowledgeHealth';
@@ -53,15 +53,16 @@ const VIEW_KEY = 'zensynora_kb_graph_view';   // 2026-10-31: colour, links, labe
 // Link-type colours: distinct from the note colours' blue so links stand out.
 const LINK_PALETTE = ['#e3b341', '#3fb950', '#f778ba', '#39c5cf', '#ff7b72', '#a371f7', '#7ee787', '#79c0ff', '#d29922', '#58a6ff'];
 
-interface GraphPrefs { colorBy: ColorBy; linkWeight: number; labels: LabelMode }
+interface GraphPrefs { colorBy: ColorBy; linkWeight: number; labels: LabelMode; style: GraphStyle }
 function loadPrefs(): GraphPrefs {
-  const def: GraphPrefs = { colorBy: 'group', linkWeight: 1, labels: 'auto' };
+  const def: GraphPrefs = { colorBy: 'group', linkWeight: 1, labels: 'auto', style: 'neurons' };
   try {
     const v = JSON.parse(stored(VIEW_KEY) || '{}');
     return {
       colorBy: ['group', 'tag', 'links', 'none'].includes(v.colorBy) ? v.colorBy : def.colorBy,
       linkWeight: v.linkWeight === 2 ? 2 : 1,
       labels: ['auto', 'all', 'none'].includes(v.labels) ? v.labels : def.labels,
+      style: v.style === 'classic' ? 'classic' : 'neurons',
     };
   } catch { return def; }
 }
@@ -116,6 +117,7 @@ const KnowledgeView: React.FC = () => {
   const [colorBy, setColorBy] = useState<ColorBy>(prefs.colorBy);
   const [linkWeight, setLinkWeight] = useState<number>(prefs.linkWeight);
   const [labelMode, setLabelMode] = useState<LabelMode>(prefs.labels);
+  const [graphStyle, setGraphStyle] = useState<GraphStyle>(prefs.style);
   const [bigGraph, setBigGraph] = useState(false); // 2026-10-31: graph over the whole window
   const orphansAuto = useRef<string | null>(null); // base for which "hide unlinked" was set automatically
   const [edgeLabels, setEdgeLabels] = useState(false);
@@ -235,7 +237,7 @@ const KnowledgeView: React.FC = () => {
   }, [bigGraph]);
 
   // 2026-10-31: remember the graph's look
-  useEffect(() => { store(VIEW_KEY, JSON.stringify({ colorBy, linkWeight, labels: labelMode })); }, [colorBy, linkWeight, labelMode]);
+  useEffect(() => { store(VIEW_KEY, JSON.stringify({ colorBy, linkWeight, labels: labelMode, style: graphStyle })); }, [colorBy, linkWeight, labelMode, graphStyle]);
 
   // Many unlinked notes hide the linked ones: start with them hidden (once per base).
   useEffect(() => {
@@ -491,6 +493,11 @@ const KnowledgeView: React.FC = () => {
           {tab === 'graph' && (
             <div className={`kb-graph-card ${bigGraph ? 'kb-graph-full' : ''}`}>
               <div className="kb-graph-controls">
+                <label title="Neurons: each group of linked notes fans out from its main note, groups apart. Classic: all notes pull and push each other.">Style
+                  <select className="field-input" value={graphStyle} onChange={e => setGraphStyle(e.target.value as GraphStyle)}>
+                    <option value="neurons">neurons</option><option value="classic">classic</option>
+                  </select>
+                </label>
                 <label>Colour
                   <select className="field-input" value={colorBy} onChange={e => setColorBy(e.target.value as ColorBy)}>
                     <option value="group">by group (linked notes)</option><option value="tag">by tag</option>
@@ -520,8 +527,10 @@ const KnowledgeView: React.FC = () => {
                 <button type="button" className="ghost-btn" onClick={() => setBigGraph(b => !b)} title={bigGraph ? 'Back to the page (Esc)' : 'Show the graph over the whole window'}>
                   {bigGraph ? '✕ Close full screen' : '⛶ Full screen'}
                 </button>
-                <button type="button" className="ghost-btn" onClick={() => setPaused(p => !p)}>{paused ? '▶ Resume' : '⏸ Freeze'}</button>
-                <button type="button" className="ghost-btn" onClick={() => { setPaused(false); graphRef.current?.reheat(); }} title="Unpin every note and lay the graph out again">⟳ Re-layout</button>
+                {graphStyle === 'classic' && <>
+                  <button type="button" className="ghost-btn" onClick={() => setPaused(p => !p)}>{paused ? '▶ Resume' : '⏸ Freeze'}</button>
+                  <button type="button" className="ghost-btn" onClick={() => { setPaused(false); graphRef.current?.reheat(); }} title="Unpin every note and lay the graph out again">⟳ Re-layout</button>
+                </>}
               </div>
               {data && view.nodes.length === 0 ? (
                 <div className="kb-empty">
@@ -532,7 +541,7 @@ const KnowledgeView: React.FC = () => {
               ) : (
                 <KnowledgeGraph ref={graphRef} nodes={view.nodes} edges={view.edges} selected={selected} onSelect={select}
                   colorOf={colorOf} showEdgeLabels={edgeLabels} paused={paused}
-                  edgeColorOf={relColor} linkWeight={linkWeight} labelMode={labelMode} />
+                  edgeColorOf={relColor} linkWeight={linkWeight} labelMode={labelMode} graphStyle={graphStyle} />
               )}
               <div className="kb-legend">
                 {hideOrphans && data && data.stats.orphans > 0 && (
@@ -568,7 +577,7 @@ const KnowledgeView: React.FC = () => {
                 ))}
                 <span className="kb-legend-item"><span className="kb-swatch missing" />missing note</span>
                 {data?.nodes.some(n => n.conflicts) && <span className="kb-legend-item"><span className="kb-swatch" style={{ background: '#d29922', width: 8, height: 8 }} />has conflicts</span>}
-                <span className="muted small kb-hint">Drag to pan · wheel to zoom · drag a note to pin it · double-click to unpin</span>
+                <span className="muted small kb-hint">{graphStyle === 'neurons' ? 'Drag to pan · wheel to zoom · click a note to open it · hover to see its links' : 'Drag to pan · wheel to zoom · drag a note to pin it · double-click to unpin'}</span>
               </div>
             </div>
           )}
