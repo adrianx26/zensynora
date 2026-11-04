@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import DoctorReport from './DoctorReport';
 import ProposalsPanel from './ProposalsPanel';
+import { AskAI } from './DoctorAI';
+import { explainKey, useExplanations } from '../doctorAi';
 
 // Same checks as `zensynora doctor` (myclaw/doctor/checks.py).
 interface CheckResult {
@@ -32,6 +34,7 @@ const DoctorView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [fixNote, setFixNote] = useState<string[] | null>(null);
   const [tab, setTab] = useState<'checks' | 'report'>('checks');
+  const [explained, reloadExplained] = useExplanations();
 
   const run = useCallback(async () => {
     setLoading(true);
@@ -111,6 +114,9 @@ const DoctorView: React.FC = () => {
                       <div><b>{r.title}</b> <span className="muted">— {r.detail}</span></div>
                       {r.hint && (r.status === 'warn' || r.status === 'fail') && (
                         <div className="doctor-hint">→ {r.hint}{r.fixable ? ' (can be fixed automatically)' : ''}</div>
+                      )}
+                      {(r.status === 'warn' || r.status === 'fail') && (
+                        <AskAI kind="check" id={r.id} known={explained[explainKey('check', r.id)]} onExplained={reloadExplained} />
                       )}
                     </div>
                   </div>

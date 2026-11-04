@@ -4,6 +4,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api, getAdminKey, getApiBase } from '../api';
 import DoctorOverview from './DoctorOverview';
+import { AISummaryCard, AskAI } from './DoctorAI';
+import { explainKey, useExplanations } from '../doctorAi';
 
 type Level = 'WARNING' | 'ERROR' | 'CRITICAL';
 
@@ -115,6 +117,7 @@ const Card: React.FC<{ label: string; value: React.ReactNode; tone?: 'ok' | 'war
 const DoctorReport: React.FC = () => {
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [hours, setHours] = useState(24);
+  const [explained, reloadExplained] = useExplanations();
   const [level, setLevel] = useState<'' | Level>('');
   const [kind, setKind] = useState<Kind>('');
   const [query, setQuery] = useState('');
@@ -236,6 +239,8 @@ const DoctorReport: React.FC = () => {
         ))}
       </div>
 
+      <AISummaryCard hours={hours} />
+
       <DoctorOverview hours={hours} summary={summary}
         onProblem={m => { setKind(''); setLevel(''); setQuery(m); setSearch(m); }} />
 
@@ -325,7 +330,7 @@ const DoctorReport: React.FC = () => {
                   <span className={`badge doctor-badge ${LEVEL_CLASS[g.level]}`}>{g.level.toLowerCase()}</span>
                   <span className="error-count">×{g.count}</span>
                   <span className="error-msg">{g.message}</span>
-                  <span className="muted small">{g.module} · last {g.last}{g.traceback ? ' · traceback' : ''}</span>
+                  <span className="muted small">{g.module} · last {g.last}{g.traceback ? ' · traceback' : ''}{explained[explainKey('error', g.key, g.level)] ? ' · 🤖 explained' : ''}</span>
                 </button>
                 {expanded && (
                   <div className="error-group-body">
@@ -333,6 +338,8 @@ const DoctorReport: React.FC = () => {
                       <span className="muted small">first {g.first} · last {g.last}</span>
                       <button className="ghost-btn small-btn" onClick={() => copy(g.samples.join('\n\n'))}>Copy</button>
                     </div>
+                    <AskAI kind="error" id={g.key} level={g.level} hours={hours}
+                      known={explained[explainKey('error', g.key, g.level)]} onExplained={reloadExplained} />
                     <pre className="report-view">{g.samples.join('\n\n')}</pre>
                   </div>
                 )}
