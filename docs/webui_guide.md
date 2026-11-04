@@ -335,8 +335,17 @@ The **Knowledge** page (sidebar) shows the knowledge base visually:
   not changed in 90 days — each with examples to click and what to do.
   **Show as table** lists the numbers; **⬇ Download as image** saves the
   whole panel as a PNG.
-* **Graph** — every note is a dot, every link (`- uses [[Other note]]`) an
-  arrow. Bigger dots have more links and facts. *Colour*: **by group** (notes
+* **Graph** — every note is a dot, every link (`- uses [[Other note]]`) a
+  line. *Style* (2026-11-04): **neurons** (the default) draws every group of
+  linked notes as its own radial burst. Its best-connected note sits in the
+  centre (named, bigger dot), the notes it links to fan out around it, theirs
+  further out, along thin curved branches with glowing dots. The groups sit
+  apart, biggest in the middle, and the notes without links form one grey
+  cluster. The picture is the same every time and nothing moves: drag to
+  pan, click a note to open it, hover to light up its links (links across
+  branches or groups are faint until then). **classic** is the force layout
+  where all notes push and pull each other (you can drag and pin notes).
+  Bigger dots have more links and facts. *Colour*: **by group** (notes
   connected by links share a colour; grey = no links), by tag, or by number
   of links. Links are coloured by type (the legend under the graph lists the
   types — click one to show only those links), curved when two notes link

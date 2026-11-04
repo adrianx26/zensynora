@@ -27,6 +27,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Opt-in *Explain new errors automatically* (`medic.auto_explain_errors`).
 - The model only explains; log text goes to it as quoted information.
 
+**Knowledge graph: "neurons" style (2026-11-04)**
+- The default graph style: every group of linked notes is a radial burst
+  around its best-connected note, on thin curved branches with glowing dots,
+  and the groups are spaced apart, so notes no longer sit on top of each
+  other. Fixed layout (same picture every time). The old force layout stays
+  as *Style: classic*.
+
 **🧬 Evolve page (2026-11-03)**
 - One page for everything that lets the AI improve ZenSynora:
   - ask for a change (optimise / change / add / move / remove a module,
