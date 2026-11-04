@@ -12,6 +12,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ago, api } from '../api';
 import ProposalsPanel from './ProposalsPanel';
 import ModelHealthCard from './ModelHealthCard';
+import { CreateAgent, ProposalSettings, SuggestCard, UndoCard, WherePicker } from './EvolveExtras';
 
 interface Agent { name: string; level: number; provider: string; model: string; description: string; skills: string[] }
 interface Req { id: string; name: string; agent: string; created: number; last_run: number | null; last_status: string }
@@ -41,7 +42,7 @@ const KINDS = [
 ];
 const STATUS: Record<string, string> = { ok: 'finished — see its report', error: '✗ failed', timeout: '✗ timed out', running: '… running', '': 'not run yet' };
 
-const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void }> = ({ onOpenModels, onOpenJobs }) => {
+const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void; onOpenUpdates: () => void }> = ({ onOpenModels, onOpenJobs, onOpenUpdates }) => {
   const [ov, setOv] = useState<Overview | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [form, setForm] = useState({ action: 'optimise', target_kind: 'function', target: '', goal: '', agent: 'default' });
@@ -98,6 +99,12 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void }>
         {/* 1. ask for a change */}
         <div className="settings-card">
           <h3>1 · Ask the AI for a change</h3>
+          <SuggestCard
+            onUse={sg => setForm({ ...form, action: sg.action, target_kind: sg.target_kind, target: sg.target, goal: sg.goal })}
+            onStart={sg => act('req', async () => {
+              const r = await api<{ name: string }>('/api/evolve/request', { method: 'POST', body: JSON.stringify({ action: sg.action, target_kind: sg.target_kind, target: sg.target, goal: sg.goal, agent: form.agent }) });
+              return `Started “${r.name}”. Its proposal will appear under Change proposals.`;
+            })} />
           <div className="evolve-form">
             <label className="field"><span className="field-label">What to do</span>
               <select className="field-input" value={form.action} onChange={e => setForm({ ...form, action: e.target.value })}>
@@ -108,7 +115,7 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void }>
                 {KINDS.map(k => <option key={k.value} value={k.value}>{k.label}</option>)}
               </select></label>
             <label className="field"><span className="field-label">Where (file, file:function, or empty)</span>
-              <input className="field-input" value={form.target} placeholder={kind.placeholder} onChange={e => setForm({ ...form, target: e.target.value })} /></label>
+              <WherePicker value={form.target} placeholder={kind.placeholder} onChange={v => setForm({ ...form, target: v })} /></label>
             <label className="field"><span className="field-label">Agent that does the work</span>
               <select className="field-input" value={form.agent} onChange={e => setForm({ ...form, agent: e.target.value })}>
                 {(ov?.agents || []).map(a => <option key={a.name} value={a.name}>{a.name} (level {a.level} · {a.model})</option>)}
@@ -149,7 +156,11 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void }>
 
         {/* 2. proposals (existing panel: diff, approve and install, reject) */}
         <h3 className="evolve-h">2 · Change proposals</h3>
+        <div className="settings-card">
+          <ProposalSettings values={ov?.self_update || {}} onSaved={load} />
+        </div>
         <ProposalsPanel />
+        <UndoCard onOpenUpdates={onOpenUpdates} />
 
         {/* 3. models */}
         <h3 className="evolve-h">3 · Models (LLMs)</h3>
@@ -191,6 +202,8 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void }>
               ))}
             </tbody>
           </table>
+
+          <CreateAgent onCreated={text => { setNotice({ ok: true, text }); load(); }} />
 
           <h4>Fuse two agents into one</h4>
           <p className="muted small">
