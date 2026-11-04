@@ -111,6 +111,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Agents repeating the same tool call (2026-11-04)**
+- An agent repeated one `job_create` call in every step (up to 501 times per
+  message), created 50 identical jobs, and was then blocked by "agents
+  already created 50 jobs". An identical call that already gave the same
+  result twice in one message is no longer run; two rounds of only such
+  repeats end the loop. `job_create` returns the existing job instead of a
+  duplicate.
+
 **Knowledge Usage tab and growth snapshots (2026-11-01)**
 - The knowledge usage API (Usage tab, benchmarks) was never registered in
   the Web UI, so it returned 404 and no daily growth snapshots were taken.
