@@ -127,3 +127,16 @@ def test_list_tools_details_and_builtin_docs():
     lazy = get_tool_documentation("check_system_health")  # a lazily loaded tool
     assert "health" in lazy.lower()
     assert "list_tools(details=True)" in get_tool_documentation("no_such_tool")
+
+
+def test_no_upper_limit_on_chat_tool_steps():
+    """2026-11-04: the user sets the limit (it was capped at 50); at least 1."""
+    import pytest
+    from pydantic import ValidationError
+
+    from myclaw.config import AgentsConfig
+
+    assert AgentsConfig(max_tool_rounds=500).max_tool_rounds == 500
+    assert AgentsConfig(max_tool_rounds=10_000).max_tool_rounds == 10_000
+    with pytest.raises(ValidationError):
+        AgentsConfig(max_tool_rounds=0)
