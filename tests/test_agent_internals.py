@@ -93,10 +93,11 @@ def test_execute_tools_accepts_expected_signature():
         "user_id", "mem", "_depth", "had_kb_results",
     ]
     # v0.7.2 adds an optional trailing ``_round`` (text tool-call follow-ups);
-    # the positional contract callers rely on is unchanged.
+    # 2026-11-04 ``_repeats`` (calls that keep giving the same result); the
+    # positional contract callers rely on is unchanged.
     assert list(sig.parameters)[:len(expected)] == expected
-    assert [p for p in list(sig.parameters)[len(expected):]] == ["_round"]
-    assert sig.parameters["_round"].default == 0
+    assert [p for p in list(sig.parameters)[len(expected):]] == ["_round", "_repeats"]
+    assert sig.parameters["_round"].default == 0 and sig.parameters["_repeats"].default is None
 
 
 # ── Stub-driven route_message integration ─────────────────────────────────

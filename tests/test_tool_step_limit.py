@@ -43,8 +43,10 @@ def _agent(replies, seen):
 
 
 def _call(i):
+    # each step looks at another item (as in "review all tools one by one"); 2026-11-04:
+    # identical calls that keep giving the same result are stopped (test_repeat_tool_calls.py)
     return [{"id": f"c{i}", "type": "function",
-             "function": {"name": "probe_tool", "arguments": {}, "arguments_str": "{}"}}]
+             "function": {"name": "probe_tool", "arguments": {"n": i}, "arguments_str": f'{{"n": {i}}}'}}]
 
 
 @pytest.fixture
@@ -52,7 +54,7 @@ def probe(monkeypatch):
     from myclaw.tools import TOOLS
 
     ran = []
-    monkeypatch.setitem(TOOLS, "probe_tool", {"func": lambda: ran.append(1) or "result", "desc": "probe"})
+    monkeypatch.setitem(TOOLS, "probe_tool", {"func": lambda n=0: ran.append(1) or f"result {n}", "desc": "probe"})
     return ran
 
 

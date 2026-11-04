@@ -15,7 +15,7 @@ import inspect
 import logging
 import re
 import time
-from typing import Dict, TYPE_CHECKING
+from typing import Dict, Optional, TYPE_CHECKING
 
 from ..events import emit, short
 
@@ -47,6 +47,36 @@ def max_rounds() -> int:
 
 
 TOOL_LIMIT_MARK = "I needed more tool steps than this job allows. What I found so far:"
+
+# 2026-11-04: an agent repeated the same job_create call 51 times per message (501 once the
+# step limit was raised), every time getting "agents already created 50 jobs". A call
+# (same tool, same arguments) that already gave the same result this many times in one
+# message is not run again; that many rounds in a row made only of such repeats end the loop.
+SAME_RESULT_LIMIT = 2
+REPEAT_ROUNDS_LIMIT = 2
+REPEAT_MSG = ("Tool {name} was not run again: you already called it {n} times in this message with the "
+              "same arguments and it gave the same result each time (see above). Do not repeat it. Use that "
+              "result, try something different, or answer the user and say what is blocking you.")
+
+
+def _signature(tc: dict) -> str:
+    import json as _json
+
+    fn = tc.get("function", {})
+    try:
+        args = _json.dumps(fn.get("arguments", {}), sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        args = str(fn.get("arguments"))
+    return f"{fn.get('name', '')}\u0000{args}"
+
+
+def _note_result(state: dict, sig: str, content: str) -> None:
+    """Count how often this call gave this same result in a row."""
+    import hashlib
+
+    h = hashlib.sha1(content.encode("utf-8", "replace")).hexdigest()
+    last, n = state.get(sig, ("", 0))
+    state[sig] = (h, n + 1 if h == last else 1)
 WRAP_UP = ("You have used all {n} tool steps allowed for this message. Do NOT call any more tools. "
            "Answer now with what you found so far. If the task is not finished, say plainly what is "
            "still missing and that the user can reply \"continue\" to go on.")
@@ -115,6 +145,7 @@ async def execute_tools(
     _depth: int,
     had_kb_results: bool,
     _round: int = 0,
+    _repeats: Optional[dict] = None,
 ) -> str:
     """Execute tool calls (parallel + sequential) and return final response.
 
@@ -133,23 +164,41 @@ async def execute_tools(
     # mirroring the OpenAI message-ordering contract.
     await mem.add("assistant", "")
 
+    # Calls that keep giving the same result are not run again (see REPEAT_MSG).
+    repeats: dict = _repeats if _repeats is not None else {}
+    tool_results_by_id: Dict[str, str] = {}
+    blocked_ids = set()
+    sig_of = {tc.get("id", "call_default"): _signature(tc) for tc in tool_calls}  # before args change
+    for tc in tool_calls:
+        last = repeats.get(sig_of[tc.get("id", "call_default")])
+        if last and last[1] >= SAME_RESULT_LIMIT:
+            tool_call_id = tc.get("id", "call_default")
+            name = tc.get("function", {}).get("name", "")
+            content = REPEAT_MSG.format(name=name, n=last[1])
+            tool_results_by_id[tool_call_id] = content
+            blocked_ids.add(tool_call_id)
+            await mem.add("tool", content)
+            logger.info("Tool %s not run again: same arguments and the same result %s times", name, last[1])
+    only_repeats = bool(tool_calls) and len(blocked_ids) == len(tool_calls)
+    repeats["_rounds"] = repeats.get("_rounds", 0) + 1 if only_repeats else 0
+    runnable = [tc for tc in tool_calls if tc.get("id", "call_default") not in blocked_ids]
+
     if agent._current_task_id:
         await agent._task_timer.update_step(
             agent._current_task_id, "executing_tools", 4, 5
         )
 
     # Per-tool result map keyed by tool_call_id (preserved for the followup
-    # message ordering required by OpenAI compatibility).
-    tool_results_by_id: Dict[str, str] = {}
+    # message ordering required by OpenAI compatibility) — created above.
 
     # Independent tools can run concurrently; dependent ones run in order
     # because their inputs may reference earlier outputs.
     independent_tools = [
-        tc for tc in tool_calls
+        tc for tc in runnable
         if is_tool_independent(tc.get("function", {}).get("name", ""))
     ]
     dependent_tools = [
-        tc for tc in tool_calls
+        tc for tc in runnable
         if not is_tool_independent(tc.get("function", {}).get("name", ""))
     ]
 
@@ -195,7 +244,7 @@ async def execute_tools(
     elif independent_tools:
         # Single independent tool: run it through the sequential path
         # alongside any dependent tools — there's no parallelism win.
-        dependent_tools = tool_calls
+        dependent_tools = runnable
 
     # Sequential path (always runs for dependent tools).
     for tc in dependent_tools:
@@ -301,6 +350,10 @@ async def execute_tools(
             await mem.add("tool", content)
             _emit_tool(agent, tool_name, args, False, str(e), time.time() - start_time)
 
+    for tc in runnable:
+        tool_call_id = tc.get("id", "call_default")
+        _note_result(repeats, sig_of[tool_call_id], tool_results_by_id.get(tool_call_id, ""))
+
     # Build the followup turn for OpenAI compatibility: an assistant
     # message with all tool_calls, followed by one tool message per id
     # in the same order as the original tool_calls.
@@ -359,9 +412,10 @@ async def execute_tools(
         from .text_tools import parse_text_tool_calls
 
         more = native_calls or parse_text_tool_calls(final_response)
-        if more and _round < max_rounds():
+        stuck = repeats.get("_rounds", 0) >= REPEAT_ROUNDS_LIMIT   # it only repeats itself: stop here
+        if more and _round < max_rounds() and not stuck:
             return await execute_tools(agent, more, followup, user_message, user_id, mem,
-                                       _depth, had_kb_results, _round=_round + 1)
+                                       _depth, had_kb_results, _round=_round + 1, _repeats=repeats)
         if more:
             used = [tc.get("function", {}).get("name", "") for m in followup
                     for tc in (m.get("tool_calls") or []) if m.get("role") == "assistant"]

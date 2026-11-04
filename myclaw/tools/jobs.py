@@ -102,6 +102,19 @@ def _describe_schedule(j: dict[str, Any]) -> str:
     return "manual (run with job_run)"
 
 
+def _norm(text: Any) -> str:
+    return " ".join(str(text or "").split()).casefold()
+
+
+def _same_job(jobs: list[dict[str, Any]], data: dict[str, Any]) -> dict[str, Any] | None:
+    """An existing job with the same agent, name, task and schedule, if any."""
+    for j in jobs:
+        if (j.get("agent") == data["agent"] and _norm(j.get("name")) == _norm(data["name"])
+                and _norm(j.get("prompt")) == _norm(data["prompt"]) and j.get("schedule") == data["schedule"]):
+            return j
+    return None
+
+
 def job_create(name: str, prompt: str, agent: str = "", schedule: str = "manual", when: str = "",
                every_minutes: int = 0, at_time: str = "", days: str = "", run_now: bool = False,
                report_here: bool = True, success_criteria: str = "", max_steps: int = 0,
@@ -157,7 +170,15 @@ def job_create(name: str, prompt: str, agent: str = "", schedule: str = "manual"
     if timeout_s:
         data["timeout_s"] = int(timeout_s)
     try:
-        if sum(1 for j in store.list_jobs() if str(j.get("created_by", "")).startswith("agent:")) >= MAX_AGENT_JOBS:
+        jobs = store.list_jobs()
+        # 2026-11-04: an agent created the same job 50 times (one per repeated call) and was
+        # then blocked by the limit. The same job (agent, name, task, schedule) is not made twice.
+        same = _same_job(jobs, data)
+        if same:
+            return (f"Job {same['id']} \"{same['name']}\" already exists with this task for @{same['agent']} "
+                    f"({_describe_schedule(same)}); it was not created again. Run it with job_run('{same['id']}') "
+                    f"or check it with job_status('{same['id']}').")
+        if sum(1 for j in jobs if str(j.get("created_by", "")).startswith("agent:")) >= MAX_AGENT_JOBS:
             return f"Error: agents already created {MAX_AGENT_JOBS} jobs; ask the user to remove some on the Jobs page."
         job = store.create_job(data)
     except ValueError as e:
