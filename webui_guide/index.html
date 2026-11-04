@@ -2230,13 +2230,29 @@ anything fails. <em>Updates → Roll back</em> undoes it later.</p>
    <code>propose_code_change</code>, and finish with a report (what it found, the
    proposal, the risks, how to check it). If the goal is unclear or unsafe it
    explains why instead of proposing. For the <em>LLM setup</em> it does not change
-   code; it recommends which model each agent should use and why.</li>
+   code; it recommends which model each agent should use and why.
+   <strong>🤖 Suggest improvements</strong> (2026-11-04): the default model looks at
+   recent problems, failing models and what was already proposed or
+   requested, and lists up to 6 concrete requests. <em>Edit in the form</em> copies
+   one into the form; <em>Start</em> runs it. Nothing starts by itself. <em>Where</em> has a
+   picker: start typing and it lists the program files agents may change, and
+   after a Python file, its functions and classes (<code>file:function</code>).</li>
 <li><strong>Change proposals.</strong> The same panel as on the Doctor page: the reason,
-   the exact diff, <em>Approve &amp; install</em> or <em>Reject</em>.</li>
+   the exact diff, <em>Approve &amp; install</em> or <em>Reject</em>. Above it are the
+   proposal settings (<code>medic.self_update.*</code>): agents may file proposals; run
+   the test suite before switching; install documentation-only changes
+   without asking. Below it, <strong>Undo the last installed change</strong> switches the
+   whole program back to the previous version (the same as <em>Updates → Roll
+   back</em>; data, settings and knowledge stay; not available on a development
+   checkout).</li>
 <li><strong>Models (LLMs).</strong> Health of every model (calls, failures, answer time,
    last error). <em>Replace in all agents</em> opens the Models page;
    <em>Ask the AI to review the model setup</em> starts an LLM-setup request.</li>
-<li><strong>Agents: levels and fusion.</strong> Every agent has a level from 1 to 9 (new
+<li><strong>Agents: levels, new agents and fusion.</strong> <strong>Create an agent with AI</strong>:
+   describe the agent you need; the default model writes the name,
+   description and system prompt, and picks skills from the ones that exist.
+   You edit the draft, then <em>Add</em> creates it at level 1 with the default
+   model (change that in <em>Settings → Agents</em>). Every agent has a level from 1 to 9 (new
    agents start at 1; for now it is a label), changed here
    (<code>agents.named[].level</code>, <code>agents.defaults.level</code>). <strong>Fuse two agents into
    one:</strong> pick two named agents and <em>Draft the merged agent</em>. The default
@@ -2252,7 +2268,10 @@ anything fails. <em>Updates → Roll back</em> undoes it later.</p>
 </ol>
 <p>API: <code>GET /api/evolve/overview</code>, <code>PUT /api/evolve/agents/{name}/level</code>,
 <code>POST /api/evolve/request</code>, <code>POST /api/evolve/fuse/preview</code>,
-<code>POST /api/evolve/fuse</code>, <code>POST /api/evolve/trash/restore</code>; proposals use
+<code>POST /api/evolve/fuse</code>, <code>POST /api/evolve/trash/restore</code>,
+<code>GET /api/evolve/files?q=</code>, <code>GET /api/evolve/functions?path=</code>,
+<code>POST /api/evolve/suggest</code>, <code>POST /api/evolve/agents/draft</code>,
+<code>POST /api/evolve/agents</code>; proposals use
 <code>/api/medic/proposals</code>.</p>
 <h2 id="doctor-change-proposals">Doctor: change proposals<a class="headerlink" href="#doctor-change-proposals" title="Permanent link">&para;</a></h2>
 <p><img alt="Change proposals" src="../images/webui-proposals.png" /></p>
