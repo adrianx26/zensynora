@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**🤖 AI in the Doctor (2026-11-04)**
+- *AI health summary* on Doctor → Report: what is wrong and what to fix first.
+- *Explain* on each error group and failing check: meaning, likely cause,
+  steps, how serious; kept for next time.
+- *Investigate with an agent*: a job that checks the problem live and may
+  file a change proposal (installed only after approval).
+- Opt-in *Explain new errors automatically* (`medic.auto_explain_errors`).
+- The model only explains; log text goes to it as quoted information.
+
 **🧬 Evolve page (2026-11-03)**
 - One page for everything that lets the AI improve ZenSynora:
   - ask for a change (optimise / change / add / move / remove a module,
