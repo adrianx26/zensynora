@@ -608,12 +608,28 @@ anything fails. *Updates → Roll back* undoes it later.
    proposal, the risks, how to check it). If the goal is unclear or unsafe it
    explains why instead of proposing. For the *LLM setup* it does not change
    code; it recommends which model each agent should use and why.
+   **🤖 Suggest improvements** (2026-11-04): the default model looks at
+   recent problems, failing models and what was already proposed or
+   requested, and lists up to 6 concrete requests. *Edit in the form* copies
+   one into the form; *Start* runs it. Nothing starts by itself. *Where* has a
+   picker: start typing and it lists the program files agents may change, and
+   after a Python file, its functions and classes (`file:function`).
 2. **Change proposals.** The same panel as on the Doctor page: the reason,
-   the exact diff, *Approve & install* or *Reject*.
+   the exact diff, *Approve & install* or *Reject*. Above it are the
+   proposal settings (`medic.self_update.*`): agents may file proposals; run
+   the test suite before switching; install documentation-only changes
+   without asking. Below it, **Undo the last installed change** switches the
+   whole program back to the previous version (the same as *Updates → Roll
+   back*; data, settings and knowledge stay; not available on a development
+   checkout).
 3. **Models (LLMs).** Health of every model (calls, failures, answer time,
    last error). *Replace in all agents* opens the Models page;
    *Ask the AI to review the model setup* starts an LLM-setup request.
-4. **Agents: levels and fusion.** Every agent has a level from 1 to 9 (new
+4. **Agents: levels, new agents and fusion.** **Create an agent with AI**:
+   describe the agent you need; the default model writes the name,
+   description and system prompt, and picks skills from the ones that exist.
+   You edit the draft, then *Add* creates it at level 1 with the default
+   model (change that in *Settings → Agents*). Every agent has a level from 1 to 9 (new
    agents start at 1; for now it is a label), changed here
    (`agents.named[].level`, `agents.defaults.level`). **Fuse two agents into
    one:** pick two named agents and *Draft the merged agent*. The default
@@ -629,7 +645,10 @@ anything fails. *Updates → Roll back* undoes it later.
 
 API: `GET /api/evolve/overview`, `PUT /api/evolve/agents/{name}/level`,
 `POST /api/evolve/request`, `POST /api/evolve/fuse/preview`,
-`POST /api/evolve/fuse`, `POST /api/evolve/trash/restore`; proposals use
+`POST /api/evolve/fuse`, `POST /api/evolve/trash/restore`,
+`GET /api/evolve/files?q=`, `GET /api/evolve/functions?path=`,
+`POST /api/evolve/suggest`, `POST /api/evolve/agents/draft`,
+`POST /api/evolve/agents`; proposals use
 `/api/medic/proposals`.
 
 ## Doctor: change proposals

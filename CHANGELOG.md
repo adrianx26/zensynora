@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Evolve page additions (2026-11-04)**
+- 🤖 *Suggest improvements*: the model proposes up to 6 requests from recent
+  problems and model health; you start them.
+- A picker for *Where* that lists the real program files and functions.
+- *Undo the last installed change* (rollback) on the page.
+- The change-proposal settings on the page.
+- *Create an agent with AI*: drafted name, prompt and skills to review;
+  added at level 1.
+
 **🤖 AI in the Doctor (2026-11-04)**
 - *AI health summary* on Doctor → Report: what is wrong and what to fix first.
 - *Explain* on each error group and failing check: meaning, likely cause,

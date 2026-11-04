@@ -330,7 +330,7 @@ function App() {
           {view === 'skills' && <SkillsView />}
           {view === 'rules' && <RulesView onChanged={loadHealth} />}
           {view === 'knowledge' && <KnowledgeView />}
-          {view === 'evolve' && <EvolveView onOpenModels={() => go('models')} onOpenJobs={() => go('jobs')} />}
+          {view === 'evolve' && <EvolveView onOpenModels={() => go('models')} onOpenJobs={() => go('jobs')} onOpenUpdates={() => go('updates')} />}
           {view === 'backups' && <BackupsView onRestored={() => { loadAgents(); loadChannels(); loadHealth(); }} />}
           {view === 'settings' && <SettingsView onSaved={onSettingsSaved} />}
           {view === 'tools' && <ToolsView />}
