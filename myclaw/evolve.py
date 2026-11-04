@@ -214,8 +214,6 @@ End with a short report."""
 
 def request_change(action: str, target_kind: str, target: str, goal: str, agent: str = "default") -> Dict[str, Any]:
     """Create and start the one-off job that carries out an Evolve request."""
-    from .jobs import store
-
     goal = (goal or "").strip()
     if action not in ACTIONS or target_kind not in KINDS:
         raise ValueError("Unknown action or target kind.")
@@ -226,9 +224,15 @@ def request_change(action: str, target_kind: str, target: str, goal: str, agent:
             f"Target: {target or 'not given: find the right place in the code yourself'}\n"
             f"Goal: {goal[:4000]}\n\n")
     prompt = head + (LLM_STEPS if target_kind == "llm" else CODE_STEPS)
-    job = store.create_job({"name": f"{PREFIX}{action} {target_kind} — {goal[:60]}", "prompt": prompt,
-                            "agent": agent or "default", "schedule": "manual", "max_steps": 30, "timeout_s": 900,
-                            "created_by": "evolve"})
+    return start_job(f"{PREFIX}{action} {target_kind} — {goal[:60]}", prompt, agent, "evolve")
+
+
+def start_job(name: str, prompt: str, agent: str = "default", created_by: str = "evolve") -> Dict[str, Any]:
+    """Create a one-off job and run it now (also used by the Doctor's "Investigate")."""
+    from .jobs import store
+
+    job = store.create_job({"name": name, "prompt": prompt, "agent": agent or "default", "schedule": "manual",
+                            "max_steps": 30, "timeout_s": 900, "created_by": created_by})
     try:
         _start_job(job["id"])
     except Exception:
