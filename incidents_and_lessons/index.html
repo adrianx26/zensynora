@@ -1420,6 +1420,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#89-agent-blocked-by-50-jobs-while-the-jobs-page-showed-6-2026-11-04-branch-no-repeat-tool-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.9 Agent blocked by "50 jobs" while the Jobs page showed 6 (2026-11-04, branch no-repeat-tool-calls)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2087,6 +2098,17 @@
     <span class="md-ellipsis">
       
         8.8 Knowledge Usage tab never worked in the Web UI (2026-11-01, branch infographics)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#89-agent-blocked-by-50-jobs-while-the-jobs-page-showed-6-2026-11-04-branch-no-repeat-tool-calls" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.9 Agent blocked by "50 jobs" while the Jobs page showed 6 (2026-11-04, branch no-repeat-tool-calls)
       
     </span>
   </a>
@@ -3202,7 +3224,41 @@ in short form, in <code>AGENTS.md</code>.</p>
 </tr>
 </tbody>
 </table>
-<hr />
+<h3 id="89-agent-blocked-by-50-jobs-while-the-jobs-page-showed-6-2026-11-04-branch-no-repeat-tool-calls">8.9 Agent blocked by "50 jobs" while the Jobs page showed 6 (2026-11-04, branch no-repeat-tool-calls)<a class="headerlink" href="#89-agent-blocked-by-50-jobs-while-the-jobs-page-showed-6-2026-11-04-branch-no-repeat-tool-calls" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>An agent said it could not create a job: "agents already created 50 jobs". The Jobs page showed fewer than 10.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>The agent repeated the identical <code>job_create</code> call in every tool step: 51 calls per message (501 after the step limit was raised to 500). The first bursts created 50 identical jobs. After that every call returned the limit error and the model retried until its steps ran out. The user had since deleted the duplicates, but the agent kept repeating its earlier answer.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>A call (same tool, same arguments) that already gave the same result twice in one message is not run again, and the model is told to use that result. Two rounds in a row made only of such repeats end the tool loop. Polling (same call, new result) still works. <code>job_create</code> returns the existing job instead of creating an identical one.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_repeat_tool_calls.py</code></td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>The tool loop must notice an agent repeating itself; tools that create things must not create the same thing twice.</td>
+</tr>
+<tr>
+<td>---</td>
+<td></td>
+</tr>
+</tbody>
+</table>
 <h2 id="rules-for-future-changes">Rules for future changes<a class="headerlink" href="#rules-for-future-changes" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Imports:</strong> inside <code>myclaw/tools/</code>, imports of other <code>myclaw</code> modules use <code>..</code>. Never import lazily registered tools from <code>myclaw.tools</code> — import from the defining module. The static import test must stay green.</li>
@@ -3232,6 +3288,7 @@ in short form, in <code>AGENTS.md</code>.</p>
 <li><strong>Validate pairs at save time:</strong> settings that only work together (provider + model) are checked when saved and by the Doctor.</li>
 <li><strong>Users can manage what agents create:</strong> see, edit, remove (to a trash) and export/import.</li>
 <li><strong>Registered or it does not exist:</strong> every web router is included in the app; <code>tests/test_web_routes_registered.py</code> checks it.</li>
+<li><strong>No endless repeats:</strong> an identical tool call that keeps giving the same result is not run again; creating tools do not create duplicates.</li>
 </ol>
 
 
