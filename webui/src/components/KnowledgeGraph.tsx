@@ -4,7 +4,11 @@
 // 2026-10-31: easier to read — notes do not overlap, unlinked notes sit on an
 // outer ring, links are coloured by type, thicker, curved when two notes link
 // both ways and keep their width when zooming; labels never overlap.
+// 2026-11-04: "Neurons" style (the default): every group of linked notes is a
+// radial burst around its hub, groups spaced apart (../neuronLayout.ts); thin
+// curved branches, glowing dots. "Classic" is the force layout above.
 import React, { useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { neuronLayout, type NeuronGroup, type NeuronPos } from '../neuronLayout';
 
 export interface GNode {
   id: string;
@@ -22,6 +26,7 @@ export interface GEdge { source: string; target: string; type: string }
 interface SimNode { id: string; x: number; y: number; vx: number; vy: number; pinned: boolean; r: number; linked: boolean }
 
 export type LabelMode = 'auto' | 'all' | 'none';
+export type GraphStyle = 'neurons' | 'classic';
 
 export interface GraphHandle { fit: () => void; reheat: () => void; focus: (id: string) => void }
 
@@ -36,6 +41,7 @@ interface Props {
   edgeColorOf?: (type: string) => string;  // colour of a link type
   linkWeight?: number;                      // 1 normal, 2 bold
   labelMode?: LabelMode;
+  graphStyle?: GraphStyle;
 }
 
 const LINK_LEN = 110;
@@ -45,13 +51,18 @@ function radius(p: { r: number }, k: number): number {
   return k > 1 ? p.r / Math.sqrt(k) : p.r;
 }
 
+/** Neurons: dot size on screen grows slowly with the zoom, never below ~1.5 px. */
+function nradius(p: { r: number }, k: number): number {
+  return (p.r * Math.sqrt(Math.min(1.6, Math.max(0.5, k)))) / k;
+}
+
 function cssVar(name: string, fallback: string): string {
   const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   return v || fallback;
 }
 
 const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGraph(
-  { nodes, edges, selected, onSelect, colorOf, showEdgeLabels, paused, edgeColorOf, linkWeight = 1, labelMode = 'auto' }, ref,
+  { nodes, edges, selected, onSelect, colorOf, showEdgeLabels, paused, edgeColorOf, linkWeight = 1, labelMode = 'auto', graphStyle = 'neurons' }, ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -63,8 +74,9 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
   const hover = useRef<string | null>(null);
   const size = useRef({ w: 600, h: 400 });
   const theme = useRef({ text: '#c9d1d9', muted: '#8b949e', edge: 'rgba(139,148,158,0.35)', accent: '#58a6ff', bg: '#0d1117' });
-  const props = useRef({ nodes, edges, selected, colorOf, showEdgeLabels, paused, edgeColorOf, linkWeight, labelMode });
-  props.current = { nodes, edges, selected, colorOf, showEdgeLabels, paused, edgeColorOf, linkWeight, labelMode };
+  const props = useRef({ nodes, edges, selected, colorOf, showEdgeLabels, paused, edgeColorOf, linkWeight, labelMode, graphStyle });
+  props.current = { nodes, edges, selected, colorOf, showEdgeLabels, paused, edgeColorOf, linkWeight, labelMode, graphStyle };
+  const neuron = useRef<{ pos: Map<string, NeuronPos>; groups: NeuronGroup[] } | null>(null);
   const didFit = useRef(false);
   const settledFit = useRef(false);  // fit again when the layout has settled, unless the user moved the view
   const userMoved = useRef(false);
@@ -83,6 +95,23 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
   // ── Sync simulation nodes with the data (keep positions of known notes) ──
   useEffect(() => {
     const m = sim.current;
+    if (graphStyle === 'neurons') {
+      const L = neuronLayout(nodes.map(n => n.id), edges);
+      neuron.current = L;
+      const size = new Map(L.groups.map((g, i) => [i, g.size]));
+      m.clear();
+      for (const n of nodes) {
+        const q = L.pos.get(n.id)!;
+        const r = q.hub ? 5 + Math.min(7, Math.sqrt(size.get(q.group) || 1) * 0.6) : 2.4 + Math.min(3.2, Math.sqrt(n.degree) * 0.8);
+        m.set(n.id, { id: n.id, x: q.x, y: q.y, vx: 0, vy: 0, pinned: true, r, linked: q.group >= 0 });
+      }
+      alpha.current = 0;
+      if (!userMoved.current) window.setTimeout(() => fit(), 0);
+      start();
+      return;
+    }
+    neuron.current = null;
+    if (m.size && [...m.values()].every(p => p.pinned)) for (const p of m.values()) p.pinned = false;   // coming from Neurons
     const ids = new Set(nodes.map(n => n.id));
     for (const id of [...m.keys()]) if (!ids.has(id)) m.delete(id);
     const placed = [...m.values()];
@@ -112,7 +141,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
     if (i > 0 && placed.length === 0) { didFit.current = false; settledFit.current = false; userMoved.current = false; }
     start();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nodes, edges]);
+  }, [nodes, edges, graphStyle]);
 
   const neighbours = useCallback((id: string | null) => {
     const s = new Set<string>();
@@ -186,6 +215,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
     if (!c) return;
     const ctx = c.getContext('2d');
     if (!ctx) return;
+    if (neuron.current) { drawNeurons(ctx, neuron.current); return; }
     const { w, h } = size.current;
     const dpr = window.devicePixelRatio || 1;
     const { x: tx, y: ty, k } = view.current;
@@ -347,13 +377,170 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
     ctx.globalAlpha = 1;
   };
 
+  // ── Drawing: Neurons ──
+  const drawNeurons = (ctx: CanvasRenderingContext2D, L: { pos: Map<string, NeuronPos>; groups: NeuronGroup[] }) => {
+    const { w, h } = size.current;
+    const dpr = window.devicePixelRatio || 1;
+    const { x: tx, y: ty, k } = view.current;
+    const th = theme.current;
+    const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+    const { nodes: ns, edges: es, selected: sel, colorOf: col, labelMode: lmode = 'auto', showEdgeLabels: elabels, linkWeight: lw = 1 } = props.current;
+    const focus = sel || hover.current;
+    const near = neighbours(focus);
+    const m = sim.current;
+    const byId = new Map(ns.map(n => [n.id, n]));
+    const colour = (id: string) => { const n = byId.get(id); return n ? (n.missing ? th.muted : col(n)) : th.muted; };
+    const rr = (p: SimNode) => nradius(p, k);
+
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = dark ? '#04060b' : '#fbfcfe';
+    ctx.fillRect(0, 0, w, h);
+    ctx.translate(w / 2 + tx, h / 2 + ty);
+    ctx.scale(k, k);
+    const glow = dark ? 'lighter' : 'source-over';
+
+    // branches: parent → child, a smooth curve that leaves the parent along its own direction
+    const tree = new Set<string>();
+    ctx.globalCompositeOperation = glow;
+    for (const [id, q] of L.pos) {
+      if (!q.parent) continue;
+      const a = m.get(q.parent), b = m.get(id);
+      if (!a || !b) continue;
+      tree.add(`${q.parent}\u0000${id}`); tree.add(`${id}\u0000${q.parent}`);
+      const on = !!focus && (id === focus || q.parent === focus);
+      const dim = !!focus && !on;
+      const g = L.groups[q.group];
+      // an organic curve: it leaves the parent heading outwards and curls a little
+      // (the same way every time) before reaching the child, like a neuron's branch
+      const ox = g ? g.cx : 0, oy = g ? g.cy : 0;
+      const pa = L.pos.get(q.parent)!;
+      const ra = Math.hypot(a.x - ox, a.y - oy), rb = Math.hypot(b.x - ox, b.y - oy);
+      const aa = pa.depth === 0 ? q.angle : pa.angle;
+      let da = q.angle - aa;
+      if (da > Math.PI) da -= 2 * Math.PI; else if (da < -Math.PI) da += 2 * Math.PI;
+      const curl = q.bend * 0.22;
+      const r1 = ra + (rb - ra) * 0.4, a1 = aa + da * 0.15 + curl;
+      const r2 = ra + (rb - ra) * 0.8, a2 = q.angle - curl * 0.6;
+      ctx.strokeStyle = on ? th.accent : colour(id);
+      ctx.globalAlpha = dim ? 0.06 : on ? 1 : dark ? 0.55 : 0.6;
+      ctx.lineWidth = (on ? 2 : 0.9 * lw) / k;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.bezierCurveTo(ox + Math.cos(a1) * r1, oy + Math.sin(a1) * r1, ox + Math.cos(a2) * r2, oy + Math.sin(a2) * r2, b.x, b.y);
+      ctx.stroke();
+    }
+    // other links (across branches or groups): faint, highlighted when a note is focused
+    for (const e of es) {
+      if (tree.has(`${e.source}\u0000${e.target}`)) continue;
+      const a = m.get(e.source), b = m.get(e.target);
+      if (!a || !b) continue;
+      const on = !!focus && (e.source === focus || e.target === focus);
+      if (focus && !on) continue;
+      ctx.strokeStyle = on ? th.accent : colour(e.target);
+      ctx.globalAlpha = on ? 0.9 : dark ? 0.09 : 0.12;
+      ctx.lineWidth = (on ? 1.6 : 0.7) / k;
+      const mx = (a.x + b.x) / 2 + (b.y - a.y) * 0.15, my = (a.y + b.y) / 2 - (b.x - a.x) * 0.15;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.quadraticCurveTo(mx, my, b.x, b.y);
+      ctx.stroke();
+    }
+
+    // dots with a soft glow
+    for (const p of m.values()) {
+      const n = byId.get(p.id);
+      if (!n) continue;
+      const dim = !!focus && !near.has(p.id);
+      const pr = rr(p);
+      const c0 = colour(p.id);
+      if (dark && !n.missing) {
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = dim ? 0.02 : 0.13;
+        ctx.fillStyle = c0;
+        ctx.beginPath(); ctx.arc(p.x, p.y, pr * 2.1, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = dim ? 0.18 : 1;
+      ctx.beginPath(); ctx.arc(p.x, p.y, pr, 0, Math.PI * 2);
+      if (n.missing) {
+        ctx.setLineDash([2 / k, 2 / k]); ctx.strokeStyle = th.muted; ctx.lineWidth = 1 / k; ctx.stroke(); ctx.setLineDash([]);
+      } else { ctx.fillStyle = c0; ctx.fill(); }
+      if (p.id === sel) {
+        ctx.beginPath(); ctx.arc(p.x, p.y, pr + 4 / k, 0, Math.PI * 2);
+        ctx.strokeStyle = th.accent; ctx.lineWidth = 2 / k; ctx.stroke();
+      }
+      if (n.conflicts) {
+        ctx.beginPath(); ctx.arc(p.x + pr, p.y - pr, Math.max(2.5 / k, pr * 0.5), 0, Math.PI * 2);
+        ctx.fillStyle = '#d29922'; ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.globalCompositeOperation = 'source-over';
+
+    // link type on the focused note's links
+    if (focus && elabels) {
+      ctx.font = `400 ${11 / k}px Inter, sans-serif`;
+      ctx.textAlign = 'center';
+      for (const e of es) {
+        if (e.source !== focus && e.target !== focus) continue;
+        const a = m.get(e.source), b = m.get(e.target);
+        if (!a || !b) continue;
+        const t = e.type.replace(/_/g, ' ');
+        ctx.lineWidth = 3 / k; ctx.strokeStyle = dark ? '#04060b' : '#fbfcfe';
+        ctx.strokeText(t, (a.x + b.x) / 2, (a.y + b.y) / 2);
+        ctx.fillStyle = th.accent; ctx.fillText(t, (a.x + b.x) / 2, (a.y + b.y) / 2);
+      }
+    }
+
+    // labels: hubs of the bigger groups first, then by links; never on top of each other
+    if (lmode === 'none' && !focus) return;
+    const want = (p: SimNode, n: GNode, q: NeuronPos) => {
+      if (near.has(p.id)) return true;
+      if (lmode === 'none') return false;
+      if (lmode === 'all') return k > 0.5 || q.hub;
+      if (q.hub && (L.groups[q.group]?.size || 0) >= 4) return true;
+      return k > 1.5 || (k > 0.9 && n.degree >= 4) || n.degree >= 12;
+    };
+    const cand = [...m.values()].filter(p => { const n = byId.get(p.id), q = L.pos.get(p.id); return n && q && want(p, n, q); })
+      .sort((a, b) => {
+        const qa = L.pos.get(a.id)!, qb = L.pos.get(b.id)!;
+        const pa = (a.id === sel ? 9 : 0) + (near.has(a.id) ? 4 : 0) + (qa.hub ? 2 : 0);
+        const pb = (b.id === sel ? 9 : 0) + (near.has(b.id) ? 4 : 0) + (qb.hub ? 2 : 0);
+        return pb - pa || (byId.get(b.id)!.degree - byId.get(a.id)!.degree);
+      });
+    const boxes: [number, number, number, number][] = [];
+    ctx.textAlign = 'center';
+    for (const p of cand) {
+      const n = byId.get(p.id)!, q = L.pos.get(p.id)!;
+      const big = q.hub && !near.has(p.id);
+      const fs = (big ? 13 : 11.5) / k;
+      const label = n.title.length > 34 ? n.title.slice(0, 33) + '…' : n.title;
+      ctx.font = `${big || p.id === sel ? 600 : 400} ${fs}px Inter, sans-serif`;
+      const tw = ctx.measureText(label).width;
+      const lx = p.x, ly = p.y + rr(p) + fs + 2 / k;
+      const box: [number, number, number, number] = [lx - tw / 2 - 3 / k, ly - fs, lx + tw / 2 + 3 / k, ly + 3 / k];
+      if (boxes.some(b => box[0] < b[2] && box[2] > b[0] && box[1] < b[3] && box[3] > b[1])) continue;
+      boxes.push(box);
+      ctx.globalAlpha = focus && !near.has(p.id) ? 0.35 : 1;
+      ctx.lineWidth = 3.5 / k;
+      ctx.strokeStyle = dark ? '#04060b' : '#fbfcfe';
+      ctx.strokeText(label, lx, ly);
+      ctx.fillStyle = n.missing ? th.muted : th.text;
+      ctx.fillText(label, lx, ly);
+    }
+    ctx.globalAlpha = 1;
+  };
+
   const fit = useCallback(() => {
     const list = [...sim.current.values()];
     if (!list.length) return;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of list) { x0 = Math.min(x0, p.x - p.r); y0 = Math.min(y0, p.y - p.r); x1 = Math.max(x1, p.x + p.r); y1 = Math.max(y1, p.y + p.r); }
     const { w, h } = size.current;
-    const k = Math.max(0.15, Math.min(2.2, Math.min((w - 60) / (x1 - x0 || 1), (h - 60) / (y1 - y0 || 1))));
+    const pad = neuron.current ? 110 : 60;   // neurons: room for the names and glow at the edges
+    const k = Math.max(0.05, Math.min(2.2, Math.min((w - pad) / (x1 - x0 || 1), (h - pad) / (y1 - y0 || 1))));
     view.current = { k, x: -((x0 + x1) / 2) * k, y: -((y0 + y1) / 2) * k };
     draw();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -361,7 +548,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
 
   const loop = () => {
     raf.current = null;
-    if (!props.current.paused && alpha.current > 0.004) {
+    if (!neuron.current && !props.current.paused && alpha.current > 0.004) {
       tick();
       // fit once while the first layout settles
       if (!didFit.current && alpha.current < 0.25) { didFit.current = true; fit(); }
@@ -371,7 +558,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
       }
     }
     draw();
-    if (!props.current.paused && alpha.current > 0.004) raf.current = requestAnimationFrame(loop);
+    if (!neuron.current && !props.current.paused && alpha.current > 0.004) raf.current = requestAnimationFrame(loop);
   };
   function start() {
     if (raf.current == null) raf.current = requestAnimationFrame(loop);
@@ -380,6 +567,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
   useImperativeHandle(ref, () => ({
     fit,
     reheat: () => {
+      if (neuron.current) { userMoved.current = false; fit(); return; }
       for (const p of sim.current.values()) p.pinned = false;
       alpha.current = 1;
       start();
@@ -433,7 +621,8 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
     let best: SimNode | null = null, bd = Infinity;
     for (const n of sim.current.values()) {
       const d = Math.hypot(n.x - p.x, n.y - p.y);
-      if (d < radius(n, view.current.k) + 4 / view.current.k && d < bd) { best = n; bd = d; }
+      const R = neuron.current ? nradius(n, view.current.k) + 6 / view.current.k : radius(n, view.current.k) + 4 / view.current.k;
+      if (d < R && d < bd) { best = n; bd = d; }
     }
     return best;
   };
@@ -448,7 +637,8 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
     const { cx, cy } = local(e);
     const n = hit(cx, cy);
     canvasRef.current?.setPointerCapture(e.pointerId);
-    drag.current = { mode: n ? 'node' : 'pan', id: n?.id, sx: cx, sy: cy, vx: view.current.x, vy: view.current.y, moved: false };
+    // Neurons: the layout is fixed, so dragging always pans (a click still selects the note)
+    drag.current = { mode: n && !neuron.current ? 'node' : 'pan', id: n?.id, sx: cx, sy: cy, vx: view.current.x, vy: view.current.y, moved: false };
   };
   const onPointerMove = (e: React.PointerEvent) => {
     const { cx, cy } = local(e);
@@ -499,12 +689,12 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
     const d = drag.current;
     drag.current = null;
     canvasRef.current?.releasePointerCapture(e.pointerId);
-    if (d && !d.moved) onSelect(d.mode === 'node' ? d.id || null : null);
+    if (d && !d.moved) onSelect(d.id || null);
   };
   const onDoubleClick = (e: React.MouseEvent) => {
     const { cx, cy } = local(e);
     const n = hit(cx, cy);
-    if (n) { n.pinned = false; alpha.current = Math.max(alpha.current, 0.3); start(); }
+    if (n && !neuron.current) { n.pinned = false; alpha.current = Math.max(alpha.current, 0.3); start(); }
   };
   const onWheel = (e: WheelEvent) => {
     e.preventDefault(); // zoom the graph, not the page
