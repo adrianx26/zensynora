@@ -91,8 +91,9 @@ tool calls are not kept in that memory.
 
 **Tool steps per message.** An agent may call tools several times to answer
 one message (search, then read, then write …). Settings → Features → *Tool
-steps per chat message* (`agents.max_tool_rounds`, default 12) limits the
-rounds. At the limit the agent answers with what it found so far and says
+steps per chat message* (`agents.max_tool_rounds`, default 12, at least 1, no
+upper limit) limits the rounds; the time limit per message
+(`timeouts.task_seconds`) still applies. At the limit the agent answers with what it found so far and says
 what is left — reply **continue** to let it go on. To look at the tools
 themselves, an agent can call `list_tools(details=True)` (all tools with
 arguments and purpose) and `get_tool_documentation(name)`.

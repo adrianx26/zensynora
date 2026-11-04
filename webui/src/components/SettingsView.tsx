@@ -134,7 +134,7 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
       { path: 'memory.auto_cleanup_enabled', label: 'Delete old conversation history', kind: 'bool' },
       { path: 'memory.auto_cleanup_days', label: 'Keep history for (days)', kind: 'number' },
       { path: 'agents.summarization_threshold', label: 'Summarize after N messages', kind: 'number' },
-      { path: 'agents.max_tool_rounds', label: 'Tool steps per chat message', kind: 'number', help: 'How many rounds of tool calls an agent may use to answer one message (1–50). At the limit it answers with what it found and you can say "continue". Jobs have their own setting.' },
+      { path: 'agents.max_tool_rounds', label: 'Tool steps per chat message', kind: 'number', help: 'How many rounds of tool calls an agent may use to answer one message (at least 1, no upper limit; default 12). At the limit it answers with what it found and you can say "continue". The time limit per message (timeouts.task_seconds) still applies. Jobs have their own setting.' },
     ],
   },
 ];

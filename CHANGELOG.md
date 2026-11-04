@@ -103,6 +103,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   replacements). Doctor check `model_mismatch` and a warning on Settings →
   Agents for provider/model pairs that cannot work.
 
+### Changed
+
+- *Tool steps per chat message* (`agents.max_tool_rounds`) has no upper limit
+  any more (it was 50); at least 1, default 12. The time limit per message
+  (`timeouts.task_seconds`) still applies (2026-11-04).
+
 ### Fixed
 
 **Knowledge Usage tab and growth snapshots (2026-11-01)**
@@ -261,6 +267,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- *Tool steps per chat message* (`agents.max_tool_rounds`) has no upper limit
+  any more (it was 50); the time limit per message still applies (2026-11-04).
 **Jobs: delete from the list (2026-10-27)**
 - Every job row on the Jobs page has a **🗑 Delete** button with an inline
   confirmation (*Delete it and its run history?*); before, Delete was only in
