@@ -547,6 +547,20 @@ with `zensynora webui`. Details: [UPDATING.md](UPDATING.md).
 The Doctor page has two tabs. **Checks** is the health check (the same as
 `zensynora doctor`). **Report** shows:
 
+* **🤖 AI health summary** (2026-11-04) — *Write the summary*: the default
+  model reads the checks, errors, restarts, failed jobs and model health of
+  the period and writes what is wrong and what to fix first, naming the page
+  or setting. It changes nothing;
+* **🤖 Explain** on every error group (and on every failing or warning check
+  on the *Checks* tab): what it means, the likely cause, the steps, and how
+  serious it is. The explanation is kept and shown again (*ask again* for a new
+  one). **🔎 Investigate with an agent** starts a job (*Doctor: …* on the Jobs
+  page). The agent checks the problem live (health report, recent problems,
+  the code) and, if the code is at fault, files a change proposal for you to
+  approve; it changes nothing itself. **Explain new errors automatically**
+  (*Settings → Features*, `medic.auto_explain_errors`, off by default) writes
+  the explanation of each new kind of ERROR / CRITICAL in the background, a
+  few every 10 minutes; such groups show *🤖 explained*;
 * the period (1, 2, 4, 8, 12 or 24 hours, 7 days) at the top; it applies to
   the whole page;
 * **Health overview** — Overall status, errors + critical, failures, job

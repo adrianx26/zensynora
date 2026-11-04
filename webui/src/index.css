@@ -1258,3 +1258,8 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .ai-resolve .ai-item-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.86rem; }
 .ai-resolve select.field-input { padding: 4px 6px; font-size: 0.82rem; }
 .ai-resolve .ai-fix { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; line-height: 1.45; }
+
+/* 2026-11-04: AI in the Doctor */
+.doctor-ai-text { white-space: pre-wrap; line-height: 1.5; font-size: 0.9rem; padding: 10px 12px; margin: 8px 0;
+  border-left: 3px solid var(--accent-color); background: color-mix(in srgb, var(--accent-color) 7%, transparent); border-radius: 6px; }
+.doctor-ask { margin: 6px 0; }

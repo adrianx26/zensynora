@@ -633,6 +633,9 @@ class MedicConfig(BaseModel):
     backup_dir: str = ""  # Local backup directory
     virustotal_api_key: SecretStr = SecretStr("")  # VirusTotal API key
     self_update: SelfUpdateConfig = SelfUpdateConfig()  # v0.7.1
+    # 2026-11-04: the default model explains new kinds of errors in the background (Doctor → Report).
+    # Off by default; only writes explanations, changes nothing.
+    auto_explain_errors: bool = False
 
 
 class NewTechConfig(BaseModel):
@@ -1006,6 +1009,16 @@ def _apply_knowledge_distill(config: AppConfig) -> None:
         logger.warning("distillation settings could not be applied (%s); it stays off", e)
 
 
+def _apply_doctor_ai(config: AppConfig) -> None:
+    """Apply ``medic.auto_explain_errors`` (2026-11-04). Never makes loading the config fail."""
+    try:
+        from .doctor.ai import set_options
+
+        set_options(auto_explain=getattr(getattr(config, "medic", None), "auto_explain_errors", False))
+    except Exception as e:
+        logger.warning("Doctor AI settings could not be applied (%s); auto-explain stays off", e)
+
+
 def _apply_knowledge_evaluate(config: AppConfig) -> None:
     """Apply ``knowledge.evaluate_*`` (2026-11-03). Never makes loading the config fail."""
     try:
@@ -1083,6 +1096,7 @@ def load_config(force_reload: bool = False) -> AppConfig:
             _apply_knowledge_semantic(_cached_config)
             _apply_knowledge_distill(_cached_config)
             _apply_knowledge_evaluate(_cached_config)
+            _apply_doctor_ai(_cached_config)
             _apply_knowledge_watch(_cached_config)
             _apply_knowledge_usage(_cached_config)
 

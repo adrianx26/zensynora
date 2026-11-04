@@ -187,6 +187,9 @@ app.include_router(_evolve_api.router)
 from myclaw.knowledge import evaluate as _kb_evaluate  # noqa: E402  (2026-11-03: idle-time evaluation)
 app.router.add_event_handler("startup", _kb_evaluate.start_idle)
 app.router.add_event_handler("shutdown", _kb_evaluate.stop_idle)
+from myclaw.doctor import ai as _doctor_ai  # noqa: E402  (2026-11-04: explain new errors, opt-in)
+app.router.add_event_handler("startup", _doctor_ai.start_auto)
+app.router.add_event_handler("shutdown", _doctor_ai.stop_auto)
 
 
 _mcp_manager = None
