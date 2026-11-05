@@ -236,9 +236,10 @@ def _option(o: Any) -> Optional[Dict[str, Any]]:
         action = {"type": "setting", "where": str(a.get("where") or "")[:200]}
     else:
         action = {"type": "none"}
+    steps = o.get("steps") if isinstance(o.get("steps"), list) else [o["steps"]] if o.get("steps") else []
     return {"title": str(o["title"])[:120], "why": str(o.get("why") or "")[:400],
             "impact": o.get("impact") if o.get("impact") in ("high", "medium", "low") else "medium",
-            "steps": [str(s)[:300] for s in (o.get("steps") or [])][:8], "action": action}
+            "steps": [str(s)[:300] for s in steps][:8], "action": action}
 
 
 async def analyze(hours: float = 24) -> Dict[str, Any]:

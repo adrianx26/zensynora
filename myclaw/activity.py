@@ -49,6 +49,7 @@ def idle_seconds() -> float:
 
 _writer: "_logging.Logger | None" = None
 _writer_path: "_Path | None" = None
+_writer_lock = threading.Lock()   # tools run in threads: open the file once
 
 
 def activity_file() -> _Path:
@@ -58,19 +59,20 @@ def activity_file() -> _Path:
 def _get_writer() -> "_logging.Logger":
     global _writer, _writer_path
     path = activity_file()
-    if _writer is None or _writer_path != path:   # HOME can change (tests)
-        log = _logging.getLogger("zensynora.activity")
-        log.propagate = False
-        log.setLevel(_logging.INFO)
-        for h in list(log.handlers):
-            log.removeHandler(h)
-            h.close()
-        path.parent.mkdir(parents=True, exist_ok=True)
-        h = _handlers.RotatingFileHandler(path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8")
-        h.setFormatter(_logging.Formatter("%(message)s"))
-        log.addHandler(h)
-        _writer, _writer_path = log, path
-    return _writer
+    with _writer_lock:
+        if _writer is None or _writer_path != path:   # HOME can change (tests)
+            log = _logging.getLogger("zensynora.activity")
+            log.propagate = False
+            log.setLevel(_logging.INFO)
+            for h in list(log.handlers):
+                log.removeHandler(h)
+                h.close()
+            path.parent.mkdir(parents=True, exist_ok=True)
+            h = _handlers.RotatingFileHandler(path, maxBytes=10 * 1024 * 1024, backupCount=5, encoding="utf-8")
+            h.setFormatter(_logging.Formatter("%(message)s"))
+            log.addHandler(h)
+            _writer, _writer_path = log, path
+        return _writer
 
 
 def record(kind: str, name: str, status: str = "ok", seconds: "float | None" = None,

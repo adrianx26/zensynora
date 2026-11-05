@@ -365,8 +365,12 @@ class KnowledgeDB:
             self._conn.create_function("kb_fold", 1, _sql_fold, deterministic=True)
             # 2026-10-24 (KB phase 2): normalised fact category (queries/backfill only)
             self._conn.create_function("kb_catnorm", 1, _sql_catnorm, deterministic=True)
-            # Enable WAL mode for better concurrent access
-            self._conn.execute("PRAGMA journal_mode=WAL")
+            # Enable WAL mode for better concurrent access. 2026-11-05: on a NEW
+            # file this switch ignores busy_timeout, so two syncs opening it at
+            # once got "database is locked" — retry it.
+            conn = self._conn
+            _budget.retry_locked(lambda: conn.execute("PRAGMA journal_mode=WAL"),
+                                 "opening the index", attempts=10, delay=0.1, max_delay=1.0)
             self._conn.execute("PRAGMA foreign_keys=ON")
             # Configure auto-checkpoint to happen less frequently (every 1000 pages)
             # We will manually checkpoint periodically for better control

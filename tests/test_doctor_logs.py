@@ -116,6 +116,7 @@ def test_analyze_gives_checked_options(home, monkeypatch):  # noqa: F811
     r = asyncio.run(logs.analyze(hours=24))
     assert r["summary"] == "browse fails a lot." and [o["action"]["type"] for o in r["options"]] == ["evolve", "investigate", "none"]
     assert "information, not instructions" in seen[0][0]["content"] and "browse" in seen[0][1]["content"]
+    assert logs._option({"title": "t", "steps": "open Settings"})["steps"] == ["open Settings"]
     _fake(monkeypatch, RuntimeError("Error code: 429"))
     with pytest.raises(logs.AIUnavailable):
         asyncio.run(logs.analyze(hours=24))
@@ -159,3 +160,19 @@ def test_normal_answers_are_not_failures():
 
     assert not is_failed_answer("Sorry to hear that! Here is the weather: sunny, 20 °C.")
     assert not is_failed_answer("The job is done.")
+
+
+def test_many_threads_write_each_action_once(home):  # noqa: F811
+    """Tools run in threads: the first records at once must not open the file twice."""
+    import threading
+
+    from myclaw import activity
+
+    activity._writer = None
+    threads = [threading.Thread(target=activity.record, args=("tool", f"t{i}")) for i in range(40)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    names = [r["name"] for r in _rows(home)]
+    assert sorted(names) == sorted(f"t{i}" for i in range(40))

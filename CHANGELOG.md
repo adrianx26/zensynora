@@ -128,6 +128,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - "Sorry, I cannot connect to the LLM service", a timeout or an LLM error
   answer now makes a job run (and its activity line) failed.
 
+**"database is locked" when the knowledge index is created (2026-11-05)**
+- Two syncs opening a new index at once (for example the file watcher and
+  the web UI on first start) could fail: switching a new database to WAL does
+  not wait for the other one. The switch is now retried.
+
 **Agents repeating the same tool call (2026-11-04)**
 - An agent repeated one `job_create` call in every step (up to 501 times per
   message), created 50 identical jobs, and was then blocked by "agents
