@@ -20,6 +20,7 @@ import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, SecretStr, ValidationError
 
+from myclaw import activity
 from myclaw.config import (
     CONFIG_FILE,
     KEY_ID_PATTERN,
@@ -405,6 +406,7 @@ def _security_warnings(cfg: AppConfig) -> List[str]:
 
 
 @router.put("/api/settings", dependencies=guard)
+@activity.recorded("setting", lambda update: "saved: " + ", ".join(sorted(update.changes))[:150])  # key names only
 async def update_settings(update: SettingsUpdate):
     cfg = load_config()
     secret_paths = set(_secret_paths(cfg))

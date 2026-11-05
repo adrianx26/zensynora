@@ -395,6 +395,16 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 | **Fix** | A call (same tool, same arguments) that already gave the same result twice in one message is not run again, and the model is told to use that result. Two rounds in a row made only of such repeats end the tool loop. Polling (same call, new result) still works. `job_create` returns the existing job instead of creating an identical one. |
 | **Detected by** | `tests/test_repeat_tool_calls.py` |
 | **Rule** | The tool loop must notice an agent repeating itself; tools that create things must not create the same thing twice. |
+
+### 8.10 Agents could not find tool_executor.py (2026-11-05, branch source-search)
+
+| | |
+|---|---|
+| **Symptom** | Agents asked to look at `tool_executor.py` said the module does not exist, and repeated the search until the repeat guard stopped them. |
+| **Root cause** | `list_source_files` used `Path.glob(pattern)` from the program folder, so `tool_executor.py`, `*executor*` and `*tool_executor*` only matched files in the top folder. `read_source_file` needed the full path. The file is `myclaw/agent_internals/tool_executor.py`. |
+| **Fix** | Names and wildcards search every folder (hidden and build folders pruned), paths match at any depth, a miss suggests close names, and `read_source_file` finds a file by its name. |
+| **Detected by** | `tests/test_source_files.py` |
+| **Rule** | A lookup tool must find what an agent naturally asks for (a bare file name) and say what to try when it finds nothing. |
 ---
 
 ## Rules for future changes
@@ -427,3 +437,4 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 26. **Users can manage what agents create:** see, edit, remove (to a trash) and export/import.
 27. **Registered or it does not exist:** every web router is included in the app; `tests/test_web_routes_registered.py` checks it.
 28. **No endless repeats:** an identical tool call that keeps giving the same result is not run again; creating tools do not create duplicates.
+29. **Find what is asked for:** lookups accept a bare name and answer a miss with what to try.

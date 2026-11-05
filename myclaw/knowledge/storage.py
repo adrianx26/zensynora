@@ -22,6 +22,7 @@ from .parser import (
     parse_note, parse_note_text, parse_observations, parse_relations,
 )
 from .db import KnowledgeDB
+from .. import activity
 
 logger = logging.getLogger(__name__)
 
@@ -355,6 +356,7 @@ def _replace_note_file(file_path: Path, old: Optional[Note], new_text: str,
     _write_atomic(file_path, new_text)
 
 
+@activity.recorded("knowledge", lambda *a, **k: f"write note: {k.get('title') or (a[0] if a else k.get('name', ''))}")
 def write_note(
     name: str,
     title: Optional[str] = None,
@@ -512,6 +514,7 @@ def read_note(permalink: str, user_id: str = "default", db_path: Optional[Path] 
     return hit[1] if hit else None  # the file is the source of truth
 
 
+@activity.recorded("knowledge", lambda *a, **k: f"delete note: {a[0] if a else k.get('permalink', '')}")
 def delete_note(permalink: str, user_id: str = "default", db_path: Optional[Path] = None) -> bool:
     """
     Delete a note from the knowledge base.

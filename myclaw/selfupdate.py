@@ -33,6 +33,7 @@ So agents never write to the program folder. Instead:
 from __future__ import annotations
 
 import difflib
+import fnmatch
 import hashlib
 import json
 import logging
@@ -43,7 +44,7 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 from myclaw.doctor.paths import install_base, install_root, medic_dir
 
@@ -108,7 +109,15 @@ def read_source_file(path: str, start_line: int = 1, max_lines: int = 400) -> st
     try:
         p = _resolve(path)
         if not p.is_file():
-            return f"Error: {path} does not exist"
+            # 2026-11-05: a file name without its folder ("tool_executor.py") is looked up
+            found = _find(Path(path).name) if Path(path).name else []
+            if len(found) == 1:
+                p = _resolve(found[0])
+            elif found:
+                return (f"Error: more than one file is called {Path(path).name}; give the path: "
+                        + ", ".join(found[:15]))
+            else:
+                return f"Error: {path} does not exist. Find files with list_source_files(\"{Path(path).name or '*'}\")."
         lines = p.read_text(encoding="utf-8", errors="replace").splitlines()
         start = max(1, int(start_line))
         end = min(len(lines), start - 1 + max(1, min(int(max_lines), 1000)))
@@ -119,26 +128,65 @@ def read_source_file(path: str, start_line: int = 1, max_lines: int = 400) -> st
         return f"Error: {e}"
 
 
+# Folders never searched (hidden ones too): blocked for agents, or build output.
+_SKIP_DIRS = _BLOCKED_PARTS | {"build", "site", "graphify-out", "releases", "staging"}
+
+
+def program_files() -> Iterator[str]:
+    """Every program file an agent may read (relative paths), hidden and build folders pruned."""
+    root = install_root().resolve()
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and d not in _SKIP_DIRS)
+        for name in sorted(filenames):
+            rel = (Path(dirpath) / name).relative_to(root).as_posix()
+            try:
+                _resolve(rel)
+            except ValueError:
+                continue
+            yield rel
+
+
+def _matches(rel: str, pattern: str) -> bool:
+    """A file name / wildcard matches in any folder; a path matches at any depth."""
+    if "/" not in pattern:
+        return fnmatch.fnmatch(rel.rsplit("/", 1)[-1], pattern)
+    for p in {pattern, pattern.replace("**/", "")}:
+        if fnmatch.fnmatch(rel, p) or fnmatch.fnmatch(rel, "*/" + p):
+            return True
+    return False
+
+
+def _find(name: str) -> list[str]:
+    return [r for r in program_files() if _matches(r, name)]
+
+
 def list_source_files(pattern: str = "myclaw/**/*.py", limit: int = 200) -> str:
-    """List installed source files matching a glob, e.g. "myclaw/tools/*.py"."""
+    """List program files: a file name ("tool_executor.py"), a wildcard ("*executor*") or a
+    path ("myclaw/tools/*.py"); names and wildcards are searched in every folder."""
     if not _cfg_flag("enabled", True):
         return _OFF
-    root = install_root().resolve()
-    out = []
-    if ".." in Path(pattern or "").parts or Path(pattern or "").is_absolute():
+    pattern = (pattern or "*").strip()
+    if ".." in Path(pattern).parts or Path(pattern).is_absolute():
         return "Error: use a pattern inside the program folder, e.g. myclaw/**/*.py"
-    for p in sorted(root.glob(pattern or "**/*")):
-        try:
-            if not p.is_file():
-                continue
-            _resolve(_rel(p))
-        except (ValueError, OSError):
-            continue
-        out.append(f"{_rel(p)}  ({p.stat().st_size} B)")
-        if len(out) >= max(1, min(int(limit), 1000)):
-            out.append("… (limit reached)")
-            break
-    return "\n".join(out) or f"No files match {pattern}"
+    while pattern.startswith("./"):
+        pattern = pattern[2:]
+    root = install_root().resolve()
+    cap = max(1, min(int(limit), 1000))
+    out = []
+    for rel in program_files():
+        if _matches(rel, pattern):
+            out.append(f"{rel}  ({(root / rel).stat().st_size} B)")
+            if len(out) >= cap:
+                out.append("… (limit reached)")
+                break
+    if out:
+        return "\n".join(out)
+    names = sorted({r.rsplit("/", 1)[-1] for r in program_files()})
+    close = difflib.get_close_matches(pattern.rsplit("/", 1)[-1], names, n=5, cutoff=0.6)
+    hint = ("" if not close else " Did you mean: "
+            + ", ".join(r for c in close for r in _find(c)[:3]) + "?")
+    return (f"No files match {pattern}.{hint} Give a file name (tool_executor.py), a wildcard "
+            "(*executor*) or a path (myclaw/tools/*.py).")
 
 
 # ── 2. Proposals ─────────────────────────────────────────────────────────────

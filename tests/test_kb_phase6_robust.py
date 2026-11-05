@@ -936,7 +936,7 @@ def test_review_doctor_links_ratio_kb_off_fix_message(home, monkeypatch):
     assert r.status == "ok" and "30 link(s)" in r.detail          # 30 of 190: wiki-style
     # knowledge.enabled off: imports / trash are not checked
     log = home / ".myclaw" / "logs" / "knowledge_ingest.jsonl"
-    log.parent.mkdir(parents=True)
+    log.parent.mkdir(parents=True, exist_ok=True)   # writing notes now also writes the activity log
     log.write_text(json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "base": "default",
                                "source": "x", "errors": ["boom"]}) + "\n")
     assert _check("kb_ingest").status == "warn"

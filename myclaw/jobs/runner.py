@@ -173,6 +173,7 @@ class JobRunner:
         # the agent's task timer must not stop a job before its own timeout (2026-10-21)
         tmax_token = TASK_MAX_SECONDS.set(int(job.get("timeout_s") or 300) + 30)
         status, output, error = "error", "", ""
+        _started = time.time()
         try:
             if job.get("fresh_context", True) or kind != "run":
                 try:
@@ -188,9 +189,9 @@ class JobRunner:
             status = "ok"
             # v0.7.3: failure texts are runs that failed, not "ok" (the job page
             # showed every failed run as successful).
-            if output.startswith(("Sorry, this task took too long", "[Error", "I'm sorry — the model",
-                                  "I needed more tool steps", "Tool executed but error")) \
-                    or not output.strip():
+            from ..agent import is_failed_answer
+
+            if is_failed_answer(output):
                 status, error = "error", output[:500]
         except TimeoutError:
             status, error = "timeout", f"No answer within {job.get('timeout_s')} s"
@@ -202,6 +203,10 @@ class JobRunner:
         finally:
             used = getattr(agent, "last_model_used", None) or (getattr(agent, "_provider_name", ""), agent.model)
             await asyncio.to_thread(store.finish_run, run_id, status, output, error, used[0], used[1])
+            from .. import activity  # 2026-11-05: Doctor → Logs
+
+            activity.record("job", job["name"], status, time.time() - _started, agent=agent.name,
+                            detail=(error or output or "")[:300])
             if channel:
                 events.emit({"type": "job_run", "status": status, "job_id": job["id"], "job": job["name"],
                              "run_id": run_id, "result": events.short(output or error, 4000)})

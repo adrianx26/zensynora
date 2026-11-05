@@ -70,6 +70,24 @@ def _signature(tc: dict) -> str:
     return f"{fn.get('name', '')}\u0000{args}"
 
 
+_SCRIPT_TOOLS = {"shell", "execute_shell", "run_script", "run_python", "execute_python"}
+
+
+def _record(name: str, args: object, ok: bool, seconds: float, content: str) -> None:
+    """Activity log (Doctor → Logs): one line per tool call; shell commands are "script"."""
+    from .. import activity
+
+    a = args if isinstance(args, dict) else {}
+    out = content.split(" returned: ", 1)[-1] if " returned: " in content else content
+    failed = not ok or out.lstrip().startswith(("Error", "Tool error", "[Error"))
+    if name in _SCRIPT_TOOLS:
+        cmd = a.get("cmd") or a.get("command") or a.get("code") or ""
+        activity.record("script", f"{name}: {str(cmd)[:120]}", "error" if failed else "ok", seconds, detail=out[:300])
+    else:
+        shown = ", ".join(f"{k}={str(v)[:40]}" for k, v in a.items() if not str(k).startswith("_"))
+        activity.record("tool", name, "error" if failed else "ok", seconds, detail=f"{shown} → {out[:200]}")
+
+
 def _note_result(state: dict, sig: str, content: str) -> None:
     """Count how often this call gave this same result in a row."""
     import hashlib
@@ -179,6 +197,9 @@ async def execute_tools(
             blocked_ids.add(tool_call_id)
             await mem.add("tool", content)
             logger.info("Tool %s not run again: same arguments and the same result %s times", name, last[1])
+            from .. import activity
+
+            activity.record("tool", name, "repeat", 0, detail="not run again: same arguments, same result")
     only_repeats = bool(tool_calls) and len(blocked_ids) == len(tool_calls)
     repeats["_rounds"] = repeats.get("_rounds", 0) + 1 if only_repeats else 0
     runnable = [tc for tc in tool_calls if tc.get("id", "call_default") not in blocked_ids]
@@ -221,6 +242,8 @@ async def execute_tools(
                 content = f"Tool {r['tool_name']} error: {r['error']}"
             tool_results_by_id[tool_call_id] = content
             await mem.add("tool", content)
+            _record(r["tool_name"], tc.get("function", {}).get("arguments", {}), bool(r["success"]),
+                    float(r.get("duration") or 0), content)
             _emit_tool(agent, r["tool_name"], tc.get("function", {}).get("arguments", {}),
                        r["success"], r["result"] if r["success"] else r["error"], None)
 
@@ -286,6 +309,7 @@ async def execute_tools(
                 logger.info("Tool %s not run: missing %s", tool_name, ", ".join(missing_args))
                 tool_results_by_id[tool_call_id] = content
                 await mem.add("tool", content)
+                _record(tool_name, sent_args, False, 0, content)
                 _emit_tool(agent, tool_name, sent_args, False, content, time.time() - start_time)
                 continue
             if ignored_args:
@@ -324,6 +348,7 @@ async def execute_tools(
             tool_results_by_id[tool_call_id] = content
             await mem.add("tool", content)
             duration = time.time() - start_time
+            _record(tool_name, args, True, duration, content)
             logger.info(
                 f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)"
             )
@@ -348,6 +373,7 @@ async def execute_tools(
                 content += _usage_hint(tool_name, args)
             tool_results_by_id[tool_call_id] = content
             await mem.add("tool", content)
+            _record(tool_name, args, False, time.time() - start_time, content)
             _emit_tool(agent, tool_name, args, False, str(e), time.time() - start_time)
 
     for tc in runnable:

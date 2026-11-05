@@ -8,6 +8,10 @@ POST /api/doctor/ai/summary      {hours, offline}             the model's health
 POST /api/doctor/ai/explain      {kind, key, level, hours}    explain one error group / check (cached)
 GET  /api/doctor/ai/explanations                              cached explanations (also automatic ones)
 POST /api/doctor/ai/investigate  {kind, key, level, hours, agent}  an agent job (may file a proposal)
+GET  /api/doctor/logs?source=activity|app&hours=&kind=&status=&level=&q=&limit=&offset=   (2026-11-05)
+GET  /api/doctor/logs/export?source=&hours=&fmt=txt|jsonl&…   the period as a file
+POST /api/doctor/logs/analyze    {hours}           the model's summary and options
+POST /api/doctor/logs/act        {option, agent}   start what an option suggests (a job)
 
 Secrets never leave the server: the report holds only "key set: yes/no" and
 log text is redacted (myclaw/doctor/logscan.py). Still guarded like the other
@@ -125,3 +129,63 @@ async def ai_investigate(body: ProblemIn):
         return ai.investigate(body.kind, body.key, body.level, _hours(body.hours), body.agent)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+# ── 2026-11-05: logs ─────────────────────────────────────────────────────────
+
+def _log_hours(hours: float) -> float:
+    return max(0.25, min(float(hours), 24 * 31))
+
+
+@router.get("/api/doctor/logs", dependencies=guard)
+async def logs(source: str = "activity", hours: float = 24, kind: str = "", status: str = "", level: str = "",
+               q: str = "", limit: int = Query(300, ge=1, le=2000), offset: int = Query(0, ge=0)):
+    from myclaw.doctor import logs as L
+
+    try:
+        return await asyncio.to_thread(L.read, source, _log_hours(hours), kind, status, level, q, limit, offset)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/api/doctor/logs/export", dependencies=guard)
+async def logs_export(source: str = "activity", hours: float = 24, fmt: str = "txt", kind: str = "",
+                      status: str = "", level: str = "", q: str = ""):
+    from myclaw.doctor import logs as L
+
+    try:
+        name, text = await asyncio.to_thread(L.export, source, _log_hours(hours), fmt, kind, status, level, q)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return Response(text, media_type="text/plain; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{name}"'})
+
+
+class AnalyzeIn(BaseModel):
+    hours: float = 24
+
+
+class ActIn(BaseModel):
+    option: dict
+    agent: str = "default"
+
+
+@router.post("/api/doctor/logs/analyze", dependencies=guard)
+async def logs_analyze(body: AnalyzeIn):
+    from myclaw.doctor import logs as L
+
+    try:
+        return await L.analyze(_log_hours(body.hours))
+    except L.AIUnavailable as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@router.post("/api/doctor/logs/act", dependencies=guard)
+async def logs_act(body: ActIn):
+    """Runs in the event loop on purpose: starting the job schedules it on this loop."""
+    from myclaw.doctor import logs as L
+
+    try:
+        return L.act(body.option, body.agent)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))

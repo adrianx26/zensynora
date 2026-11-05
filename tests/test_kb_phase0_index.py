@@ -811,3 +811,35 @@ def test_review8_symlinks(kb, tmp_path):
     os.symlink(kb.dir / "real.md", kb.dir / "inside-link.md")
     names = {p.name for p in scan_markdown_files(USER)}
     assert names == {"real.md", "inside-link.md"}
+
+
+def test_opening_a_new_index_while_another_sync_holds_it_does_not_fail(tmp_path, monkeypatch):
+    """2026-11-05: switching a NEW database to WAL ignores busy_timeout, so two
+    syncs opening it at once failed with "database is locked" (seen in CI)."""
+    from myclaw.knowledge import budget, db as db_mod
+
+    real_connect = sqlite3.connect
+    tries = []
+
+    class Busy:
+        def __init__(self, conn):
+            object.__setattr__(self, "_c", conn)
+
+        def __getattr__(self, name):
+            return getattr(self._c, name)
+
+        def __setattr__(self, name, value):
+            setattr(self._c, name, value)
+
+        def execute(self, sql, *a):
+            if sql == "PRAGMA journal_mode=WAL":
+                tries.append(sql)
+                if len(tries) < 3:
+                    raise sqlite3.OperationalError("database is locked")
+            return self._c.execute(sql, *a)
+
+    monkeypatch.setattr(db_mod.sqlite3, "connect", lambda *a, **k: Busy(real_connect(*a, **k)))
+    monkeypatch.setattr(budget.time, "sleep", lambda s: None)
+    with KnowledgeDB(USER, db_path=tmp_path / "new.db") as db:
+        assert db._get_connection().execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    assert len(tries) == 3
