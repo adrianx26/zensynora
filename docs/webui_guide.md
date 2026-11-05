@@ -652,6 +652,34 @@ API: `GET /api/evolve/overview`, `PUT /api/evolve/agents/{name}/level`,
 `POST /api/evolve/agents`; proposals use
 `/api/medic/proposals`.
 
+## Doctor: Logs
+
+**Doctor → Logs** (2026-11-05) shows two sources:
+
+* **What the app did**, the activity log: one line for every agent answer, tool
+  call, script (shell command), job run, model call, settings save (key
+  names only, never values), update, backup and knowledge write. Each line
+  has the time, what it was, the result (✓ ok, ✗ failed, ⏱ timed out,
+  ↺ repeated call stopped), the agent, how long it took and a short detail.
+  An answer that only says the model could not be reached counts as failed.
+  It is kept in `~/.myclaw/logs/activity.jsonl` (10 MB, 5 older files), with
+  secrets hidden.
+* **App log**: the full program log (`zensynora.log`), filtered by level.
+
+Choose the period: *Last 1 / 2 / 4 / 8 / 12 / 24* **hours** or **days**
+(only as far back as the log files reach; the line under the filters says
+how far). You can also filter by kind and result (or by level), and search.
+**⬇ Export .log / .jsonl** downloads the filtered period. **🤖 Analyse with
+AI** has the default model read what ran, what failed, what was slow, what
+repeated and what the app log complains about. It writes a short summary
+and 3–6 options, each with why, how much it matters and the steps. Each
+option offers *🧬 Ask the AI for this change* (an Evolve request; the code
+change waits for your approval), *🔎 Investigate with an agent* (a job), or
+says which setting to change. Nothing starts until you click.
+
+API: `GET /api/doctor/logs`, `GET /api/doctor/logs/export`,
+`POST /api/doctor/logs/analyze`, `POST /api/doctor/logs/act`.
+
 ## Doctor: change proposals
 
 ![Change proposals](images/webui-proposals.png)

@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Doctor → Logs (2026-11-05)**
+- An activity log of everything the app does (agent answers, tools, scripts,
+  jobs, model calls, settings saves, updates, backups, knowledge writes) and
+  the app log. Period 1/2/4/8/12/24 hours or days, filters, search, export
+  (.log / .jsonl). An AI analysis proposes options that you can start as an
+  Evolve request or an agent investigation.
+
 **Evolve page additions (2026-11-04)**
 - 🤖 *Suggest improvements*: the model proposes up to 6 requests from recent
   problems and model health; you start them.
@@ -110,6 +117,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`timeouts.task_seconds`) still applies (2026-11-04).
 
 ### Fixed
+
+**Agents could not find program files by name (2026-11-05)**
+- `list_source_files("tool_executor.py")`, `("*executor*")` and
+  `read_source_file("tool_executor.py")` found nothing: only the top folder
+  was searched. Names and wildcards now search every program folder, paths
+  match at any depth, and a miss suggests close names.
+
+**Runs that never reached a model counted as OK (2026-11-05)**
+- "Sorry, I cannot connect to the LLM service", a timeout or an LLM error
+  answer now makes a job run (and its activity line) failed.
 
 **Agents repeating the same tool call (2026-11-04)**
 - An agent repeated one `job_create` call in every step (up to 501 times per
