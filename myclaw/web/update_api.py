@@ -31,6 +31,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from myclaw import activity
 from myclaw.doctor.paths import active_release, install_base, install_root, release_version, stale_release
 from myclaw.web.settings_api import guard
 
@@ -171,6 +172,7 @@ class StartIn(BaseModel):
     force: bool = False  # reinstall even when the version is the same (repair)
 
 
+@activity.recorded("update", lambda action, args: f"{action} started")
 def _spawn(action: str, args: list) -> Dict[str, Any]:
     global _proc
     reason = _managed()

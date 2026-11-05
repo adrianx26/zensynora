@@ -60,6 +60,9 @@ def reset() -> None:
 
 
 def record(provider: str, model: str, ok: bool, latency: float, error: str = "") -> None:
+    from . import activity  # 2026-11-05: every model call in the activity log (Doctor → Logs)
+
+    activity.record("model", f"{provider}/{model}", "ok" if ok else "error", latency, detail=str(error)[:300])
     with _lock:
         h = _HEALTH.setdefault((provider, model), Health(provider, model))
         h.calls += 1

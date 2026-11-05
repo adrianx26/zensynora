@@ -58,6 +58,18 @@ from .task_timer import get_task_timer_orchestrator, TaskStatus, Colors as Timer
 from rich.console import Console
 
 logger = logging.getLogger(__name__)
+
+# Answers that mean the agent could not do the task (no model reachable, timeout, …).
+# Jobs and the activity log count them as failed (2026-11-05: such runs showed as OK).
+FAILED_ANSWER_PREFIXES = (
+    "Sorry, this task took too long", "Sorry, the LLM service", "Sorry, I cannot connect to the LLM service",
+    "[Error", "I'm sorry — the model", "I needed more tool steps", "Tool executed but error",
+)
+
+
+def is_failed_answer(text: str) -> bool:
+    return not (text or "").strip() or str(text).lstrip().startswith(FAILED_ANSWER_PREFIXES)
+
 kb_gap_logger = logging.getLogger("myclaw.knowledge.gaps")
 
 # Re-export the canonical default from `defaults.py`. Existing code that
@@ -2015,11 +2027,17 @@ class Agent:
         # 2026-10-27: the knowledge usage log records this agent and message as "for what"
         usage_token = _kb_usage.begin_turn(self.name, user_message, _depth)
         _activity.turn_started()  # 2026-11-03: idle-time work waits while agents work
+        _t0, _status = time.time(), "error"
         try:
             with _span("agent.think", agent=self.name, user=user_id, depth=_depth):
-                return await self._think_impl(user_message, user_id, _depth)
+                _answer = await self._think_impl(user_message, user_id, _depth)
+                _status = "error" if is_failed_answer(_answer) else "ok"
+                return _answer
         finally:
             _activity.turn_ended()
+            # 2026-11-05: Doctor → Logs
+            _activity.record("agent", f"{self.name} answered" + (" (delegated)" if _depth else ""), _status,
+                             time.time() - _t0, agent=self.name, detail=str(user_message)[:160])
             _kb_usage.end_turn(usage_token)
             KB_USER.reset(kb_token)
 
@@ -2143,11 +2161,15 @@ class Agent:
         kb_token = KB_USER.set(for_turn(user_id))
         usage_token = _kb_usage.begin_turn(self.name, user_message, _depth)  # 2026-10-27
         _activity.turn_started()
+        _t0, _status = time.time(), "error"
         try:
             async for chunk in self._stream_think_impl(user_message, user_id, _depth):
                 yield chunk
+            _status = "ok"
         finally:
             _activity.turn_ended()
+            _activity.record("agent", f"{self.name} answered", _status, time.time() - _t0,
+                             agent=self.name, detail=str(user_message)[:160])
             _kb_usage.end_turn(usage_token)
             try:
                 KB_USER.reset(kb_token)

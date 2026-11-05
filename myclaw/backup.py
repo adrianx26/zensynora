@@ -57,6 +57,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from . import activity
+
 logger = logging.getLogger(__name__)
 
 FORMAT = 1
@@ -165,6 +167,7 @@ def default_parts(cfg: Any = None) -> list[str]:
 
 
 # ── create ───────────────────────────────────────────────────────────────────
+@activity.recorded("backup", lambda *a, **k: f"backup ({k.get('label', a[1] if len(a) > 1 else 'manual')})")
 def create_backup(parts: list[str] | None = None, label: str = "manual", note: str = "",
                   dest: Path | None = None, cfg: Any = None) -> dict[str, Any]:
     """Write a backup archive; returns its info (as listed by ``list_backups``)."""
