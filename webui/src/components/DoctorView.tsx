@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import DoctorReport from './DoctorReport';
 import ProposalsPanel from './ProposalsPanel';
+import DoctorLogs from './DoctorLogs';
 import { AskAI } from './DoctorAI';
 import { explainKey, useExplanations } from '../doctorAi';
 
@@ -33,7 +34,7 @@ const DoctorView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fixNote, setFixNote] = useState<string[] | null>(null);
-  const [tab, setTab] = useState<'checks' | 'report'>('checks');
+  const [tab, setTab] = useState<'checks' | 'report' | 'logs'>('checks');
   const [explained, reloadExplained] = useExplanations();
 
   const run = useCallback(async () => {
@@ -71,8 +72,10 @@ const DoctorView: React.FC = () => {
       <div className="settings-tabs">
         <button className={`settings-tab ${tab === 'checks' ? 'active' : ''}`} onClick={() => setTab('checks')}>Checks</button>
         <button className={`settings-tab ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>Report</button>
+        <button className={`settings-tab ${tab === 'logs' ? 'active' : ''}`} onClick={() => setTab('logs')}>Logs</button>
       </div>
       {tab === 'report' && <div className="settings-body"><DoctorReport /></div>}
+      {tab === 'logs' && <div className="settings-body"><DoctorLogs /></div>}
       {tab === 'checks' && <div className="settings-body">
         <div className="settings-card">
           <h3>
