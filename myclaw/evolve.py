@@ -266,34 +266,17 @@ class AIUnavailable(RuntimeError):
     """The model could not answer (reason in the message)."""
 
 
-_SKIP_DIRS = {"node_modules", "dist", "build", "venv", "__pycache__", "site", "graphify-out", "releases"}
-
-
 def program_files(q: str = "", limit: int = 50) -> List[str]:
-    """Program files an agent may read and propose changes to (same rules as propose_code_change)."""
-    import os
+    """Program files an agent may read and propose changes to (same walk as list_source_files)."""
+    from .selfupdate import program_files as walk
 
-    from .selfupdate import _rel, _resolve, install_root
-
-    root = install_root().resolve()
     ql = (q or "").lower()
     out: List[str] = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        # hidden folders (.git, .claude, .venv …) and build output are never program files
-        dirnames[:] = sorted(d for d in dirnames if not d.startswith(".") and d not in _SKIP_DIRS)
-        for name in sorted(filenames):
-            if not name.endswith(_FILE_TYPES) or name.startswith("."):
-                continue
-            rel = _rel(Path(dirpath) / name)
-            if ql and ql not in rel.lower():
-                continue
-            try:
-                _resolve(rel)
-            except ValueError:
-                continue
+    for rel in walk():
+        if rel.endswith(_FILE_TYPES) and not rel.rsplit("/", 1)[-1].startswith(".") and ql in rel.lower():
             out.append(rel)
             if len(out) >= limit:
-                return out
+                break
     return out
 
 
