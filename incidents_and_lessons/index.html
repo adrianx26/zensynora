@@ -1431,6 +1431,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#810-agents-could-not-find-tool_executorpy-2026-11-05-branch-source-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.10 Agents could not find tool_executor.py (2026-11-05, branch source-search)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2109,6 +2120,17 @@
     <span class="md-ellipsis">
       
         8.9 Agent blocked by "50 jobs" while the Jobs page showed 6 (2026-11-04, branch no-repeat-tool-calls)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#810-agents-could-not-find-tool_executorpy-2026-11-05-branch-source-search" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.10 Agents could not find tool_executor.py (2026-11-05, branch source-search)
       
     </span>
   </a>
@@ -3253,6 +3275,37 @@ in short form, in <code>AGENTS.md</code>.</p>
 <td><strong>Rule</strong></td>
 <td>The tool loop must notice an agent repeating itself; tools that create things must not create the same thing twice.</td>
 </tr>
+</tbody>
+</table>
+<h3 id="810-agents-could-not-find-tool_executorpy-2026-11-05-branch-source-search">8.10 Agents could not find tool_executor.py (2026-11-05, branch source-search)<a class="headerlink" href="#810-agents-could-not-find-tool_executorpy-2026-11-05-branch-source-search" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>Agents asked to look at <code>tool_executor.py</code> said the module does not exist, and repeated the search until the repeat guard stopped them.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td><code>list_source_files</code> used <code>Path.glob(pattern)</code> from the program folder, so <code>tool_executor.py</code>, <code>*executor*</code> and <code>*tool_executor*</code> only matched files in the top folder. <code>read_source_file</code> needed the full path. The file is <code>myclaw/agent_internals/tool_executor.py</code>.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Names and wildcards search every folder (hidden and build folders pruned), paths match at any depth, a miss suggests close names, and <code>read_source_file</code> finds a file by its name.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>tests/test_source_files.py</code></td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>A lookup tool must find what an agent naturally asks for (a bare file name) and say what to try when it finds nothing.</td>
+</tr>
 <tr>
 <td>---</td>
 <td></td>
@@ -3289,6 +3342,7 @@ in short form, in <code>AGENTS.md</code>.</p>
 <li><strong>Users can manage what agents create:</strong> see, edit, remove (to a trash) and export/import.</li>
 <li><strong>Registered or it does not exist:</strong> every web router is included in the app; <code>tests/test_web_routes_registered.py</code> checks it.</li>
 <li><strong>No endless repeats:</strong> an identical tool call that keeps giving the same result is not run again; creating tools do not create duplicates.</li>
+<li><strong>Find what is asked for:</strong> lookups accept a bare name and answer a miss with what to try.</li>
 </ol>
 
 

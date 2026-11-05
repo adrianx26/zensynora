@@ -541,6 +541,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#doctor-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Doctor: Logs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#doctor-change-proposals" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1445,6 +1456,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#doctor-logs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Doctor: Logs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#doctor-change-proposals" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2274,6 +2296,31 @@ anything fails. <em>Updates → Roll back</em> undoes it later.</p>
 <code>POST /api/evolve/suggest</code>, <code>POST /api/evolve/agents/draft</code>,
 <code>POST /api/evolve/agents</code>; proposals use
 <code>/api/medic/proposals</code>.</p>
+<h2 id="doctor-logs">Doctor: Logs<a class="headerlink" href="#doctor-logs" title="Permanent link">&para;</a></h2>
+<p><strong>Doctor → Logs</strong> (2026-11-05) shows two sources:</p>
+<ul>
+<li><strong>What the app did</strong>, the activity log: one line for every agent answer, tool
+  call, script (shell command), job run, model call, settings save (key
+  names only, never values), update, backup and knowledge write. Each line
+  has the time, what it was, the result (✓ ok, ✗ failed, ⏱ timed out,
+  ↺ repeated call stopped), the agent, how long it took and a short detail.
+  An answer that only says the model could not be reached counts as failed.
+  It is kept in <code>~/.myclaw/logs/activity.jsonl</code> (10 MB, 5 older files), with
+  secrets hidden.</li>
+<li><strong>App log</strong>: the full program log (<code>zensynora.log</code>), filtered by level.</li>
+</ul>
+<p>Choose the period: <em>Last 1 / 2 / 4 / 8 / 12 / 24</em> <strong>hours</strong> or <strong>days</strong>
+(only as far back as the log files reach; the line under the filters says
+how far). You can also filter by kind and result (or by level), and search.
+<strong>⬇ Export .log / .jsonl</strong> downloads the filtered period. <strong>🤖 Analyse with
+AI</strong> has the default model read what ran, what failed, what was slow, what
+repeated and what the app log complains about. It writes a short summary
+and 3–6 options, each with why, how much it matters and the steps. Each
+option offers <em>🧬 Ask the AI for this change</em> (an Evolve request; the code
+change waits for your approval), <em>🔎 Investigate with an agent</em> (a job), or
+says which setting to change. Nothing starts until you click.</p>
+<p>API: <code>GET /api/doctor/logs</code>, <code>GET /api/doctor/logs/export</code>,
+<code>POST /api/doctor/logs/analyze</code>, <code>POST /api/doctor/logs/act</code>.</p>
 <h2 id="doctor-change-proposals">Doctor: change proposals<a class="headerlink" href="#doctor-change-proposals" title="Permanent link">&para;</a></h2>
 <p><img alt="Change proposals" src="../images/webui-proposals.png" /></p>
 <p>Below the health checks, <strong>Change proposals</strong> lists code changes that agents
