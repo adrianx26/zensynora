@@ -1634,7 +1634,10 @@ one message (search, then read, then write …). Settings → Features → <em>T
 steps per chat message</em> (<code>agents.max_tool_rounds</code>, default 12, at least 1, no
 upper limit) limits the rounds; the time limit per message
 (<code>timeouts.task_seconds</code>) still applies. At the limit the agent answers with what it found so far and says
-what is left — reply <strong>continue</strong> to let it go on. To look at the tools
+what is left — reply <strong>continue</strong> to let it go on. An agent that calls the
+same tool with the same arguments and keeps getting the same result is
+stopped earlier and says so ("I stopped: I kept repeating the same tool
+call…") — more steps would not help there. To look at the tools
 themselves, an agent can call <code>list_tools(details=True)</code> (all tools with
 arguments and purpose) and <code>get_tool_documentation(name)</code>.</p>
 <p><strong>How long an agent may work.</strong> Settings → Features → <em>Timeouts &amp; memory</em> →
@@ -1842,7 +1845,9 @@ the medic reads the code and files a proposal you approve on the Doctor page.
 Common failures are recognised even when no model answers. In the job's
 settings, <em>When a run fails</em> can do this automatically (diagnose, or diagnose,
 fix the job and run once more). <strong>Tool steps</strong> sets how many extra tool rounds
-(search, read, retry…) the agent may use per run — raise it for research jobs.</p>
+(search, read, retry…) the agent may use per run — raise it for research jobs.
+A run that ends with "I stopped: I kept repeating the same tool call…" did
+not run out of steps: check the tool and the prompt instead (2026-11-06).</p>
 <p><strong>Agents make jobs too</strong> (2026-10-21). Ask an agent in chat — <em>"check the
 backups every morning at 7 and tell me here"</em>, <em>"remind me in 30 minutes"</em> —
 and it creates the job with <code>job_create</code>; it shows up in this table with
@@ -1904,7 +1909,8 @@ Settings → Channels to give each Telegram user their own); WhatsApp users each
 keep their own knowledge base.</p>
 <h3 id="knowledge-page-graph-notes-tags">Knowledge page: graph, notes, tags<a class="headerlink" href="#knowledge-page-graph-notes-tags" title="Permanent link">&para;</a></h3>
 <p><img alt="Knowledge graph" src="../images/webui-knowledge-graph.png" /></p>
-<p>The <strong>Knowledge</strong> page (sidebar) shows the knowledge base visually:</p>
+<p>The <strong>Knowledge</strong> page (sidebar) shows the knowledge base visually. Every
+note is shown (until 2026-11-06 only the first 2000):</p>
 <ul>
 <li><strong>Overview</strong> (the page opens here) — the knowledge base at a glance: notes, facts, links, tags
   and groups of linked notes, each with this week's change; growth by

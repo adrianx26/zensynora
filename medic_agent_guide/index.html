@@ -2024,7 +2024,11 @@ still review proposals but install them by rebuilding / copying.</p>
 </tr>
 <tr>
 <td>A job ends with "I needed more tool steps"</td>
-<td>Raise the job's <em>Tool steps</em> (default 8), or name the website in the prompt. <strong>🩺 Ask the medic</strong> on the run suggests both. (v0.7.5)</td>
+<td>Raise the job's <em>Tool steps</em> (default 8), or name the website in the prompt. <strong>🩺 Ask the medic</strong> on the run suggests both. (v0.7.5) Before 2026-11-06 this was often wrong: the response cache gave the agent its first answer again, it repeated one tool call and was stopped after ~4 steps — fixed.</td>
+</tr>
+<tr>
+<td>A job ends with "I stopped: I kept repeating the same tool call"</td>
+<td>The agent called one tool with the same arguments and got the same result again. More steps do not help: check what the tool returns (Doctor → Logs) and name the tool and its arguments in the prompt. (2026-11-06)</td>
 </tr>
 <tr>
 <td>A job keeps failing and you don't know why</td>
