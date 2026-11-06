@@ -59,6 +59,15 @@ def rule_diagnosis(job: dict[str, Any], run: dict[str, Any]) -> dict[str, Any] |
     text = f"{run.get('error') or ''}\n{run.get('output') or ''}"
     low = text.lower()
     steps = int(job.get("max_steps") or 8)
+    if "kept repeating the same tool call" in low:   # 2026-11-06: more steps would not help
+        return {
+            "cause": "The agent kept calling the same tool with the same arguments and got the same result.",
+            "category": "tools",
+            "explanation": ("The run was stopped because the agent repeated one tool call that kept giving the "
+                            "same result. More tool steps would not help. Check that the tool works and what it "
+                            "returns, and make the prompt say which tool to use and with which arguments."),
+            "job_changes": {}, "manual_steps": [], "code_fix_needed": False, "confidence": 0.7,
+        }
     if "needed more tool steps" in low:
         return {
             "cause": "The agent needed more tool steps than the job allows.",

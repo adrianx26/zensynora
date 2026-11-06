@@ -17,6 +17,7 @@ import re
 import time
 from typing import Dict, Optional, TYPE_CHECKING
 
+from .. import semantic_cache
 from ..events import emit, short
 
 if TYPE_CHECKING:
@@ -47,6 +48,9 @@ def max_rounds() -> int:
 
 
 TOOL_LIMIT_MARK = "I needed more tool steps than this job allows. What I found so far:"
+# 2026-11-06: a run ended by the repeat guard (below) is not a step-limit problem; it used to
+# be reported as one, and the medic kept raising "max tool steps" (to 30) without effect.
+REPEAT_STOP_MARK = "I stopped: I kept repeating the same tool call with the same result. What I found so far:"
 
 # 2026-11-04: an agent repeated the same job_create call 51 times per message (501 once the
 # step limit was raised), every time getting "agents already created 50 jobs". A call
@@ -98,9 +102,12 @@ def _note_result(state: dict, sig: str, content: str) -> None:
 WRAP_UP = ("You have used all {n} tool steps allowed for this message. Do NOT call any more tools. "
            "Answer now with what you found so far. If the task is not finished, say plainly what is "
            "still missing and that the user can reply \"continue\" to go on.")
+WRAP_UP_REPEAT = ("You called the same tool with the same arguments again and it gave the same result. "
+                  "Do NOT call any more tools. Answer now with what you found so far. If the task is not "
+                  "finished, say plainly what is still missing and what you would need to go on.")
 
 
-async def _wrap_up(agent: "Agent", followup: list, used: list) -> str:
+async def _wrap_up(agent: "Agent", followup: list, used: list, repeated: bool = False) -> str:
     """At the tool-step limit: let the model answer from the results it already has.
 
     2026-10-21: the run used to end with a fixed "I needed more tool steps"
@@ -110,13 +117,18 @@ async def _wrap_up(agent: "Agent", followup: list, used: list) -> str:
 
     n = max_rounds() + 1
     try:
-        text, calls = await agent._provider_chat(
-            followup + [{"role": "user", "content": WRAP_UP.format(n=n)}], agent.model)
+        with semantic_cache.exact_only():
+            text, calls = await agent._provider_chat(
+                followup + [{"role": "user", "content": WRAP_UP_REPEAT if repeated else WRAP_UP.format(n=n)}],
+                agent.model)
         if text and text.strip() and not parse_text_tool_calls(text):
             return text.strip()
     except Exception as e:
         logger.warning("Wrap-up after the tool-step limit failed: %s", e)
     names = ", ".join(dict.fromkeys(used)) or "tools"
+    if repeated:
+        return (f"I stopped because I kept calling the same tool ({names}) with the same arguments and got "
+                "the same result. Tell me what to do differently, or ask for a smaller part.")
     return (f"I used all {n} tool steps for this message ({names}) before finishing. "
             "Reply \"continue\" and I will go on from there, or ask for a smaller part. "
             "(The limit is agents.max_tool_rounds — Settings → Features.)")
@@ -425,7 +437,8 @@ async def execute_tools(
             followup = result
 
     try:
-        final_response, native_calls = await agent._provider_chat(followup, agent.model)
+        with semantic_cache.exact_only():   # 2026-11-06: never the first call's answer again
+            final_response, native_calls = await agent._provider_chat(followup, agent.model)
 
         trigger_hook("post_llm_call", final_response, native_calls)
 
@@ -445,11 +458,11 @@ async def execute_tools(
         if more:
             used = [tc.get("function", {}).get("name", "") for m in followup
                     for tc in (m.get("tool_calls") or []) if m.get("role") == "assistant"]
-            final_response = await _wrap_up(agent, followup, used)
+            final_response = await _wrap_up(agent, followup, used, repeated=stuck)
             if MAX_ROUNDS.get() > 0:
                 # A job: the answer is partial — mark it so the run counts as
-                # failed and the medic suggests more "max tool steps".
-                final_response = f"{TOOL_LIMIT_MARK}\n\n{final_response}"
+                # failed (and, at the step limit, the medic suggests more "max tool steps").
+                final_response = f"{REPEAT_STOP_MARK if stuck else TOOL_LIMIT_MARK}\n\n{final_response}"
 
         # Empty-response recovery after tool-use followup.
         if agent._is_empty_response(final_response):

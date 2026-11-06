@@ -357,7 +357,9 @@ floor below).
    **Install**, or by hand `python -m pip install "fastembed>=0.5,<1.0"` in
    ZenSynora's virtual environment. The same model also lets the semantic
    response cache match similar questions (it used to ask for
-   sentence-transformers, which needs PyTorch).
+   sentence-transformers, which needs PyTorch). Similar matches are used for
+   a new question only; the steps inside a running task (after a tool result)
+   use exact matches (2026-11-06).
 3. **Backfill** on the same card (or `zensynora knowledge embed`) computes
    the vectors of the existing notes. The first time, the model is
    downloaded once from Hugging Face into `~/.myclaw/models`.

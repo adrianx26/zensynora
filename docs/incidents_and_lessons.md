@@ -407,6 +407,28 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 | **Rule** | A lookup tool must find what an agent naturally asks for (a bare file name) and say what to try when it finds nothing. |
 ---
 
+### 8.11 Jobs stopped half way: "I needed more tool steps" (2026-11-06, branch tool-loop-cache)
+
+| | |
+|---|---|
+| **Symptom** | Every job run on mindy01 since 2026-11-02 failed with "I needed more tool steps than this job allows" — Evolve jobs with 30 steps after 0.5–6 s. The medic kept raising *Tool steps*, without effect. |
+| **Root cause** | The semantic response cache found answers by similarity to the **last user message** only. In the tool loop that message stays the same (tool results come after it), so each follow-up model call got the first call's cached answer back in ~1 ms: "call the same tool again". The activity log showed 445 of 848 model answers taking ≤ 5 ms and 767 blocked repeats. The repeat guard then ended the loop, and the run was labelled as the step limit. |
+| **Fix** | Follow-up calls in the tool loop (and the wrap-up) use exact cache matches only (`semantic_cache.exact_only()`). A run ended by the repeat guard is marked "I stopped: I kept repeating the same tool call…" (still failed); the medic gives a tool/prompt diagnosis instead of more steps. |
+| **Detected by** | The jobs database and Doctor → Logs (activity log) on mindy01; `tests/test_tool_loop_cache.py`. |
+| **Rule** | A cache key must cover everything that changes the answer; a fuzzy match is only for a fresh question, never for a step inside a running task. A stop message names the real reason. |
+
+### 8.12 The Knowledge page showed only 2000 notes (2026-11-06, branch tool-loop-cache)
+
+| | |
+|---|---|
+| **Symptom** | mindy01 has 3011 notes; the Knowledge page (graph, notes, tags, Overview) showed 2000 and "Only the first 2000 notes are shown". |
+| **Root cause** | `MAX_NODES = 2000` in `myclaw/web/knowledge_api.py`, a fixed cap set when the page was built (2026-10-18) to keep it fast. No measurement or setting behind it. |
+| **Fix** | The cap is removed. Measured: 3011 notes in 0.8 s, 10,000 in 2.4 s; the graph draws 3011 notes smoothly in the browser. |
+| **Detected by** | The user; `tests/test_knowledge_api.py::test_graph_shows_every_note_not_only_the_first_2000`. |
+| **Rule** | No hidden fixed caps on user data: measure first, and if a limit is needed make it a setting and say so on the page. |
+
+---
+
 ## Rules for future changes
 
 1. **Imports:** inside `myclaw/tools/`, imports of other `myclaw` modules use `..`. Never import lazily registered tools from `myclaw.tools` — import from the defining module. The static import test must stay green.
@@ -438,3 +460,4 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 27. **Registered or it does not exist:** every web router is included in the app; `tests/test_web_routes_registered.py` checks it.
 28. **No endless repeats:** an identical tool call that keeps giving the same result is not run again; creating tools do not create duplicates.
 29. **Find what is asked for:** lookups accept a bare name and answer a miss with what to try.
+30. **Caches and stop reasons:** a fuzzy (similarity) cache match is only for a fresh question, never for a step inside a running task; a stopped run says the real reason. No hidden fixed caps on user data.
