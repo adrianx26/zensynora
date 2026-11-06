@@ -122,3 +122,15 @@ def test_search_and_bad_base(client):
     assert c.get("/api/knowledge/search", params={"q": ""}).json()["results"] == []
     assert c.get("/api/knowledge/graph", params={"base": "../x"}).status_code == 400
     assert c.post("/api/knowledge/sync").json()["ok"] is True
+
+
+def test_graph_shows_every_note_not_only_the_first_2000(client):
+    """2026-11-06: the Knowledge page read only the first 2000 notes (MAX_NODES, since 2026-10-18)."""
+    c, kdir = client
+    before = len(c.get("/api/knowledge/graph").json()["nodes"])
+    for i in range(2100):
+        (kdir / f"bulk-{i}.md").write_text(f"---\ntitle: Bulk {i}\npermalink: bulk-{i}\n---\n# Bulk {i}\n",
+                                           encoding="utf-8")
+    g = c.get("/api/knowledge/graph").json()
+    assert g["stats"]["notes"] >= 2100 and len(g["nodes"]) >= before + 2100
+    assert "truncated" not in g

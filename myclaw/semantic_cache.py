@@ -15,8 +15,24 @@ from typing import Optional, List, Tuple, Dict, Any
 from dataclasses import dataclass
 from collections import OrderedDict
 import numpy as np
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 logger = logging.getLogger(__name__)
+
+# 2026-11-06: similarity is measured on the last user message only. In the tool loop that
+# message stays the same, so every follow-up call got the first call's answer back ("call
+# the same tool again") and jobs stopped half way. The tool loop sets this: exact matches only.
+EXACT_ONLY: ContextVar[bool] = ContextVar("semantic_cache_exact_only", default=False)
+
+
+@contextmanager
+def exact_only():
+    token = EXACT_ONLY.set(True)
+    try:
+        yield
+    finally:
+        EXACT_ONLY.reset(token)
 
 
 FASTEMBED_TIMEOUT = 2.0  # seconds a cache lookup may wait for an embedding
@@ -311,7 +327,7 @@ class SemanticCache:
 
         # Try semantic similarity match (2026-10-31: also with the fastembed backend)
         self._load_embedding_model()
-        if self._embedding_model is not None or self._backend == "fastembed":
+        if not EXACT_ONLY.get() and (self._embedding_model is not None or self._backend == "fastembed"):
             # Construct query text from messages
             query_text = self._extract_query_text(messages)
             query_embedding = self._get_embedding(query_text)

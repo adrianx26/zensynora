@@ -112,11 +112,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+**The Knowledge page shows every note (2026-11-06)**
+- The graph, notes list, tags and Overview read only the first 2000 notes
+  (`MAX_NODES`, a fixed cap set when the page was built on 2026-10-18 to keep
+  it fast; it was never a setting). It is removed: all notes are read. Measured:
+  3011 notes in 0.8 s, 10,000 in 2.4 s; the graph draws 3011 notes smoothly.
+  The "Only the first 2000 notes are shown" notice is gone.
+
 - *Tool steps per chat message* (`agents.max_tool_rounds`) has no upper limit
   any more (it was 50); at least 1, default 12. The time limit per message
   (`timeouts.task_seconds`) still applies (2026-11-04).
 
 ### Fixed
+
+**Jobs stopped half way with "I needed more tool steps" (2026-11-06)**
+- The semantic response cache matched similar questions by the last user
+  message only. In the tool loop that message does not change, so every
+  follow-up call got the first call's cached answer back in about 1 ms ("call
+  the same tool again") and the agent never got further. On mindy01, 445 of 848
+  model answers were such cache hits, and every job run since 2026-11-02 ended
+  this way after about 4 of its 8–30 steps. Follow-up calls in the tool loop
+  now use exact cache matches only; a new question still gets similar matches.
+- A run ended by the repeat guard said "I needed more tool steps", so the job
+  medic kept raising *Tool steps* (to 30) without effect. Such a run now says
+  "I stopped: I kept repeating the same tool call with the same result", still
+  counts as failed, and the medic does not suggest more steps for it.
 
 **Agents could not find program files by name (2026-11-05)**
 - `list_source_files("tool_executor.py")`, `("*executor*")` and

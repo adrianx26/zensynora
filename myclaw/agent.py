@@ -64,6 +64,7 @@ logger = logging.getLogger(__name__)
 FAILED_ANSWER_PREFIXES = (
     "Sorry, this task took too long", "Sorry, the LLM service", "Sorry, I cannot connect to the LLM service",
     "[Error", "I'm sorry — the model", "I needed more tool steps", "Tool executed but error",
+    "I stopped: I kept repeating the same tool call",   # 2026-11-06: stopped by the repeat guard
 )
 
 

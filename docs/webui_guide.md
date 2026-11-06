@@ -94,7 +94,10 @@ one message (search, then read, then write …). Settings → Features → *Tool
 steps per chat message* (`agents.max_tool_rounds`, default 12, at least 1, no
 upper limit) limits the rounds; the time limit per message
 (`timeouts.task_seconds`) still applies. At the limit the agent answers with what it found so far and says
-what is left — reply **continue** to let it go on. To look at the tools
+what is left — reply **continue** to let it go on. An agent that calls the
+same tool with the same arguments and keeps getting the same result is
+stopped earlier and says so ("I stopped: I kept repeating the same tool
+call…") — more steps would not help there. To look at the tools
 themselves, an agent can call `list_tools(details=True)` (all tools with
 arguments and purpose) and `get_tool_documentation(name)`.
 
@@ -274,6 +277,8 @@ Common failures are recognised even when no model answers. In the job's
 settings, *When a run fails* can do this automatically (diagnose, or diagnose,
 fix the job and run once more). **Tool steps** sets how many extra tool rounds
 (search, read, retry…) the agent may use per run — raise it for research jobs.
+A run that ends with "I stopped: I kept repeating the same tool call…" did
+not run out of steps: check the tool and the prompt instead (2026-11-06).
 
 **Agents make jobs too** (2026-10-21). Ask an agent in chat — *"check the
 backups every morning at 7 and tell me here"*, *"remind me in 30 minutes"* —
@@ -318,7 +323,8 @@ keep their own knowledge base.
 
 ![Knowledge graph](images/webui-knowledge-graph.png)
 
-The **Knowledge** page (sidebar) shows the knowledge base visually:
+The **Knowledge** page (sidebar) shows the knowledge base visually. Every
+note is shown (until 2026-11-06 only the first 2000):
 
 * **Overview** (the page opens here) — the knowledge base at a glance: notes, facts, links, tags
   and groups of linked notes, each with this week's change; growth by

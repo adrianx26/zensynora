@@ -25,7 +25,6 @@ interface GraphData {
   tags: Count[];
   categories: Count[];
   relation_types: Count[];
-  truncated: boolean;
 }
 interface NoteDetail {
   permalink: string;
@@ -468,7 +467,6 @@ const KnowledgeView: React.FC = () => {
           <span><b>{data.stats.tags}</b> tags</span>
           <span title="Linked to, but no note exists yet"><b>{data.stats.missing}</b> missing</span>
           <span title="Notes with no links"><b>{data.stats.orphans}</b> unlinked</span>
-          {data.truncated && <span className="probe-err">Only the first 2000 notes are shown.</span>}
           {semantic.st?.enabled && (
             <button type="button" className="chip small-chip" onClick={() => setTab('tags')}
               title={semantic.st.reason || 'Notes with vectors for semantic search (details under Tags & types)'}>

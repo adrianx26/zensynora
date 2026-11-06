@@ -54,7 +54,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 BASE_RE = re.compile(r"^[\w.@-]{1,64}$")
-MAX_NODES = 2000
 
 
 def _root() -> Path:
@@ -104,7 +103,7 @@ def _parse_all(base: str) -> list[Any]:
     from myclaw.knowledge.parser import parse_note
 
     notes = []
-    for f in _note_files(base)[:MAX_NODES]:
+    for f in _note_files(base):   # 2026-11-06: every note (it was the first 2000)
         try:
             notes.append(parse_note(f))
         except Exception as e:  # a broken file must not hide the others
@@ -267,7 +266,6 @@ def build_graph(base: str) -> dict[str, Any]:
         "tags": [{"name": k, "count": v} for k, v in tags.most_common()],
         "categories": [{"name": k, "count": v} for k, v in categories.most_common()],
         "relation_types": [{"name": k, "count": v} for k, v in rel_types.most_common()],
-        "truncated": len(_note_files(base)) > MAX_NODES,
     }
 
 
