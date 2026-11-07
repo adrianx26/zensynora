@@ -9,6 +9,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import SettingsView from './SettingsView';
+import CustomizeCore, { type CoreInfo } from './CustomizeCore';
 
 type Field = 'style' | 'structure' | 'behavior';
 type Situation = 'chat' | 'job' | 'agent';
@@ -30,14 +31,17 @@ interface Data {
   situations: { id: Situation; label: string }[];
   fields: { id: Field; label: string }[];
   max_field: number;
+  core: CoreInfo;
+  core_users: { agent: string; uses: string }[];
+  core_fields: { id: 'identity' | 'style' | 'behavior' | 'knowledge'; label: string }[];
 }
 type Choices = Record<string, Partial<Record<Situation, string>>>;
 interface Draft { slug: string; name: string; description: string; style: string; structure: string; behavior: string; tools_off: string[] }
 interface Review { summary: string; issues: string[]; improved: Record<Field, string> }
 
-type Tab = 'profiles' | 'use' | 'telegram' | 'proposals' | 'features';
+type Tab = 'core' | 'profiles' | 'use' | 'telegram' | 'proposals' | 'features';
 const TAB_LABEL: Record<Tab, string> = {
-  profiles: 'Profiles', use: 'Who uses what', telegram: 'Telegram', proposals: 'Proposals', features: 'Built-in features',
+  core: 'ZenSynora core', profiles: 'Profiles', use: 'Who uses what', telegram: 'Telegram', proposals: 'Proposals', features: 'Built-in features',
 };
 const HELP: Record<Field, string> = {
   style: 'Tone and wording: e.g. friendly and direct, Romanian, no jargon.',
@@ -52,7 +56,7 @@ const CustomizeView: React.FC = () => {
   const [data, setData] = useState<Data | null>(null);
   const [choices, setChoices] = useState<Choices>({});
   const [use, setUse] = useState<Record<Situation, string> | null>(null);
-  const [tab, setTab] = useState<Tab>('profiles');
+  const [tab, setTab] = useState<Tab>('core');
   const [sel, setSel] = useState<string>('default');
   const [draft, setDraft] = useState<Draft | null>(null);
   const [preview, setPreview] = useState('');
@@ -191,6 +195,12 @@ const CustomizeView: React.FC = () => {
       </div>
       <div className="settings-body">
         {notice && <div className={`notice ${notice.kind === 'error' ? 'error' : ''}`}>{notice.text}</div>}
+
+        {tab === 'core' && (
+          <CustomizeCore core={data.core} users={data.core_users} labels={data.core_fields} maxField={data.max_field}
+            onSaved={async text => { setNotice({ kind: 'ok', text }); await load(sel); }}
+            onError={text => setNotice({ kind: 'error', text })} />
+        )}
 
         {tab === 'profiles' && (
           <div className="cz-layout">
@@ -365,11 +375,13 @@ const CustomizeView: React.FC = () => {
                 </div>
                 <p className="pre"><b>Why:</b> {p.reason || '—'}</p>
                 {!p.field.startsWith('use_') && (() => {
-                  const cur = data.profiles.find(x => x.slug === p.profile);
-                  const now = cur ? (p.field === 'tools_off' ? cur.tools_off.join(', ') : String(cur[p.field as Field] ?? '')) : '';
+                  const isCore = p.profile === 'core';
+                  const cur = isCore ? undefined : data.profiles.find(x => x.slug === p.profile);
+                  const now = isCore ? String(data.core.fields[p.field as keyof CoreInfo['fields']] ?? '')
+                    : cur ? (p.field === 'tools_off' ? cur.tools_off.join(', ') : String(cur[p.field as Field] ?? '')) : '';
                   return (
                     <div className="cz-compare">
-                      <div><span className="muted small">{cur ? 'Now' : 'New profile'}</span><pre className="skill-body">{cur ? (now || '(empty)') : p.profile_name}</pre></div>
+                      <div><span className="muted small">{cur || isCore ? 'Now' : 'New profile'}</span><pre className="skill-body">{cur || isCore ? (now || '(empty)') : p.profile_name}</pre></div>
                       <div><span className="muted small">Proposed</span><pre className="skill-body">{p.text}</pre></div>
                     </div>
                   );

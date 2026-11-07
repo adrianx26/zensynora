@@ -9,7 +9,7 @@ Profile Loading Order:
 3. Default system prompt (built-in)
 
 Available Profiles:
-- default.md: Default agent with all capabilities
+- (default.md was removed 2026-11-07: the default agent uses the ZenSynora core, editable on the Customize page)
 - agent.md: Core agent capabilities reference
 - soul.md: Ethical guidelines and principles
 - identity.md: Agent personality and communication style

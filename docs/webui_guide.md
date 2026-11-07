@@ -492,7 +492,8 @@ the list of every tool agents can call.
 
 ## Customize: how the agents work
 
-**Customize** in the sidebar (🎛️, since 0.8.1). Profiles set the
+**Customize** in the sidebar (🎛️, since 0.8.1). The **ZenSynora core** is what
+every agent starts with; profiles set the
 **communication style**, **response structure**, **behaviour** and the **tools
 switched off**; they are added on top of ZenSynora's built-in prompt, before
 your Rules. Each agent uses a profile per situation — **chat**, **jobs** and
@@ -501,6 +502,7 @@ minimal). Tabs:
 
 | Tab | What you do there |
 |---|---|
+| **ZenSynora core** | The key characteristics every agent starts with (the default agent too): identity, communication style, behaviour, knowledge base habits — edit, undo, reset, 🤖 review; the tools and safety part is shown, fixed |
 | **Profiles** | Edit, create, undo, reset or delete (to `.trash`) profiles; tick tools to switch off; **🤖 Review and improve** (issues + suggested text, saved only when you press Save) and **Adapt** for a scenario (a draft profile) |
 | **Who uses what** | The profile per situation for all agents, and per agent; whether agents may propose changes |
 | **Telegram** | Who answers without `@name`: one agent, or a team whose **leader** answers and manages the members; `@Agent` still goes straight to that agent |

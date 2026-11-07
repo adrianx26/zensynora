@@ -173,7 +173,8 @@ channel (web chat / telegram / whatsapp / cli)
       → _route_message()      task timer, guardrails, model selection,
                               medic loop guard (working since 0.7.0)
       → _build_context()      memory + knowledge retrieval
-      → system prompt         built-in prompt (+ skills, team) cached;
+      → system prompt         ZenSynora core (user's version, customize.base_prompt)
+                              + fixed tools/safety part; + skills, team; cached;
                               per call: customization profile for the
                               situation (customize.prompt_section), team
                               leader section, then the Rules [0.8.1]
