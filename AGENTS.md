@@ -43,5 +43,6 @@ rules when changing ZenSynora:
 - What agents create (tools, skills, notes) the user can see, edit, remove to a trash and export/import.
 - Every router in `myclaw/web/` is included in the app (`tests/test_web_routes_registered.py`); test new endpoints through the app.
 - The tool loop stops identical calls that keep giving the same result (`SAME_RESULT_LIMIT`); tools that create things (jobs, agents, notes) return the existing one instead of a duplicate.
+- Agent-facing customization (myclaw/customize.py) is a layer on top of the built-in prompt, before the Rules; agents only propose changes (the user approves); every saved version is kept and deleted profiles go to `.trash`.
 - Similarity cache matches are for a fresh question only; tool-loop follow-ups use exact matches (`semantic_cache.exact_only()`). A stopped run names the real reason. No hidden fixed caps on user data.
 

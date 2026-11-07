@@ -1,11 +1,13 @@
 # ZenSynora Architecture
 
-> **Status:** reflects **v0.8.0** (2026-10-27; knowledge base: see the
+> **Status:** reflects **v0.8.1** (2026-11-07: Customize page — customization
+> profiles per situation and agent, Telegram teams; see the
+> [Customize guide](customize_guide.md)). v0.8.0 (2026-10-27; knowledge base: see the
 > [Knowledge base guide](knowledge_base_guide.md)). Updated from the v0.4.1
 > version: adds the Web UI settings API, provider routing changes, the safe
 > updater and the doctor/medic rewrite (0.7.0); chat channels, agent-to-agent
 > events, jobs, backups, model rotation, custom providers and approval-gated
-> self-update (0.7.1); test inventory recounted. **Unreleased:** Telegram bot
+> self-update (0.7.1); test inventory recounted. **0.8.1:** Telegram bot
 > fixed and able to run inside the Web UI (`web/telegram_api.py`).
 > **Audience:** contributors and operators. For end-user docs see
 > [`README.md`](../README.md). Sprint history:
@@ -23,7 +25,7 @@ fit together. It complements [`docs/architecture_diagram.md`](architecture_diagr
 myclaw/
 ├── agent.py                 # Agent — orchestrator (think, complete_structured, stream_think)
 ├── agent_skills.py          # Skills: SKILL.md files, per-agent lists, use_skill tool [0.7.5]
-├── agent_team.py            # Team prompt section, create_agent tool, delegation depth [0.7.5]
+├── agent_team.py            # Team prompt section, create_agent tool, delegation depth [0.7.5]; Telegram team leader section (LEAD_TEAM) [0.8.1]
 ├── skills_builtin/          # Built-in skills, one folder with SKILL.md each [0.7.5]
 ├── agent_internals/         # Phase helpers — Sprint 5 (free fns) + Sprint 9 (classes + ResponseHandler)
 ├── agents/
@@ -36,25 +38,26 @@ myclaw/
 ├── backup.py                # Backups of settings, API keys, knowledge, chat, jobs [0.7.1]
 ├── caching/                 # Shared BaseTTLCache + PersistentCacheMixin [Sprint 11]
 ├── channels/                # telegram / whatsapp / discord / web adapters [Sprint 6]
-│   ├── attachments.py       # Received files → workspace inbox/<channel>/<date>/, text for the agent [Unreleased]
-│   └── telegram.py          # Telegram bot: allowFrom, per-chat queue + workers, @agent, downloads files
-│                            #   routing, commands + / menu, reply splitting [Unreleased]
+│   ├── attachments.py       # Received files → workspace inbox/<channel>/<date>/, text for the agent [0.8.1]
+│   └── telegram.py          # Telegram bot: allowFrom, per-chat queue + workers, @agent, downloads files; answering agent / team [0.8.1]
+│                            #   routing, commands + / menu, reply splitting [0.8.1]
 ├── chat/                    # Web UI chat channels: store (chat.db) + multi-agent engine [0.7.1]
 ├── config.py                # Pydantic config + hot-reload (watchdog)
-├── context_budget.py        # Per-agent context: estimate, model maximum, trimming, num_ctx [Unreleased]
+├── context_budget.py        # Per-agent context: estimate, model maximum, trimming, num_ctx [0.8.1]
 ├── gateway.py               # `zensynora gateway`: Telegram / WhatsApp without the Web UI
 ├── cost_tracker.py          # SQLite cost accumulator + dashboard queries
 ├── defaults.py              # Single source of truth for tunable constants [Sprint 10]
 ├── doctor/                  # Health checks, integrity baseline, safe fixes [0.7.0]
 │                            #   + checks_more.py (restarts, custom tools, knowledge index, skills, MCP, chat),
-│                            #   logscan.py (log grouping, redaction), report.py (diagnostics report) [Unreleased]
+│                            #   logscan.py (log grouping, redaction), report.py (diagnostics report) [0.8.1]
 ├── evals/                   # Dataset-driven eval harness [Sprint 7]
 ├── events.py                # Agent-to-agent activity events (delegation, tools, jobs) [0.7.1]
 ├── jobs/                    # Jobs: store (jobs.db) + runner (schedule, evaluate, benchmark) [0.7.1]
 │                            #   + medic.py: diagnose / fix failed runs [0.7.5]
 ├── llm_errors.py            # Readable model-server errors + rotation cooldowns [0.7.3]
-├── model_health.py          # Model health, automatic fallback order, time limits, replace a model in all agents, mismatch check [Unreleased]
-├── rules.py                 # Rules every agent follows; agents propose, the user approves [Unreleased]
+├── model_health.py          # Model health, automatic fallback order, time limits, replace a model in all agents, mismatch check [0.8.1]
+├── rules.py                 # Rules every agent follows; agents propose, the user approves [0.8.1]
+├── customize.py             # Customization profiles: style, structure, behaviour, tools off; per situation (chat/job/agent) and agent; proposals; AI review/adapt [0.8.1]
 ├── knowledge/               # scope.py: one shared knowledge base for internal ids [0.7.5]
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
 │   ├── quality.py           # fact sources, categories, conflicts, hub penalty, duplicates [0.8.0]
@@ -63,8 +66,8 @@ myclaw/
 │   ├── ingest/              # assimilate URL/GitHub/folder/documents, chat & vault importers [0.8.0]
 │   ├── budget.py · watch.py · health.py  # write budget, live re-index, health checks [0.8.0]
 │   ├── path_reasoning.py    # find_paths / shortest_path [Sprint 7]
-│   ├── storage.py           # Batched parallel note reads [Sprint 1 + 8]; write_note keeps text + tags + facts + links [Unreleased]
-│   ├── extract.py           # Model output → notes with tags, facts, links; ✨ enrich [Unreleased]
+│   ├── storage.py           # Batched parallel note reads [Sprint 1 + 8]; write_note keeps text + tags + facts + links [0.8.1]
+│   ├── extract.py           # Model output → notes with tags, facts, links; ✨ enrich [0.8.1]
 │   └── ...
 ├── logging_config.py        # Structured logger + PII scrubber [Sprint 2]
 ├── marketplace/             # Multi-source plugin discovery + HMAC manifests [Sprint 9]
@@ -75,38 +78,39 @@ myclaw/
 ├── provider.py              # LLM providers (+ your own, providers.custom) + Message TypedDict
 ├── provider_keys.py         # Several API keys per provider: lookup, key fallback order, who uses which key [0.7.5]
 ├── resilience/              # Circuit breaker + fallback chain — wired Sprint 10
-├── evolve.py                # Evolve: agent levels, agent fusion (+ agent trash), AI change requests as jobs [Unreleased]
+├── evolve.py                # Evolve: agent levels, agent fusion (+ agent trash), AI change requests as jobs [0.8.1]
 ├── selfupdate.py            # Agents' code-change proposals → approval → safe updater [0.7.1]
 ├── structured_output/       # extract_json / validate / repair_json [Sprint 3]
 ├── swarm/                   # Multi-agent orchestrator + strategies
 ├── tenancy/                 # UserContext + scoping helpers [Sprint 6 + 11]
 ├── tools/
 │   ├── browser.py           # Playwright headless browser [Sprint 3]
-│   ├── jobs.py              # job_create / job_list / job_run / job_status / job_update [Unreleased]
-│   ├── shell.py             # Allow-list, no shell; chains with | && || ; of allowed commands; 2>/dev/null, 2>&1 [Unreleased]
-│   ├── tool_policy.py       # Which modules and calls agent-made tools may use [Unreleased]
-│   ├── tool_sandbox.py      # Agent-made tools run in a separate, locked-down process [Unreleased]
-│   ├── toolbox_manage.py    # Your tools: create/edit/delete (trash), make a skill, repair, export/import bundles [Unreleased]
+│   ├── jobs.py              # job_create / job_list / job_run / job_status / job_update [0.8.1]
+│   ├── shell.py             # Allow-list, no shell; chains with | && || ; of allowed commands; 2>/dev/null, 2>&1 [0.8.1]
+│   ├── tool_policy.py       # Which modules and calls agent-made tools may use [0.8.1]
+│   ├── tool_sandbox.py      # Agent-made tools run in a separate, locked-down process [0.8.1]
+│   ├── toolbox_manage.py    # Your tools: create/edit/delete (trash), make a skill, repair, export/import bundles [0.8.1]
 │   └── ...
 ├── vector/                  # Pluggable backends: memory / sqlite / qdrant [Sprint 4]
 ├── web/
 │   ├── api.py               # Web UI backend: wiring, agents, legacy chat socket, static SPA
 │   ├── settings_api.py      # Settings, health, doctor, costs, history [0.5.0]
 │   ├── chat_api.py          # Channels REST + /ws/channels/{id} [0.7.1]
-│   ├── models_api.py        # Default model, rotation, prompt generator [0.7.1]; model health, replace in all agents [Unreleased]
+│   ├── models_api.py        # Default model, rotation, prompt generator [0.7.1]; model health, replace in all agents [0.8.1]
 │   ├── provider_keys_api.py # Add / rename / delete / test a provider's API keys [0.7.5]
 │   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
 │   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
 │   ├── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
-│   ├── evolve_api.py        # Evolve page: overview, levels, change requests, fusion, restore [Unreleased]
-│   ├── doctor_api.py        # Doctor report, errors viewer, report download, health timeline [Unreleased]
-│   ├── knowledge_usage_api.py # Knowledge usage log, benchmarks, overview infographic [Unreleased]
+│   ├── evolve_api.py        # Evolve page: overview, levels, change requests, fusion, restore [0.8.1]
+│   ├── doctor_api.py        # Doctor report, errors viewer, report download, health timeline [0.8.1]
+│   ├── knowledge_usage_api.py # Knowledge usage log, benchmarks, overview infographic [0.8.1]
 │   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
-│   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [Unreleased]
+│   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [0.8.1]
 │   ├── knowledge_api.py     # Knowledge page: graph, notes, edit, trash, search, conflicts, duplicates [0.8.0]
 │   ├── knowledge_{import,semantic,distill,health}_api.py  # import jobs, semantic status/backfill/install, distillation, health [0.8.0]
-│   ├── rules_api.py         # Rules page: rules, proposals, approve / reject [Unreleased]
-│   ├── toolbox_api.py       # Your tools; export / import tools and skills as a file [Unreleased]
+│   ├── rules_api.py         # Rules page: rules, proposals, approve / reject [0.8.1]
+│   ├── customize_api.py     # Customize page: profiles, who uses what, proposals, AI review / adapt [0.8.1]
+│   ├── toolbox_api.py       # Your tools; export / import tools and skills as a file [0.8.1]
 │   └── skills_api.py        # Skills page: list, edit, import, assign [0.7.5]
 └── ... (~50 utility modules)
 
@@ -114,44 +118,44 @@ updater/                     # Safe updates: side-by-side releases, backups,
                              # migrations, rollback (stdlib only) [0.6.0];
                              # app_backup.py: full program-folder archive [0.7.1];
                              # nodejs.py: finds Node.js 20.19+ or installs Node 22
-                             # into BASE/node for the web UI build [Unreleased]
+                             # into BASE/node for the web UI build [0.8.1]
 
 webui/src/
 ├── App.tsx                  # Shell: channels + agents sidebar, navigation, live health
 ├── api.ts                   # Backend helpers and shared types
 ├── colors.ts                # Stable colour per agent [0.7.1]
 ├── updates.ts               # Update status type, restart-and-wait helper [0.7.4]
-├── latency.ts               # Latency levels of the model test (green/amber/red) [Unreleased]
-├── contextLength.ts         # Context slider helpers: formatting, snapping, levels [Unreleased]
+├── latency.ts               # Latency levels of the model test (green/amber/red) [0.8.1]
+├── contextLength.ts         # Context slider helpers: formatting, snapping, levels [0.8.1]
 └── components/
     ├── ChatView.tsx         # Channel chat, @mentions, activity panel [0.7.1]
     ├── ModelsView.tsx       # Default model, rotation, your providers [0.7.1]
-    ├── ModelHealthCard.tsx  # Model health, replacements, mismatches [Unreleased]
+    ├── ModelHealthCard.tsx  # Model health, replacements, mismatches [0.8.1]
     ├── JobsView.tsx         # Jobs, runs, evaluation, benchmark [0.7.1]
     ├── BackupsView.tsx      # Backups [0.7.1]
     ├── ProposalsPanel.tsx   # Change proposals + lessons (Doctor page) [0.7.1]
     ├── ChannelsView.tsx     # Create / rename / manage channels [0.7.3]
     ├── UpdatesView.tsx      # Check for updates, update, roll back, restart [0.7.4]
     ├── SkillsView.tsx       # Skills page [0.7.5]
-    ├── KnowledgeView.tsx    # Knowledge page: graph, notes, tags, note panel [Unreleased]
-    ├── KnowledgeGraph.tsx   # Canvas force-directed graph (no extra libraries) [Unreleased]
-    ├── ModelPicker.tsx      # Model list per provider + key, ⚡ latency test [Unreleased]
-    ├── ContextLength.tsx    # Per-agent context slider with min / recommended / max marks [Unreleased]
+    ├── KnowledgeView.tsx    # Knowledge page: graph, notes, tags, note panel [0.8.1]
+    ├── KnowledgeGraph.tsx   # Canvas force-directed graph (no extra libraries) [0.8.1]
+    ├── ModelPicker.tsx      # Model list per provider + key, ⚡ latency test [0.8.1]
+    ├── ContextLength.tsx    # Per-agent context slider with min / recommended / max marks [0.8.1]
     ├── SettingsView.tsx     # Settings page [0.5.0]
     ├── DoctorView.tsx       # Doctor page [0.7.0]
-    ├── DoctorReport.tsx     # Doctor → Report: errors viewer, report view, download [Unreleased]
+    ├── DoctorReport.tsx     # Doctor → Report: errors viewer, report view, download [0.8.1]
     ├── ToolsView.tsx        # Your tools (editor, on/off, make skill, repair) + all tools [0.5.0, Unreleased]
-    ├── TransferImport.tsx   # Import tools/skills from a file (bundle, .py, SKILL.md) [Unreleased]
+    ├── TransferImport.tsx   # Import tools/skills from a file (bundle, .py, SKILL.md) [0.8.1]
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
 
 tests/                       # 730 tests (pytest --collect-only, 2026-10-18)
-├── fixtures/fake_telegram_api.py # Local fake Telegram Bot API server [Unreleased]
-├── test_chat_message_actions.py # Copy/edit/delete/regenerate chat messages [Unreleased]
-├── test_doctor_report.py    # Doctor checks, report, errors viewer, downloads [Unreleased]
-├── test_provider_keys.py    # Several API keys per provider [Unreleased]
-├── test_telegram_channel.py # Telegram bot, incl. end-to-end via the fake server [Unreleased]
-└── test_telegram_webui.py   # Telegram bot inside the Web UI [Unreleased]
+├── fixtures/fake_telegram_api.py # Local fake Telegram Bot API server [0.8.1]
+├── test_chat_message_actions.py # Copy/edit/delete/regenerate chat messages [0.8.1]
+├── test_doctor_report.py    # Doctor checks, report, errors viewer, downloads [0.8.1]
+├── test_provider_keys.py    # Several API keys per provider [0.8.1]
+├── test_telegram_channel.py # Telegram bot, incl. end-to-end via the fake server [0.8.1]
+└── test_telegram_webui.py   # Telegram bot inside the Web UI [0.8.1]
 ```
 
 ---
@@ -163,11 +167,18 @@ The "happy path" for a single user message:
 ```
 channel (web chat / telegram / whatsapp / cli)
   telegram only: allowFrom check → per-chat queue → worker → @agent routing
+                 (no @name: channels.telegram.answer_agent; with a team, LEAD_TEAM
+                 is set so the leader's prompt says it manages the team) [0.8.1]
   → Agent.think()
       → _route_message()      task timer, guardrails, model selection,
                               medic loop guard (working since 0.7.0)
       → _build_context()      memory + knowledge retrieval
-      → _provider_chat()      LLM call (provider.py)
+      → system prompt         built-in prompt (+ skills, team) cached;
+                              per call: customization profile for the
+                              situation (customize.prompt_section), team
+                              leader section, then the Rules [0.8.1]
+      → _provider_chat()      LLM call (provider.py); tools switched off by
+                              the profile are left out (customize.HIDDEN_TOOLS)
                               ─ semantic_cache lookup
                               ─ retry/backoff, circuit breaker
                               ─ offline fallback to another local provider

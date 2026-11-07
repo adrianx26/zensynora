@@ -739,19 +739,26 @@ def _notify(prop: dict[str, Any]) -> None:
             return
     except Exception:
         pass
-    try:
-        from .channels import telegram as tg
-    except Exception:
-        return
-    if not tg.ACTIVE:
-        return
-    loop = getattr(tg.ACTIVE[0], "loop", None)
-    if loop is None or not loop.is_running():
-        return
     verb = {"create": "a new rule", "modify": "a change to rule", "delete": "deleting rule"}[prop["action"]]
     text = (f"📜 @{prop['proposed_by']} proposes {verb} “{prop['title']}” (#{prop['id']}).\n"
             f"Why: {prop['reason'] or '—'}\n"
             f"Approve or reject it in the Web UI → Rules, or: zensynora rules approve {prop['id']}")
+    if not send_notice(text):
+        logger.info("Rule proposal #%s: Telegram notice not sent", prop["id"])
+
+
+def send_notice(text: str) -> bool:
+    """Send a notice to the user through ZenSynora's running Telegram bot (best effort).
+    2026-11-07: shared with customization proposals."""
+    try:
+        from .channels import telegram as tg
+    except Exception:
+        return False
+    if not tg.ACTIVE:
+        return False
+    loop = getattr(tg.ACTIVE[0], "loop", None)
+    if loop is None or not loop.is_running():
+        return False
     try:
         import asyncio
 
@@ -764,8 +771,10 @@ def _notify(prop: dict[str, Any]) -> None:
             loop.create_task(coro)
         else:
             asyncio.run_coroutine_threadsafe(coro, loop)
+        return True
     except Exception as e:  # best effort
-        logger.info("Rule proposal #%s: Telegram notice not sent (%s)", prop["id"], e)
+        logger.info("Telegram notice not sent (%s)", e)
+        return False
 
 
 # ── the agents' system prompt ────────────────────────────────────────────────

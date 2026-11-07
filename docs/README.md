@@ -9,6 +9,7 @@
 |---|---|
 | [Web UI guide](webui_guide.md) | Chat channels with several agents, agent-to-agent activity, Models (switch, rotate, your own providers, model health and automatic fallback), Tools and Skills (create, edit, export/import), Jobs, Backups, Doctor (errors, failures, failed jobs, restarts), the Telegram bot in Settings → Channels |
 | [Rules](rules_guide.md) | Rules every agent must follow; agents propose changes, you approve or reject them |
+| [Customize](customize_guide.md) | How agents communicate, structure answers, behave and which tools they use — profiles per situation and agent, AI review, Telegram teams (0.8.1) |
 | [Knowledge base](knowledge_base_guide.md) | Note format (tags, aliases, metadata, facts, links), search syntax, what agents see, CLI, `.trash`, `.bmignore` |
 | [Telegram bot](telegram_guide.md) | Set up the Telegram bot, allow users, commands, `@agent` messages, files and photos, reminders, knowledge, troubleshooting |
 | [Updating](UPDATING.md) | `zensynora update`, rollback, data and program-folder backups, how updates stay safe |

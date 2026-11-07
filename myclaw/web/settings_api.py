@@ -468,6 +468,14 @@ async def update_settings(update: SettingsUpdate):
     dupes = sorted({n for n in new_names if lowered.count(n.lower()) > 1})
     if dupes:  # v0.7.5: two agents with one name made channels and @mentions ambiguous
         raise HTTPException(status_code=400, detail=f"Two agents are called {', '.join(dupes)} — names must differ.")
+    # 2026-11-07: Telegram's answering agent and its team must be agents that exist.
+    agent_names = {"default", *new_names}
+    lead = (_get_path(raw, "channels.telegram.answer_agent") or "").strip()
+    if lead and lead not in agent_names:
+        raise HTTPException(status_code=400, detail=f"Telegram: there is no agent '{lead}' to answer.")
+    missing = [t for t in (_get_path(raw, "channels.telegram.team") or []) if t not in agent_names]
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Telegram team: no agent called {', '.join(missing)}.")
     # v0.7.5: an agent renamed in the editor (same position, new name) keeps its
     # channels, conversation and jobs instead of leaving a "zombie" behind.
     renames = {}

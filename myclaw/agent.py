@@ -321,6 +321,9 @@ SYSTEM_PROMPT = (
     "list_rules() and read_rule(slug) show them. You cannot change a rule yourself: propose_rule(title, text, "
     "scope, reason), propose_rule_change(slug, text, reason) or propose_rule_deletion(slug, reason) send a "
     "proposal that the user approves or rejects; until then nothing changes. "
+    # 2026-11-07: customization profiles (myclaw/customize.py)
+    "CUSTOMIZATION: follow 'How to work now' when it is there. show_customization() lists the profiles; "
+    "propose_customization(profile, field, text, reason) sends a change for the user to approve. "
     "For all other responses, reply in plain text."
 )
 
@@ -843,11 +846,23 @@ class Agent:
         by the files' modification times, so an approved change applies on the
         next message without rebuilding anything, and proposals never appear.
         """
+        who = getattr(self, "rules_name", None) or self.name
+        # 2026-11-07: the customization profile for what the agent does now (chat / job /
+        # a task from another agent) and, on Telegram, the team it leads. Rules come last.
+        try:
+            from . import customize
+            from .agent_team import lead_section
+
+            for extra in (customize.prompt_section(who), lead_section(who)):
+                if extra:
+                    prompt = f"{prompt}\n\n{extra}"
+        except Exception as exc:  # a broken file must not stop the agent
+            logger.warning("Could not load the customization for agent %s: %s", self.name, exc)
         try:
             from .rules import prompt_section
 
             # A benchmark copy ("bench-<agent>") follows the rules of the agent it copies.
-            section = prompt_section(getattr(self, "rules_name", None) or self.name)
+            section = prompt_section(who)
         except Exception as exc:  # a broken rule file must not stop the agent
             logger.warning("Could not load rules for agent %s: %s", self.name, exc)
             return prompt
@@ -968,6 +983,10 @@ class Agent:
 
         # The agent's context length (Ollama sends it as num_ctx).
         token = CONTEXT_LENGTH.set(agent_context_length(_load_cfg(), self.name))
+        # 2026-11-07: tools switched off by the agent's customization profile are not offered.
+        from . import customize as _customize
+
+        hidden_token = _customize.HIDDEN_TOOLS.set(_customize.hidden_tools(self.name))
         try:
             from .observability import span
             from .resilience import CircuitBreakerError
@@ -1043,6 +1062,7 @@ class Agent:
                 return await self._fallback_wrapper.chat(messages, model, stream=stream)
         finally:
             CONTEXT_LENGTH.reset(token)
+            _customize.HIDDEN_TOOLS.reset(hidden_token)
 
     # ── Default-LLM rotation (v0.7.1) ────────────────────────────────────────
     def _follows_default_model(self) -> bool:

@@ -63,8 +63,8 @@ COMMANDS = [
 
 HELP = (
     "🤖 I'm your ZenSynora assistant.\n\n"
-    "Just write to me — the default agent answers. Start a message with @name to ask "
-    "a specific agent (see /agents).\n\n"
+    "Just write to me — the agent (or team) set in the Web UI → Customize → Telegram answers. "
+    "Start a message with @name to ask a specific agent (see /agents).\n\n"
     "Commands:\n"
     + "\n".join(f"/{c} — {d}" for c, d in COMMANDS)
 )
@@ -184,7 +184,8 @@ class TelegramChannel:
     # ── routing ──────────────────────────────────────────────────────────────
     def _route(self, text: str) -> tuple[Any, str]:
         """``@name rest`` → (agent, rest). Any case; a mention of the bot itself is
-        removed; an unknown @word stays part of the message for the default agent."""
+        removed; an unknown @word stays part of the message for the answering agent
+        (2026-11-07: Customize → Telegram; the default agent when none is set)."""
         reg = self.registry
         text = (text or "").strip()
         for _ in range(2):
@@ -199,7 +200,26 @@ class TelegramChannel:
             if match:
                 return reg[match], rest.strip()
             break
-        return reg["default"], text
+        return self.answerer()[0], text
+
+    def answerer(self) -> tuple[Any, list[str]]:
+        """Who answers a message without @name, and the team that agent leads (2026-11-07).
+        An agent that no longer exists falls back to the default agent."""
+        reg = self.registry
+        try:
+            from ..config import load_config
+
+            tg = load_config().channels.telegram
+            lead, team = (tg.answer_agent or "").strip(), list(tg.team or [])
+        except Exception:
+            lead, team = "", []
+        name = next((k for k in reg if k.lower() == lead.lower()), None) if lead else None
+        if lead and name is None and lead not in self._warned:
+            self._warned.add(lead)
+            logger.warning("Telegram: answer agent '%s' does not exist; the default agent answers", lead)
+        name = name or "default"
+        members = [k for k in reg if k != name and any(k.lower() == t.lower() for t in team)]
+        return reg[name], members
 
     # ── sending ──────────────────────────────────────────────────────────────
     async def _send(self, message: Any, text: str, markdown: bool = False) -> None:
@@ -341,6 +361,10 @@ class TelegramChannel:
             return
         await self._typing_once(update.effective_chat)
         typing = asyncio.create_task(self._keep_typing(update.effective_chat))
+        from ..agent_team import LEAD_TEAM
+
+        leader, members = self.answerer()
+        team_token = LEAD_TEAM.set(tuple(members) if agent.name == leader.name else ())  # the leader manages its team
         try:
             response = await agent.think(cleaned, user_id=user_id)
         except Exception as e:
@@ -350,6 +374,7 @@ class TelegramChannel:
             short = re.sub(r"\s*\(Details:.*$", "", describe_llm_error(e), flags=re.DOTALL)  # details → log
             response = f"⚠️ Sorry, that did not work: {short}"
         finally:
+            LEAD_TEAM.reset(team_token)
             typing.cancel()
         prefix = f"@{agent.name}: " if getattr(agent, "name", "default") != "default" else ""
         await self._send(msg, prefix + (response or ""))
@@ -423,7 +448,10 @@ class TelegramChannel:
         for name in self.registry:
             desc = (getattr(named.get(name), "description", "") or "").strip()
             lines.append(f"• @{name}" + (f" — {desc}" if desc else (" — the main agent" if name == "default" else "")))
-        lines.append("\nStart a message with @name to ask that agent, e.g. @coder write a binary search.")
+        leader, members = self.answerer()
+        lines.append(f"\nWithout @name, @{leader.name} answers" + (
+            f" and leads the team: {', '.join('@' + m for m in members)}." if members else "."))
+        lines.append("Start a message with @name to ask that agent, e.g. @coder write a binary search.")
         await self._send(update.effective_message, "\n".join(lines))
 
     # ── knowledge ────────────────────────────────────────────────────────────

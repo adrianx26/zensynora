@@ -1280,3 +1280,28 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .doctor-logs .log-filters .field-input { width: auto; min-width: 150px; }
 .doctor-logs .log-filters input.field-input { flex: 1 1 220px; }
 .doctor-logs .log-steps { margin: 4px 0 6px; padding-left: 22px; }
+
+/* 2026-11-07: Customize page */
+.customize-view .cz-layout { display: grid; grid-template-columns: minmax(200px, 260px) 1fr; gap: 16px; align-items: start; }
+.customize-view .cz-list { display: flex; flex-direction: column; gap: 8px; }
+.customize-view .cz-item { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 10px 12px; border-radius: 10px;
+  border: 1px solid var(--panel-border); background: var(--panel-bg); color: var(--text-primary); cursor: pointer; }
+.customize-view .cz-item.active { border-color: var(--accent-color); box-shadow: 0 0 0 1px var(--accent-color) inset; }
+.customize-view .cz-badges { display: flex; flex-wrap: wrap; gap: 4px; }
+.customize-view .cz-use { background: var(--accent-color); color: #fff; }
+.customize-view .cz-editor { max-width: none; }
+.customize-view .cz-over { color: var(--danger-color); }
+.customize-view .cz-suggest { margin-top: 6px; padding: 8px 10px; border-left: 3px solid var(--accent-color); background: var(--input-bg); border-radius: 6px; }
+.customize-view .cz-tools { margin: 10px 0; font-size: 0.9rem; }
+.customize-view .cz-suggest { font-size: 0.9rem; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.customize-view .cz-tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 12px; max-height: 260px; overflow: auto; margin-top: 8px; }
+.customize-view .cz-ai { margin-top: 14px; border-top: 1px solid var(--panel-border); padding-top: 10px; }
+.customize-view .cz-ai .row-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.customize-view .cz-ai .row-actions .field-input { flex: 1; min-width: 220px; }
+.customize-view .cz-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.customize-view .settings-tab .badge { margin-left: 6px; }
+@media (max-width: 800px) { .customize-view .cz-compare { grid-template-columns: 1fr; } }
+.customize-view .cz-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+.customize-view .cz-table th, .customize-view .cz-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--panel-border); }
+.customize-view .cz-table select { width: 100%; }
+@media (max-width: 800px) { .customize-view .cz-layout { grid-template-columns: 1fr; } }
