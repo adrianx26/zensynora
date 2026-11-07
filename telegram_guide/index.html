@@ -1339,7 +1339,7 @@ on your phone or computer. It uses the same agents, models and knowledge base
 as the Web UI. Your bot is private: only the people you allow can use it.</p>
 <p>What it can do:</p>
 <ul>
-<li>answer your messages (the default agent, or any agent with <code>@name</code>);</li>
+<li>answer your messages (the agent or team you choose, or any agent with <code>@name</code>);</li>
 <li>run reminders and repeating tasks (<code>/remind</code>);</li>
 <li>search, read and save notes in the knowledge base (<code>/knowledge_…</code>);</li>
 <li>answer several people at the same time, while keeping each chat in order.</li>
@@ -1365,7 +1365,8 @@ as the Web UI. Your bot is private: only the people you allow can use it.</p>
 <li>Click <strong>Send test message</strong>: the bot writes to every number in <em>Allowed
    Telegram users</em>. Telegram does not let a bot write first, so open the bot
    and press <strong>Start</strong> once before that.</li>
-<li><strong>Chat.</strong> Write to your bot. The default agent answers.</li>
+<li><strong>Chat.</strong> Write to your bot. The default agent answers (choose another agent or a team in
+   <strong>Customize → Telegram</strong>).</li>
 </ol>
 <p>The <strong>Telegram bot</strong> panel in Settings → Channels shows <em>Status: Running as
 @YourBot</em> when everything works (the sidebar health shows <em>Telegram: running
@@ -1449,17 +1450,24 @@ get only their own id and how to be allowed). All other commands, and normal
 messages, work only for allowed users.</p>
 <h2 id="agents-and-mentions">Agents and @mentions<a class="headerlink" href="#agents-and-mentions" title="Permanent link">&para;</a></h2>
 <ul>
-<li>A normal message goes to the <strong>default</strong> agent.</li>
-<li>Start a message with <code>@name</code> to ask another agent:
+<li>A normal message goes to the <strong>answering agent</strong> — the default agent unless
+  you choose another in <strong>Web UI → Customize → Telegram</strong> (since 0.8.1).</li>
+<li><strong>A team</strong> (0.8.1): in the same place, pick team members. The answering
+  agent is then the <strong>team leader</strong>: it answers you and manages the team — it
+  gives each member the part that fits it (<code>delegate</code>), checks what comes back
+  and sends you one answer. The members only work when the leader asks them.</li>
+<li>Start a message with <code>@name</code> to ask another agent directly (also a team member):
   <code>@writer a short poem about rain</code>. Upper or lower case does not matter.
   Answers from other agents start with their name (<code>@writer: …</code>), so you
   know who replied. <code>@writer</code> alone, with nothing after it, gets the question
   <em>What should @writer do?</em> — write the task after the name.</li>
-<li><code>/agents</code> lists the agents. Agents created later — in Settings → Agents, or
+<li><code>/agents</code> lists the agents and says who answers without <code>@name</code> (and the team).
+  Agents created later — in Settings → Agents, or
   by another agent with <code>create_agent</code> — can be used right away, without a
   restart.</li>
-<li>An <code>@word</code> that is not an agent stays part of the message for the default
-  agent.</li>
+<li>An <code>@word</code> that is not an agent stays part of the message for the answering
+  agent. If the answering agent is deleted, the default agent answers again
+  (and the log says so once).</li>
 </ul>
 <p>While the agent works, Telegram shows <strong>typing…</strong>. Long answers come as
 several messages (Telegram allows at most 4096 characters per message). If
@@ -1593,6 +1601,8 @@ polling. If you are not sure, use polling.</p>
 <span class="w">    </span><span class="nt">"run_in_webui"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">"shared_knowledge"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
 <span class="w">    </span><span class="nt">"files_to_knowledge"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"answer_agent"</span><span class="p">:</span><span class="w"> </span><span class="s2">""</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"team"</span><span class="p">:</span><span class="w"> </span><span class="p">[],</span>
 <span class="w">    </span><span class="nt">"max_workers"</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span>
 <span class="w">  </span><span class="p">}</span>
 <span class="p">}</span>
@@ -1628,6 +1638,14 @@ polling. If you are not sure, use polling.</p>
 <tr>
 <td><code>files_to_knowledge</code></td>
 <td><code>true</code>: documents and photos you send are added to the knowledge base right away (default <code>false</code>; files are always saved and shown to the agent)</td>
+</tr>
+<tr>
+<td><code>answer_agent</code></td>
+<td>Who answers a message without <code>@name</code> (<code>""</code> = the default agent); the team leader when <code>team</code> is set (0.8.1)</td>
+</tr>
+<tr>
+<td><code>team</code></td>
+<td>Agents the answering agent leads and hands parts to (0.8.1); must be existing agents — the Web UI refuses others</td>
 </tr>
 <tr>
 <td><code>max_workers</code></td>

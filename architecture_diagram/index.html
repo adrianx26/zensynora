@@ -1553,7 +1553,7 @@ layer to the layer it uses.</p>
     subgraph L1["Interfaces"]
         direction LR
         cli2["cli.py&lt;br/&gt;click commands"]
-        webapi["web/&lt;br/&gt;api · settings · models · chat · jobs · backup · medic · telegram"]
+        webapi["web/&lt;br/&gt;api · settings · models · chat · jobs · backup · medic · telegram · customize"]
         gw["gateway.py&lt;br/&gt;zensynora gateway: Telegram / WhatsApp / console"]
         channels["channels/&lt;br/&gt;telegram · whatsapp · discord"]
         mcpsrv["mcp/server.py&lt;br/&gt;tools over MCP (stdio)"]
@@ -1563,6 +1563,7 @@ layer to the layer it uses.</p>
     subgraph L2["Agents"]
         direction LR
         agent["agent.py&lt;br/&gt;Agent: think · stream_think"]
+        customize["customize.py&lt;br/&gt;profiles per situation and agent"]
         internals["agent_internals/&lt;br/&gt;router · context_builder · tool_executor"]
         swarm["swarm/&lt;br/&gt;orchestrator · strategies"]
         registry["agents/registry.py&lt;br/&gt;agents.yaml profiles"]
@@ -1993,8 +1994,8 @@ stops its own.</p>
         Q-&gt;&gt;W: next message of this chat
         Note over Q,W: several workers, so several chats in parallel,&lt;br/&gt;one message at a time per chat
         W-&gt;&gt;T: typing… while the agent works
-        W-&gt;&gt;W: @agent routing: remove @YourBot,&lt;br/&gt;match @writer ignoring case, else default agent
-        W-&gt;&gt;A: think(text) with this user's memory
+        W-&gt;&gt;W: @agent routing: remove @YourBot,&lt;br/&gt;match @writer ignoring case, else the answering agent&lt;br/&gt;(Customize → Telegram, else the default agent)
+        W-&gt;&gt;A: think(text) with this user's memory&lt;br/&gt;(answering agent with a team: it leads the team)
         A--&gt;&gt;W: answer, or a short plain error
         W-&gt;&gt;W: split into messages of at most 4096 characters
         W-&gt;&gt;T: send each part, as plain text if Markdown fails

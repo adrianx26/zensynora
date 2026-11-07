@@ -469,6 +469,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#customize-how-the-agents-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customize: how the agents work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#rules-what-every-agent-must-follow" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1384,6 +1395,17 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#customize-how-the-agents-work" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Customize: how the agents work
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#rules-what-every-agent-must-follow" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -2015,6 +2037,10 @@ after changing WhatsApp settings.</p>
 <td>On (default): notes are shared; each Telegram user keeps their own conversation memory</td>
 </tr>
 <tr>
+<td><strong>Who answers</strong> (Customize → Telegram, 0.8.1)</td>
+<td>The agent that answers a message without <code>@name</code>, and optionally the team it leads</td>
+</tr>
+<tr>
 <td><strong>Add files sent on Telegram to the knowledge base</strong></td>
 <td>Off (default). Files you send are always saved in the agent workspace (<code>inbox/telegram/…</code>) and shown to the agent; on: documents and photos also go into the knowledge base right away</td>
 </tr>
@@ -2123,6 +2149,44 @@ the list of every tool agents can call.</p>
   fails the safety check comes in turned off with the reason; <strong>I checked the
   code — trust it</strong> turns it on (still in the locked-down process).</li>
 </ul>
+<h2 id="customize-how-the-agents-work">Customize: how the agents work<a class="headerlink" href="#customize-how-the-agents-work" title="Permanent link">&para;</a></h2>
+<p><strong>Customize</strong> in the sidebar (🎛️, since 0.8.1). Profiles set the
+<strong>communication style</strong>, <strong>response structure</strong>, <strong>behaviour</strong> and the <strong>tools
+switched off</strong>; they are added on top of ZenSynora's built-in prompt, before
+your Rules. Each agent uses a profile per situation — <strong>chat</strong>, <strong>jobs</strong> and
+<strong>tasks from another agent</strong> (built-in <em>Agent to agent</em>: clear, precise,
+minimal). Tabs:</p>
+<table>
+<thead>
+<tr>
+<th>Tab</th>
+<th>What you do there</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Profiles</strong></td>
+<td>Edit, create, undo, reset or delete (to <code>.trash</code>) profiles; tick tools to switch off; <strong>🤖 Review and improve</strong> (issues + suggested text, saved only when you press Save) and <strong>Adapt</strong> for a scenario (a draft profile)</td>
+</tr>
+<tr>
+<td><strong>Who uses what</strong></td>
+<td>The profile per situation for all agents, and per agent; whether agents may propose changes</td>
+</tr>
+<tr>
+<td><strong>Telegram</strong></td>
+<td>Who answers without <code>@name</code>: one agent, or a team whose <strong>leader</strong> answers and manages the members; <code>@Agent</code> still goes straight to that agent</td>
+</tr>
+<tr>
+<td><strong>Proposals</strong></td>
+<td>Changes agents propose (<code>propose_customization</code>) — <em>Now</em> and <em>Proposed</em> side by side, Approve / Reject</td>
+</tr>
+<tr>
+<td><strong>Built-in features</strong></td>
+<td>The switches of Settings → Features</td>
+</tr>
+</tbody>
+</table>
+<p>See the <a href="../customize_guide/">Customize guide</a>.</p>
 <h2 id="rules-what-every-agent-must-follow">Rules: what every agent must follow<a class="headerlink" href="#rules-what-every-agent-must-follow" title="Permanent link">&para;</a></h2>
 <p><strong>Rules</strong> in the sidebar (the number = proposals waiting). Write rules every agent
 follows (title, priority, which agents, text); agents can only propose new rules,
