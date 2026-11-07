@@ -1015,6 +1015,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#the-zensynora-core" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The ZenSynora core
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#profiles" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1130,16 +1141,69 @@ it; agents can only <strong>propose</strong> a change, and nothing changes until
 The AI can review a profile and suggest a better one, or adapt it to a new
 scenario.</p>
 <pre class="mermaid"><code>flowchart LR
-    U["You — Customize page"] --&gt;|edit| P["Profiles&lt;br/&gt;style · structure · behaviour · tools off"]
+    U["You — Customize page"] --&gt;|edit| K["ZenSynora core&lt;br/&gt;identity · style · behaviour · knowledge habits"]
+    U --&gt;|edit| P["Profiles&lt;br/&gt;style · structure · behaviour · tools off"]
     A["Agent"] --&gt;|propose_customization| Q["Proposals"]
     Q --&gt;|you approve| P
     P --&gt; W{"What is the agent&lt;br/&gt;doing now?"}
     W --&gt;|chat| C["profile for chat"]
     W --&gt;|job run| J["profile for jobs"]
     W --&gt;|task from another agent| G["profile for agent-to-agent"]
-    C --&gt; S["Agent's instructions:&lt;br/&gt;built-in prompt + profile + Rules"]
+    Q --&gt;|you approve| K
+    C --&gt; S["Agent's instructions:&lt;br/&gt;core + fixed tools and safety + profile + Rules"]
+    K --&gt; S
     J --&gt; S
     G --&gt; S</code></pre>
+<h2 id="the-zensynora-core">The ZenSynora core<a class="headerlink" href="#the-zensynora-core" title="Permanent link">&para;</a></h2>
+<p><em>Since 2026-11-07.</em> The first tab shows the <strong>key characteristics</strong> every agent
+starts with — the default agent and every agent without its own prompt:</p>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Built-in text (short)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Identity</strong></td>
+<td><em>You are ZenSynora, a personal AI agent with access to a knowledge base, TOOLBOX, and Agent Swarms …</em></td>
+</tr>
+<tr>
+<td><strong>Communication style</strong></td>
+<td><em>Reply in plain text. Report errors clearly, with a suggested solution.</em></td>
+</tr>
+<tr>
+<td><strong>Behaviour</strong></td>
+<td><em>Verify tool outputs before proceeding; use the knowledge base; keep the context; check list_toolbox() before creating a tool.</em></td>
+</tr>
+<tr>
+<td><strong>Knowledge base habits</strong></td>
+<td><em>KNOWLEDGE GROWTH MANDATE: after every interaction where you share facts … save them with write_to_knowledge().</em></td>
+</tr>
+</tbody>
+</table>
+<p>Edit any part and <strong>Save</strong>; agents get it with their next message. <strong>Use
+ZenSynora's text</strong> puts one part back, <strong>Reset all to built-in</strong> the whole core,
+and <strong>↶ Undo last change</strong> the version before (the last 20 are kept). The
+identity cannot be empty. <strong>🤖 Review and improve the core</strong> asks the default
+model for problems and better text (nothing is saved until you press Save).
+Agents can propose a change to a part — <code>propose_customization("core",
+"knowledge", "…", "why")</code> — which waits on the Proposals tab like any other.</p>
+<p><strong>🔒 Tools and safety (fixed)</strong> is shown below the core but cannot be edited:
+how to call tools, the tool list, <em>never store secrets in the knowledge base</em>,
+and that agents cannot change the Rules or the customization themselves. A
+change there could break tool calling or let an agent change its own rules. To
+keep an agent away from a tool, switch the tool off in a profile.</p>
+<p><em>Used by</em> lists the agents: those with their own prompt (Settings → Agents) or
+their own profile file (<code>~/.myclaw/profiles/&lt;name&gt;.md</code>) use that instead of the
+core; profiles and Rules still apply to them. <em>What an agent gets</em> shows the
+exact text.</p>
+<p>Until 2026-11-07 the default agent did not use this text at all: it read a
+separate file in the program folder (<code>myclaw/profiles/default.md</code>) that was not
+visible, was replaced by every update and lacked the parts about Rules,
+customization and the knowledge base. That file is gone; its guidelines are
+part of the core's <em>Behaviour</em>.</p>
 <h2 id="profiles">Profiles<a class="headerlink" href="#profiles" title="Permanent link">&para;</a></h2>
 <p>A <strong>profile</strong> has:</p>
 <table>
@@ -1173,9 +1237,8 @@ scenario.</p>
 </tr>
 </tbody>
 </table>
-<p>The profile is a <strong>layer on top</strong> of ZenSynora's built-in prompt: the part that
-explains tool calling, the knowledge base and your <a href="../rules_guide/">Rules</a> stays
-as it is, so a profile cannot break tool use. Rules come after the profile in
+<p>The profile is a <strong>layer on top</strong> of the ZenSynora core and its fixed tools and
+safety part, so a profile cannot break tool use. Rules come after the profile in
 the prompt — they always win. A tool switched off is not sent to the model; if
 an agent still names it, it gets <em>the tool … is switched off for you here</em> and
 must do the task another way.</p>
@@ -1192,7 +1255,7 @@ must do the task another way.</p>
 <tr>
 <td><strong>Default</strong></td>
 <td>chat and jobs</td>
-<td>Nothing: empty fields add nothing, so ZenSynora works as before</td>
+<td>Nothing on top of the core: empty fields add nothing</td>
 </tr>
 <tr>
 <td><strong>Agent to agent</strong></td>
@@ -1248,9 +1311,11 @@ uses in a situation (for example <em>use Agent to agent for jobs, because the le
 agent reads my results</em>). It appears on the Proposals tab; approving it sets
 that agent's choice.</p>
 <h2 id="proposals-from-agents">Proposals from agents<a class="headerlink" href="#proposals-from-agents" title="Permanent link">&para;</a></h2>
-<p>Agents see the profiles (<code>show_customization</code>) and can propose a change with
-<code>propose_customization(profile, field, text, reason)</code>:</p>
+<p>Agents see the core and the profiles (<code>show_customization</code>) and can propose a
+change with <code>propose_customization(profile, field, text, reason)</code>:</p>
 <ul>
+<li>a part of the ZenSynora core: <code>profile</code> = <code>core</code>, <code>field</code> = <code>identity</code>,
+  <code>style</code>, <code>behavior</code> or <code>knowledge</code> (the tools and safety part cannot be proposed);</li>
 <li>a new text for <code>style</code>, <code>structure</code> or <code>behavior</code> of a profile;</li>
 <li>the tools switched off (<code>tools_off</code>, comma-separated);</li>
 <li>a new profile (give a new name as <code>profile</code>);</li>
@@ -1307,8 +1372,8 @@ leaving the page. They are the same settings.</p>
 </thead>
 <tbody>
 <tr>
-<td>Profiles, choices, proposals, history</td>
-<td><code>~/.myclaw/customize.json</code> (in backups under <em>Jobs, tools, skills, rules</em>)</td>
+<td>The core, profiles, choices, proposals, history</td>
+<td><code>~/.myclaw/customize.json</code> (in backups under <em>Jobs, tools, skills, rules</em>; updates never touch it)</td>
 </tr>
 <tr>
 <td>Deleted profiles</td>
@@ -1337,7 +1402,11 @@ or a plain script cannot change them. Agents reach only the two tools above.</p>
 <tbody>
 <tr>
 <td><code>GET /api/customize</code></td>
-<td>Profiles, <code>use</code>, per-agent <code>choices</code>, proposals, agents, tools</td>
+<td>The <code>core</code> (fields, built-in text, fixed <code>technical</code> part), <code>core_users</code>, profiles, <code>use</code>, per-agent <code>choices</code>, proposals, agents, tools</td>
+</tr>
+<tr>
+<td><code>PUT /api/customize/core</code> · <code>POST /api/customize/core/reset</code> (<code>{"part": …}</code> or <code>{}</code>) · <code>/core/undo</code> · <code>GET /core/preview</code></td>
+<td>Change, reset, undo the core · the full built-in prompt as agents get it</td>
 </tr>
 <tr>
 <td><code>POST /api/customize/profiles</code> · <code>PUT/DELETE /api/customize/profiles/{slug}</code></td>
@@ -1361,7 +1430,7 @@ or a plain script cannot change them. Agents reach only the two tools above.</p>
 </tr>
 <tr>
 <td><code>POST /api/customize/review</code> · <code>/adapt</code></td>
-<td>AI review (issues + improved text) · a draft for a scenario; nothing saved</td>
+<td>AI review (issues + improved text; <code>{"profile": "core"}</code> for the core) · a draft for a scenario; nothing saved</td>
 </tr>
 </tbody>
 </table>

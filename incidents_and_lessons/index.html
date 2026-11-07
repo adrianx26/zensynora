@@ -1464,6 +1464,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#813-the-default-agent-used-a-hidden-older-prompt-2026-11-07-branch-zensynora-core" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.13 The default agent used a hidden, older prompt (2026-11-07, branch zensynora-core)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2175,6 +2186,17 @@
     <span class="md-ellipsis">
       
         8.12 The Knowledge page showed only 2000 notes (2026-11-06, branch tool-loop-cache)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#813-the-default-agent-used-a-hidden-older-prompt-2026-11-07-branch-zensynora-core" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.13 The default agent used a hidden, older prompt (2026-11-07, branch zensynora-core)
       
     </span>
   </a>
@@ -3418,6 +3440,37 @@ in short form, in <code>AGENTS.md</code>.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="813-the-default-agent-used-a-hidden-older-prompt-2026-11-07-branch-zensynora-core">8.13 The default agent used a hidden, older prompt (2026-11-07, branch zensynora-core)<a class="headerlink" href="#813-the-default-agent-used-a-hidden-older-prompt-2026-11-07-branch-zensynora-core" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>Found while making the ZenSynora core editable: the default agent's instructions did not contain the built-in prompt's parts about Rules, customization proposals and the knowledge base.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td><code>Agent._load_system_prompt</code> prefers <code>myclaw/profiles/&lt;name&gt;.md</code> in the program folder; <code>default.md</code> existed there (an older copy of the prompt), so the default agent never got <code>SYSTEM_PROMPT</code>. The file was invisible to the user and replaced by every update.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>The file is removed; the built-in prompt is the ZenSynora core (editable, <code>~/.myclaw/customize.json</code>) + a fixed tools-and-safety part, for the default agent and every agent without its own prompt.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td>Review; <code>tests/test_customize.py::test_the_default_agent_gets_the_core_and_edits_apply_at_once</code>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>One base prompt, visible to the user: no second hidden copy of instructions in the program folder.</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="rules-for-future-changes">Rules for future changes<a class="headerlink" href="#rules-for-future-changes" title="Permanent link">&para;</a></h2>
 <ol>
@@ -3451,6 +3504,7 @@ in short form, in <code>AGENTS.md</code>.</p>
 <li><strong>No endless repeats:</strong> an identical tool call that keeps giving the same result is not run again; creating tools do not create duplicates.</li>
 <li><strong>Find what is asked for:</strong> lookups accept a bare name and answer a miss with what to try.</li>
 <li><strong>Caches and stop reasons:</strong> a fuzzy (similarity) cache match is only for a fresh question, never for a step inside a running task; a stopped run says the real reason. No hidden fixed caps on user data.</li>
+<li><strong>One visible base prompt:</strong> the instructions agents start with are the ZenSynora core the user can see and edit, plus a fixed technical part; no hidden copies.</li>
 </ol>
 
 
