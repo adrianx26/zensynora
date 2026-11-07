@@ -21,6 +21,7 @@ zensynora webui            # http://localhost:8000
 | Jobs — add, run, monitor, evaluate, benchmark | `src/components/JobsView.tsx` | `/api/jobs…` |
 | Backups — create, check, restore, download, import, automatic | `src/components/BackupsView.tsx` | `/api/backups…` |
 | Settings — providers, agents (✨ generate prompt), channels, features, security | `src/components/SettingsView.tsx` | `GET/PUT /api/settings`, `POST /api/settings/probe`, `POST /api/agents/generate-prompt` |
+| Customize — profiles (style, structure, behaviour, tools off), who uses what, Telegram answering agent / team, agents' proposals, AI review / adapt, built-in features | `src/components/CustomizeView.tsx` (Built-in features: `SettingsView only="Features"`) | `/api/customize…`, `PUT /api/settings` (Telegram) |
 | Doctor — health checks, safe fixes, change proposals, lessons | `src/components/DoctorView.tsx`, `src/components/ProposalsPanel.tsx` | `/api/system/doctor…`, `/api/medic/…` |
 | Costs & usage | `src/components/CostDashboard.tsx` | `/api/v1/costs/*` |
 | Tools | `src/components/ToolsView.tsx` | `GET /api/tools` |

@@ -416,6 +416,7 @@ after changing WhatsApp settings.
 | **Allowed Telegram users** | Your numeric user id — send `/whoami` to the bot to see it — or `@username`. Nobody else can use the bot. |
 | **Run the bot inside the Web UI** | On (default). Turn off if you run the bot with `zensynora gateway` instead. |
 | **Telegram uses the same knowledge base as the Web UI** | On (default): notes are shared; each Telegram user keeps their own conversation memory |
+| **Who answers** (Customize → Telegram, 0.8.1) | The agent that answers a message without `@name`, and optionally the team it leads |
 | **Add files sent on Telegram to the knowledge base** | Off (default). Files you send are always saved in the agent workspace (`inbox/telegram/…`) and shown to the agent; on: documents and photos also go into the knowledge base right away |
 | **Test bot** | Checks the token with Telegram — the token you just typed, or else the saved one. Success: *Token works — bot @name (Name)*. |
 | **Restart bot** | Starts the bot again. Not available when the bot is turned off, runs in `zensynora gateway`, or has no saved token. |
@@ -488,6 +489,25 @@ the list of every tool agents can call.
   **Replace existing** (the current one goes to the trash). Imported code that
   fails the safety check comes in turned off with the reason; **I checked the
   code — trust it** turns it on (still in the locked-down process).
+
+## Customize: how the agents work
+
+**Customize** in the sidebar (🎛️, since 0.8.1). Profiles set the
+**communication style**, **response structure**, **behaviour** and the **tools
+switched off**; they are added on top of ZenSynora's built-in prompt, before
+your Rules. Each agent uses a profile per situation — **chat**, **jobs** and
+**tasks from another agent** (built-in *Agent to agent*: clear, precise,
+minimal). Tabs:
+
+| Tab | What you do there |
+|---|---|
+| **Profiles** | Edit, create, undo, reset or delete (to `.trash`) profiles; tick tools to switch off; **🤖 Review and improve** (issues + suggested text, saved only when you press Save) and **Adapt** for a scenario (a draft profile) |
+| **Who uses what** | The profile per situation for all agents, and per agent; whether agents may propose changes |
+| **Telegram** | Who answers without `@name`: one agent, or a team whose **leader** answers and manages the members; `@Agent` still goes straight to that agent |
+| **Proposals** | Changes agents propose (`propose_customization`) — *Now* and *Proposed* side by side, Approve / Reject |
+| **Built-in features** | The switches of Settings → Features |
+
+See the [Customize guide](customize_guide.md).
 
 ## Rules: what every agent must follow
 

@@ -9,7 +9,7 @@ as the Web UI. Your bot is private: only the people you allow can use it.
 
 What it can do:
 
-* answer your messages (the default agent, or any agent with `@name`);
+* answer your messages (the agent or team you choose, or any agent with `@name`);
 * run reminders and repeating tasks (`/remind`);
 * search, read and save notes in the knowledge base (`/knowledge_…`);
 * answer several people at the same time, while keeping each chat in order.
@@ -36,7 +36,8 @@ Settings, buttons and status are in the Web UI under **Settings → Channels**
 6. Click **Send test message**: the bot writes to every number in *Allowed
    Telegram users*. Telegram does not let a bot write first, so open the bot
    and press **Start** once before that.
-5. **Chat.** Write to your bot. The default agent answers.
+5. **Chat.** Write to your bot. The default agent answers (choose another agent or a team in
+   **Customize → Telegram**).
 
 The **Telegram bot** panel in Settings → Channels shows *Status: Running as
 @YourBot* when everything works (the sidebar health shows *Telegram: running
@@ -76,17 +77,24 @@ messages, work only for allowed users.
 
 ## Agents and @mentions
 
-* A normal message goes to the **default** agent.
-* Start a message with `@name` to ask another agent:
+* A normal message goes to the **answering agent** — the default agent unless
+  you choose another in **Web UI → Customize → Telegram** (since 0.8.1).
+* **A team** (0.8.1): in the same place, pick team members. The answering
+  agent is then the **team leader**: it answers you and manages the team — it
+  gives each member the part that fits it (`delegate`), checks what comes back
+  and sends you one answer. The members only work when the leader asks them.
+* Start a message with `@name` to ask another agent directly (also a team member):
   `@writer a short poem about rain`. Upper or lower case does not matter.
   Answers from other agents start with their name (`@writer: …`), so you
   know who replied. `@writer` alone, with nothing after it, gets the question
   *What should @writer do?* — write the task after the name.
-* `/agents` lists the agents. Agents created later — in Settings → Agents, or
+* `/agents` lists the agents and says who answers without `@name` (and the team).
+  Agents created later — in Settings → Agents, or
   by another agent with `create_agent` — can be used right away, without a
   restart.
-* An `@word` that is not an agent stays part of the message for the default
-  agent.
+* An `@word` that is not an agent stays part of the message for the answering
+  agent. If the answering agent is deleted, the default agent answers again
+  (and the log says so once).
 
 While the agent works, Telegram shows **typing…**. Long answers come as
 several messages (Telegram allows at most 4096 characters per message). If
@@ -218,6 +226,8 @@ The Web UI writes these for you; you can also edit the file.
     "run_in_webui": true,
     "shared_knowledge": true,
     "files_to_knowledge": false,
+    "answer_agent": "",
+    "team": [],
     "max_workers": 4
   }
 }
@@ -231,6 +241,8 @@ The Web UI writes these for you; you can also edit the file.
 | `run_in_webui` | `true`: `zensynora webui` runs the bot (default) |
 | `shared_knowledge` | `true`: same knowledge base as the Web UI (default) |
 | `files_to_knowledge` | `true`: documents and photos you send are added to the knowledge base right away (default `false`; files are always saved and shown to the agent) |
+| `answer_agent` | Who answers a message without `@name` (`""` = the default agent); the team leader when `team` is set (0.8.1) |
+| `team` | Agents the answering agent leads and hands parts to (0.8.1); must be existing agents — the Web UI refuses others |
 | `max_workers` | How many chats are answered at the same time |
 
 ## Advanced: your own Telegram Bot API server

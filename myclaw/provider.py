@@ -93,7 +93,9 @@ def _get_tool_schemas() -> List[Dict]:
 
         ensure_tool_schemas()
         _TOOL_SCHEMAS_CACHE = TOOL_SCHEMAS
-    return _TOOL_SCHEMAS_CACHE
+    from .customize import filter_schemas  # 2026-11-07: tools switched off by the profile
+
+    return filter_schemas(_TOOL_SCHEMAS_CACHE)
 
 
 # ── Configuration Constants ──────────────────────────────────────────────────────

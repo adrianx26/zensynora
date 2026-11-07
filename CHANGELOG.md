@@ -7,7 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-07
+
+Everything below since 0.8.0, plus:
+
 ### Added
+
+**Customize page (2026-11-07)**
+- Web UI → **Customize** (🎛️): profiles that set the agents' *communication
+  style*, *response structure*, *behaviour* and the *tools switched off*. A
+  profile is a layer on top of ZenSynora's built-in prompt and before the
+  Rules, so it cannot break tool calling. Built-in profiles: *Default* (adds
+  nothing), *Agent to agent* (clear, precise, minimal) and *Brief*.
+- Each agent uses a profile per situation — **chat**, **jobs**, **tasks from
+  another agent** — found by itself; defaults for all agents plus a choice per
+  agent. Agent-to-agent work uses *Agent to agent* by default.
+- Agents read the profiles (`show_customization`) and can only **propose**
+  changes, new profiles or their own profile choice
+  (`propose_customization`); nothing changes until you approve (Proposals tab,
+  *Now* / *Proposed* side by side; a Telegram notice when the bot runs).
+- 🤖 **Review and improve** (issues + suggested text) and **Adapt** for a
+  scenario (a draft profile) with the default model; nothing is saved until you
+  choose.
+- Every saved version is kept (Undo, the last 20); deleted profiles go to
+  `~/.myclaw/.trash`; *Reset to built-in*; the exact text added to the prompt
+  is shown. Stored in `~/.myclaw/customize.json` (included in backups).
+- **Telegram: one agent or a team.** Customize → Telegram sets who answers a
+  message without `@name` (`channels.telegram.answer_agent`) and the team it
+  leads (`channels.telegram.team`). The leader answers and manages the team
+  (delegates parts, checks them, sends one answer); `@Agent` still goes
+  straight to that agent; `/agents` says who answers. Unknown agents are
+  refused when saved; a deleted answering agent falls back to the default.
+- **Built-in features** tab: the switches of Settings → Features.
+- Guide: [docs/customize_guide.md](docs/customize_guide.md).
 
 **Doctor → Logs (2026-11-05)**
 - An activity log of everything the app does (agent answers, tools, scripts,

@@ -212,9 +212,22 @@ async def execute_tools(
             from .. import activity
 
             activity.record("tool", name, "repeat", 0, detail="not run again: same arguments, same result")
+    # 2026-11-07: a tool switched off by the agent's profile is not run (the model was not offered it).
+    from .. import customize as _customize
+
+    hidden = _customize.hidden_tools(agent.name)
+    off_ids = set()
+    for tc in tool_calls:
+        name = tc.get("function", {}).get("name", "")
+        tool_call_id = tc.get("id", "call_default")
+        if name in hidden and tool_call_id not in blocked_ids:
+            content = _customize.tool_off_message(name, agent.name)
+            tool_results_by_id[tool_call_id] = content
+            off_ids.add(tool_call_id)
+            await mem.add("tool", content)
     only_repeats = bool(tool_calls) and len(blocked_ids) == len(tool_calls)
     repeats["_rounds"] = repeats.get("_rounds", 0) + 1 if only_repeats else 0
-    runnable = [tc for tc in tool_calls if tc.get("id", "call_default") not in blocked_ids]
+    runnable = [tc for tc in tool_calls if tc.get("id", "call_default") not in blocked_ids | off_ids]
 
     if agent._current_task_id:
         await agent._task_timer.update_step(

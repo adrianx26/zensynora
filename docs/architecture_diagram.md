@@ -78,7 +78,7 @@ flowchart TB
     subgraph L1["Interfaces"]
         direction LR
         cli2["cli.py<br/>click commands"]
-        webapi["web/<br/>api · settings · models · chat · jobs · backup · medic · telegram"]
+        webapi["web/<br/>api · settings · models · chat · jobs · backup · medic · telegram · customize"]
         gw["gateway.py<br/>zensynora gateway: Telegram / WhatsApp / console"]
         channels["channels/<br/>telegram · whatsapp · discord"]
         mcpsrv["mcp/server.py<br/>tools over MCP (stdio)"]
@@ -88,6 +88,7 @@ flowchart TB
     subgraph L2["Agents"]
         direction LR
         agent["agent.py<br/>Agent: think · stream_think"]
+        customize["customize.py<br/>profiles per situation and agent"]
         internals["agent_internals/<br/>router · context_builder · tool_executor"]
         swarm["swarm/<br/>orchestrator · strategies"]
         registry["agents/registry.py<br/>agents.yaml profiles"]
@@ -567,8 +568,8 @@ sequenceDiagram
         Q->>W: next message of this chat
         Note over Q,W: several workers, so several chats in parallel,<br/>one message at a time per chat
         W->>T: typing… while the agent works
-        W->>W: @agent routing: remove @YourBot,<br/>match @writer ignoring case, else default agent
-        W->>A: think(text) with this user's memory
+        W->>W: @agent routing: remove @YourBot,<br/>match @writer ignoring case, else the answering agent<br/>(Customize → Telegram, else the default agent)
+        W->>A: think(text) with this user's memory<br/>(answering agent with a team: it leads the team)
         A-->>W: answer, or a short plain error
         W->>W: split into messages of at most 4096 characters
         W->>T: send each part, as plain text if Markdown fails

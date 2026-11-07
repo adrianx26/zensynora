@@ -253,6 +253,10 @@ class TelegramConfig(BaseModel):
     # and shown to the agent; this also adds documents and photos to the
     # knowledge base automatically (off by default: background work is opt-in).
     files_to_knowledge: bool = False
+    # 2026-11-07: who answers a message without @name: one agent, or a team whose
+    # leader (answer_agent) answers and hands parts to the members ("" = default agent).
+    answer_agent: str = ""
+    team: list[str] = []
 
 
 class WhatsAppConfig(BaseModel):

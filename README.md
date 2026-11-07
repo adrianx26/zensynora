@@ -31,11 +31,16 @@ Ollama, or any major cloud provider.
   the Web UI, search by words or (optionally) by meaning, flags for
   contradicting facts, and imports of web pages, GitHub repos, documents and
   ChatGPT/Claude/Obsidian exports. [More below](#knowledge-base).
-- **Does things.** 121 tools: files, sandboxed shell, web and headless browser,
+- **Does things.** 128 tools: files, sandboxed shell, web and headless browser,
   scheduling, knowledge, delegation, and tools the agent writes for itself.
 - **Works in teams.** Chat channels with several agents at once — see who
   delegates what to whom. 137 ready-made agent profiles and swarms
   (parallel, sequential, hierarchical, voting).
+- **Works your way.** The Customize page sets how agents communicate, lay
+  out answers, behave and which tools they use — a profile per situation
+  (chat, jobs, agent-to-agent) and per agent. The AI reviews and adapts
+  profiles; agents propose changes, you approve. On Telegram, one agent or a
+  team (its leader answers) replies. [Guide](docs/customize_guide.md).
 - **Any model, switchable.** Change the default model in one click, rotate
   or fall back across models, add your own local or online providers.
 - **Runs jobs.** Scheduled or on-demand tasks with history, scoring and
@@ -97,7 +102,7 @@ step: [docs/telegram_guide.md](docs/telegram_guide.md).
 
 | Command | What it does |
 |---|---|
-| `zensynora webui [--port 8000] [--host 127.0.0.1]` | Web UI: chat channels, models, jobs, backups, settings, doctor (`--host 127.0.0.1` = this computer only); also runs the Telegram bot when it is switched on |
+| `zensynora webui [--port 8000] [--host 127.0.0.1]` | Web UI: chat channels, models, jobs, backups, settings, doctor, **Customize** (how agents communicate and behave — [guide](docs/customize_guide.md)) (`--host 127.0.0.1` = this computer only); also runs the Telegram bot when it is switched on (answered by an agent or a team) |
 | `zensynora agent` | Chat in the terminal (`@name` to address an agent) |
 | `zensynora gateway` | Run the Telegram or WhatsApp bot without the Web UI (falls back to terminal chat) — [Telegram guide](docs/telegram_guide.md) |
 | `zensynora mcp-server` | Expose ZenSynora's tools to MCP clients over stdio |

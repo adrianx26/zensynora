@@ -163,6 +163,8 @@ function setPathImmutable(obj: Json, path: string, value: Json): Json {
 
 interface Props {
   onSaved?: () => void;
+  // 2026-11-07: show only this tab, without the tab row (Customize → Built-in features)
+  only?: Tab;
 }
 
 interface TelegramBot {
@@ -195,12 +197,12 @@ function botStateText(bot: TelegramBot): { text: string; ok: boolean } {
   }
 }
 
-const SettingsView: React.FC<Props> = ({ onSaved }) => {
+const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
   const [data, setData] = useState<SettingsResponse | null>(null);
   const [draft, setDraft] = useState<Json>(null);
   const [changes, setChanges] = useState<Record<string, Json>>({});
   const [clearSecrets, setClearSecrets] = useState<string[]>([]);
-  const [tab, setTab] = useState<Tab>('Model');
+  const [tab, setTab] = useState<Tab>(only ?? 'Model');
   const [loadError, setLoadError] = useState<string | null>(null);
   const [needsKey, setNeedsKey] = useState(false);
   const [keyInput, setKeyInput] = useState(getAdminKey());
@@ -550,13 +552,15 @@ const SettingsView: React.FC<Props> = ({ onSaved }) => {
 
   return (
     <div className="settings-view">
-      <div className="settings-tabs" role="tablist">
-        {TABS.map(t => (
-          <button key={t} role="tab" aria-selected={tab === t} className={`settings-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-            {t}
-          </button>
-        ))}
-      </div>
+      {!only && (
+        <div className="settings-tabs" role="tablist">
+          {TABS.map(t => (
+            <button key={t} role="tab" aria-selected={tab === t} className={`settings-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
+              {t}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="settings-body">
         {!data.config_file_exists && (

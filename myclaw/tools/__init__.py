@@ -140,6 +140,9 @@ _LAZY_AGENT_TOOLS = {
     "propose_rule":              ("myclaw.rules",                "propose_rule",              "Propose a new rule for agents; the user approves or rejects it (not active until approved)"),
     "propose_rule_change":       ("myclaw.rules",                "propose_rule_change",       "Propose new text for an existing rule; the user approves or rejects it (not active until approved)"),
     "propose_rule_deletion":     ("myclaw.rules",                "propose_rule_deletion",     "Propose deleting a rule; it stays active until the user approves"),
+    # 2026-11-07: customization profiles — agents read them and can only propose changes
+    "show_customization":        ("myclaw.customize",            "show_customization",        "Show the customization profiles (communication style, response structure, behaviour, tools off) and which one you use now"),
+    "propose_customization":     ("myclaw.customize",            "propose_customization",     "Propose a change to a customization profile, a new profile, or which profile you use per situation; the user approves it"),
     # 2026-10-24 (KB phase 5): ingestion into the knowledge base
     "assimilate":                ("myclaw.tools.ingest",         "assimilate",                "Read a web page, a GitHub repository (https://github.com/owner/repo) or a local file/folder (PDF, Word, Excel, text, code, images) into linked knowledge notes plus a Mermaid diagram of its structure, in one call; returns the overview note and the diagram"),
     "import_knowledge":          ("myclaw.tools.ingest",         "import_knowledge",          "Import a ChatGPT or Claude.ai export (.zip/.json), an MCP memory file, a folder or zip of Markdown notes (Obsidian vault) or one document into the knowledge base (kind: auto, chatgpt, claude, mcp_memory, markdown, document)"),

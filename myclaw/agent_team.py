@@ -45,6 +45,29 @@ def _describe(config: Any, name: str) -> str:
     return ""
 
 
+# 2026-11-07: Telegram can be answered by a team. While the leader answers a Telegram
+# message this holds the team members; the leader's prompt then says it manages them.
+LEAD_TEAM: ContextVar[tuple] = ContextVar("lead_team", default=())
+
+
+def lead_section(agent_name: str) -> str:
+    """'You lead this team' (only while the agent answers for a Telegram team)."""
+    team = [n for n in LEAD_TEAM.get() if n != agent_name]
+    if not team:
+        return ""
+    try:
+        from .config import load_config
+
+        config = load_config()
+        lines = [f"- @{n}: {_describe(config, n)}" for n in team]
+    except Exception:  # pragma: no cover
+        lines = [f"- @{n}" for n in team]
+    return ("## You lead a team\nYou answer the user for this team and you manage it:\n" + "\n".join(lines) +
+            "\nPlan the work, give each member the part that fits it with delegate(agent_name, task) (the task "
+            "must stand on its own), check what they send back, and give the user ONE combined answer. Do "
+            "simple things yourself; do not delegate what one quick step answers.")
+
+
 def team_section(config: Any, agent_name: str) -> str:
     """'Your team' part of the system prompt (empty when the agent is alone)."""
     names = ["default"] + [a.name for a in config.agents.named]
