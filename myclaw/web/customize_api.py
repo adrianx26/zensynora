@@ -1,7 +1,8 @@
 """Customize page API (2026-11-07): customization profiles, who uses which, agents'
 proposals and the AI review.
 
-GET    /api/customize                        profiles, use per situation, per-agent choices (choices),
+GET    /api/customize                        the ZenSynora core (+ fixed part, who uses it), profiles,
+                                             use per situation, per-agent choices (choices),
                                              proposals, agents, tools (name + what it does)
 POST   /api/customize/profiles               create a profile
 PUT    /api/customize/profiles/{slug}        change a profile (any field)
@@ -11,7 +12,10 @@ POST   /api/customize/profiles/{slug}/undo   the version before the last change
 GET    /api/customize/profiles/{slug}/preview   the text this profile adds to a prompt
 PUT    /api/customize/use                    {"use": {...}, "agents": {...}, "agents_may_propose": bool}
 POST   /api/customize/proposals/{id}/approve|reject
-POST   /api/customize/review                 {"profile": slug} → issues + improved text (not saved)
+PUT    /api/customize/core                   {"identity"?, "style"?, "behavior"?, "knowledge"?}
+POST   /api/customize/core/reset             {"part": "style"} or {} for the whole core
+POST   /api/customize/core/undo              the version before the last change
+POST   /api/customize/review                 {"profile": slug | "core"} → issues + improved text (not saved)
 POST   /api/customize/adapt                  {"profile": slug, "scenario": "..."} → draft (not saved)
 
 Profiles are instructions to every agent, so every route uses the settings guard and
@@ -55,7 +59,9 @@ def get_all() -> Dict[str, Any]:
             "tools": _tools(), "situations": [{"id": s, "label": customize.SITUATION_LABELS[s]}
                                               for s in customize.SITUATIONS],
             "fields": [{"id": f, "label": customize.FIELD_LABELS[f]} for f in customize.FIELDS],
-            "max_field": customize.MAX_FIELD}
+            "max_field": customize.MAX_FIELD,
+            "core": customize.core_info(), "core_users": customize.core_users(),
+            "core_fields": [{"id": f, "label": customize.CORE_LABELS[f]} for f in customize.CORE_FIELDS]}
 
 
 class ProfileIn(BaseModel):
@@ -117,6 +123,47 @@ def preview(slug: str) -> Dict[str, Any]:
     if p is None:
         raise HTTPException(status_code=404, detail=f"There is no profile '{slug}'.")
     text = customize.render(p)  # exactly what an agent using it gets
+    return {"text": text, "chars": len(text)}
+
+
+class CoreIn(BaseModel):
+    identity: Optional[str] = None
+    style: Optional[str] = None
+    behavior: Optional[str] = None
+    knowledge: Optional[str] = None
+
+
+@router.put("/api/customize/core", dependencies=ui_guard)
+def save_core(c: CoreIn) -> Dict[str, Any]:
+    try:
+        return customize.save_core({k: v for k, v in c.model_dump().items() if v is not None})
+    except ValueError as e:
+        raise _bad(e)
+
+
+class PartIn(BaseModel):
+    part: Optional[str] = None
+
+
+@router.post("/api/customize/core/reset", dependencies=ui_guard)
+def reset_core(p: PartIn) -> Dict[str, Any]:
+    try:
+        return customize.reset_core(p.part or None)
+    except ValueError as e:
+        raise _bad(e)
+
+
+@router.post("/api/customize/core/undo", dependencies=ui_guard)
+def undo_core() -> Dict[str, Any]:
+    try:
+        return customize.undo_core()
+    except ValueError as e:
+        raise _bad(e)
+
+
+@router.get("/api/customize/core/preview", dependencies=guard)
+def preview_core() -> Dict[str, Any]:
+    text = customize.base_prompt()  # what an agent without its own prompt starts with
     return {"text": text, "chars": len(text)}
 
 

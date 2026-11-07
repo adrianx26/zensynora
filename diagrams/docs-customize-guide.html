@@ -27,14 +27,17 @@
   <h2 class="diagram-title">Customize: how ZenSynora&#x27;s agents work</h2>
   <p class="diagram-desc">*Since 0.8.1 (2026-11-07).* **Web UI → Customize** (🎛️ in the sidebar) is where you decide how the agents communicate, how they lay out their answers, how they behave and which tools they use — for every situation, and per agent. You change</p>
   <div class="mermaid">flowchart LR
-    U[&quot;You — Customize page&quot;] --&gt;|edit| P[&quot;Profiles&lt;br/&gt;style · structure · behaviour · tools off&quot;]
+    U[&quot;You — Customize page&quot;] --&gt;|edit| K[&quot;ZenSynora core&lt;br/&gt;identity · style · behaviour · knowledge habits&quot;]
+    U --&gt;|edit| P[&quot;Profiles&lt;br/&gt;style · structure · behaviour · tools off&quot;]
     A[&quot;Agent&quot;] --&gt;|propose_customization| Q[&quot;Proposals&quot;]
     Q --&gt;|you approve| P
     P --&gt; W{&quot;What is the agent&lt;br/&gt;doing now?&quot;}
     W --&gt;|chat| C[&quot;profile for chat&quot;]
     W --&gt;|job run| J[&quot;profile for jobs&quot;]
     W --&gt;|task from another agent| G[&quot;profile for agent-to-agent&quot;]
-    C --&gt; S[&quot;Agent&#x27;s instructions:&lt;br/&gt;built-in prompt + profile + Rules&quot;]
+    Q --&gt;|you approve| K
+    C --&gt; S[&quot;Agent&#x27;s instructions:&lt;br/&gt;core + fixed tools and safety + profile + Rules&quot;]
+    K --&gt; S
     J --&gt; S
     G --&gt; S</div>
 </div>

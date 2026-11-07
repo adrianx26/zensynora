@@ -9,17 +9,57 @@ scenario.
 
 ```mermaid
 flowchart LR
-    U["You — Customize page"] -->|edit| P["Profiles<br/>style · structure · behaviour · tools off"]
+    U["You — Customize page"] -->|edit| K["ZenSynora core<br/>identity · style · behaviour · knowledge habits"]
+    U -->|edit| P["Profiles<br/>style · structure · behaviour · tools off"]
     A["Agent"] -->|propose_customization| Q["Proposals"]
     Q -->|you approve| P
     P --> W{"What is the agent<br/>doing now?"}
     W -->|chat| C["profile for chat"]
     W -->|job run| J["profile for jobs"]
     W -->|task from another agent| G["profile for agent-to-agent"]
-    C --> S["Agent's instructions:<br/>built-in prompt + profile + Rules"]
+    Q -->|you approve| K
+    C --> S["Agent's instructions:<br/>core + fixed tools and safety + profile + Rules"]
+    K --> S
     J --> S
     G --> S
 ```
+
+## The ZenSynora core
+
+*Since 2026-11-07.* The first tab shows the **key characteristics** every agent
+starts with — the default agent and every agent without its own prompt:
+
+| Part | Built-in text (short) |
+|---|---|
+| **Identity** | *You are ZenSynora, a personal AI agent with access to a knowledge base, TOOLBOX, and Agent Swarms …* |
+| **Communication style** | *Reply in plain text. Report errors clearly, with a suggested solution.* |
+| **Behaviour** | *Verify tool outputs before proceeding; use the knowledge base; keep the context; check list_toolbox() before creating a tool.* |
+| **Knowledge base habits** | *KNOWLEDGE GROWTH MANDATE: after every interaction where you share facts … save them with write_to_knowledge().* |
+
+Edit any part and **Save**; agents get it with their next message. **Use
+ZenSynora's text** puts one part back, **Reset all to built-in** the whole core,
+and **↶ Undo last change** the version before (the last 20 are kept). The
+identity cannot be empty. **🤖 Review and improve the core** asks the default
+model for problems and better text (nothing is saved until you press Save).
+Agents can propose a change to a part — `propose_customization("core",
+"knowledge", "…", "why")` — which waits on the Proposals tab like any other.
+
+**🔒 Tools and safety (fixed)** is shown below the core but cannot be edited:
+how to call tools, the tool list, *never store secrets in the knowledge base*,
+and that agents cannot change the Rules or the customization themselves. A
+change there could break tool calling or let an agent change its own rules. To
+keep an agent away from a tool, switch the tool off in a profile.
+
+*Used by* lists the agents: those with their own prompt (Settings → Agents) or
+their own profile file (`~/.myclaw/profiles/<name>.md`) use that instead of the
+core; profiles and Rules still apply to them. *What an agent gets* shows the
+exact text.
+
+Until 2026-11-07 the default agent did not use this text at all: it read a
+separate file in the program folder (`myclaw/profiles/default.md`) that was not
+visible, was replaced by every update and lacked the parts about Rules,
+customization and the knowledge base. That file is gone; its guidelines are
+part of the core's *Behaviour*.
 
 ## Profiles
 
@@ -32,9 +72,8 @@ A **profile** has:
 | **Behaviour** | How to work | *Ask before deleting anything. Say what you are unsure of.* |
 | **Tools switched off** | Tools the agent is not offered (tick them in the list) | `shell`, `ssh_command` |
 
-The profile is a **layer on top** of ZenSynora's built-in prompt: the part that
-explains tool calling, the knowledge base and your [Rules](rules_guide.md) stays
-as it is, so a profile cannot break tool use. Rules come after the profile in
+The profile is a **layer on top** of the ZenSynora core and its fixed tools and
+safety part, so a profile cannot break tool use. Rules come after the profile in
 the prompt — they always win. A tool switched off is not sent to the model; if
 an agent still names it, it gets *the tool … is switched off for you here* and
 must do the task another way.
@@ -43,7 +82,7 @@ Three profiles come with ZenSynora:
 
 | Profile | For | What it does |
 |---|---|---|
-| **Default** | chat and jobs | Nothing: empty fields add nothing, so ZenSynora works as before |
+| **Default** | chat and jobs | Nothing on top of the core: empty fields add nothing |
 | **Agent to agent** | tasks one agent gives another | Clear, precise, minimal: no greetings, the result first, facts one per line, says what it could not do |
 | **Brief** | e.g. Telegram on a phone | At most about 5 short lines, the answer first |
 
@@ -80,9 +119,11 @@ that agent's choice.
 
 ## Proposals from agents
 
-Agents see the profiles (`show_customization`) and can propose a change with
-`propose_customization(profile, field, text, reason)`:
+Agents see the core and the profiles (`show_customization`) and can propose a
+change with `propose_customization(profile, field, text, reason)`:
 
+* a part of the ZenSynora core: `profile` = `core`, `field` = `identity`,
+  `style`, `behavior` or `knowledge` (the tools and safety part cannot be proposed);
 * a new text for `style`, `structure` or `behavior` of a profile;
 * the tools switched off (`tools_off`, comma-separated);
 * a new profile (give a new name as `profile`);
@@ -140,7 +181,7 @@ leaving the page. They are the same settings.
 
 | What | Where |
 |---|---|
-| Profiles, choices, proposals, history | `~/.myclaw/customize.json` (in backups under *Jobs, tools, skills, rules*) |
+| The core, profiles, choices, proposals, history | `~/.myclaw/customize.json` (in backups under *Jobs, tools, skills, rules*; updates never touch it) |
 | Deleted profiles | `~/.myclaw/.trash/customize-*.json` |
 | Telegram answering agent and team | `~/.myclaw/config.json` → `channels.telegram` |
 | Who changed what | Doctor → Logs (kind *setting*, `customize: …`) |
@@ -152,10 +193,11 @@ or a plain script cannot change them. Agents reach only the two tools above.
 
 | Route | What |
 |---|---|
-| `GET /api/customize` | Profiles, `use`, per-agent `choices`, proposals, agents, tools |
+| `GET /api/customize` | The `core` (fields, built-in text, fixed `technical` part), `core_users`, profiles, `use`, per-agent `choices`, proposals, agents, tools |
+| `PUT /api/customize/core` · `POST /api/customize/core/reset` (`{"part": …}` or `{}`) · `/core/undo` · `GET /core/preview` | Change, reset, undo the core · the full built-in prompt as agents get it |
 | `POST /api/customize/profiles` · `PUT/DELETE /api/customize/profiles/{slug}` | Create, change, delete (to the trash) |
 | `POST /api/customize/profiles/{slug}/reset` · `/undo` | Built-in text back · the version before the last change |
 | `GET /api/customize/profiles/{slug}/preview` | The text the profile adds to a prompt |
 | `PUT /api/customize/use` | `{"use": {...}, "agents": {...}, "agents_may_propose": bool}` |
 | `POST /api/customize/proposals/{id}/approve` · `/reject` | Decide a proposal |
-| `POST /api/customize/review` · `/adapt` | AI review (issues + improved text) · a draft for a scenario; nothing saved |
+| `POST /api/customize/review` · `/adapt` | AI review (issues + improved text; `{"profile": "core"}` for the core) · a draft for a scenario; nothing saved |

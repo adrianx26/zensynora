@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+**The ZenSynora core is visible and editable (2026-11-07)**
+- Customize → **ZenSynora core**: the key characteristics every agent starts
+  with — identity, communication style, behaviour, knowledge base habits — are
+  shown and editable (undo, reset per part or all, 🤖 review). Agents can
+  propose changes (`propose_customization("core", …)`), approved by you.
+  Stored in `~/.myclaw/customize.json`, so updates never overwrite them.
+- How to call tools, the tool list and the safety lines (no secrets in the
+  knowledge base; agents cannot change Rules or the customization) are shown
+  but fixed.
+- *Used by* shows which agents get the core and which use their own prompt.
+
+### Fixed
+
+**The default agent used another, hidden prompt (2026-11-07)**
+- The default agent read `myclaw/profiles/default.md` instead of the built-in
+  prompt: invisible, replaced by every update, and without the instructions
+  about Rules, customization and the knowledge base. It now uses the ZenSynora
+  core like every agent without its own prompt; the file's guidelines are part
+  of the core's *Behaviour*. Note: the default agent now also follows the
+  knowledge base habits (built-in: the *knowledge growth mandate*) — change
+  them on the Core tab if it saves too much.
+
 ## [0.8.1] - 2026-11-07
 
 Everything below since 0.8.0, plus:

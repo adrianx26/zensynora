@@ -1298,6 +1298,9 @@ button.kb-bar:hover, .kb-bar.active { background: var(--accent-glow); }
 .customize-view .cz-ai { margin-top: 14px; border-top: 1px solid var(--panel-border); padding-top: 10px; }
 .customize-view .cz-ai .row-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .customize-view .cz-ai .row-actions .field-input { flex: 1; min-width: 220px; }
+.customize-view .cz-field-actions { display: flex; justify-content: space-between; gap: 8px; margin-top: 4px; }
+.customize-view .field-label .badge { margin-left: 6px; }
+.customize-view .muted .badge { margin-right: 4px; }
 .customize-view .cz-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .customize-view .settings-tab .badge { margin-left: 6px; }
 @media (max-width: 800px) { .customize-view .cz-compare { grid-template-columns: 1fr; } }

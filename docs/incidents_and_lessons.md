@@ -427,6 +427,16 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 | **Detected by** | The user; `tests/test_knowledge_api.py::test_graph_shows_every_note_not_only_the_first_2000`. |
 | **Rule** | No hidden fixed caps on user data: measure first, and if a limit is needed make it a setting and say so on the page. |
 
+### 8.13 The default agent used a hidden, older prompt (2026-11-07, branch zensynora-core)
+
+| | |
+|---|---|
+| **Symptom** | Found while making the ZenSynora core editable: the default agent's instructions did not contain the built-in prompt's parts about Rules, customization proposals and the knowledge base. |
+| **Root cause** | `Agent._load_system_prompt` prefers `myclaw/profiles/<name>.md` in the program folder; `default.md` existed there (an older copy of the prompt), so the default agent never got `SYSTEM_PROMPT`. The file was invisible to the user and replaced by every update. |
+| **Fix** | The file is removed; the built-in prompt is the ZenSynora core (editable, `~/.myclaw/customize.json`) + a fixed tools-and-safety part, for the default agent and every agent without its own prompt. |
+| **Detected by** | Review; `tests/test_customize.py::test_the_default_agent_gets_the_core_and_edits_apply_at_once`. |
+| **Rule** | One base prompt, visible to the user: no second hidden copy of instructions in the program folder. |
+
 ---
 
 ## Rules for future changes
@@ -461,3 +471,4 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 28. **No endless repeats:** an identical tool call that keeps giving the same result is not run again; creating tools do not create duplicates.
 29. **Find what is asked for:** lookups accept a bare name and answer a miss with what to try.
 30. **Caches and stop reasons:** a fuzzy (similarity) cache match is only for a fresh question, never for a step inside a running task; a stopped run says the real reason. No hidden fixed caps on user data.
+31. **One visible base prompt:** the instructions agents start with are the ZenSynora core the user can see and edit, plus a fixed technical part; no hidden copies.

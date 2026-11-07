@@ -275,57 +275,12 @@ async def _load_profile_cached_async(name: str, profile_path: Path) -> str:
     return await asyncio.to_thread(_load_profile_cached, name, profile_path)
 
 
-SYSTEM_PROMPT = (
-    "You are ZenSynora, a personal AI agent with access to a knowledge base, TOOLBOX, and Agent Swarms. "
-    "Use the provided function-calling tools. If you cannot call functions natively, call a tool "
-    "by responding ONLY with JSON, nothing else: "
-    '{"tool": "<name>", "args": {<key>: <value>}} — you then get the result and answer in normal text. '
-    "Core tools: shell(cmd), read_file(path), write_file(path, content), "
-    "browse(url, max_length), download_file(url, path), delegate(agent_name, task). "
-    "Tool management: list_tools(), register_tool(name, code, documentation), "
-    "list_toolbox(), get_tool_documentation(name). "
-    "Scheduling: schedule(task, delay, every, user_id), edit_schedule(job_id, new_task, delay, every), "
-    "split_schedule(job_id, sub_tasks_json), suspend_schedule(job_id), resume_schedule(job_id), "
-    "cancel_schedule(job_id), list_schedules(). "
-    "Knowledge: write_to_knowledge(title, content, tags, observations, relations), search_knowledge(query), "
-    "read_knowledge(permalink), get_knowledge_context(permalink, depth), list_knowledge(), "
-    "get_related_knowledge(permalink), sync_knowledge_base(), list_knowledge_tags(), "
-    # 2026-10-24 (KB phase 2): quality tools
-    "knowledge_conflicts(permalink), resolve_knowledge_conflict(conflict_id, keep), "
-    "knowledge_categories(), find_duplicate_notes(). "
-    # 2026-10-24 (KB phase 4): distilled facts, scenarios and persona
-    "Distilled: list_facts(query, limit), list_scenarios(query), get_persona(), drill_down(id) "
-    "(the notes behind a fact f12, scenario s3 or the persona), distill_knowledge(). "
-    # 2026-10-24 (KB phase 5): ingestion
-    "Import: assimilate(source, max_notes) reads a web page, a GitHub repository (https://github.com/owner/repo) "
-    "or a local file/folder into linked notes plus a Mermaid diagram in one call — use it for 'analyze this "
-    "repo/site/document and make a diagram'; import_knowledge(path, kind) imports ChatGPT/Claude exports, "
-    "MCP memory files and Markdown/Obsidian folders. "
-    # 2026-10-23 (KB phase 0): how notes link to each other.
-    "A line `- relation [[Other note]]` in a note's text links it to another note. "
-    "Agent Swarms: swarm_create(name, strategy, workers, coordinator, aggregation), "
-    "swarm_assign(swarm_id, task), swarm_status(swarm_id), swarm_result(swarm_id), "
-    "swarm_terminate(swarm_id), swarm_list(status), swarm_stats(). "
-    "IMPORTANT: When creating tools with register_tool(), first use list_toolbox() to check if a similar tool exists. "
-    "You can reference knowledge with memory://permalink. "
-    # 2026-10-23 (KB phase 0): "credentials" removed — the knowledge-keeper
-    # skill (and common sense) says secrets never go into the knowledge base.
-    "KNOWLEDGE GROWTH MANDATE: After EVERY interaction where the user shares factual information, "
-    "preferences, configurations, server details, hostnames, ports, file paths, "
-    "important decisions, or any data worth remembering — you MUST proactively call "
-    "write_to_knowledge() to persist it permanently. Do NOT wait to be asked. "
-    "Every meaningful exchange must grow the knowledge base. "
-    "Never store passwords, API keys, tokens or other secrets in the knowledge base. "
-    # 2026-10-27: the user's rules (myclaw/rules.py)
-    "RULES: the user's rules are listed under 'Rules you must follow' — always follow them. "
-    "list_rules() and read_rule(slug) show them. You cannot change a rule yourself: propose_rule(title, text, "
-    "scope, reason), propose_rule_change(slug, text, reason) or propose_rule_deletion(slug, reason) send a "
-    "proposal that the user approves or rejects; until then nothing changes. "
-    # 2026-11-07: customization profiles (myclaw/customize.py)
-    "CUSTOMIZATION: follow 'How to work now' when it is there. show_customization() lists the profiles; "
-    "propose_customization(profile, field, text, reason) sends a change for the user to approve. "
-    "For all other responses, reply in plain text."
-)
+# 2026-11-07: the built-in prompt = the ZenSynora core (identity, style, behaviour, knowledge
+# habits — editable on the Customize page) + a fixed part (tool calling, tool list, safety).
+# This constant is ZenSynora's own version; agents get the user's version (see _with_rules).
+from .customize import BUILTIN_CORE as _BUILTIN_CORE, base_prompt as _base_prompt  # noqa: E402
+
+SYSTEM_PROMPT = _base_prompt(_BUILTIN_CORE)
 
 
 # 2026-10-23 (KB phase 0): size of the automatic "## Relevant Knowledge" block.
@@ -847,6 +802,14 @@ class Agent:
         next message without rebuilding anything, and proposals never appear.
         """
         who = getattr(self, "rules_name", None) or self.name
+        # 2026-11-07: the user's version of the ZenSynora core replaces the built-in one (no rebuild needed).
+        if prompt.startswith(SYSTEM_PROMPT):
+            try:
+                from . import customize
+
+                prompt = customize.base_prompt() + prompt[len(SYSTEM_PROMPT):]
+            except Exception as exc:  # a broken file must not stop the agent
+                logger.warning("Could not load the ZenSynora core: %s", exc)
         # 2026-11-07: the customization profile for what the agent does now (chat / job /
         # a task from another agent) and, on Telegram, the team it leads. Rules come last.
         try:
