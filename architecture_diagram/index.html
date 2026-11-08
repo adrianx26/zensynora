@@ -1528,7 +1528,7 @@ Text-oriented companion: <a href="../ARCHITECTURE/">ARCHITECTURE.md</a>.</p>
     end
     core["ZenSynora core&lt;br/&gt;agents · tools · memory · knowledge"]
     subgraph llm["LLM providers"]
-        local["Local: llama.cpp · Ollama · LM Studio"]
+        local["Local: llama.cpp · Ollama · LM Studio · NVIDIA PAIR · FreeToken"]
         cloud["Cloud: OpenAI · Anthropic · Gemini · Groq · OpenRouter"]
     end
     subgraph ext["Outside services (optional)"]
@@ -1704,6 +1704,16 @@ and a model that is gone for good is replaced in every agent
 <tr>
 <td><code>lmstudio</code></td>
 <td>LM Studio (OpenAI API, <code>:1234/v1</code>)</td>
+<td><code>openai</code></td>
+</tr>
+<tr>
+<td><code>nvpair</code></td>
+<td>NVIDIA PAIR — Personal AI Router (OpenAI API, <code>127.0.0.1:11434/v1</code>; routes to a free GPU at home)</td>
+<td><code>openai</code></td>
+</tr>
+<tr>
+<td><code>freetoken</code></td>
+<td>FreeToken / FreeToken Desktop (OpenAI API, <code>127.0.0.1:1919/v1</code>)</td>
 <td><code>openai</code></td>
 </tr>
 <tr>
