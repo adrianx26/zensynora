@@ -6,6 +6,7 @@
 // the top with a diff, and nothing changes until you approve.
 import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
+import { useAutoClear } from '../notice';
 
 type Priority = 'high' | 'normal' | 'low';
 
@@ -77,6 +78,7 @@ const RulesView: React.FC<{ onChanged?: () => void }> = ({ onChanged }) => {
   const [showHistory, setShowHistory] = useState(false);
   const [notes, setNotes] = useState<Record<number, string>>({});
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [busy, setBusy] = useState<string | null>(null); // an approve/reject/review in flight
 
   const load = useCallback(async () => {

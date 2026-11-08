@@ -3,6 +3,7 @@
 // restore (a safety backup is made first), import and delete.
 import React, { useCallback, useEffect, useState } from 'react';
 import { ago, api, fmtBytes, getAdminKey, getApiBase, type BackupInfo } from '../api';
+import { useAutoClear } from '../notice';
 
 interface BackupSettings {
   auto_enabled: boolean; interval_hours: number; keep: number;
@@ -32,6 +33,7 @@ const BackupsView: React.FC<Props> = ({ onRestored }) => {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [restoreParts, setRestoreParts] = useState<Record<string, string[]>>({});
 
   const load = useCallback(async () => {

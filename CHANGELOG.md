@@ -47,6 +47,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**"Saved." stayed on the screen forever (2026-11-08)**
+- Success messages ("Saved.", "Proposal approved.", …) on Settings and every
+  other page now go away by themselves within 3 seconds. Errors stay until the
+  next action, so they can be read.
+
 **Dropdown lists were white in Chrome (2026-11-08)**
 - The open list of every dropdown (Settings, chat, Customize, …) was white
   with light, unreadable text: the selects have see-through backgrounds and

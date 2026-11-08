@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
 import SettingsView from './SettingsView';
 import CustomizeCore, { type CoreInfo } from './CustomizeCore';
+import { useAutoClear } from '../notice';
 
 type Field = 'style' | 'structure' | 'behavior';
 type Situation = 'chat' | 'job' | 'agent';
@@ -65,6 +66,7 @@ const CustomizeView: React.FC = () => {
   const [toolQ, setToolQ] = useState('');
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [tg, setTg] = useState<{ lead: string; team: string[] } | null>(null);
 
   const load = useCallback(async (keepSel?: string) => {

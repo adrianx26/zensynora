@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ago, api, type AgentInfo, type Channel } from '../api';
 import { agentColor } from '../colors';
+import { useAutoClear } from '../notice';
 
 interface Props {
   agents: AgentInfo[];
@@ -29,6 +30,7 @@ const ChannelsView: React.FC<Props> = ({ agents, onChanged, onOpen }) => {
   const [draft, setDraft] = useState<Draft>(EMPTY);
   const draftRaw = draft;
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
 
   const load = useCallback(async () => {
     try {

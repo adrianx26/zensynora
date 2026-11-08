@@ -4,6 +4,7 @@ import { api, ApiError, getAdminKey, setAdminKey, type ProbeResult, type Provide
 import { KeySelect, ProviderKeysPanel } from './ProviderKeys';
 import { LatencyTest, ModelPicker } from './ModelPicker';
 import { ContextLength } from './ContextLength';
+import { useAutoClear } from '../notice';
 
 type Json = any;
 
@@ -210,6 +211,7 @@ const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
   const [keyInput, setKeyInput] = useState(getAdminKey());
   const [saving, setSaving] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [probe, setProbe] = useState<Record<string, ProbeResult & { loading?: boolean }>>({});
   // v0.7.1: index of the named agent whose prompt is being generated
   const [generating, setGenerating] = useState<number | null>(null);

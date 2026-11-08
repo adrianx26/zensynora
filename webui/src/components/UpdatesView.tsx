@@ -5,11 +5,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { restartServer, type UpdateStatus } from '../updates';
+import { useAutoClear } from '../notice';
 
 const UpdatesView: React.FC = () => {
   const [st, setSt] = useState<UpdateStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [ref, setRef] = useState('main');
   const [force, setForce] = useState(false);
   const [restarting, setRestarting] = useState<string | null>(null);

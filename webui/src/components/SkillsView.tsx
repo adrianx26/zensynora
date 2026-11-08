@@ -7,6 +7,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api, downloadFile } from '../api';
 import { useTransferImport } from './TransferImport';
 import { agentColor } from '../colors';
+import { useAutoClear } from '../notice';
 
 interface SkillRow {
   name: string;
@@ -38,6 +39,7 @@ const SkillsView: React.FC = () => {
   const [draft, setDraft] = useState<Draft | null>(null);    // editor
   const [filter, setFilter] = useState('');
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
 
   const load = useCallback(async () => {
     try {

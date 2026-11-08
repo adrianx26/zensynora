@@ -6,6 +6,7 @@ import { api, getAdminKey, getApiBase } from '../api';
 import DoctorOverview from './DoctorOverview';
 import { AISummaryCard, AskAI } from './DoctorAI';
 import { explainKey, useExplanations } from '../doctorAi';
+import { useAutoClear } from '../notice';
 
 type Level = 'WARNING' | 'ERROR' | 'CRITICAL';
 
@@ -127,6 +128,7 @@ const DoctorReport: React.FC = () => {
   const [markdown, setMarkdown] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
 
   const loadSummary = useCallback(async () => {
     try {

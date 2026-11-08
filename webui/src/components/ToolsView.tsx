@@ -5,6 +5,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, downloadFile } from '../api';
 import { useTransferImport } from './TransferImport';
+import { useAutoClear } from '../notice';
 
 interface Tool {
   name: string;
@@ -51,6 +52,7 @@ const ToolsView: React.FC = () => {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [preview, setPreview] = useState<SkillPreview | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
