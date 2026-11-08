@@ -87,6 +87,8 @@ class PrometheusMetrics:
         "ollama": {},
         "lmstudio": {},
         "llamacpp": {},
+        "nvpair": {},
+        "freetoken": {},
         "openrouter": {},
     }
 

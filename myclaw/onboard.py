@@ -5,6 +5,8 @@ _PROVIDER_HINTS = {
     "ollama":     "Local — Ollama (http://localhost:11434)",
     "lmstudio":   "Local — LM Studio (http://localhost:1234/v1)",
     "llamacpp":   "Local — llama.cpp server (http://localhost:8080/v1)",
+    "nvpair":     "Local — NVIDIA PAIR, routes to a free GPU at home (http://127.0.0.1:11434/v1)",
+    "freetoken":  "Local — FreeToken / FreeToken Desktop (http://127.0.0.1:1919/v1)",
     "openai":     "Online — OpenAI (requires api_key)",
     "anthropic":  "Online — Anthropic Claude (requires api_key)",
     "gemini":     "Online — Google Gemini (requires api_key)",
@@ -35,6 +37,8 @@ def onboard():
         "ollama":     "llama3.2",
         "lmstudio":   "local-model",
         "llamacpp":   "local-model",
+        "nvpair":     "llama3.2",
+        "freetoken":  "local-model",
         "openai":     "gpt-4o-mini",
         "anthropic":  "claude-3-5-sonnet-20241022",
         "gemini":     "gemini-1.5-flash",
@@ -79,6 +83,8 @@ def onboard():
             "ollama":     {"base_url": "http://localhost:11434"},
             "lmstudio":   {"base_url": "http://localhost:1234/v1",  "api_key": "lm-studio"},
             "llamacpp":   {"base_url": "http://localhost:8080/v1",  "api_key": "no-key"},
+            "nvpair":     {"base_url": "http://127.0.0.1:11434/v1", "api_key": "no-key"},
+            "freetoken":  {"base_url": "http://127.0.0.1:1919/v1",  "api_key": "no-key"},
             "openai":     {"api_key": api_key if provider == "openai"     else ""},
             "anthropic":  {"api_key": api_key if provider == "anthropic"  else ""},
             "gemini":     {"api_key": api_key if provider == "gemini"     else ""},
@@ -158,7 +164,7 @@ def onboard():
     if gdpr_enabled:
         print("🔒 GDPR compliance enabled. Use `zensynora gdpr delete <user_id>` to erase user data.")
 
-    if provider in {"ollama", "lmstudio", "llamacpp"}:
+    if provider in {"ollama", "lmstudio", "llamacpp", "nvpair", "freetoken"}:
         print(f"\nMake sure your {provider} server is running, then: zensynora agent")
     else:
         print("\nRun `zensynora agent` to start chatting.")

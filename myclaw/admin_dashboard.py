@@ -128,6 +128,8 @@ def get_provider_health() -> List[Dict[str, Any]]:
         "ollama": ("http://localhost:11434/api/tags", 2.0),
         "lmstudio": ("http://localhost:1234/v1/models", 2.0),
         "llamacpp": ("http://localhost:8080/v1/models", 2.0),
+        "nvpair": ("http://127.0.0.1:11434/v1/models", 2.0),
+        "freetoken": ("http://127.0.0.1:1919/v1/models", 2.0),
     }
 
     for provider in SUPPORTED_PROVIDERS:

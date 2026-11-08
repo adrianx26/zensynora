@@ -7,6 +7,8 @@ Local
   ollama      – Ollama  (http://localhost:11434)
   lmstudio    – LM Studio  (OpenAI-compat, http://localhost:1234/v1)
   llamacpp    – llama-server  (OpenAI-compat, http://localhost:8080/v1)
+  nvpair      – NVIDIA PAIR, Personal AI Router (OpenAI-compat, http://127.0.0.1:11434/v1)
+  freetoken   – FreeToken / FreeToken Desktop (OpenAI-compat, http://127.0.0.1:1919/v1)
 
 Online
   openai      – OpenAI  (gpt-4o, gpt-4-turbo, …)
@@ -638,7 +640,8 @@ class OllamaProvider(BaseLLMProvider):
         }
         from .context_budget import CONTEXT_LENGTH
 
-        if CONTEXT_LENGTH.get() > 0:  # the agent's context length (Settings → Agents)
+        # the agent's context length, or this provider's if smaller (set per call in Agent._fitted)
+        if CONTEXT_LENGTH.get() > 0:
             payload["options"] = {"num_ctx": CONTEXT_LENGTH.get()}
         try:
             # Use pooled client instead of creating new one
@@ -969,6 +972,34 @@ class LMStudioProvider(OpenAICompatProvider):
             base_url = "http://localhost:1234/v1"
             api_key = "lm-studio"
         super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
+
+
+class _LocalOpenAIProvider(OpenAICompatProvider):
+    """A built-in local OpenAI-compatible server configured under providers.<NAME>."""
+
+    NAME = ""
+    DEFAULT_URL = ""
+
+    def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
+        try:
+            cfg = getattr(config.providers, self.NAME)
+            base_url = _with_v1(cfg.base_url)
+            api_key = cfg.api_key.get_secret_value() or "no-key"
+        except Exception:
+            base_url, api_key = self.DEFAULT_URL, "no-key"
+        super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
+
+
+class NVPairProvider(_LocalOpenAIProvider):
+    """NVIDIA PAIR — Personal AI Router (2026-11-08): routes to a free GPU at home."""
+
+    NAME, DEFAULT_URL = "nvpair", "http://127.0.0.1:11434/v1"
+
+
+class FreeTokenProvider(_LocalOpenAIProvider):
+    """FreeToken / FreeToken Desktop by FlashML (2026-11-08)."""
+
+    NAME, DEFAULT_URL = "freetoken", "http://127.0.0.1:1919/v1"
 
 
 class LlamaCppProvider(OpenAICompatProvider):
@@ -1355,6 +1386,8 @@ _PROVIDER_MAP = {
     "ollama": OllamaProvider,
     "lmstudio": LMStudioProvider,
     "llamacpp": LlamaCppProvider,
+    "nvpair": NVPairProvider,
+    "freetoken": FreeTokenProvider,
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "gemini": GeminiProvider,
@@ -1483,7 +1516,7 @@ def provider_names(config=None) -> List[str]:
     return names
 
 
-LOCAL_BUILTIN_PROVIDERS = ("ollama", "lmstudio", "llamacpp")
+LOCAL_BUILTIN_PROVIDERS = ("ollama", "lmstudio", "llamacpp", "nvpair", "freetoken")
 _CLOUD_DEFAULT_URLS = {
     "anthropic": "https://api.anthropic.com/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta",
@@ -1511,7 +1544,7 @@ def provider_endpoint(config, name: str, key_id: Optional[str] = None) -> Option
         key = pcfg.api_key.get_secret_value() if pcfg is not None and hasattr(pcfg, "api_key") else ""
         kind = name if name in ("ollama", "anthropic", "gemini") else "openai"
         url = getattr(pcfg, "base_url", "") or _CLOUD_DEFAULT_URLS.get(name, "")
-        if name in ("lmstudio", "llamacpp"):
+        if name in ("lmstudio", "llamacpp", "nvpair", "freetoken"):
             url = _with_v1(url)  # v0.7.3: same URL the provider really uses
         return {"kind": kind, "base_url": url.rstrip("/"), "api_key": key,
                 "local": name in LOCAL_BUILTIN_PROVIDERS, "label": name, "custom": False}

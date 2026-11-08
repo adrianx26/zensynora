@@ -24,7 +24,7 @@ from .provider import get_provider, BaseLLMProvider
 logger = logging.getLogger(__name__)
 
 # Local provider fallback chain (in priority order)
-_LOCAL_PROVIDERS = ["ollama", "lmstudio", "llamacpp"]
+_LOCAL_PROVIDERS = ["ollama", "lmstudio", "llamacpp", "nvpair", "freetoken"]
 
 
 async def _check_provider_alive(provider: BaseLLMProvider) -> bool:

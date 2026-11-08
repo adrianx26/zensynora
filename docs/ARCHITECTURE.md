@@ -75,7 +75,7 @@ myclaw/
 ├── messaging/               # AgentMessage envelope + InProcessBroker [Sprint 7]
 ├── observability/           # OpenTelemetry tracing — wired Sprint 10
 ├── prompts/                 # Versioned Jinja2 prompt registry [Sprint 3]
-├── provider.py              # LLM providers (+ your own, providers.custom) + Message TypedDict
+├── provider.py              # LLM providers (+ your own, providers.custom; nvpair, freetoken [Unreleased]) + Message TypedDict
 ├── provider_keys.py         # Several API keys per provider: lookup, key fallback order, who uses which key [0.7.5]
 ├── resilience/              # Circuit breaker + fallback chain — wired Sprint 10
 ├── evolve.py                # Evolve: agent levels, agent fusion (+ agent trash), AI change requests as jobs [0.8.1]

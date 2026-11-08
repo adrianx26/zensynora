@@ -46,6 +46,8 @@ _PRICING = {
     "ollama": {},
     "lmstudio": {},
     "llamacpp": {},
+    "nvpair": {},
+    "freetoken": {},
     "openrouter": {},
 }
 

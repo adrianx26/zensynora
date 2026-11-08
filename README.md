@@ -203,9 +203,16 @@ API key.
 | llama.cpp | `llamacpp`, `http://localhost:8080/v1` | start with `--jinja` for tools |
 | Ollama | `ollama`, `http://localhost:11434` | the model must be pulled |
 | LM Studio | `lmstudio`, `http://localhost:1234/v1` | |
+| NVIDIA PAIR (Personal AI Router) | `nvpair`, `http://127.0.0.1:11434/v1` | one endpoint that routes each request to a free GPU at home (Ollama / LM Studio / llama.cpp on each machine); use the URL from PAIR's *Endpoints* window; same computer only |
+| FreeToken / FreeToken Desktop | `freetoken`, `http://127.0.0.1:1919/v1` | large MoE models on one GPU (`ft serve` or the desktop app) |
 | OpenAI · Groq · OpenRouter | API key | OpenAI-compatible |
 | Anthropic · Gemini | API key | install `anthropic` / `google-generativeai` |
 | **Your own** (Models → Add provider) | URL (+ key) | any OpenAI-compatible server or another Ollama; presets for vLLM, LocalAI, DeepSeek, Mistral, Cerebras, GitHub Models … |
+
+Each provider has a **context length** (Settings → Providers, 0 = unknown):
+requests are fitted to it — the oldest messages left out, a shorter tool list
+if needed — also when the rotation moves a turn to that provider; the smaller
+of it and the agent's own context length wins.
 
 A provider can hold **several API keys** (Settings → Providers → Keys) and
 each agent picks one; optionally the other keys are tried when one is
