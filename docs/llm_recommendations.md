@@ -17,6 +17,14 @@
 > * **Ollama** — provider `ollama`, URL `http://localhost:11434`. The configured
 >   model must be pulled (`ollama pull …`), otherwise Ollama answers 404.
 > * **LM Studio** — provider `lmstudio`, URL `http://localhost:1234/v1`.
+> * **NVIDIA PAIR** (Personal AI Router, 2026-11-08) — provider `nvpair`, URL
+>   `http://127.0.0.1:11434/v1` (PAIR's Ollama endpoint; LM Studio's is `:1234`,
+>   llama.cpp's `:8080` — copy it from PAIR's *Endpoints* window). PAIR sends
+>   each request to a free machine at home; it only answers on the same computer.
+> * **FreeToken / FreeToken Desktop** (FlashML, 2026-11-08) — provider
+>   `freetoken`, URL `http://127.0.0.1:1919/v1` (`ft serve`). Its context comes
+>   from the model (`--max-seq-len-override`); set the same number as the
+>   provider's *Context length*.
 > * `zensynora doctor` tells you whether the server is reachable and whether the
 >   configured model exists on it.
 

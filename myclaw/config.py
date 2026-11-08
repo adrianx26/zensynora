@@ -119,6 +119,8 @@ ENV_OVERRIDES = {
     # Added 0.7.0: local OpenAI-compatible servers and OpenRouter were not overridable.
     "providers.llamacpp.base_url": "MYCLAW_LLAMACPP_BASE_URL",
     "providers.lmstudio.base_url": "MYCLAW_LMSTUDIO_BASE_URL",
+    "providers.nvpair.base_url": "MYCLAW_NVPAIR_BASE_URL",        # 2026-11-08
+    "providers.freetoken.base_url": "MYCLAW_FREETOKEN_BASE_URL",  # 2026-11-08
     "providers.openrouter.api_key": "MYCLAW_OPENROUTER_API_KEY",
     # Telegram
     "channels.telegram.token": "MYCLAW_TELEGRAM_TOKEN",
@@ -301,6 +303,10 @@ class MultiKeyMixin(BaseModel):
     # On a rate limit, quota or key error, try the same model with this
     # provider's other keys before moving to the next model.
     rotate_keys: bool = False
+    # 2026-11-08: the context length (tokens) this provider's models run with
+    # (0 = unknown / the model's default). Requests are fitted to it, also when
+    # the routing moves a turn to this provider; Ollama gets it as num_ctx.
+    context_length: int = Field(0, ge=0, le=10_000_000)
 
     @field_validator("keys")
     @classmethod
@@ -317,6 +323,8 @@ class MultiKeyMixin(BaseModel):
 
 class OllamaConfig(BaseModel):
     base_url: str = "http://localhost:11434"
+    # 2026-11-08: see MultiKeyMixin.context_length (sent as num_ctx)
+    context_length: int = Field(0, ge=0, le=10_000_000)
 
 
 class LMStudioConfig(MultiKeyMixin):
@@ -332,6 +340,25 @@ class LlamaCppConfig(MultiKeyMixin):
     """llama.cpp server (`llama-server`) — OpenAI-compatible REST API."""
 
     base_url: str = "http://localhost:8080/v1"
+    api_key: SecretStr = SecretStr("no-key")
+
+
+class NVPairConfig(MultiKeyMixin):
+    """NVIDIA PAIR (Personal AI Router, 2026-11-08): one local OpenAI-compatible endpoint
+    that routes each request to a free GPU on your home network (Ollama, LM Studio or
+    llama.cpp on each machine). Default: its Ollama endpoint; it also serves LM Studio's
+    :1234 and llama.cpp's :8080 — copy the URL from PAIR's Endpoints window. Loopback
+    only, no key."""
+
+    base_url: str = "http://127.0.0.1:11434/v1"
+    api_key: SecretStr = SecretStr("no-key")
+
+
+class FreeTokenConfig(MultiKeyMixin):
+    """FreeToken / FreeToken Desktop by FlashML (2026-11-08): large MoE models on one
+    local GPU; `ft serve` speaks the OpenAI API on 127.0.0.1:1919/v1, no key."""
+
+    base_url: str = "http://127.0.0.1:1919/v1"
     api_key: SecretStr = SecretStr("no-key")
 
 
@@ -388,6 +415,8 @@ class ProvidersConfig(BaseModel):
     ollama: OllamaConfig = OllamaConfig()
     lmstudio: LMStudioConfig = LMStudioConfig()
     llamacpp: LlamaCppConfig = LlamaCppConfig()
+    nvpair: NVPairConfig = NVPairConfig()          # 2026-11-08
+    freetoken: FreeTokenConfig = FreeTokenConfig()  # 2026-11-08
     openai: OpenAIConfig = OpenAIConfig()
     anthropic: AnthropicConfig = AnthropicConfig()
     gemini: GeminiConfig = GeminiConfig()

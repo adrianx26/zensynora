@@ -224,6 +224,15 @@ it into memory — test a second time to see the normal speed.
 
 ![Agents tab with model list and latency test](images/webui-agents-latency.png)
 
+**Context length per provider** (2026-11-08). Settings → Providers has a
+*Context length (tokens)* for every provider (Models → your own providers
+too; 0 = unknown). Every request to that provider is fitted to it — also when
+the rotation moves a turn from one model to another, so each model gets what
+it can take. The smallest of the agent's own context length, the provider's,
+what the server reports (LM Studio: the loaded context) and what an "exceeds
+the context" error said is used; Ollama gets the agent's or provider's number
+as `num_ctx`.
+
 **A model with a small context** (2026-11-08). When a model answers that the
 request is longer than its context (for example LM Studio: *exceeds the
 available context size (8192 tokens)*), ZenSynora remembers that size and asks

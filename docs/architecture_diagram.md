@@ -47,7 +47,7 @@ flowchart LR
     end
     core["ZenSynora core<br/>agents · tools · memory · knowledge"]
     subgraph llm["LLM providers"]
-        local["Local: llama.cpp · Ollama · LM Studio"]
+        local["Local: llama.cpp · Ollama · LM Studio · NVIDIA PAIR · FreeToken"]
         cloud["Cloud: OpenAI · Anthropic · Gemini · Groq · OpenRouter"]
     end
     subgraph ext["Outside services (optional)"]
@@ -226,6 +226,8 @@ flowchart TD
 | `llamacpp` | `llama-server` (OpenAI API, default `:8080/v1`) | `openai` |
 | `ollama` | Ollama native API (`:11434/api/chat`) | — (httpx) |
 | `lmstudio` | LM Studio (OpenAI API, `:1234/v1`) | `openai` |
+| `nvpair` | NVIDIA PAIR — Personal AI Router (OpenAI API, `127.0.0.1:11434/v1`; routes to a free GPU at home) | `openai` |
+| `freetoken` | FreeToken / FreeToken Desktop (OpenAI API, `127.0.0.1:1919/v1`) | `openai` |
 | `openai`, `groq`, `openrouter` | OpenAI-compatible cloud APIs | `openai` |
 | `anthropic` | Anthropic Messages API | `anthropic` (optional) |
 | `gemini` | Google Gemini | `google-generativeai` (optional) |

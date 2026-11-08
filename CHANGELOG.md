@@ -9,6 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**NVIDIA PAIR and FreeToken providers (2026-11-08)**
+- `nvpair` — NVIDIA PAIR (Personal AI Router): one local OpenAI-compatible
+  endpoint (`http://127.0.0.1:11434/v1` by default; also LM Studio's `:1234`,
+  llama.cpp's `:8080`) that routes each request to a free GPU on your home
+  network. `freetoken` — FreeToken / FreeToken Desktop by FlashML
+  (`http://127.0.0.1:1919/v1`). Both local, no key; in Settings, the model
+  pickers, the doctor, offline fallback and `zensynora onboard`;
+  `MYCLAW_NVPAIR_BASE_URL` / `MYCLAW_FREETOKEN_BASE_URL`.
+
+**Context length per provider, kept across the routing (2026-11-08)**
+- Settings → Providers → *Context length (tokens)* for every provider (and your
+  own providers on the Models page). Every call is fitted to the smallest of the
+  agent's context length, the provider's, what the server reported and what an
+  overflow error said — worked out for each model the rotation tries, so the
+  context adapts when a turn moves to another model. Ollama's `num_ctx` follows
+  the provider it runs on.
+
 **Change an agent's provider and model from the chat (2026-11-08)**
 - A *provider · model* ▾ chip next to the agent in a direct chat and on each
   member of a channel: pick the provider and a model it offers and save — the

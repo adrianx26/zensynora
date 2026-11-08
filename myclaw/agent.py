@@ -1186,15 +1186,16 @@ class Agent:
         from . import context_budget as cb
 
         limit = cb.limit_for(prov_name, model)
+        num_ctx = cb.explicit_context(prov_name)   # this model's own (the routing may have moved the turn)
         try:
-            return await cb.call_fitted(messages, limit, send)
+            return await cb.call_fitted(messages, limit, send, num_ctx)
         except Exception as e:
             learned = cb.learn_from_error(prov_name, model, e)
             if not learned or (limit and learned >= limit):
                 raise
             logger.warning("%s/%s runs with a %d-token context; asking again with a shorter request",
                            prov_name, model, learned)
-            return await cb.call_fitted(messages, learned, send)
+            return await cb.call_fitted(messages, learned, send, num_ctx)
 
     async def _chat_once(self, prov_name: str, model: str, key: Optional[str], messages,
                          stream: bool, errors: List[str]):

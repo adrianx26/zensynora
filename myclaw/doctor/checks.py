@@ -19,13 +19,15 @@ from .registry import FAIL, OK, SKIP, WARN, check, fixer
 PROVIDER_SDK = {
     "lmstudio": ("openai", "openai"),
     "llamacpp": ("openai", "openai"),
+    "nvpair": ("openai", "openai"),
+    "freetoken": ("openai", "openai"),
     "openai": ("openai", "openai"),
     "groq": ("openai", "openai"),
     "openrouter": ("openai", "openai"),
     "anthropic": ("anthropic", "anthropic"),
     "gemini": ("google.generativeai", "google-generativeai"),
 }
-LOCAL_PROVIDERS = {"ollama", "lmstudio", "llamacpp"}
+LOCAL_PROVIDERS = {"ollama", "lmstudio", "llamacpp", "nvpair", "freetoken"}
 CORE_MODULES = ["fastapi", "uvicorn", "websockets", "httpx", "h2", "aiosqlite", "telegram",
                 "yaml", "pydantic", "numpy", "openai", "psutil", "rich", "mcp"]
 DATA_FOLDERS = ["workspace", "knowledge", "tools", "skills", "logs", "medic", "plugins", "hub"]

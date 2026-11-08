@@ -147,3 +147,55 @@ def test_a_daily_limit_is_skipped_for_an_hour_not_a_minute():
     assert cooldown_for(err) == 3600 and "daily limit" in describe_llm_error(err)
     assert not is_rate_limit(err)                               # no quick retry for a daily limit
     assert cooldown_for("Error code: 429 - Too Many Requests") == 60 and is_rate_limit("429 Too Many Requests")
+
+
+# ── 2026-11-08: a context set per provider, kept and adapted across the routing ─────────────
+def _cfg(monkeypatch, **ctx):
+    from myclaw.config import AppConfig
+
+    cfg = AppConfig()
+    for name, value in ctx.items():
+        getattr(cfg.providers, name).context_length = value
+    monkeypatch.setattr("myclaw.config.load_config", lambda *a, **k: cfg)
+    return cfg
+
+
+def test_the_context_follows_each_model_of_the_rotation(monkeypatch):
+    from myclaw import context_budget as cb
+
+    _cfg(monkeypatch, lmstudio=8192, freetoken=32768)
+    token = cb.CONTEXT_LENGTH.set(16384)                       # the agent's own context length
+    try:
+        assert cb.limit_for("lmstudio", "qwen") == 8192          # the smaller one wins
+        assert cb.limit_for("freetoken", "glm") == 16384         # the agent's setting is kept
+        assert cb.limit_for("openrouter", "x") == 16384
+        assert cb.explicit_context("ollama") == 16384            # Ollama's num_ctx
+    finally:
+        cb.CONTEXT_LENGTH.reset(token)
+    assert cb.limit_for("freetoken", "glm") == 32768             # no agent setting: the provider's
+    assert cb.limit_for("openrouter", "x") == 0                  # nothing known: as it is
+    cb._MAX_CACHE[("lmstudio", "big", None)] = (9e18, 4096, "provider")   # what the server reported
+    try:
+        assert cb.limit_for("lmstudio", "big") == 4096
+    finally:
+        cb._MAX_CACHE.pop(("lmstudio", "big", None), None)
+
+
+def test_ollama_gets_num_ctx_of_the_model_it_runs(monkeypatch):
+    """The agent's call to a routed Ollama model sends that provider's context, not another's."""
+    from myclaw import context_budget as cb
+
+    _cfg(monkeypatch, ollama=12288)
+    seen = []
+
+    async def send(m):
+        seen.append(cb.CONTEXT_LENGTH.get())
+        return "ok"
+
+    from myclaw.agent import Agent
+
+    a = Agent.__new__(Agent)
+    a.name = "x"
+    asyncio.run(a._fitted("ollama", "qwen3", [{"role": "user", "content": "hi"}], send))
+    asyncio.run(a._fitted("lmstudio", "qwen", [{"role": "user", "content": "hi"}], send))
+    assert seen == [12288, 0] and cb.CONTEXT_LENGTH.get() == 0

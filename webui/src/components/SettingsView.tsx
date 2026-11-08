@@ -33,6 +33,8 @@ const PROVIDER_LABELS: Record<string, string> = {
   ollama: 'Ollama (local)',
   lmstudio: 'LM Studio (local)',
   llamacpp: 'llama.cpp server (local)',
+  nvpair: 'NVIDIA PAIR — Personal AI Router (local)',
+  freetoken: 'FreeToken / FreeToken Desktop (local)',
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   gemini: 'Google Gemini',
@@ -506,6 +508,10 @@ const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
     if ('api_key' in cfg) out.push({ path: `providers.${p}.api_key`, label: 'API key', kind: 'password' });
     if ('site_url' in cfg) out.push({ path: `providers.${p}.site_url`, label: 'Site URL (optional header)', kind: 'text' });
     if ('site_name' in cfg) out.push({ path: `providers.${p}.site_name`, label: 'Site name (optional header)', kind: 'text' });
+    // 2026-11-08: the context this provider's models run with; kept when the routing moves a turn here
+    if ('context_length' in cfg) out.push({ path: `providers.${p}.context_length`, label: 'Context length (tokens)', kind: 'number',
+      help: p === 'nvpair' ? '0 = unknown. PAIR sends each request to one machine: use the smallest context among them.'
+        : '0 = unknown. Set what the models run with (LM Studio: the context you load the model with); requests are fitted to it, also after the rotation picks this provider. The smaller of this and the agent’s own context length wins.' });
     return out;
   };
 

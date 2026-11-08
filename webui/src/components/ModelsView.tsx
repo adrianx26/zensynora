@@ -16,6 +16,7 @@ interface Preset { name: string; label: string; kind: 'openai' | 'ollama'; base_
 interface CustomProvider {
   name: string; label: string; kind: 'openai' | 'ollama'; base_url: string; api_key: string;
   local: boolean; models: string[]; notes: string;
+  context_length: number;  // 2026-11-08: tokens its models run with (0 = unknown)
 }
 
 interface SettingsSlice {
@@ -26,7 +27,7 @@ interface SettingsSlice {
 
 interface Props { onChanged?: () => void }
 
-const BLANK: CustomProvider = { name: '', label: '', kind: 'openai', base_url: '', api_key: '', local: false, models: [], notes: '' };
+const BLANK: CustomProvider = { name: '', label: '', kind: 'openai', base_url: '', api_key: '', local: false, models: [], notes: '', context_length: 0 };
 
 const ModelsView: React.FC<Props> = ({ onChanged }) => {
   const [ov, setOv] = useState<ModelsOverview | null>(null);
@@ -328,6 +329,10 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
                 <input className="field-input" value={edit.p.base_url} placeholder="https://api.example.com/v1" onChange={e => setEdit({ ...edit, p: { ...edit.p, base_url: e.target.value } })} /></div>
               <div className="field"><label className="field-label">API key {edit.index != null && keySet(edit.p.name) && <span className="muted">(saved — leave empty to keep)</span>}</label>
                 <input className="field-input" type="password" autoComplete="off" value={edit.p.api_key} placeholder={edit.p.local ? 'usually not needed' : 'paste the key'} onChange={e => setEdit({ ...edit, p: { ...edit.p, api_key: e.target.value } })} /></div>
+              <div className="field"><label className="field-label">Context length (tokens, 0 = unknown)</label>
+                <input className="field-input" type="number" min={0} step={1024} value={edit.p.context_length || 0}
+                  onChange={e => setEdit({ ...edit, p: { ...edit.p, context_length: Math.max(0, parseInt(e.target.value || '0', 10) || 0) } })} />
+                <span className="muted small">What its models run with. Requests are fitted to it, also when the routing moves a turn here.</span></div>
               <div className="field"><label className="field-label">Model names (optional, one per line — for servers that cannot list them)</label>
                 <textarea className="field-input" rows={2} value={edit.p.models.join('\n')} onChange={e => setEdit({ ...edit, p: { ...edit.p, models: e.target.value.split('\n').map(s => s.trim()).filter(Boolean) } })} /></div>
               <div className="field field-inline"><label className="field-label">Runs on my computer / network</label>

@@ -295,9 +295,42 @@ def learn_from_error(provider: str, model: str, err: BaseException | str) -> Opt
     return value
 
 
+def provider_context(provider: str) -> int:
+    """The context length set for a provider (Settings → Providers; 0 = not set)."""
+    try:
+        from .config import load_config
+        from .provider import find_custom_provider
+
+        cfg = load_config()
+        pcfg = getattr(cfg.providers, provider, None) or find_custom_provider(cfg, provider)
+        return int(getattr(pcfg, "context_length", 0) or 0)
+    except Exception:
+        return 0
+
+
+def explicit_context(provider: str) -> int:
+    """What the user set for this call: the agent's context length and the provider's, the
+    smaller one (0 = neither). Ollama gets it as num_ctx — never a guessed maximum."""
+    values = [v for v in (CONTEXT_LENGTH.get(), provider_context(provider)) if v]
+    return min(values) if values else 0
+
+
+def _reported(provider: str, model: str) -> Optional[int]:
+    """The context the provider reported for the model (cached; LM Studio: the loaded one)."""
+    for (p, m, _k), (_t, value, src) in list(_MAX_CACHE.items()):
+        if p == provider and m == model and value and src != "library":
+            return int(value)
+    return None
+
+
 def limit_for(provider: str, model: str) -> int:
-    """The smallest known limit for this call: learned, the agent's setting (0 = unknown)."""
-    limits = [v for v in (_LEARNED.get((provider, model)), CONTEXT_LENGTH.get()) if v]
+    """The limit a call to ``provider/model`` is fitted to (0 = nothing known: sent as it is).
+
+    2026-11-08: the smallest of the agent's context length, the provider's context length,
+    what the provider reported and what an "exceeds the context" error said. Worked out for
+    every model the routing tries, so it is kept and adapted when a turn moves to another one."""
+    limits = [v for v in (_LEARNED.get((provider, model)), explicit_context(provider),
+                          _reported(provider, model)) if v]
     return min(limits) if limits else 0
 
 
@@ -352,8 +385,18 @@ def _plan_tools(messages: list[dict[str, Any]], limit: int, reserve: int = REPLY
     return room if room >= 400 else -1
 
 
-async def call_fitted(messages: list[dict[str, Any]], limit: int, send: Any) -> Any:
-    """``await send(messages)`` with the request fitted to ``limit`` tokens (0 = as it is)."""
+async def call_fitted(messages: list[dict[str, Any]], limit: int, send: Any, num_ctx: int | None = None) -> Any:
+    """``await send(messages)`` with the request fitted to ``limit`` tokens (0 = as it is).
+    ``num_ctx``: the context length this call runs with (Ollama's num_ctx) — set for the call."""
+    ctx_token = CONTEXT_LENGTH.set(num_ctx) if num_ctx is not None else None
+    try:
+        return await _call_fitted(messages, limit, send)
+    finally:
+        if ctx_token is not None:
+            CONTEXT_LENGTH.reset(ctx_token)
+
+
+async def _call_fitted(messages: list[dict[str, Any]], limit: int, send: Any) -> Any:
     if limit <= 0:
         return await send(messages)
     token = TOOL_BUDGET.set(_plan_tools(messages, limit))

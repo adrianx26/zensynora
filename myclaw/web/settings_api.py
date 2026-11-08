@@ -40,6 +40,8 @@ _LOOPBACK = {"127.0.0.1", "::1", "localhost", "testclient"}
 _PROVIDER_SDK = {
     "lmstudio": ("openai", "openai"),
     "llamacpp": ("openai", "openai"),
+    "nvpair": ("openai", "openai"),
+    "freetoken": ("openai", "openai"),
     "openai": ("openai", "openai"),
     "groq": ("openai", "openai"),
     "openrouter": ("openai", "openai"),
