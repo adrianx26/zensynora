@@ -47,6 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Dropdown lists were white in Chrome (2026-11-08)**
+- The open list of every dropdown (Settings, chat, Customize, …) was white
+  with light, unreadable text: the selects have see-through backgrounds and
+  the page never told Chrome it is dark. Each theme now sets `color-scheme`
+  (Chrome draws its own lists and scrollbars in the theme) and the options
+  have solid theme colours.
+
 **"Request exceeds the available context size" stopped every answer (2026-11-08)**
 - mindy01: LM Studio models loaded with an 8,192-token context got a
   14,407-token request (the 128 tool definitions alone are ~9,000 tokens), and

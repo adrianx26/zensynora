@@ -2,6 +2,7 @@
 
 /* ── Dark theme (default) ─────────────────────────────────────────────────── */
 :root {
+  color-scheme: dark;
   --bg-color: #0d1117;
   --panel-bg: rgba(22, 27, 34, 0.6);
   --panel-border: rgba(48, 54, 61, 0.5);
@@ -19,6 +20,7 @@
 
 /* ── Light theme ──────────────────────────────────────────────────────────── */
 [data-theme="light"] {
+  color-scheme: light;
   --bg-color: #f6f8fa;
   --panel-bg: rgba(255, 255, 255, 0.75);
   --panel-border: rgba(208, 215, 222, 0.6);
@@ -685,6 +687,11 @@ textarea.field-input { resize: vertical; font-family: ui-monospace, SFMono-Regul
 .field-input:focus { border-color: var(--accent-color); box-shadow: 0 0 0 1px var(--accent-color); }
 .field-input.narrow { max-width: 160px; }
 select.field-input { cursor: pointer; }
+/* 2026-11-08: Chrome drew the open list of every dropdown white (unreadable light text): the
+   selects have see-through backgrounds and the page never said it is dark. color-scheme makes
+   Chrome draw its own controls (open lists, scrollbars) in the theme; options get solid colours. */
+select option, select optgroup { background-color: var(--bg-color); color: var(--text-primary); }
+select option:disabled { color: var(--text-secondary); }
 .changed-dot { width: 7px; height: 7px; border-radius: 50%; background: #d29922; display: inline-block; }
 
 /* Toggle switch */
