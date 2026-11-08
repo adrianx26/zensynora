@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { api, type ModelChoice, type ModelsOverview, type ProbeResult, type ProviderKeysMap } from '../api';
 import { KeySelect, ProviderKeysPanel } from './ProviderKeys';
 import ModelHealthCard from './ModelHealthCard';
+import { useAutoClear } from '../notice';
 
 // Name of a provider key for display ("" for the default key).
 const keyLabel = (keysMap: ProviderKeysMap | null, provider: string, key?: string): string =>
@@ -33,6 +34,7 @@ const ModelsView: React.FC<Props> = ({ onChanged }) => {
   const [ov, setOv] = useState<ModelsOverview | null>(null);
   const [settings, setSettings] = useState<SettingsSlice | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [pick, setPick] = useState<ModelChoice>({ provider: '', model: '' });
   const [probe, setProbe] = useState<Record<string, ProbeResult & { loading?: boolean }>>({});
   // v0.7.3: results of a real chat test per "provider/model"

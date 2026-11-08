@@ -5,6 +5,7 @@
 // main LLM against the job's success criteria, and a benchmark runs the same
 // prompt on several models side by side.
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useAutoClear } from '../notice';
 import {
   ago, api, fmtTime, type AgentInfo, type Channel, type Diagnosis, type Job, type JobRun, type ModelChoice, type ModelsOverview,
 } from '../api';
@@ -112,6 +113,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [openRun, setOpenRun] = useState<number | null>(null);
   const [models, setModels] = useState<ModelsOverview | null>(null);
   const [bench, setBench] = useState<ModelChoice[]>([]);

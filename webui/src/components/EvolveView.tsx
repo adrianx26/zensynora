@@ -13,6 +13,7 @@ import { ago, api } from '../api';
 import ProposalsPanel from './ProposalsPanel';
 import ModelHealthCard from './ModelHealthCard';
 import { CreateAgent, ProposalSettings, SuggestCard, UndoCard, WherePicker } from './EvolveExtras';
+import { useAutoClear } from '../notice';
 
 interface Agent { name: string; level: number; provider: string; model: string; description: string; skills: string[] }
 interface Req { id: string; name: string; agent: string; created: number; last_run: number | null; last_status: string }
@@ -45,6 +46,7 @@ const STATUS: Record<string, string> = { ok: 'finished — see its report', erro
 const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void; onOpenUpdates: () => void }> = ({ onOpenModels, onOpenJobs, onOpenUpdates }) => {
   const [ov, setOv] = useState<Overview | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [form, setForm] = useState({ action: 'optimise', target_kind: 'function', target: '', goal: '', agent: 'default' });
   const [busy, setBusy] = useState('');
   const [pair, setPair] = useState({ a: '', b: '' });

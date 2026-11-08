@@ -6,6 +6,7 @@
 // side-by-side install, checks, automatic rollback). Shown on the Doctor page.
 import React, { useCallback, useEffect, useState } from 'react';
 import { ago, api, type Proposal } from '../api';
+import { useAutoClear } from '../notice';
 
 const STATUS_LABEL: Record<Proposal['status'], string> = {
   pending: 'waiting for you', approved: 'approved', applying: 'installing…', applied: 'installed',
@@ -36,6 +37,7 @@ const ProposalsPanel: React.FC = () => {
     risky_custom_tools?: { name: string; problems: string[] }[];
   } | null>(null);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [showAll, setShowAll] = useState(false);
 
   const load = useCallback(async () => {

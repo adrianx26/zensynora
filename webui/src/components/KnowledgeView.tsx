@@ -14,6 +14,7 @@ import KnowledgeEvaluate from './KnowledgeEvaluate';
 import { CategoriesCard, CategoryMergePanel, ConflictsSection, DuplicatesPanel, type Conflict } from './KnowledgeQuality';
 import { SearchModePicker, SemanticCard } from './KnowledgeSemantic';
 import { useSemanticStatus, type SearchMode } from '../knowledgeSemantic';
+import { useAutoClear } from '../notice';
 
 interface Count { name: string; count: number }
 interface GraphNode extends GNode { updated: string | null; size: number; categories?: string[] }
@@ -98,6 +99,7 @@ const KnowledgeView: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState<{ name: string; tags: string; content: string } | null>(null);
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   // 2026-10-24 (KB phase 2): quality tools in the side panel
   const [side, setSide] = useState<{ type: 'dups' } | { type: 'ai' } | { type: 'eval' } | { type: 'catmerge'; from: string; to: string } | null>(null);
   const [catFilter, setCatFilter] = useState<string[]>([]);
