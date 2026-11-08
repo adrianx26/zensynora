@@ -437,6 +437,16 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 | **Detected by** | Review; `tests/test_customize.py::test_the_default_agent_gets_the_core_and_edits_apply_at_once`. |
 | **Rule** | One base prompt, visible to the user: no second hidden copy of instructions in the program folder. |
 
+### 8.14 "Request exceeds the available context size (8192 tokens)" (2026-11-08, branch context-fit-chat-model)
+
+| | |
+|---|---|
+| **Symptom** | mindy01: `Agent Mindy failed in channel dm-mindy … All models in the rotation failed` — every LM Studio model: *request (14407 tokens) exceeds the available context size (8192 tokens)*; every free OpenRouter model: 429 *free-models-per-day*. Logged as ERROR with a traceback. |
+| **Root cause** | (1) Nothing fitted a request to the model unless the agent had a context length set; the 128 tool definitions alone are ~9,000 tokens, more than 8,192. (2) LM Studio reports `max_context_length` and `loaded_context_length`; only the maximum was read. (3) LM Studio's wording matched neither the "too long" nor the "model-server error" patterns. (4) A daily limit was treated like a per-minute one (60 s cooldown). (5) The chat engine and job runner logged every failure with `logger.exception`. |
+| **Fix** | `Agent._fitted` / `context_budget.call_fitted`: every call is fitted to the smallest known limit; an overflow error teaches the limit (`learn_from_error`) and the same model is asked again with a request that fits (`fit_messages` + `TOOL_BUDGET`: short tool descriptions, `ESSENTIAL_TOOLS` first). `loaded_context_length` first. Patterns for LM Studio / llama.cpp / Anthropic. Daily limits: 1 h cooldown, no quick retry. `llm_errors.log_failure`: model problems are one-line warnings. |
+| **Detected by** | The user's log; `tests/test_context_fit.py`. |
+| **Rule** | Fit every request to what the model can take, and learn the real limit from the server's answer; classify errors by every provider's wording, with a cooldown that matches how long the problem lasts. |
+
 ---
 
 ## Rules for future changes
@@ -472,3 +482,4 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 29. **Find what is asked for:** lookups accept a bare name and answer a miss with what to try.
 30. **Caches and stop reasons:** a fuzzy (similarity) cache match is only for a fresh question, never for a step inside a running task; a stopped run says the real reason. No hidden fixed caps on user data.
 31. **One visible base prompt:** the instructions agents start with are the ZenSynora core the user can see and edit, plus a fixed technical part; no hidden copies.
+32. **Fit the request to the model:** learn the real context from the server (loaded size, error text) and shrink the request (old messages, tool list) before giving up; cooldowns match how long a limit lasts.

@@ -520,6 +520,60 @@ async def update_settings(update: SettingsUpdate):
     }
 
 
+class AgentModelUpdate(BaseModel):
+    agent: str
+    provider: str
+    model: str
+
+
+@router.get("/api/settings/agent-models", dependencies=guard)
+async def agent_models():
+    """2026-11-08: the chat window's model picker — each agent's provider/model and the providers."""
+    from myclaw.provider import provider_names
+
+    cfg = load_config()
+    d = cfg.agents.defaults
+    rows = [{"agent": "default", "provider": d.provider, "model": d.model, "inherits": False}]
+    for a in cfg.agents.named:
+        rows.append({"agent": a.name, "provider": a.provider or d.provider, "model": a.model or d.model,
+                     "inherits": not a.provider})  # the provider comes from the default agent
+    return {"agents": rows, "providers": provider_names(cfg)}
+
+
+@router.put("/api/settings/agent-model", dependencies=ui_guard)
+async def set_agent_model(update: AgentModelUpdate):
+    """2026-11-08: change one agent's provider and model from the chat window.
+
+    Goes through the normal settings save (same checks: provider + model must work
+    together, keys must exist; the agents are rebuilt). A key chosen for the old
+    provider is cleared when the provider changes."""
+    cfg = load_config()
+    provider, model = update.provider.strip(), update.model.strip()
+    if not provider or not model:
+        raise HTTPException(status_code=400, detail="Pick a provider and a model.")
+    from myclaw.provider import provider_names
+
+    if provider not in provider_names(cfg):
+        raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}' — set it up in Settings → Providers.")
+    if update.agent == "default":
+        changes: Dict[str, Any] = {"agents.defaults.provider": provider, "agents.defaults.model": model}
+        if provider != cfg.agents.defaults.provider:
+            changes["agents.defaults.key"] = ""
+    else:
+        raw = _read_raw_config() or AppConfig().model_dump(mode="json")
+        named = copy.deepcopy(_get_path(raw, "agents.named") or [])
+        row = next((a for a in named if (a or {}).get("name") == update.agent), None)
+        if row is None:
+            raise HTTPException(status_code=404, detail=f"There is no agent '{update.agent}'.")
+        if provider != (row.get("provider") or cfg.agents.defaults.provider):
+            row["key"] = ""
+        row["provider"], row["model"] = provider, model
+        changes = {"agents.named": named}
+    await update_settings(SettingsUpdate(changes=changes))
+    logger.info("Chat: agent %s now uses %s/%s", update.agent, provider, model)
+    return {"agent": update.agent, "provider": provider, "model": model}
+
+
 def _telegram_in_webui() -> bool:
     try:
         return bool(load_config().channels.telegram.run_in_webui)

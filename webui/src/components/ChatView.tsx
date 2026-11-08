@@ -10,6 +10,7 @@
 //   as compact cards and, filtered, in the Activity panel on the right.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import TypewriterText from './TypewriterText';
+import AgentModelMenu from './AgentModelMenu';
 import { MessageActions, MessageBody, MessageEditor } from './MessageActions';
 import { copyText } from '../clipboard';
 import { api, getApiBase, getWsBase, type AgentInfo, type Channel, type ChatMsg } from '../api';
@@ -440,6 +441,10 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
           <div className="channel-title">
             <span className="channel-hash">{isDm ? '@' : '#'}</span>
             <span>{channel ? (isDm ? channel.members[0] : channel.name) : channelId}</span>
+            {channel && isDm && (() => {  // 2026-11-08: change the agent's provider / model here
+              const a = agents.find(x => x.name === channel.members[0]);
+              return a ? <AgentModelMenu agent={a.name} provider={a.provider} model={a.model} onSaved={onAgentsChanged} /> : null;
+            })()}
             <span className={`status-dot ${status}`} title={status === 'open' ? 'Connected' : status === 'connecting' ? 'Connecting…' : 'Disconnected — retrying'} />
           </div>
           {channel && !isDm && (
@@ -448,6 +453,10 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
                 <span key={m} className="member-chip" style={{ borderColor: agentColor(m) }}>
                   <span className="member-dot" style={{ background: agentColor(m) }} />@{m}
                   {working.includes(m) && <span className="member-working" title="answering…">…</span>}
+                  {(() => {
+                    const a = agents.find(x => x.name === m);
+                    return a ? <AgentModelMenu agent={m} provider={a.provider} model={a.model} onSaved={onAgentsChanged} /> : null;
+                  })()}
                 </span>
               ))}
               <button className="icon-btn" onClick={() => setEditMembers(v => !v)} title="Members and reply mode">⚙</button>

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Change an agent's provider and model from the chat (2026-11-08)**
+- A *provider · model* ▾ chip next to the agent in a direct chat and on each
+  member of a channel: pick the provider and a model it offers and save — the
+  same setting as Settings → Agents, with the same checks
+  (`PUT /api/settings/agent-model`, `GET /api/settings/agent-models`).
+
 ### Changed
 
 **The ZenSynora core is visible and editable (2026-11-07)**
@@ -21,6 +29,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - *Used by* shows which agents get the core and which use their own prompt.
 
 ### Fixed
+
+**"Request exceeds the available context size" stopped every answer (2026-11-08)**
+- mindy01: LM Studio models loaded with an 8,192-token context got a
+  14,407-token request (the 128 tool definitions alone are ~9,000 tokens), and
+  the free OpenRouter models in the rotation had used up their daily limit, so
+  the turn failed. Now every model call is fitted to the model's known context:
+  the limit is read from the error (LM Studio, llama.cpp, OpenAI, Anthropic
+  wording) and remembered, LM Studio's *loaded* context length is preferred
+  over its maximum, and the same model is asked again with a request that fits
+  (oldest messages left out; when the tool list alone is too big, short tool
+  descriptions with the most useful tools first).
+- LM Studio's wording was not recognised as "too long" or as a model-server
+  error at all; it is now, with a clear explanation.
+- A provider's **daily** limit (OpenRouter `free-models-per-day`) made
+  rotation skip the model for only 60 s, so every message waited for it again;
+  it is now skipped for an hour, and not retried after a few seconds.
+- A turn or job that failed because no model could answer was logged as
+  ERROR with a traceback; it is now a one-line WARNING (real bugs keep the
+  traceback).
 
 **The default agent used another, hidden prompt (2026-11-07)**
 - The default agent read `myclaw/profiles/default.md` instead of the built-in

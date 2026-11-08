@@ -93,9 +93,10 @@ def _get_tool_schemas() -> List[Dict]:
 
         ensure_tool_schemas()
         _TOOL_SCHEMAS_CACHE = TOOL_SCHEMAS
+    from .context_budget import fit_tool_list  # 2026-11-08: shortened for a small context
     from .customize import filter_schemas  # 2026-11-07: tools switched off by the profile
 
-    return filter_schemas(_TOOL_SCHEMAS_CACHE)
+    return fit_tool_list(filter_schemas(_TOOL_SCHEMAS_CACHE))
 
 
 # ── Configuration Constants ──────────────────────────────────────────────────────

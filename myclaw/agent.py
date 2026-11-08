@@ -970,7 +970,8 @@ class Agent:
                 with span("provider.chat", provider=self._provider_name, model=model):
                     try:
                         # 2026-11-01: never wait longer than the call budget for one model
-                        return await asyncio.wait_for(self.provider.chat(messages, model, stream=stream),
+                        return await asyncio.wait_for(self._fitted(self._provider_name, model, messages,
+                                                                   lambda m: self.provider.chat(m, model, stream=stream)),
                                                       timeout=model_health.CALL_BUDGET_SECONDS)
                     except Exception as e:
                         # 2026-10-18: free models are often "temporarily rate-limited
@@ -982,7 +983,8 @@ class Agent:
                                        self._provider_name, model, RATE_LIMIT_RETRY_SECONDS)
                         await asyncio.sleep(RATE_LIMIT_RETRY_SECONDS)
                         left = model_health.CALL_BUDGET_SECONDS - (time.monotonic() - started)
-                        return await asyncio.wait_for(self.provider.chat(messages, model, stream=stream),
+                        return await asyncio.wait_for(self._fitted(self._provider_name, model, messages,
+                                                                   lambda m: self.provider.chat(m, model, stream=stream)),
                                                       timeout=max(1.0, left))
 
             # Fast path: no breaker, no fallback — direct call.
@@ -1174,21 +1176,46 @@ class Agent:
                 return result
         raise ProviderUnavailableError("All models in the rotation failed — " + " | ".join(errors))
 
+    async def _fitted(self, prov_name: str, model: str, messages, send):
+        """One model call fitted to the model's known context (2026-11-08).
+
+        When the model answers "the request exceeds the context (N tokens)", N is remembered
+        and the same model is asked once more with a request that fits (oldest messages left
+        out, a shorter tool list) — instead of failing, or trying every model with the same
+        too-long request."""
+        from . import context_budget as cb
+
+        limit = cb.limit_for(prov_name, model)
+        try:
+            return await cb.call_fitted(messages, limit, send)
+        except Exception as e:
+            learned = cb.learn_from_error(prov_name, model, e)
+            if not learned or (limit and learned >= limit):
+                raise
+            logger.warning("%s/%s runs with a %d-token context; asking again with a shorter request",
+                           prov_name, model, learned)
+            return await cb.call_fitted(messages, learned, send)
+
     async def _chat_once(self, prov_name: str, model: str, key: Optional[str], messages,
                          stream: bool, errors: List[str]):
         """One rotation attempt; remembers which provider/model/key answered."""
         prov = self._get_provider_for(prov_name, key)
         if not stream:
-            result = await prov.chat(messages, model, stream=False)
+            result = await self._fitted(prov_name, model, messages, lambda m: prov.chat(m, model, stream=False))
             self.last_model_used = (prov_name, model)
             self.last_key_used = key
             return result
-        gen, collector = await prov.chat(messages, model, stream=True)
-        it = gen.__aiter__()
-        try:
-            first = await it.__anext__()
-        except StopAsyncIteration:
-            first = None  # empty text is fine (e.g. a tool-call-only reply)
+
+        async def _start(m):  # the request is sent when the first piece is asked for
+            gen, collector = await prov.chat(m, model, stream=True)
+            it = gen.__aiter__()
+            try:
+                first = await it.__anext__()
+            except StopAsyncIteration:
+                first = None  # empty text is fine (e.g. a tool-call-only reply)
+            return first, it, collector
+
+        first, it, collector = await self._fitted(prov_name, model, messages, _start)
 
         async def _chained(first=first, it=it):
             if first is not None:
