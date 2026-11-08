@@ -338,7 +338,7 @@ class ChatEngine:
             parts.append(" …[stopped]")
             raise
         except Exception as e:
-            logger.exception("Agent %s failed in channel %s", agent_name, channel_id)
+            log_agent_failure(agent_name, channel_id, e)
             from ..llm_errors import describe_llm_error  # v0.7.3
 
             error = describe_llm_error(e)
@@ -356,6 +356,13 @@ class ChatEngine:
             await asyncio.to_thread(store.update_message, msg["id"], full, meta)
             events.publish(channel_id, {"type": "stream_end", "id": msg["id"], "text": full, "meta": meta})
         return full
+
+
+def log_agent_failure(agent_name: str, channel_id: str, err: BaseException) -> None:
+    """2026-11-08: model-server problems are warnings without a traceback (not a crash)."""
+    from ..llm_errors import log_failure
+
+    log_failure(logger, f"Agent {agent_name} could not answer in channel {channel_id}", err)
 
 
 MEMORY_REPLAY = 40  # messages put back into an agent's memory after an edit

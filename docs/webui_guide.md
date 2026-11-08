@@ -46,6 +46,14 @@ the top of the chat switches between *Activity: grouped* (default), *every
 step* (one line per step, as before) and *hidden*; the choice is remembered in
 this browser.
 
+**Change an agent's model from the chat** (2026-11-08). Next to the agent's
+name (a direct chat) or on each member chip (a channel) a small chip shows
+*provider · model* ▾. Click it to pick another provider and one of the models
+it offers (↻ reloads the list, *Other…* takes a name the list does not show)
+and **Save**: it is the same setting as Settings → Agents, checked the same
+way, and the next message uses it. Changing the provider clears a key chosen
+for the old one.
+
 **Agents as a team** (v0.7.5). Every agent knows the other agents and what
 they do, and hands work to them with `delegate` when another one fits better —
 you see the hand-over as a card. An agent can also **create a new agent**
@@ -215,6 +223,15 @@ The first request to a local model (Ollama, LM Studio, llama.cpp) also loads
 it into memory — test a second time to see the normal speed.
 
 ![Agents tab with model list and latency test](images/webui-agents-latency.png)
+
+**A model with a small context** (2026-11-08). When a model answers that the
+request is longer than its context (for example LM Studio: *exceeds the
+available context size (8192 tokens)*), ZenSynora remembers that size and asks
+the same model again with a request that fits: the oldest messages are left
+out and, if the tool list alone is too big (all tools are about 9,000 tokens),
+the tools get short descriptions with the most useful first. LM Studio's
+*loaded* context length is used, not the model's maximum. For the full tool
+list, load the model with a larger context (16k or more).
 
 **Context length.** How much text (in tokens) the agent's model works with
 per turn. Each agent has a slider and a number box (type `16384` or `16k`);

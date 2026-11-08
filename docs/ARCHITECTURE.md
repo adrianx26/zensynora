@@ -179,7 +179,10 @@ channel (web chat / telegram / whatsapp / cli)
                               situation (customize.prompt_section), team
                               leader section, then the Rules [0.8.1]
       → _provider_chat()      LLM call (provider.py); tools switched off by
-                              the profile are left out (customize.HIDDEN_TOOLS)
+                              the profile are left out (customize.HIDDEN_TOOLS);
+                              every call fitted to the model's known context
+                              (Agent._fitted → context_budget.call_fitted; an
+                              overflow error teaches the limit, one retry) [Unreleased]
                               ─ semantic_cache lookup
                               ─ retry/backoff, circuit breaker
                               ─ offline fallback to another local provider

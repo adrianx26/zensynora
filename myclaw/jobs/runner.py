@@ -198,7 +198,9 @@ class JobRunner:
         except asyncio.CancelledError:
             status, error = "cancelled", "Cancelled"
         except Exception as e:
-            logger.exception("Job %s failed", job["id"])
+            from ..llm_errors import log_failure  # 2026-11-08: a model problem is not a crash
+
+            log_failure(logger, f"Job {job['id']} failed", e)
             status, error = "error", str(e)[:1000]
         finally:
             used = getattr(agent, "last_model_used", None) or (getattr(agent, "_provider_name", ""), agent.model)

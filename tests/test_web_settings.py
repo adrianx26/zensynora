@@ -69,3 +69,24 @@ def test_remote_clients_are_refused(client):
     remote = TestClient(app, client=("192.168.1.50", 5000))
     assert remote.get("/api/settings").status_code == 403
     assert settings_api  # imported for clarity
+
+
+def test_chat_changes_an_agents_provider_and_model(client):
+    """2026-11-08: the chat window sets each agent's provider and model (through the normal save)."""
+    c, cfg_file = client
+    c.put("/api/settings", json={"changes": {"agents.named": [
+        {"name": "Mindy", "provider": "lmstudio", "model": "qwen"}, {"name": "Coder", "model": "llama3.2"}]}})
+    rows = {a["agent"]: a for a in c.get("/api/settings/agent-models").json()["agents"]}
+    assert rows["Mindy"]["provider"] == "lmstudio" and rows["Coder"]["inherits"]
+    assert "openrouter" in c.get("/api/settings/agent-models").json()["providers"]
+    r = c.put("/api/settings/agent-model", json={"agent": "Mindy", "provider": "openrouter", "model": "qwen/qwen3-32b"})
+    assert r.status_code == 200, r.text
+    saved = json.loads(cfg_file.read_text())
+    mindy = [a for a in saved["agents"]["named"] if a["name"] == "Mindy"][0]
+    assert (mindy["provider"], mindy["model"]) == ("openrouter", "qwen/qwen3-32b")
+    assert [a["name"] for a in saved["agents"]["named"]] == ["Mindy", "Coder"]   # the others untouched
+    assert c.put("/api/settings/agent-model", json={"agent": "default", "provider": "ollama", "model": "qwen3"}).status_code == 200
+    assert json.loads(cfg_file.read_text())["agents"]["defaults"]["model"] == "qwen3"
+    assert c.put("/api/settings/agent-model", json={"agent": "Ghost", "provider": "ollama", "model": "x"}).status_code == 404
+    assert c.put("/api/settings/agent-model", json={"agent": "Mindy", "provider": "nope", "model": "x"}).status_code == 400
+    assert c.put("/api/settings/agent-model", json={"agent": "Mindy", "provider": "ollama", "model": " "}).status_code == 400

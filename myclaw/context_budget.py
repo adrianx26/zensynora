@@ -14,6 +14,11 @@ and keep a conversation inside the chosen size.
 * :func:`agent_context_length` / :func:`fit_messages` — the agent's setting
   (0 = the model's default) and trimming the oldest messages so a turn fits.
   Ollama also receives it as ``num_ctx`` (:data:`CONTEXT_LENGTH`).
+* 2026-11-08 :func:`call_fitted` / :func:`learn_from_error` — every model call
+  is fitted to the model's known limit (learned from an "exceeds the context"
+  error, LM Studio's *loaded* context, or the setting): the oldest messages are
+  left out and, when the tool list alone is too big, the tools get short
+  descriptions and the most useful come first (:data:`TOOL_BUDGET`).
 
 Token counts are estimates (about 3.8 characters per token for English and
 code); real tokenizers differ by ±20 %.
@@ -43,6 +48,18 @@ FALLBACK_MAX = 131072     # when the model's limit is unknown
 # Context length of the current agent turn (0 = model default); read by the
 # Ollama provider to send num_ctx. Set in Agent._provider_chat.
 CONTEXT_LENGTH: ContextVar[int] = ContextVar("context_length", default=0)
+
+# 2026-11-08: tokens the tool list of this call may use (0 = all tools as they are, -1 = none).
+TOOL_BUDGET: ContextVar[int] = ContextVar("tool_budget", default=0)
+# Sent first when the tool list must be shortened.
+ESSENTIAL_TOOLS = ("shell", "read_file", "write_file", "browse", "web_search", "delegate", "search_knowledge",
+                   "read_knowledge", "write_to_knowledge", "list_tools", "get_tool_documentation",
+                   "download_file", "schedule", "list_schedules")
+# (provider, model) -> context size learned from an "exceeds the context" error
+_LEARNED: dict[tuple[str, str], int] = {}
+_LIMIT_RE = re.compile(
+    r'n_ctx"?\s*[:=]\s*(\d{3,7})|available context size \((\d{3,7})|maximum context length is (\d{3,7})|'
+    r"context length of (\d{3,7})|context window of (\d{3,7})|>\s*(\d{3,7}) maximum", re.I)
 
 
 def estimate_tokens(text: str) -> int:
@@ -103,7 +120,8 @@ def estimate_context(config: Any, agent_name: str, system_prompt: str = "",
 # ── The model's maximum ──────────────────────────────────────────────────────
 _MAX_CACHE: dict[tuple, tuple[float, Optional[int], str]] = {}
 _CACHE_SECONDS = 3600
-_CTX_KEYS = ("context_length", "context_window", "max_context_length", "max_model_len",
+# 2026-11-08: LM Studio's loaded_context_length (what the model runs with now) before its maximum
+_CTX_KEYS = ("loaded_context_length", "context_length", "context_window", "max_context_length", "max_model_len",
              "max_input_tokens", "input_token_limit", "inputTokenLimit", "n_ctx")
 
 
@@ -260,3 +278,90 @@ def fit_messages(messages: list[dict[str, Any]], limit: int,
     if dropped:
         logger.info("Context %d tokens: left out the %d oldest message(s)", limit, dropped)
     return head + body, dropped
+
+
+# ── Fitting every call (2026-11-08) ─────────────────────────────────────────
+def learn_from_error(provider: str, model: str, err: BaseException | str) -> Optional[int]:
+    """The context size an "exceeds the context" error names; remembered for that model."""
+    from .llm_errors import is_context_overflow
+
+    if not is_context_overflow(err):
+        return None
+    m = _LIMIT_RE.search(str(err))
+    if not m:
+        return None
+    value = int(next(g for g in m.groups() if g))
+    _LEARNED[(provider, model)] = value
+    return value
+
+
+def limit_for(provider: str, model: str) -> int:
+    """The smallest known limit for this call: learned, the agent's setting (0 = unknown)."""
+    limits = [v for v in (_LEARNED.get((provider, model)), CONTEXT_LENGTH.get()) if v]
+    return min(limits) if limits else 0
+
+
+def _compact(schema: dict[str, Any]) -> dict[str, Any]:
+    """A tool definition with short descriptions (first sentence, ≤ 140 characters)."""
+    s = json.loads(json.dumps(schema))
+    fn = s.get("function", s)
+    desc = (fn.get("description") or "").strip()
+    fn["description"] = re.split(r"(?<=[.!?])\s", desc, maxsplit=1)[0][:140]
+    for p in ((fn.get("parameters") or {}).get("properties") or {}).values():
+        if isinstance(p, dict) and p.get("description"):
+            p["description"] = str(p["description"])[:60]
+    return s
+
+
+def fit_tool_list(schemas: list) -> list:
+    """The tool list for this call within :data:`TOOL_BUDGET` (most useful tools first)."""
+    budget = TOOL_BUDGET.get()
+    if budget == 0:
+        return schemas
+    if budget < 0:
+        return []
+
+    def name(s: dict) -> str:
+        return (s.get("function") or s).get("name", "")
+
+    rank = {n: i for i, n in enumerate(ESSENTIAL_TOOLS)}
+    ordered = sorted(schemas, key=lambda s: rank.get(name(s), len(rank)))  # stable: others keep their order
+    out, used = [], 0
+    for s in ordered:
+        c = _compact(s)
+        t = estimate_tokens(json.dumps(c, separators=(",", ":")))
+        if used + t <= budget:
+            out.append(c)
+            used += t
+    return out
+
+
+def _plan_tools(messages: list[dict[str, Any]], limit: int, reserve: int = REPLY_MIN) -> int:
+    """The TOOL_BUDGET for a call to a model with ``limit`` tokens (0 = all tools fit)."""
+    token = TOOL_BUDGET.set(0)
+    try:
+        full, _ = _tool_schema_tokens()
+    finally:
+        TOOL_BUDGET.reset(token)
+    head = sum(message_tokens(m) for m in messages if m.get("role") == "system")
+    last = message_tokens(messages[-1]) if messages else 0
+    conversation = min(1024, limit // 8)  # room for the recent messages
+    room = limit - reserve - head - last - conversation
+    if full <= room:
+        return 0
+    return room if room >= 400 else -1
+
+
+async def call_fitted(messages: list[dict[str, Any]], limit: int, send: Any) -> Any:
+    """``await send(messages)`` with the request fitted to ``limit`` tokens (0 = as it is)."""
+    if limit <= 0:
+        return await send(messages)
+    token = TOOL_BUDGET.set(_plan_tools(messages, limit))
+    try:
+        fitted, _ = fit_messages(messages, limit)
+        if TOOL_BUDGET.get():
+            logger.info("Context %d tokens: tool list shortened to %s", limit,
+                        "none" if TOOL_BUDGET.get() < 0 else f"{TOOL_BUDGET.get()} tokens")
+        return await send(fitted)
+    finally:
+        TOOL_BUDGET.reset(token)
