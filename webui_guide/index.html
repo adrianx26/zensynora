@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -1590,6 +1590,13 @@ answered @default · 1.2 s</em>, every tool call) with its task and answer. The
 the top of the chat switches between <em>Activity: grouped</em> (default), <em>every
 step</em> (one line per step, as before) and <em>hidden</em>; the choice is remembered in
 this browser.</p>
+<p><strong>Change an agent's model from the chat</strong> (2026-11-08). Next to the agent's
+name (a direct chat) or on each member chip (a channel) a small chip shows
+<em>provider · model</em> ▾. Click it to pick another provider and one of the models
+it offers (↻ reloads the list, <em>Other…</em> takes a name the list does not show)
+and <strong>Save</strong>: it is the same setting as Settings → Agents, checked the same
+way, and the next message uses it. Changing the provider clears a key chosen
+for the old one.</p>
 <p><strong>Agents as a team</strong> (v0.7.5). Every agent knows the other agents and what
 they do, and hands work to them with <code>delegate</code> when another one fits better —
 you see the hand-over as a card. An agent can also <strong>create a new agent</strong>
@@ -1786,6 +1793,14 @@ shows how long the answer took:</p>
 <p>The first request to a local model (Ollama, LM Studio, llama.cpp) also loads
 it into memory — test a second time to see the normal speed.</p>
 <p><img alt="Agents tab with model list and latency test" src="../images/webui-agents-latency.png" /></p>
+<p><strong>A model with a small context</strong> (2026-11-08). When a model answers that the
+request is longer than its context (for example LM Studio: <em>exceeds the
+available context size (8192 tokens)</em>), ZenSynora remembers that size and asks
+the same model again with a request that fits: the oldest messages are left
+out and, if the tool list alone is too big (all tools are about 9,000 tokens),
+the tools get short descriptions with the most useful first. LM Studio's
+<em>loaded</em> context length is used, not the model's maximum. For the full tool
+list, load the model with a larger context (16k or more).</p>
 <p><strong>Context length.</strong> How much text (in tokens) the agent's model works with
 per turn. Each agent has a slider and a number box (type <code>16384</code> or <code>16k</code>);
 <em>model default</em> leaves it to the model.</p>
@@ -2457,7 +2472,7 @@ learned</strong> lists the lessons it saved. Details:
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>

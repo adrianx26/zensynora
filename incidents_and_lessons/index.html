@@ -21,7 +21,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.png">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.0">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.8.1">
     
     
       
@@ -1475,6 +1475,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#814-request-exceeds-the-available-context-size-8192-tokens-2026-11-08-branch-context-fit-chat-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.14 "Request exceeds the available context size (8192 tokens)" (2026-11-08, branch context-fit-chat-model)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2197,6 +2208,17 @@
     <span class="md-ellipsis">
       
         8.13 The default agent used a hidden, older prompt (2026-11-07, branch zensynora-core)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#814-request-exceeds-the-available-context-size-8192-tokens-2026-11-08-branch-context-fit-chat-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8.14 "Request exceeds the available context size (8192 tokens)" (2026-11-08, branch context-fit-chat-model)
       
     </span>
   </a>
@@ -3471,6 +3493,37 @@ in short form, in <code>AGENTS.md</code>.</p>
 </tr>
 </tbody>
 </table>
+<h3 id="814-request-exceeds-the-available-context-size-8192-tokens-2026-11-08-branch-context-fit-chat-model">8.14 "Request exceeds the available context size (8192 tokens)" (2026-11-08, branch context-fit-chat-model)<a class="headerlink" href="#814-request-exceeds-the-available-context-size-8192-tokens-2026-11-08-branch-context-fit-chat-model" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>mindy01: <code>Agent Mindy failed in channel dm-mindy … All models in the rotation failed</code> — every LM Studio model: <em>request (14407 tokens) exceeds the available context size (8192 tokens)</em>; every free OpenRouter model: 429 <em>free-models-per-day</em>. Logged as ERROR with a traceback.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>(1) Nothing fitted a request to the model unless the agent had a context length set; the 128 tool definitions alone are ~9,000 tokens, more than 8,192. (2) LM Studio reports <code>max_context_length</code> and <code>loaded_context_length</code>; only the maximum was read. (3) LM Studio's wording matched neither the "too long" nor the "model-server error" patterns. (4) A daily limit was treated like a per-minute one (60 s cooldown). (5) The chat engine and job runner logged every failure with <code>logger.exception</code>.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td><code>Agent._fitted</code> / <code>context_budget.call_fitted</code>: every call is fitted to the smallest known limit; an overflow error teaches the limit (<code>learn_from_error</code>) and the same model is asked again with a request that fits (<code>fit_messages</code> + <code>TOOL_BUDGET</code>: short tool descriptions, <code>ESSENTIAL_TOOLS</code> first). <code>loaded_context_length</code> first. Patterns for LM Studio / llama.cpp / Anthropic. Daily limits: 1 h cooldown, no quick retry. <code>llm_errors.log_failure</code>: model problems are one-line warnings.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td>The user's log; <code>tests/test_context_fit.py</code>.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Fit every request to what the model can take, and learn the real limit from the server's answer; classify errors by every provider's wording, with a cooldown that matches how long the problem lasts.</td>
+</tr>
+</tbody>
+</table>
 <hr />
 <h2 id="rules-for-future-changes">Rules for future changes<a class="headerlink" href="#rules-for-future-changes" title="Permanent link">&para;</a></h2>
 <ol>
@@ -3505,6 +3558,7 @@ in short form, in <code>AGENTS.md</code>.</p>
 <li><strong>Find what is asked for:</strong> lookups accept a bare name and answer a miss with what to try.</li>
 <li><strong>Caches and stop reasons:</strong> a fuzzy (similarity) cache match is only for a fresh question, never for a step inside a running task; a stopped run says the real reason. No hidden fixed caps on user data.</li>
 <li><strong>One visible base prompt:</strong> the instructions agents start with are the ZenSynora core the user can see and edit, plus a fixed technical part; no hidden copies.</li>
+<li><strong>Fit the request to the model:</strong> learn the real context from the server (loaded size, error text) and shrink the request (old messages, tool list) before giving up; cooldowns match how long a limit lasts.</li>
 </ol>
 
 
@@ -3558,7 +3612,7 @@ in short form, in <code>AGENTS.md</code>.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": [], "search": "../assets/javascripts/workers/search.a7633da7.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.c21346df.min.js"></script>
+      <script src="../assets/javascripts/bundle.a5f9d56c.min.js"></script>
       
     
   </body>
