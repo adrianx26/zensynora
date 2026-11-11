@@ -1226,6 +1226,34 @@ def dismiss_duplicate(user_id: str, a: str, b: str) -> None:
     tmp.replace(path)
 
 
+def merge_identical(user_id: str = "default", dry_run: bool = True) -> Dict[str, Any]:
+    """Merge every pair of notes with **identical text** in one go (2026-11-11).
+
+    Only that reason qualifies — same title or similar text still needs your eye.
+    Each merge is ``merge_notes`` (the merged file goes to ``<base>/.trash/``; links
+    to it open the kept note). ``dry_run=True`` lists the pairs only."""
+    report = find_duplicates(user_id, None, 500, True, 20.0)
+    pairs = [p for p in report["pairs"] if "identical text" in p["reasons"]]
+    out: Dict[str, Any] = {"pairs": [{"keep": p["keep"]["permalink"], "keep_title": p["keep"]["title"],
+                                      "drop": p["drop"]["permalink"], "drop_title": p["drop"]["title"]}
+                                     for p in pairs],
+                           "merged": 0, "errors": [], "dry_run": bool(dry_run), "partial": report["partial"]}
+    if dry_run:
+        return out
+    gone: Dict[str, str] = {}     # a note merged in this run → the note it went into
+    for p in out["pairs"]:
+        keep, drop = gone.get(p["keep"], p["keep"]), p["drop"]
+        if drop in gone or keep == drop:
+            continue
+        try:
+            merge_notes(user_id, keep, drop, dry_run=False)
+            gone[drop] = keep
+            out["merged"] += 1
+        except Exception as e:
+            out["errors"].append(f"{p['drop_title']}: {e}")
+    return out
+
+
 def _fold_names(note: Any) -> set:
     names = {note.permalink, note.title, note.name, *(note.aliases or [])}
     return {_squash(x).casefold() for x in names if isinstance(x, str) and x.strip()}

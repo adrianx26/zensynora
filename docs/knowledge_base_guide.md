@@ -54,6 +54,10 @@ Runs Ubuntu 24.04 and hosts ZenSynora. Free text, as long as you like.
 * **Links** (relations): `- relation [[Other note]]`. The target can be the
   other note's title, permalink, file name or one of its aliases (case does
   not matter; `[[Note|label]]` and `[[Note#Section]]` work too).
+* A link can have a **strength** from 1 to 5, written after it:
+  `- uses [[Redis]] (x3)`. No number means 1. Stronger links come first when
+  an agent reads a note's related notes and are drawn thicker in the graph
+  (see [Tuning](#tuning-thresholds-decay-models-relevance-link-strength)).
 * A link to a note that **does not exist yet** is remembered and connects by
   itself as soon as that note is written. In the Web UI graph it is a dashed
   dot (*Create this note*). Deleting a note turns links to it back into such
@@ -255,6 +259,15 @@ links.
 `knowledge_categories()`, `find_duplicate_notes()` (a list only). Merging
 notes or categories is left to you on the Knowledge page.
 
+**Curating duplicates (Knowledge → ⧉ Duplicates).** Every pair has four
+buttons: **Merge** (keeps the suggested note), **⇄ Keep the other**,
+**Preview…** (the merged note first) and **Different notes** (the pair is not
+listed again). On top: **Merge all identical (N)** merges every pair whose
+text is exactly the same in one go, and **🤖 Curate with AI** lets the default
+model propose a decision per pair (you approve). A merge keeps the tags,
+facts, links and text of both notes; the merged file goes to
+`<base>/.trash/` and links to it open the kept note.
+
 **Settings → Features** (`~/.myclaw/config.json`):
 
 | Setting | Default | |
@@ -407,6 +420,100 @@ of ~1000 characters); like the rest of the index they can be rebuilt at any
 time and deleting them never loses a note. A note's vectors are removed with
 it; after `sync --force` or when a note comes back from `.trash` its old
 vectors are re-used (kept 30 days).
+
+## Tuning: thresholds, decay, models, relevance, link strength
+
+The **Tune** tab of the Knowledge page (2026-11-11) holds everything that
+changes *how notes are ranked*. Nothing here changes or deletes a note, except
+the Relations part, which writes link lines you chose.
+
+### Who may change the values
+
+| Who | What |
+|---|---|
+| You | any value inside its limits (Tune tab, Settings, `config.json`) |
+| The AI (**🤖 AI suggest**, the weekly decay review) and agents (`kb_tuning_set`) | follows *The AI and agents*: **only propose** (default) — every change waits under *Proposals* for your Approve / Reject; **may change inside the safe ranges** — a value inside its safe range is applied at once, anything else is a proposal |
+
+The embedding model is always a proposal (a download of up to 2 GB and a
+re-embedding of every note). Every applied change is in **History** with who,
+when and why, and has an **↶ Undo**. Setting: `knowledge.tuning_ai`
+(`suggest` / `safe`). History and proposals: `~/.myclaw/knowledge-tuning.json`.
+
+| Value (setting) | Default | Safe range | |
+|---|---|---|---|
+| Similarity for a meaning match (`knowledge.semantic_min_score`) | 0 = the model's | 0.3–0.9 | embedding similarity threshold of the note search |
+| Answer cache similarity (`semantic_cache.similarity_threshold`) | 0.92 | 0.85–0.98 | how similar a new question must be to reuse a saved answer; the running cache follows at once |
+| Weight of word / meaning matches (`knowledge.fusion_fts_weight`, `fusion_sem_weight`) | 1.0 / 0.6 | 0.5–1.5 / 0.2–1.2 | the mixed (hybrid) order |
+| Word matches kept on top (`knowledge.fusion_keep_fts`) | 2 | 0–4 | an exact name or error code is never pushed down |
+| Chunk size / overlap (`knowledge.chunk_chars`, `chunk_overlap`) | 0 = the model's / 150 | 300–1500 / 50–300 | changing them re-embeds every note |
+| Decay half-life / lowest weight (`knowledge.decay_half_life_days`, `decay_floor`) | 0 = off / 0.3 | 30–730 / 0.2–0.9 | below |
+
+**🤖 AI suggest** sends the default model *measurements only* (the values,
+counts, ages, tag names, the result of *Measure* — no note text) and asks what
+to change and why.
+
+### Bigger embedding models
+
+*Thresholds & model → Embedding model*: the two small models, plus
+`BAAI/bge-base-en-v1.5` (210 MB), `BAAI/bge-large-en-v1.5` (1.2 GB),
+`sentence-transformers/paraphrase-multilingual-mpnet-base-v2` (1 GB, ~50
+languages) and `intfloat/multilingual-e5-large` (2.2 GB, ~100 languages; its
+`query:` / `passage:` prefixes are added for you), every other model
+fastembed supports, or a name you type. A bigger model ranks better but is
+slower, needs more memory (vectors of 768 or 1024 numbers instead of 384) and
+is downloaded once. Saving re-embeds every note in the background; until a
+note is done it is found by its words. The similarity thresholds of the new
+models are estimates — check them on the test bench.
+
+### Temporal decay
+
+Off by default. With a half-life of *N* days, a note that was neither
+**changed nor used by an agent** for *N* days counts half in the ranking,
+after 2 × *N* a quarter, never less than the lowest weight. It only re-orders
+search results (and so the automatic *Relevant Knowledge*); nothing is hidden.
+A note tagged `evergreen` never decays. *Own half-life per tag or fact
+category* (`knowledge.decay_categories`) gives e.g. `news` 30 days and
+`person` 0 (never). Distilled facts use the same half-lives for their
+confidence from the next distillation on.
+
+**🤖 Let the AI decide** asks the default model whether decay helps *this*
+base (how old the notes are, whether old notes are still used, which tags and
+categories exist), which half-life and which tags never or quickly go stale;
+its reasons are shown above the fields. *AI reviews the decay policy once a
+week* (`knowledge.decay_ai`, off by default) repeats that while ZenSynora
+runs — one model call a week.
+
+### Relevance test, 👍 / 👎, Measure
+
+*Relevance test* runs a search the way an agent would and shows for every
+result its position in the word search, its position and similarity by
+meaning, its decay weight and the position before decay. **👍** marks the
+right note for that query, **👎** a wrong one: the same query (words in any
+case or punctuation) then shows 👍 notes first and 👎 notes last. Marks are
+kept in `~/.myclaw/knowledge-usage.db` (table `kb_feedback`, never pruned).
+**📏 Measure my marked searches** (needs 👍 on 5 different searches) replays
+them with other meaning weights, kept word matches and similarity floors and
+shows the settings that put the right notes highest; **Apply these values**
+saves them.
+
+### Relations: strength, precise types, new links
+
+*Relations* lists every link with its strength and how often agents used
+both notes in one turn (last 90 days).
+
+* Click a dot to set the strength, or **↗ Strengthen from use**: links whose
+  notes were used together 3 / 8 / 20 / 50 times get strength 2 / 3 / 4 / 5
+  (a preview first; it only raises, a second run changes nothing).
+* **🤖 Precise types** proposes exact types (`depends_on`, `runs_on` …) for
+  vague ones (`relates_to`, `see_also` …).
+* **🤖 Suggest links** proposes explicit links between notes about the same
+  thing that are not linked yet (better graph edges).
+
+AI proposals are a checklist; only what you tick is written, through the
+normal note save (text, facts and tags are kept).
+
+**Agent tools:** `strengthen_relation(from_note, relation_type, target,
+strength)`, `kb_tuning_show()`, `kb_tuning_set(key, value, reason)`.
 
 ## Distillation: facts, scenarios, a persona
 

@@ -9,6 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Knowledge → Tune: thresholds, decay, bigger models, relevance, link strength (2026-11-11)**
+- New **Tune** tab on the Knowledge page.
+  - *Thresholds & model*: the embedding similarity threshold, the answer-cache
+    (semantic cache) similarity, the weights of word and meaning matches, chunk
+    size / overlap, and the embedding model — now also `bge-base`, `bge-large`,
+    multilingual `mpnet` and `multilingual-e5-large`, every other fastembed
+    model, or a typed name. A new model or chunking re-embeds the notes in the
+    background.
+  - *Temporal decay* (off by default): notes not changed or used for a long
+    time rank lower; own half-life per tag / fact category; `evergreen` never
+    decays. **🤖 Let the AI decide** chooses the policy and says why; optional
+    weekly review (`knowledge.decay_ai`).
+  - *Relevance test*: every result with its score parts, 👍 / 👎 per query, and
+    **📏 Measure** — replays your marked searches to find better settings.
+  - *Relations*: link strength 1–5 (`- uses [[Redis]] (x3)`), **↗ Strengthen
+    from use**, **🤖 Precise types**, **🤖 Suggest links**; stronger links come
+    first for agents and are thicker in the graph.
+  - Who may change values: you (anything); the AI and agents only propose, or —
+    your switch — change inside each value's safe range. History with Undo.
+- **⧉ Duplicates**: Merge / Keep the other / Different notes per pair, **Merge
+  all identical**, **🤖 Curate with AI**.
+- Agent tools `strengthen_relation`, `kb_tuning_show`, `kb_tuning_set`.
+- Settings `knowledge.fusion_fts_weight`, `fusion_sem_weight`, `fusion_keep_fts`,
+  `chunk_chars`, `chunk_overlap`, `decay_half_life_days`, `decay_floor`,
+  `decay_categories`, `decay_ai`, `tuning_ai`.
+
 **NVIDIA PAIR and FreeToken providers (2026-11-08)**
 - `nvpair` — NVIDIA PAIR (Personal AI Router): one local OpenAI-compatible
   endpoint (`http://127.0.0.1:11434/v1` by default; also LM Studio's `:1234`,

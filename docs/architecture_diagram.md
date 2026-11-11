@@ -662,3 +662,29 @@ flowchart LR
 `myclaw/context_budget.py` holds all of it; token counts are estimated at
 about 3.8 characters per token.
 
+
+## 19. Knowledge tuning, decay and re-ranking
+
+Who may change a ranking value, and where the values act on a search
+(2026-11-11). Details: [Knowledge base guide → Tuning](knowledge_base_guide.md#tuning-thresholds-decay-models-relevance-link-strength).
+
+```mermaid
+flowchart TD
+    user["You<br/>Knowledge → Tune"] -- "any value inside its limits" --> setv["tuning.set_values()"]
+    ai["AI suggest · weekly decay review<br/>agent tool kb_tuning_set"] -- "value + reason" --> setv
+    setv -- "you, or mode safe and inside the safe range" --> cfg[("config.json<br/>knowledge.* · semantic_cache.*")]
+    setv -- "otherwise" --> prop["proposal<br/>Approve / Reject"]
+    prop -- "Approve" --> cfg
+    setv --> hist[("knowledge-tuning.json<br/>history · undo · proposals")]
+    cfg --> sem["semantic.py<br/>fusion weights · similarity floor · chunking · model"]
+    cfg --> dec["decay.py<br/>half-life · floor · per tag / category"]
+    cfg --> cache["semantic_cache<br/>similarity threshold"]
+    q["search (agent context, tools, Web UI)"] --> sem
+    sem -- "ordered notes" --> rr["relevance.rerank()"]
+    dec --> rr
+    fb[("kb_feedback<br/>your 👍 / 👎 per query")] --> rr
+    use[("usage log<br/>last use · notes used together")] --> dec
+    use --> rel["relations.py<br/>strengthen from use"]
+    rel -- "- uses [[Note]] (x3)" --> md[("notes *.md")]
+    rr --> out["results<br/>identical to before when decay is off and the query has no marks"]
+```

@@ -16,7 +16,7 @@
   <span class="dot"></span>
   <h1 class="title">ZenSynora Architecture — Visual Guide</h1>
 </div>
-<p class="subtitle">20 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
+<p class="subtitle">21 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
 <div class="legend">
   <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
   <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
@@ -494,6 +494,28 @@
     cfg --&gt; turn[&quot;agent turn&quot;]
     turn --&gt; fit[&quot;fit_messages()&lt;br/&gt;drop oldest messages to fit&quot;]
     turn --&gt; var[&quot;CONTEXT_LENGTH contextvar&quot;] --&gt; oll[&quot;Ollama: options.num_ctx&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">19. Knowledge tuning, decay and re-ranking</h2>
+  <p class="diagram-desc">Who may change a ranking value, and where the values act on a search (2026-11-11). Details: [Knowledge base guide → Tuning](knowledge_base_guide.md#tuning-thresholds-decay-models-relevance-link-strength).</p>
+  <div class="mermaid">flowchart TD
+    user[&quot;You&lt;br/&gt;Knowledge → Tune&quot;] -- &quot;any value inside its limits&quot; --&gt; setv[&quot;tuning.set_values()&quot;]
+    ai[&quot;AI suggest · weekly decay review&lt;br/&gt;agent tool kb_tuning_set&quot;] -- &quot;value + reason&quot; --&gt; setv
+    setv -- &quot;you, or mode safe and inside the safe range&quot; --&gt; cfg[(&quot;config.json&lt;br/&gt;knowledge.* · semantic_cache.*&quot;)]
+    setv -- &quot;otherwise&quot; --&gt; prop[&quot;proposal&lt;br/&gt;Approve / Reject&quot;]
+    prop -- &quot;Approve&quot; --&gt; cfg
+    setv --&gt; hist[(&quot;knowledge-tuning.json&lt;br/&gt;history · undo · proposals&quot;)]
+    cfg --&gt; sem[&quot;semantic.py&lt;br/&gt;fusion weights · similarity floor · chunking · model&quot;]
+    cfg --&gt; dec[&quot;decay.py&lt;br/&gt;half-life · floor · per tag / category&quot;]
+    cfg --&gt; cache[&quot;semantic_cache&lt;br/&gt;similarity threshold&quot;]
+    q[&quot;search (agent context, tools, Web UI)&quot;] --&gt; sem
+    sem -- &quot;ordered notes&quot; --&gt; rr[&quot;relevance.rerank()&quot;]
+    dec --&gt; rr
+    fb[(&quot;kb_feedback&lt;br/&gt;your 👍 / 👎 per query&quot;)] --&gt; rr
+    use[(&quot;usage log&lt;br/&gt;last use · notes used together&quot;)] --&gt; dec
+    use --&gt; rel[&quot;relations.py&lt;br/&gt;strengthen from use&quot;]
+    rel -- &quot;- uses [[Note]] (x3)&quot; --&gt; md[(&quot;notes *.md&quot;)]
+    rr --&gt; out[&quot;results&lt;br/&gt;identical to before when decay is off and the query has no marks&quot;]</div>
 </div>
 
 <div class="footer">

@@ -252,7 +252,10 @@ def build_graph(base: str) -> dict[str, Any]:
                 continue
             seen.add(key)
             rel_types[r.relation_type] += 1
-            edges.append({"source": n.permalink, "target": target, "type": r.relation_type})
+            edge = {"source": n.permalink, "target": target, "type": r.relation_type}
+            if getattr(r, "strength", 1) > 1:   # 2026-11-11: drawn thicker
+                edge["strength"] = r.strength
+            edges.append(edge)
             nodes[n.permalink]["degree"] += 1
             nodes[target]["degree"] += 1
     return {

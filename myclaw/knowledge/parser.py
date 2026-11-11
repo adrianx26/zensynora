@@ -36,6 +36,10 @@ class Relation:
     """A directed relationship between entities."""
     relation_type: str
     target: str  # permalink of target entity
+    # 2026-11-11: how strong the link is, 1 (default) to 5. Written as
+    # ``- depends_on [[Target]] (x3)``; stronger links come first in an
+    # agent's context and are drawn thicker in the graph.
+    strength: int = 1
 
 
 @dataclass
@@ -71,7 +75,15 @@ FRONTMATTER_PATTERN = re.compile(
 # 2026-10-23 (KB phase 0): markdown task boxes ``- [ ] todo`` / ``- [x] done``
 # are body text, not observations.
 OBSERVATION_PATTERN = re.compile(r'^- \[(?![ xX]\])([^\]]+)\] (.+)$', re.MULTILINE)
-RELATION_PATTERN = re.compile(r'^- (\w+) \[\[([^\]]+)\]\]$', re.MULTILINE)
+# 2026-11-11: an optional strength, ``(x2)`` … ``(x5)``, after the link
+RELATION_PATTERN = re.compile(r'^- (\w+) \[\[([^\]]+)\]\](?: \(x([1-5])\))?$', re.MULTILINE)
+MAX_STRENGTH = 5
+
+
+def relation_line(rel: "Relation") -> str:
+    """The Markdown line of a link (``- type [[Target]]``, with ``(xN)`` when stronger than 1)."""
+    s = max(1, min(MAX_STRENGTH, int(getattr(rel, "strength", 1) or 1)))
+    return f'- {rel.relation_type} [[{rel.target}]]' + (f' (x{s})' if s > 1 else '')
 TAG_PATTERN = re.compile(r'#(\w+)')
 # The section headings generate_markdown writes (removed by extract_body).
 _SECTION_HEADING = re.compile(r'^##\s+(?:Observations|Relations)\s*$', re.IGNORECASE)
@@ -504,7 +516,7 @@ def parse_relations(content: str) -> List[Relation]:
         List of Relation objects
     """
     relations: List[Relation] = []
-    seen = set()
+    seen: Dict[tuple, Relation] = {}
     for line, in_code in _body_lines(content):
         if in_code:
             continue
@@ -512,10 +524,12 @@ def parse_relations(content: str) -> List[Relation]:
         if not match:
             continue
         key = (match.group(1).strip(), match.group(2).strip())
+        strength = int(match.group(3) or 1)
         if key in seen:
+            seen[key].strength = max(seen[key].strength, strength)   # a repeated link: the stronger one
             continue
-        seen.add(key)
-        relations.append(Relation(relation_type=key[0], target=key[1]))
+        seen[key] = Relation(relation_type=key[0], target=key[1], strength=strength)
+        relations.append(seen[key])
     return relations
 
 
@@ -769,7 +783,7 @@ def generate_markdown(note: Note) -> str:
         lines.append('## Relations')
         lines.append('')
         for rel in note.relations:
-            lines.append(f'- {rel.relation_type} [[{rel.target}]]')
+            lines.append(relation_line(rel))
         lines.append('')
 
     return '\n'.join(lines)

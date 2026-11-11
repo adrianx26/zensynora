@@ -11,6 +11,7 @@ import KnowledgeUsage, { NoteUsageLine } from './KnowledgeUsage';
 import KnowledgeOverview from './KnowledgeOverview';
 import KnowledgeAIResolve from './KnowledgeAIResolve';
 import KnowledgeEvaluate from './KnowledgeEvaluate';
+import KnowledgeTune from './KnowledgeTune';
 import { CategoriesCard, CategoryMergePanel, ConflictsSection, DuplicatesPanel, type Conflict } from './KnowledgeQuality';
 import { SearchModePicker, SemanticCard } from './KnowledgeSemantic';
 import { useSemanticStatus, type SearchMode } from '../knowledgeSemantic';
@@ -42,7 +43,7 @@ interface NoteDetail {
   conflicts?: Conflict[]; // 2026-10-24 (KB phase 2)
 }
 
-type Tab = 'overview' | 'graph' | 'notes' | 'tags' | 'distilled' | 'usage';
+type Tab = 'overview' | 'graph' | 'notes' | 'tags' | 'distilled' | 'usage' | 'tune';
 type ColorBy = 'group' | 'tag' | 'links' | 'none';
 
 // Categorical palette (works on the dark and light themes).
@@ -430,9 +431,9 @@ const KnowledgeView: React.FC = () => {
         <SearchModePicker mode={mode} status={semantic.st} note={query.trim() ? modeNote : null}
           onChange={m => { setMode(m); store(MODE_KEY, m); }} />
         <div className="kb-tabs" role="tablist">
-          {(['overview', 'graph', 'notes', 'tags', 'distilled', 'usage'] as Tab[]).map(t => (
+          {(['overview', 'graph', 'notes', 'tags', 'distilled', 'usage', 'tune'] as Tab[]).map(t => (
             <button key={t} role="tab" aria-selected={tab === t} className={`settings-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-              {t === 'overview' ? 'Overview' : t === 'graph' ? 'Graph' : t === 'notes' ? 'Notes' : t === 'tags' ? 'Tags & types' : t === 'distilled' ? 'Distilled' : 'Usage'}
+              {t === 'overview' ? 'Overview' : t === 'graph' ? 'Graph' : t === 'notes' ? 'Notes' : t === 'tags' ? 'Tags & types' : t === 'distilled' ? 'Distilled' : t === 'usage' ? 'Usage' : 'Tune'}
             </button>
           ))}
         </div>
@@ -443,7 +444,7 @@ const KnowledgeView: React.FC = () => {
             title="Read a web page, GitHub repository, folder or document into linked notes, or import ChatGPT / Claude / MCP memory / Obsidian exports">⇪ Import</button>
           {data && data.stats.notes > 1 && (
             <button type="button" className="ghost-btn" onClick={() => { setCreating(null); setSelected(null); setSide({ type: 'dups' }); }}
-              title="List notes that look like duplicates; preview and merge them one pair at a time">⧉ Find duplicates</button>
+              title="Curate notes that look like duplicates: merge a pair, merge all identical ones, or mark a pair as different">⧉ Duplicates</button>
           )}
           {data && data.stats.notes > 1 && (
             <button type="button" className="ghost-btn" onClick={() => { setCreating(null); setSelected(null); setSide({ type: 'ai' }); }}
@@ -620,6 +621,12 @@ const KnowledgeView: React.FC = () => {
               onOpenNote={p => { setCreating(null); setSide(null); select(p); }} />
           )}
 
+          {tab === 'tune' && (
+            // 2026-11-11: thresholds, decay, embedding model, relevance test, relations
+            <KnowledgeTune key={base} base={base} onChanged={() => { void load(); semantic.refresh(); }}
+              onOpenNote={p => { setCreating(null); setSide(null); select(p); }} />
+          )}
+
           {tab === 'tags' && data && (
             <div className="kb-tags-grid">
               <section className="settings-card">
@@ -660,6 +667,7 @@ const KnowledgeView: React.FC = () => {
 
             {!creating && side?.type === 'dups' && (
               <DuplicatesPanel base={base} onDone={qualityDone} onCancel={() => setSide(null)}
+                onAi={() => setSide({ type: 'ai' })}
                 onOpen={id => { setSide(null); select(id); }} />
             )}
             {!creating && side?.type === 'eval' && (
