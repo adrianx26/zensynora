@@ -1,8 +1,8 @@
 """Search relevance: your 👍 / 👎, the re-rank step, the test bench, measured tuning (2026-11-11).
 
 * **Feedback** — on the test bench (Knowledge → Tune) you mark a result of a query as
-  right (👍) or wrong (👎). It is kept in the table ``kb_feedback`` of the usage
-  database (your data: never pruned, not part of the rebuildable index). The same
+  right (👍) or wrong (👎). It is kept in ``~/.myclaw/knowledge-feedback.db`` (your data: its own file, never
+  pruned, not part of the rebuildable index or of the usage log). The same
   query later shows 👍 notes first and 👎 notes last.
 * **Re-rank** — ``semantic.search_entities`` passes its ordered results through
   :func:`rerank`: 👍 notes, then position score × temporal decay (``decay.py``), then 👎 notes. With decay
@@ -33,41 +33,58 @@ _SCHEMA = """CREATE TABLE IF NOT EXISTS kb_feedback (
     base TEXT NOT NULL, query_key TEXT NOT NULL, query TEXT NOT NULL,
     permalink TEXT NOT NULL, vote INTEGER NOT NULL, ts REAL NOT NULL,
     PRIMARY KEY (base, query_key, permalink))"""
-_CACHE: Dict[Tuple[str, str], Dict[str, Dict[str, int]]] = {}
+_CACHE: Dict[Tuple[str, str], Tuple[float, Dict[str, Dict[str, int]]]] = {}
 
 
 def query_key(query: str) -> str:
     return " ".join(re.findall(r"\w+", str(query or "").casefold()))
 
 
-def _connect() -> sqlite3.Connection:
+def db_path() -> Any:
+    """``~/.myclaw/knowledge-feedback.db`` — its own file: the usage log next to it may be
+    deleted ("loses only the log"), your marks must not go with it (2026-11-12, review)."""
     from . import usage
 
-    con = usage.connect()
+    return usage.db_path().parent / "knowledge-feedback.db"
+
+
+def _connect() -> sqlite3.Connection:
+    p = db_path()
+    p.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(str(p), timeout=2.0)
     con.execute(_SCHEMA)
     return con
 
 
-def _all(base: str) -> Dict[str, Dict[str, int]]:
-    """{query key: {permalink: vote}} of one base (kept in memory; votes update it)."""
-    from . import usage
+def _stamp() -> float:
+    try:
+        return db_path().stat().st_mtime
+    except OSError:
+        return 0.0
 
-    key = (str(usage.db_path()), base)
-    if key not in _CACHE:
-        out: Dict[str, Dict[str, int]] = {}
+
+def _all(base: str) -> Dict[str, Dict[str, int]]:
+    """{query key: {permalink: vote}} of one base; re-read when the file changed
+    (a mark made in another process is seen)."""
+    key = (str(db_path()), base)
+    stamp = _stamp()
+    hit = _CACHE.get(key)
+    if hit is not None and hit[0] == stamp:
+        return hit[1]
+    out: Dict[str, Dict[str, int]] = {}
+    if stamp:
         try:
-            if usage.db_path().is_file():
-                con = _connect()
-                try:
-                    for q, p, v in con.execute("SELECT query_key, permalink, vote FROM kb_feedback "
-                                               "WHERE base = ?", (base,)):
-                        out.setdefault(q, {})[p] = int(v)
-                finally:
-                    con.close()
+            con = _connect()
+            try:
+                for q, p, v in con.execute("SELECT query_key, permalink, vote FROM kb_feedback "
+                                           "WHERE base = ?", (base,)):
+                    out.setdefault(q, {})[p] = int(v)
+            finally:
+                con.close()
         except (sqlite3.Error, OSError) as e:
             logger.info("Knowledge: search feedback could not be read: %s", e)
-        _CACHE[key] = out
-    return _CACHE[key]
+    _CACHE[key] = (stamp, out)
+    return out
 
 
 def votes_for(base: str, query: str) -> Dict[str, int]:
@@ -76,43 +93,47 @@ def votes_for(base: str, query: str) -> Dict[str, int]:
 
 def vote(base: str, query: str, permalink: str, value: int) -> Dict[str, Any]:
     """👍 (1), 👎 (-1) or clear (0) one result of one query."""
-    from . import usage
-
     key = query_key(query)
     if not key or not str(permalink or "").strip():
         raise ValueError("a query and a note are needed")
     value = 1 if value > 0 else -1 if value < 0 else 0
-    con = _connect()
     try:
-        if value:
-            con.execute("INSERT OR REPLACE INTO kb_feedback VALUES (?, ?, ?, ?, ?, ?)",
-                        (base, key, " ".join(str(query).split())[:300], permalink, value, time.time()))
-        else:
-            con.execute("DELETE FROM kb_feedback WHERE base = ? AND query_key = ? AND permalink = ?",
-                        (base, key, permalink))
-        con.commit()
-    finally:
-        con.close()
-    _CACHE.pop((str(usage.db_path()), base), None)
+        con = _connect()
+        try:
+            if value:
+                con.execute("INSERT OR REPLACE INTO kb_feedback VALUES (?, ?, ?, ?, ?, ?)",
+                            (base, key, " ".join(str(query).split())[:300], permalink, value, time.time()))
+            else:
+                con.execute("DELETE FROM kb_feedback WHERE base = ? AND query_key = ? AND permalink = ?",
+                            (base, key, permalink))
+            con.commit()
+        finally:
+            con.close()
+    except (sqlite3.Error, OSError) as e:
+        raise ValueError(f"The mark could not be saved ({db_path().name}: {e}).") from e
+    _CACHE.pop((str(db_path()), base), None)
     return {"query": query, "permalink": permalink, "vote": value}
 
 
 def feedback(base: str = "default") -> Dict[str, Any]:
     """The labelled set: every query with its 👍 / 👎 notes."""
-    from . import usage
-
     rows: List[Dict[str, Any]] = []
-    if usage.db_path().is_file():
-        con = _connect()
+    error = None
+    if _stamp():
         try:
-            for r in con.execute("SELECT query, query_key, permalink, vote, ts FROM kb_feedback WHERE base = ? "
-                                 "ORDER BY ts DESC", (base,)):
-                rows.append({"query": r[0], "key": r[1], "permalink": r[2], "vote": r[3], "ts": r[4]})
-        finally:
-            con.close()
+            con = _connect()
+            try:
+                for r in con.execute("SELECT query, query_key, permalink, vote, ts FROM kb_feedback WHERE base = ? "
+                                     "ORDER BY ts DESC", (base,)):
+                    rows.append({"query": r[0], "key": r[1], "permalink": r[2], "vote": r[3], "ts": r[4]})
+            finally:
+                con.close()
+        except (sqlite3.Error, OSError) as e:
+            error = f"{db_path().name} could not be read: {e}"
     queries = {r["key"] for r in rows}
     labelled = {r["key"] for r in rows if r["vote"] > 0}
-    return {"items": rows, "queries": len(queries), "labelled": len(labelled), "needed": MIN_LABELLED}
+    return {"items": rows, "queries": len(queries), "labelled": len(labelled), "needed": MIN_LABELLED,
+            "error": error}
 
 
 def active(base: str, query: str) -> bool:

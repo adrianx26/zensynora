@@ -262,8 +262,9 @@ notes or categories is left to you on the Knowledge page.
 **Curating duplicates (Knowledge → ⧉ Duplicates).** Every pair has four
 buttons: **Merge** (keeps the suggested note), **⇄ Keep the other**,
 **Preview…** (the merged note first) and **Different notes** (the pair is not
-listed again). On top: **Merge all identical (N)** merges every pair whose
-text is exactly the same in one go, and **🤖 Curate with AI** lets the default
+listed again). On top: **Merge all identical (N)** merges in one go every
+pair that is the same note twice — identical text *and* the same facts and
+links (notes that only share a line of boilerplate are left for you) — and **🤖 Curate with AI** lets the default
 model propose a decision per pair (you approve). A merge keeps the tags,
 facts, links and text of both notes; the merged file goes to
 `<base>/.trash/` and links to it open the kept note.
@@ -489,8 +490,10 @@ runs — one model call a week.
 result its position in the word search, its position and similarity by
 meaning, its decay weight and the position before decay. **👍** marks the
 right note for that query, **👎** a wrong one: the same query (words in any
-case or punctuation) then shows 👍 notes first and 👎 notes last. Marks are
-kept in `~/.myclaw/knowledge-usage.db` (table `kb_feedback`, never pruned).
+case or punctuation) then shows 👍 notes first and 👎 notes last — also when
+decay is on. Marks are kept in their own file,
+`~/.myclaw/knowledge-feedback.db` (never pruned; deleting the usage log does
+not touch them).
 **📏 Measure my marked searches** (needs 👍 on 5 different searches) replays
 them with other meaning weights, kept word matches and similarity floors and
 shows the settings that put the right notes highest; **Apply these values**
@@ -509,8 +512,11 @@ both notes in one turn (last 90 days).
 * **🤖 Suggest links** proposes explicit links between notes about the same
   thing that are not linked yet (better graph edges).
 
-AI proposals are a checklist; only what you tick is written, through the
-normal note save (text, facts and tags are kept).
+AI proposals are a checklist; only what you tick is written. Every link
+change edits **only that link line** in the note's file — the rest of the
+file stays byte for byte as it was; a note with an unusual layout (an
+unclosed code block) is refused, not rewritten. Changing a type keeps the
+previous file in `.trash`.
 
 **Agent tools:** `strengthen_relation(from_note, relation_type, target,
 strength)`, `kb_tuning_show()`, `kb_tuning_set(key, value, reason)`.

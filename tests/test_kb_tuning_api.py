@@ -120,6 +120,18 @@ def test_curate_duplicates_dismiss_and_merge_identical(client):
     assert find_duplicates("default", None, 100, True)["pairs"] == []
 
 
+def test_merge_identical_leaves_notes_with_the_same_boilerplate_but_other_facts(client):
+    from myclaw.knowledge.parser import Observation
+    from myclaw.knowledge.storage import list_notes, write_note
+
+    for day in ("05", "12", "19"):
+        write_note(f"sync-2026-01-{day}", f"Weekly sync 2026-01-{day}",
+                   [Observation("decision", f"decision of the {day}th")], [], [], "default",
+                   "Weekly sync meeting. Decisions are listed below.")
+    r = client.post("/api/knowledge/duplicates/merge-identical", json={"dry_run": False}).json()
+    assert r["merged"] == 0 and r["pairs"] == [] and len(list_notes("default")) == 3
+
+
 def test_agent_tools_are_registered_with_their_arguments(tuned):  # noqa: F811
     import inspect
 

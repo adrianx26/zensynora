@@ -15,7 +15,7 @@
   about the same thing but not linked yet.
 
 AI proposals are only shown; ``apply`` writes the ones the user chose. Every write
-goes through ``storage.write_note`` (the note's text, facts and tags are kept).
+changes only the link line itself in the note's file (``_edit``): every other byte stays.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ import json
 import logging
 import re
 import sqlite3
+import threading
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from .parser import MAX_STRENGTH
@@ -166,20 +167,89 @@ def usage_strength(together: int) -> int:
     return 1
 
 
-def _rewrite(base: str, permalink: str, change: Any) -> Optional[Any]:
-    """Read a note, let ``change(relations)`` return the new link list (None = nothing to do), write it."""
-    from .parser import extract_body
-    from .storage import read_note, write_note
+_EDIT_LOCK = threading.Lock()
 
-    note = read_note(permalink, base)
-    if note is None:
-        raise ValueError(f"There is no note '{permalink}'.")
-    rels = change(list(note.relations))
-    if rels is None:
-        return None
-    write_note(permalink, note.title, list(note.observations), rels, list(note.tags), base,
-               extract_body(note.content) or None)
-    return note
+
+def _edit(base: str, permalink: str, change: Any) -> bool:
+    """Change link lines of one note **in place** (2026-11-12, review).
+
+    ``change(lines, rel_idx)`` gets the file's lines and ``{index: (type, target, strength)}``
+    of its link lines (outside the frontmatter and code blocks) and edits ``lines``; it
+    returns the links the note must have afterwards as ``{(type, folded target): strength}``
+    or None when there is nothing to do. Every other byte of the file stays as it is
+    (the first version re-generated the note and changed text with ``\n``, blank lines in
+    code, the ``name:`` key). Before writing, the new text is parsed again: the text,
+    facts, tags and all other links must be unchanged and the wanted links present —
+    otherwise nothing is written. A removed link line keeps the old file in ``.trash``.
+    """
+    from .parser import _FENCE, FRONTMATTER_PATTERN, RELATION_PATTERN, extract_body, parse_note_text
+    from .storage import _index_file, _replace_note_file, _resolve_note, get_knowledge_dir
+
+    with _EDIT_LOCK:   # one read-change-write at a time (two edits of one note lost one)
+        hit = _resolve_note(permalink, base)
+        if hit is None:
+            raise ValueError(f"There is no note '{permalink}'.")
+        path, old = hit
+        with open(path, encoding="utf-8", newline="") as f:
+            raw = f.read()
+        eol = "\r\n" if "\r\n" in raw else "\n"
+        m = FRONTMATTER_PATTERN.match(raw)
+        head, body = (raw[:m.end()], raw[m.end():]) if m else ("", raw)
+        lines = body.replace("\r\n", "\n").split("\n")
+        rel_idx: Dict[int, Tuple[str, str, int]] = {}
+        fence = ""
+        for n, line in enumerate(lines):
+            f_m = _FENCE.match(line)
+            if f_m:
+                mark = f_m.group(1)[0]
+                if not fence:
+                    fence = mark
+                    continue
+                if mark == fence:
+                    fence = ""
+                    continue
+            if fence:
+                continue
+            r_m = RELATION_PATTERN.match(line.rstrip())
+            if r_m:
+                rel_idx[n] = (r_m.group(1).strip(), r_m.group(2).strip(), int(r_m.group(3) or 1))
+        wanted = change(lines, rel_idx, bool(fence))
+        if wanted is None:
+            return False
+        new_text = head + eol.join(lines)
+        new = parse_note_text(new_text, path)
+        got: Dict[Tuple[str, str], int] = {}
+        for r in new.relations:
+            k = (r.relation_type, _fold(r.target))
+            got[k] = max(got.get(k, 1), r.strength)
+        same = (extract_body(new.content) == extract_body(old.content)
+                and [(o.category, o.content) for o in new.observations]
+                == [(o.category, o.content) for o in old.observations]
+                and list(new.tags) == list(old.tags) and new.title == old.title
+                and new.permalink == old.permalink)
+        if not same or got != wanted:
+            raise ValueError(f"The link in '{permalink}' could not be changed safely (the note has an "
+                             "unusual layout, e.g. an unclosed code block); nothing was written. "
+                             "Edit the note by hand.")
+        _replace_note_file(path, old, new_text, get_knowledge_dir(base))
+        _index_file(path, base, None)
+        return True
+
+
+def _line(rel_type: str, target: str, strength: int) -> str:
+    return f"- {rel_type} [[{target}]]" + (f" (x{strength})" if strength > 1 else "")
+
+
+def _links(rel_idx: Dict[int, Tuple[str, str, int]]) -> Dict[Tuple[str, str], int]:
+    out: Dict[Tuple[str, str], int] = {}
+    for t, target, s in rel_idx.values():
+        key = (t, _fold(target))
+        out[key] = max(out.get(key, 1), s)
+    return out
+
+
+def _match(rel_idx: Dict[int, Tuple[str, str, int]], rel_type: str, target: str) -> List[int]:
+    return [n for n, (t, tg, _s) in rel_idx.items() if t == rel_type and _fold(tg) == _fold(target)]
 
 
 def _find(rels: List[Any], rel_type: str, target: str) -> Optional[Any]:
@@ -194,19 +264,23 @@ def set_strength(base: str, permalink: str, rel_type: str, target: str, strength
     """Set a link's strength (1–5), or change it by ``delta`` (Strengthen = +1)."""
     result: Dict[str, Any] = {}
 
-    def change(rels: List[Any]) -> Optional[List[Any]]:
-        rel = _find(rels, rel_type, target)
-        if rel is None:
+    def change(lines: List[str], rel_idx: Dict[int, Tuple[str, str, int]], _open: bool) -> Any:
+        hits = _match(rel_idx, rel_type, target)
+        if not hits:
             raise ValueError(f"'{permalink}' has no link {rel_type} [[{target}]].")
-        new = int(strength) if strength is not None else rel.strength + int(delta)
+        old = max(rel_idx[n][2] for n in hits)
+        new = int(strength) if strength is not None else old + int(delta)
         new = max(1, min(MAX_STRENGTH, new))
-        result.update(old=rel.strength, strength=new)
-        if new == rel.strength:
+        result.update(old=old, strength=new)
+        if new == old:
             return None
-        rel.strength = new
-        return rels
+        wanted = _links(rel_idx)
+        for n in hits:   # the same link written twice: every line gets the strength
+            lines[n] = _line(rel_idx[n][0], rel_idx[n][1], new)
+        wanted[(rel_type, _fold(target))] = new
+        return wanted
 
-    _rewrite(base, permalink, change)
+    _edit(base, permalink, change)
     return {"from": permalink, "type": rel_type, "target": target, **result}
 
 
@@ -237,43 +311,55 @@ def set_type(base: str, permalink: str, rel_type: str, target: str, new_type: st
     if not new_type:
         raise ValueError("Give the new link type (letters, digits, _).")
 
-    def change(rels: List[Any]) -> Optional[List[Any]]:
-        rel = _find(rels, rel_type, target)
-        if rel is None:
+    def change(lines: List[str], rel_idx: Dict[int, Tuple[str, str, int]], _open: bool) -> Any:
+        hits = _match(rel_idx, rel_type, target)
+        if not hits:
             raise ValueError(f"'{permalink}' has no link {rel_type} [[{target}]].")
-        if new_type == rel.relation_type:
+        if new_type == rel_type:
             return None
-        twin = _find(rels, new_type, target)
-        if twin is not None:          # the precise link exists already: keep the stronger, drop the vague one
-            twin.strength = max(twin.strength, rel.strength)
-            rels.remove(rel)
+        wanted = _links(rel_idx)
+        strength = max(wanted.pop((rel_type, _fold(target))), wanted.get((new_type, _fold(target)), 1))
+        twins = _match(rel_idx, new_type, target)
+        if twins:   # the precise link exists already: it keeps the stronger value, the vague lines go
+            for n in twins:
+                lines[n] = _line(new_type, rel_idx[n][1], strength)
+            for n in sorted(hits, reverse=True):
+                del lines[n]
         else:
-            rel.relation_type = new_type
-        return rels
+            for n in hits:
+                lines[n] = _line(new_type, rel_idx[n][1], strength)
+        wanted[(new_type, _fold(target))] = strength
+        return wanted
 
-    _rewrite(base, permalink, change)
+    _edit(base, permalink, change)
     return {"from": permalink, "type": new_type, "target": target, "was": rel_type}
 
 
 def add_link(base: str, permalink: str, rel_type: str, target: str, strength: int = 1) -> Dict[str, Any]:
-    from .parser import Relation
-
     rel_type = clean_type(rel_type) or "related_to"
     target = " ".join(str(target).replace("[", "").replace("]", "").split())[:120]
     if not target:
         raise ValueError("Give the note to link to.")
-    added: Dict[str, Any] = {"added": False}
+    strength = max(1, min(MAX_STRENGTH, int(strength or 1)))
 
-    def change(rels: List[Any]) -> Optional[List[Any]]:
-        if _find(rels, rel_type, target) is not None:
+    def change(lines: List[str], rel_idx: Dict[int, Tuple[str, str, int]], open_fence: bool) -> Any:
+        if _match(rel_idx, rel_type, target):
             return None
-        rels.append(Relation(relation_type=rel_type, target=target,
-                             strength=max(1, min(MAX_STRENGTH, int(strength or 1)))))
-        added["added"] = True
-        return rels
+        if open_fence:
+            raise ValueError(f"'{permalink}' ends inside an unclosed code block; a link added there would "
+                             "not be read. Close the block first.")
+        new = _line(rel_type, target, strength)
+        if rel_idx:   # after the note's last link line
+            lines.insert(max(rel_idx) + 1, new)
+        else:
+            while lines and not lines[-1].strip():
+                lines.pop()
+            lines.extend(["", "## Relations", "", new, ""])
+        wanted = _links(rel_idx)
+        wanted[(rel_type, _fold(target))] = strength
+        return wanted
 
-    _rewrite(base, permalink, change)
-    return {"from": permalink, "type": rel_type, "target": target, **added}
+    return {"from": permalink, "type": rel_type, "target": target, "added": _edit(base, permalink, change)}
 
 
 # ── AI: precise types and new links (proposals only) ─────────────────────────
@@ -294,7 +380,9 @@ LINKS_TASK = (
 def _quote(note: Any, limit: int = TEXT) -> str:
     from .graph import note_snippet
 
-    return f"<note title={json.dumps(note.title)}>{note_snippet(note, limit)}</note>"
+    # "<" is written as "‹" so note text cannot close its own <note> tag (2026-11-12, review)
+    text = note_snippet(note, limit).replace("<", "‹")
+    return f"<note title={json.dumps(str(note.title).replace('<', '‹'))}>{text}</note>"
 
 
 async def _ask(config: Any, task: str, body: str) -> List[Dict[str, Any]]:
@@ -405,7 +493,7 @@ async def propose_links(config: Any, base: str = "default", limit: int = 5, perm
 def apply(base: str, proposals: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Write the proposals the user chose (types changed, links added)."""
     done, failed = [], []
-    for p in proposals[:200]:
+    for p in proposals:
         try:
             if p.get("kind") == "type":
                 done.append(set_type(base, str(p["from"]), str(p["type"]), str(p["target"]), str(p["new_type"])))

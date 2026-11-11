@@ -1229,11 +1229,29 @@ def dismiss_duplicate(user_id: str, a: str, b: str) -> None:
 def merge_identical(user_id: str = "default", dry_run: bool = True) -> Dict[str, Any]:
     """Merge every pair of notes with **identical text** in one go (2026-11-11).
 
-    Only that reason qualifies — same title or similar text still needs your eye.
-    Each merge is ``merge_notes`` (the merged file goes to ``<base>/.trash/``; links
+    Only pairs that are the same note twice qualify: identical text **and** the same
+    facts and links (2026-11-12, review: meeting notes that share one line of
+    boilerplate but hold different facts are not the same note). Everything else
+    still needs your eye. Each merge is ``merge_notes`` (the merged file goes to ``<base>/.trash/``; links
     to it open the kept note). ``dry_run=True`` lists the pairs only."""
-    report = find_duplicates(user_id, None, 500, True, 20.0)
-    pairs = [p for p in report["pairs"] if "identical text" in p["reasons"]]
+    from .storage import read_note
+
+    report = find_duplicates(user_id, None, 1_000_000, True, 20.0)   # every pair; no cut
+
+    def content(permalink: str) -> Any:
+        n = read_note(permalink, user_id)
+        if n is None:
+            return None
+        return (sorted((o.category, _squash(o.content)) for o in n.observations or []),
+                sorted((r.relation_type, _squash(r.target).casefold()) for r in n.relations or []))
+
+    pairs = []
+    for p in report["pairs"]:
+        if "identical text" not in p["reasons"]:
+            continue
+        a, b = content(p["keep"]["permalink"]), content(p["drop"]["permalink"])
+        if a is not None and a == b:
+            pairs.append(p)
     out: Dict[str, Any] = {"pairs": [{"keep": p["keep"]["permalink"], "keep_title": p["keep"]["title"],
                                       "drop": p["drop"]["permalink"], "drop_title": p["drop"]["title"]}
                                      for p in pairs],
@@ -1322,9 +1340,13 @@ def merge_notes(user_id: str, keep: str, drop: str, dry_run: bool = True,
             continue  # a link between the two notes would become a self-link
         key = (r.relation_type, target.casefold())
         if key in seen_l:
+            for have in links:   # the same link in both notes: the stronger one (2026-11-12)
+                if (have.relation_type, have.target.casefold()) == key:
+                    have.strength = max(have.strength, getattr(r, "strength", 1))
             continue
         seen_l.add(key)
-        links.append(Relation(relation_type=r.relation_type, target=target))
+        links.append(Relation(relation_type=r.relation_type, target=target,
+                              strength=getattr(r, "strength", 1)))
     k_body = _body_of(k).strip()
     d_body = _body_of(d).strip()
     title_d = d.title or d.name or d.permalink

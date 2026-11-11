@@ -106,15 +106,40 @@ def _path() -> Path:
 
 
 def state() -> Dict[str, Any]:
+    """History and proposals. A damaged file is set aside as ``…json.bad-<time>`` (never
+    silently overwritten) and entries of the wrong shape are left out (2026-11-12, review)."""
+    p = _path()
     try:
-        data = json.loads(_path().read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        data = json.loads(p.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("not an object")
+    except FileNotFoundError:
         data = {}
-    if not isinstance(data, dict):
+    except (OSError, ValueError) as e:
         data = {}
-    data.setdefault("history", [])
-    data.setdefault("proposals", [])
-    data.setdefault("seq", 0)
+        try:
+            bad = p.with_name(f"{p.name}.bad-{time.strftime('%Y%m%d-%H%M%S')}")
+            os.replace(p, bad)
+            logger.warning("Knowledge: %s could not be read (%s); kept as %s, starting a new one",
+                           p.name, e, bad.name)
+        except OSError:
+            pass
+    hist = data.get("history")
+    data["history"] = [h for h in hist if isinstance(h, dict) and isinstance(h.get("id"), int)
+                       and isinstance(h.get("changes"), dict)
+                       and all(isinstance(v, list) and len(v) == 2 for v in h["changes"].values())
+                       ] if isinstance(hist, list) else []
+    props = data.get("proposals")
+    data["proposals"] = [x for x in props if isinstance(x, dict) and isinstance(x.get("id"), int)
+                         and isinstance(x.get("key"), str) and "value" in x] if isinstance(props, list) else []
+    for h in data["history"]:
+        h.setdefault("ts", 0), h.setdefault("actor", "?"), h.setdefault("reason", "")
+    for x in data["proposals"]:
+        x.setdefault("ts", 0), x.setdefault("actor", "?"), x.setdefault("reason", "")
+        x.setdefault("current", None), x.setdefault("safe", False)
+    ids = [x["id"] for x in data["history"] + data["proposals"]]
+    seq = data.get("seq")
+    data["seq"] = max([seq if isinstance(seq, int) and not isinstance(seq, bool) else 0, *ids])
     return data
 
 
@@ -185,7 +210,7 @@ def _clean(key: str, value: Any) -> Any:
                 d = float(days)
             except (TypeError, ValueError):
                 raise ValueError(f"category {name!r}: the half-life must be a number of days") from None
-            if not name or d < 0 or d > 36500:
+            if not name or not (0 <= d <= 36500):   # also refuses NaN and infinity
                 raise ValueError(f"category {name!r}: 0 (never decays) to 36500 days")
             out[name] = d
         if len(out) > MAX_CATEGORIES:
@@ -203,7 +228,7 @@ def _clean(key: str, value: Any) -> Any:
         v = float(value)
     except (TypeError, ValueError):
         raise ValueError(f"{p.label}: a number is needed") from None
-    if v != v or v < p.lo or v > p.hi:
+    if not (p.lo <= v <= p.hi):   # also refuses NaN and infinity
         raise ValueError(f"{p.label}: {p.lo:g} to {p.hi:g}")
     if key == "chunk_chars" and 0 < v < 200:
         raise ValueError("Chunk size: 0 (the model's own) or 200 to 4000")
@@ -223,12 +248,14 @@ def is_safe(key: str, value: Any) -> bool:
 def _write_config(changes: Dict[str, Any]) -> None:
     from ..config import CONFIG_FILE, AppConfig, load_config, load_encrypted_or_plain, save_config
 
+    # no config file yet: only our values are written (a dump of the defaults would
+    # write masked placeholder keys into the new file)
     raw = (load_encrypted_or_plain(CONFIG_FILE) or {}) if CONFIG_FILE.exists() else {}
-    if not raw:
-        raw = load_config().model_dump(mode="json")
     for key, value in changes.items():
         section, name = PARAMS[key].path if key in PARAMS else ("knowledge", key)
-        raw.setdefault(section, {})[name] = value
+        if not isinstance(raw.get(section), dict):
+            raw[section] = {}
+        raw[section][name] = value
     AppConfig(**raw)   # raises on an invalid combination; nothing is saved then
     save_config(raw)
     load_config(force_reload=True)   # applies fusion / chunking / decay; a new chunking queues re-embedding
@@ -250,7 +277,7 @@ def _apply_cache_threshold(value: float) -> None:
 
 
 def set_values(changes: Dict[str, Any], actor: str = "user", reason: str = "",
-               reasons: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+               reasons: Optional[Dict[str, str]] = None, exact: bool = False) -> Dict[str, Any]:
     """Apply or propose changes. ``actor`` "user" applies everything valid; any other
     actor follows ``knowledge.tuning_ai``. Returns ``applied`` {key: [old, new]},
     ``proposed`` (new proposals), ``errors`` {key: why}, ``unchanged``."""
@@ -266,10 +293,13 @@ def set_values(changes: Dict[str, Any], actor: str = "user", reason: str = "",
         unchanged: List[str] = []
         for key, value in (changes or {}).items():
             try:
-                v = _clean(key, value)
+                # exact (undo): the stored old value goes back as it was, not re-rounded
+                v = value if exact and (key in PARAMS or key in SPECIAL) else _clean(key, value)
             except ValueError as e:
                 errors[key] = str(e)
                 continue
+            if actor != "user" and key == "decay_categories":
+                v = {**now.get(key, {}), **v}   # the AI / an agent adds or changes entries, never removes yours
             if v == now.get(key):
                 unchanged.append(key)
             elif actor == "user" or (direct and is_safe(key, v)):
@@ -314,7 +344,8 @@ def undo(entry_id: Optional[int] = None) -> Dict[str, Any]:
         if entry is None:
             raise ValueError("there is no such change to undo")
         back = {k: old for k, (old, _new) in entry["changes"].items()}
-        return set_values(back, actor="user", reason=f"undo of change #{entry['id']} by {entry['actor']}")
+        return set_values(back, actor="user", reason=f"undo of change #{entry['id']} by {entry['actor']}",
+                          exact=True)
 
 
 def decide(proposal_id: int, approve: bool) -> Dict[str, Any]:

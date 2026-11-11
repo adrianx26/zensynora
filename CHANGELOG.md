@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **⧉ Duplicates**: Merge / Keep the other / Different notes per pair, **Merge
   all identical**, **🤖 Curate with AI**.
 - Agent tools `strengthen_relation`, `kb_tuning_show`, `kb_tuning_set`.
+- Independent data-safety review before the merge (13 findings, fixed): link
+  changes edit only the link line in the note's file (a first version
+  re-generated the note); merging keeps link strengths; *Merge all identical*
+  needs the same facts and links too; NaN is refused; 👍 / 👎 have their own
+  file; undo restores the exact old values; a damaged tuning file is set aside.
 - Settings `knowledge.fusion_fts_weight`, `fusion_sem_weight`, `fusion_keep_fts`,
   `chunk_chars`, `chunk_overlap`, `decay_half_life_days`, `decay_floor`,
   `decay_categories`, `decay_ai`, `tuning_ai`.

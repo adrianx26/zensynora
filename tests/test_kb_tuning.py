@@ -290,3 +290,74 @@ def test_bigger_models_are_offered_and_e5_gets_its_prefixes(tuned):
     assert semantic.model_info("intfloat/e5-base-v2").query_prefix == "query: "            # typed by hand
     assert semantic.model_info("BAAI/bge-small-en-v1.5").query_prefix == ""
     assert semantic.model_info("some/unknown-model").passage_prefix == ""
+
+
+# ── 2026-11-12 (independent review) ─────────────────────────────────────────
+def test_nan_and_infinity_are_refused_everywhere(tuned):
+    from myclaw.knowledge import tuning
+
+    assert "Error" in tuning.kb_tuning_set("decay_categories", '{"news": NaN}', "why")
+    assert "Error" in tuning.kb_tuning_set("decay_categories", '{"news": Infinity}', "why")
+    assert tuning.set_values({"decay_floor": float("nan"), "cache_similarity": float("inf")})["errors"].keys() == {
+        "decay_floor", "cache_similarity"}
+    assert tuning.describe()["proposals"] == []
+    import json as _json
+
+    _json.dumps(tuning.describe(), allow_nan=False)
+
+
+def test_undo_puts_back_the_exact_old_values(tuned):
+    from myclaw.config import CONFIG_FILE, load_config, load_encrypted_or_plain, save_config
+    from myclaw.knowledge import tuning
+
+    raw = load_encrypted_or_plain(CONFIG_FILE) if CONFIG_FILE.exists() else {}
+    raw.setdefault("knowledge", {}).update(semantic_min_score=0.123456, decay_categories={"My Tag": 45.5})
+    save_config(raw)
+    load_config(force_reload=True)
+    tuning.set_values({"semantic_min_score": 0.5, "decay_categories": {"news": 30}})
+    tuning.undo()
+    k = load_config().knowledge
+    assert k.semantic_min_score == 0.123456 and k.decay_categories == {"My Tag": 45.5}
+
+
+def test_a_damaged_state_file_is_set_aside_and_odd_entries_are_skipped(tuned):
+    from myclaw.knowledge import tuning
+
+    tuning.set_values({"decay_floor": 0.5})
+    path = tuning._path()
+    path.write_text(path.read_text()[:40])                       # truncated
+    assert tuning.state()["history"] == []
+    assert len(list(path.parent.glob("knowledge-tuning.json.bad-*"))) == 1     # kept, not overwritten
+    path.write_text('{"history": "x", "proposals": [{"id": 3}, {"id": 4, "key": "decay_floor", "value": 0.6}], "seq": "7"}')
+    st = tuning.state()
+    assert st["history"] == [] and [p["id"] for p in st["proposals"]] == [4] and st["seq"] == 4
+    assert tuning.set_values({"decay_floor": 0.4})["applied"] and tuning.describe()["history"][0]["id"] == 5
+
+
+def test_an_agent_adds_decay_categories_but_never_removes_yours(tuned):
+    from myclaw.config import CONFIG_FILE, load_config, load_encrypted_or_plain, save_config
+    from myclaw.knowledge import tuning
+
+    tuning.set_values({"decay_categories": {"person": 0}})
+    raw = load_encrypted_or_plain(CONFIG_FILE)
+    raw["knowledge"]["tuning_ai"] = "safe"
+    save_config(raw)
+    load_config(force_reload=True)
+    tuning.set_values({"decay_categories": {"news": 30}}, actor="agent:x", reason="r")
+    assert load_config().knowledge.decay_categories == {"person": 0.0, "news": 30.0}
+
+
+def test_marks_have_their_own_file_and_survive_a_deleted_or_broken_usage_log(tuned):
+    from myclaw.knowledge import relevance, usage
+
+    relevance.vote("default", "restic backup", "a", 1)
+    assert relevance.db_path().name == "knowledge-feedback.db" and relevance.db_path() != usage.db_path()
+    usage.db_path().write_bytes(b"not a database")
+    assert relevance.feedback("default")["labelled"] == 1
+    relevance.db_path().write_bytes(b"not a database")
+    relevance._CACHE.clear()
+    fb = relevance.feedback("default")
+    assert fb["labelled"] == 0 and "could not be read" in fb["error"]
+    assert relevance.votes_for("default", "restic backup") == {}
+    with pytest.raises(ValueError, match="could not be saved"):
+        relevance.vote("default", "q", "a", 1)

@@ -252,9 +252,14 @@ export const DuplicatesPanel: React.FC<{
     await api(`/api/knowledge/duplicates/dismiss?${q(base)}`, { method: 'POST', body: JSON.stringify({ a: p.keep.permalink, b: p.drop.permalink }) });
     return `“${p.keep.title}” and “${p.drop.title}” are kept as different notes.`;
   });
-  const identical = (pairs || []).filter(p => p.reasons.includes('identical text'));
+  const [identical, setIdentical] = useState<unknown[]>([]);  // same text, facts and links (server decides)
+  useEffect(() => {
+    if (!pairs?.some(p => p.reasons.includes('identical text'))) { setIdentical([]); return; }
+    api<{ pairs: unknown[] }>(`/api/knowledge/duplicates/merge-identical?${q(base)}`, { method: 'POST', body: JSON.stringify({ dry_run: true }) })
+      .then(r => setIdentical(r.pairs)).catch(() => setIdentical([]));
+  }, [pairs, base]);
   const mergeIdentical = () => {
-    if (!window.confirm(`Merge ${identical.length} pair(s) of notes with identical text? The merged files go to the trash folder; links keep working.`)) return;
+    if (!window.confirm(`Merge ${identical.length} pair(s) of notes with identical text, facts and links? The merged files go to the trash folder; links keep working.`)) return;
     void act(async () => {
       const r = await api<{ merged: number; errors: string[] }>(`/api/knowledge/duplicates/merge-identical?${q(base)}`, { method: 'POST', body: JSON.stringify({ dry_run: false }) });
       if (r.errors.length) throw new Error(`Merged ${r.merged}; not merged: ${r.errors.join(' · ')}`);
@@ -300,7 +305,7 @@ export const DuplicatesPanel: React.FC<{
       {pairs && pairs.length > 0 && (
         <div className="kb-buttons" style={{ marginBottom: 8 }}>
           {identical.length > 0 && <button type="button" className="primary-btn" disabled={busy} onClick={mergeIdentical}
-            title="Only pairs whose text is exactly the same">Merge all identical ({identical.length})</button>}
+            title="Only pairs with exactly the same text, facts and links">Merge all identical ({identical.length})</button>}
           {onAi && <button type="button" className="ghost-btn" disabled={busy} onClick={onAi}
             title="The default model proposes for each pair: merge, keep the other one, or different notes — you approve">🤖 Curate with AI</button>}
         </div>
