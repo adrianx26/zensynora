@@ -1029,6 +1029,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#19-knowledge-tuning-decay-and-re-ranking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        19. Knowledge tuning, decay and re-ranking
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1457,6 +1468,17 @@
     <span class="md-ellipsis">
       
         18. Context length per agent
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#19-knowledge-tuning-decay-and-re-ranking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        19. Knowledge tuning, decay and re-ranking
       
     </span>
   </a>
@@ -2077,6 +2099,27 @@ red above or failed.</p>
     turn --&gt; var["CONTEXT_LENGTH contextvar"] --&gt; oll["Ollama: options.num_ctx"]</code></pre>
 <p><code>myclaw/context_budget.py</code> holds all of it; token counts are estimated at
 about 3.8 characters per token.</p>
+<h2 id="19-knowledge-tuning-decay-and-re-ranking">19. Knowledge tuning, decay and re-ranking<a class="headerlink" href="#19-knowledge-tuning-decay-and-re-ranking" title="Permanent link">&para;</a></h2>
+<p>Who may change a ranking value, and where the values act on a search
+(2026-11-11). Details: <a href="../knowledge_base_guide/#tuning-thresholds-decay-models-relevance-link-strength">Knowledge base guide → Tuning</a>.</p>
+<pre class="mermaid"><code>flowchart TD
+    user["You&lt;br/&gt;Knowledge → Tune"] -- "any value inside its limits" --&gt; setv["tuning.set_values()"]
+    ai["AI suggest · weekly decay review&lt;br/&gt;agent tool kb_tuning_set"] -- "value + reason" --&gt; setv
+    setv -- "you, or mode safe and inside the safe range" --&gt; cfg[("config.json&lt;br/&gt;knowledge.* · semantic_cache.*")]
+    setv -- "otherwise" --&gt; prop["proposal&lt;br/&gt;Approve / Reject"]
+    prop -- "Approve" --&gt; cfg
+    setv --&gt; hist[("knowledge-tuning.json&lt;br/&gt;history · undo · proposals")]
+    cfg --&gt; sem["semantic.py&lt;br/&gt;fusion weights · similarity floor · chunking · model"]
+    cfg --&gt; dec["decay.py&lt;br/&gt;half-life · floor · per tag / category"]
+    cfg --&gt; cache["semantic_cache&lt;br/&gt;similarity threshold"]
+    q["search (agent context, tools, Web UI)"] --&gt; sem
+    sem -- "ordered notes" --&gt; rr["relevance.rerank()"]
+    dec --&gt; rr
+    fb[("kb_feedback&lt;br/&gt;your 👍 / 👎 per query")] --&gt; rr
+    use[("usage log&lt;br/&gt;last use · notes used together")] --&gt; dec
+    use --&gt; rel["relations.py&lt;br/&gt;strengthen from use"]
+    rel -- "- uses [[Note]] (x3)" --&gt; md[("notes *.md")]
+    rr --&gt; out["results&lt;br/&gt;identical to before when decay is off and the query has no marks"]</code></pre>
 
 
 

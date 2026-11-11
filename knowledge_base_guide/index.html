@@ -513,6 +513,78 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tuning-thresholds-decay-models-relevance-link-strength" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning: thresholds, decay, models, relevance, link strength
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tuning: thresholds, decay, models, relevance, link strength">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#who-may-change-the-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who may change the values
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bigger-embedding-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bigger embedding models
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#temporal-decay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Temporal decay
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#relevance-test-measure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relevance test, 👍 / 👎, Measure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#relations-strength-precise-types-new-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relations: strength, precise types, new links
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#distillation-facts-scenarios-a-persona" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1310,6 +1382,78 @@
 </li>
       
         <li class="md-nav__item">
+  <a href="#tuning-thresholds-decay-models-relevance-link-strength" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tuning: thresholds, decay, models, relevance, link strength
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Tuning: thresholds, decay, models, relevance, link strength">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#who-may-change-the-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who may change the values
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bigger-embedding-models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bigger embedding models
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#temporal-decay" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Temporal decay
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#relevance-test-measure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relevance test, 👍 / 👎, Measure
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#relations-strength-precise-types-new-links" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relations: strength, precise types, new links
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#distillation-facts-scenarios-a-persona" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1447,6 +1591,10 @@ Runs Ubuntu 24.04 and hosts ZenSynora. Free text, as long as you like.
 <li><strong>Links</strong> (relations): <code>- relation [[Other note]]</code>. The target can be the
   other note's title, permalink, file name or one of its aliases (case does
   not matter; <code>[[Note|label]]</code> and <code>[[Note#Section]]</code> work too).</li>
+<li>A link can have a <strong>strength</strong> from 1 to 5, written after it:
+  <code>- uses [[Redis]] (x3)</code>. No number means 1. Stronger links come first when
+  an agent reads a note's related notes and are drawn thicker in the graph
+  (see <a href="#tuning-thresholds-decay-models-relevance-link-strength">Tuning</a>).</li>
 <li>A link to a note that <strong>does not exist yet</strong> is remembered and connects by
   itself as soon as that note is written. In the Web UI graph it is a dashed
   dot (<em>Create this note</em>). Deleting a note turns links to it back into such
@@ -1723,6 +1871,15 @@ links.</p>
 <code>resolve_knowledge_conflict(conflict_id, keep)</code> (<code>"a"</code>, <code>"b"</code> or <code>"both"</code>),
 <code>knowledge_categories()</code>, <code>find_duplicate_notes()</code> (a list only). Merging
 notes or categories is left to you on the Knowledge page.</p>
+<p><strong>Curating duplicates (Knowledge → ⧉ Duplicates).</strong> Every pair has four
+buttons: <strong>Merge</strong> (keeps the suggested note), <strong>⇄ Keep the other</strong>,
+<strong>Preview…</strong> (the merged note first) and <strong>Different notes</strong> (the pair is not
+listed again). On top: <strong>Merge all identical (N)</strong> merges in one go every
+pair that is the same note twice — identical text <em>and</em> the same facts and
+links (notes that only share a line of boilerplate are left for you) — and <strong>🤖 Curate with AI</strong> lets the default
+model propose a decision per pair (you approve). A merge keeps the tags,
+facts, links and text of both notes; the merged file goes to
+<code>&lt;base&gt;/.trash/</code> and links to it open the kept note.</p>
 <p><strong>Settings → Features</strong> (<code>~/.myclaw/config.json</code>):</p>
 <table>
 <thead>
@@ -1956,6 +2113,142 @@ of ~1000 characters); like the rest of the index they can be rebuilt at any
 time and deleting them never loses a note. A note's vectors are removed with
 it; after <code>sync --force</code> or when a note comes back from <code>.trash</code> its old
 vectors are re-used (kept 30 days).</p>
+<h2 id="tuning-thresholds-decay-models-relevance-link-strength">Tuning: thresholds, decay, models, relevance, link strength<a class="headerlink" href="#tuning-thresholds-decay-models-relevance-link-strength" title="Permanent link">&para;</a></h2>
+<p>The <strong>Tune</strong> tab of the Knowledge page (2026-11-11) holds everything that
+changes <em>how notes are ranked</em>. Nothing here changes or deletes a note, except
+the Relations part, which writes link lines you chose.</p>
+<h3 id="who-may-change-the-values">Who may change the values<a class="headerlink" href="#who-may-change-the-values" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Who</th>
+<th>What</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>You</td>
+<td>any value inside its limits (Tune tab, Settings, <code>config.json</code>)</td>
+</tr>
+<tr>
+<td>The AI (<strong>🤖 AI suggest</strong>, the weekly decay review) and agents (<code>kb_tuning_set</code>)</td>
+<td>follows <em>The AI and agents</em>: <strong>only propose</strong> (default) — every change waits under <em>Proposals</em> for your Approve / Reject; <strong>may change inside the safe ranges</strong> — a value inside its safe range is applied at once, anything else is a proposal</td>
+</tr>
+</tbody>
+</table>
+<p>The embedding model is always a proposal (a download of up to 2 GB and a
+re-embedding of every note). Every applied change is in <strong>History</strong> with who,
+when and why, and has an <strong>↶ Undo</strong>. Setting: <code>knowledge.tuning_ai</code>
+(<code>suggest</code> / <code>safe</code>). History and proposals: <code>~/.myclaw/knowledge-tuning.json</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Value (setting)</th>
+<th>Default</th>
+<th>Safe range</th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Similarity for a meaning match (<code>knowledge.semantic_min_score</code>)</td>
+<td>0 = the model's</td>
+<td>0.3–0.9</td>
+<td>embedding similarity threshold of the note search</td>
+</tr>
+<tr>
+<td>Answer cache similarity (<code>semantic_cache.similarity_threshold</code>)</td>
+<td>0.92</td>
+<td>0.85–0.98</td>
+<td>how similar a new question must be to reuse a saved answer; the running cache follows at once</td>
+</tr>
+<tr>
+<td>Weight of word / meaning matches (<code>knowledge.fusion_fts_weight</code>, <code>fusion_sem_weight</code>)</td>
+<td>1.0 / 0.6</td>
+<td>0.5–1.5 / 0.2–1.2</td>
+<td>the mixed (hybrid) order</td>
+</tr>
+<tr>
+<td>Word matches kept on top (<code>knowledge.fusion_keep_fts</code>)</td>
+<td>2</td>
+<td>0–4</td>
+<td>an exact name or error code is never pushed down</td>
+</tr>
+<tr>
+<td>Chunk size / overlap (<code>knowledge.chunk_chars</code>, <code>chunk_overlap</code>)</td>
+<td>0 = the model's / 150</td>
+<td>300–1500 / 50–300</td>
+<td>changing them re-embeds every note</td>
+</tr>
+<tr>
+<td>Decay half-life / lowest weight (<code>knowledge.decay_half_life_days</code>, <code>decay_floor</code>)</td>
+<td>0 = off / 0.3</td>
+<td>30–730 / 0.2–0.9</td>
+<td>below</td>
+</tr>
+</tbody>
+</table>
+<p><strong>🤖 AI suggest</strong> sends the default model <em>measurements only</em> (the values,
+counts, ages, tag names, the result of <em>Measure</em> — no note text) and asks what
+to change and why.</p>
+<h3 id="bigger-embedding-models">Bigger embedding models<a class="headerlink" href="#bigger-embedding-models" title="Permanent link">&para;</a></h3>
+<p><em>Thresholds &amp; model → Embedding model</em>: the two small models, plus
+<code>BAAI/bge-base-en-v1.5</code> (210 MB), <code>BAAI/bge-large-en-v1.5</code> (1.2 GB),
+<code>sentence-transformers/paraphrase-multilingual-mpnet-base-v2</code> (1 GB, ~50
+languages) and <code>intfloat/multilingual-e5-large</code> (2.2 GB, ~100 languages; its
+<code>query:</code> / <code>passage:</code> prefixes are added for you), every other model
+fastembed supports, or a name you type. A bigger model ranks better but is
+slower, needs more memory (vectors of 768 or 1024 numbers instead of 384) and
+is downloaded once. Saving re-embeds every note in the background; until a
+note is done it is found by its words. The similarity thresholds of the new
+models are estimates — check them on the test bench.</p>
+<h3 id="temporal-decay">Temporal decay<a class="headerlink" href="#temporal-decay" title="Permanent link">&para;</a></h3>
+<p>Off by default. With a half-life of <em>N</em> days, a note that was neither
+<strong>changed nor used by an agent</strong> for <em>N</em> days counts half in the ranking,
+after 2 × <em>N</em> a quarter, never less than the lowest weight. It only re-orders
+search results (and so the automatic <em>Relevant Knowledge</em>); nothing is hidden.
+A note tagged <code>evergreen</code> never decays. <em>Own half-life per tag or fact
+category</em> (<code>knowledge.decay_categories</code>) gives e.g. <code>news</code> 30 days and
+<code>person</code> 0 (never). Distilled facts use the same half-lives for their
+confidence from the next distillation on.</p>
+<p><strong>🤖 Let the AI decide</strong> asks the default model whether decay helps <em>this</em>
+base (how old the notes are, whether old notes are still used, which tags and
+categories exist), which half-life and which tags never or quickly go stale;
+its reasons are shown above the fields. <em>AI reviews the decay policy once a
+week</em> (<code>knowledge.decay_ai</code>, off by default) repeats that while ZenSynora
+runs — one model call a week.</p>
+<h3 id="relevance-test-measure">Relevance test, 👍 / 👎, Measure<a class="headerlink" href="#relevance-test-measure" title="Permanent link">&para;</a></h3>
+<p><em>Relevance test</em> runs a search the way an agent would and shows for every
+result its position in the word search, its position and similarity by
+meaning, its decay weight and the position before decay. <strong>👍</strong> marks the
+right note for that query, <strong>👎</strong> a wrong one: the same query (words in any
+case or punctuation) then shows 👍 notes first and 👎 notes last — also when
+decay is on. Marks are kept in their own file,
+<code>~/.myclaw/knowledge-feedback.db</code> (never pruned; deleting the usage log does
+not touch them).
+<strong>📏 Measure my marked searches</strong> (needs 👍 on 5 different searches) replays
+them with other meaning weights, kept word matches and similarity floors and
+shows the settings that put the right notes highest; <strong>Apply these values</strong>
+saves them.</p>
+<h3 id="relations-strength-precise-types-new-links">Relations: strength, precise types, new links<a class="headerlink" href="#relations-strength-precise-types-new-links" title="Permanent link">&para;</a></h3>
+<p><em>Relations</em> lists every link with its strength and how often agents used
+both notes in one turn (last 90 days).</p>
+<ul>
+<li>Click a dot to set the strength, or <strong>↗ Strengthen from use</strong>: links whose
+  notes were used together 3 / 8 / 20 / 50 times get strength 2 / 3 / 4 / 5
+  (a preview first; it only raises, a second run changes nothing).</li>
+<li><strong>🤖 Precise types</strong> proposes exact types (<code>depends_on</code>, <code>runs_on</code> …) for
+  vague ones (<code>relates_to</code>, <code>see_also</code> …).</li>
+<li><strong>🤖 Suggest links</strong> proposes explicit links between notes about the same
+  thing that are not linked yet (better graph edges).</li>
+</ul>
+<p>AI proposals are a checklist; only what you tick is written. Every link
+change edits <strong>only that link line</strong> in the note's file — the rest of the
+file stays byte for byte as it was; a note with an unusual layout (an
+unclosed code block) is refused, not rewritten. Changing a type keeps the
+previous file in <code>.trash</code>.</p>
+<p><strong>Agent tools:</strong> <code>strengthen_relation(from_note, relation_type, target,
+strength)</code>, <code>kb_tuning_show()</code>, <code>kb_tuning_set(key, value, reason)</code>.</p>
 <h2 id="distillation-facts-scenarios-a-persona">Distillation: facts, scenarios, a persona<a class="headerlink" href="#distillation-facts-scenarios-a-persona" title="Permanent link">&para;</a></h2>
 <p>Added 2026-10-24 (KB phase 4). ZenSynora works out three levels from the
 notes (level 0), by rules — no model is called:</p>
