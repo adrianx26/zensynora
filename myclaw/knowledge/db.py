@@ -685,6 +685,10 @@ class KnowledgeDB:
         _semantic.ensure_schema(conn)
         # 2026-10-24 (KB phase 4): distilled facts / scenarios / persona (derived, rebuildable)
         _distill.ensure_schema(conn)
+        # 2026-11-11: link strengths (derived from the notes' "(xN)", rebuildable)
+        from . import relations as _relations
+
+        _relations.ensure_schema(conn)
 
         # Phase 4 (MemoPad import): sync_meta table for watermark-based incremental scanning
         conn.execute("""
@@ -1920,6 +1924,14 @@ class KnowledgeDB:
                     logger.debug("Link target not found yet (kept as unresolved): %s",
                                  target_name)
                     self._add_pending(conn, eid, rel.relation_type, target_name)
+            # 2026-11-11: the links' strengths (derived; never stops the note from being indexed)
+            try:
+                from . import relations as _relations
+
+                with self._savepoint(conn, "kb_relstrength"):
+                    _relations.on_note_indexed(conn, eid, note.relations)
+            except Exception as e:
+                logger.info("Knowledge: link strengths skipped for %s: %s", note.permalink, e)
 
             # Note text index
             self._index_note_text_conn(conn, eid, title, note.content or "", tags)

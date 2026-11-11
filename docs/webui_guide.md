@@ -352,6 +352,15 @@ keep their own knowledge base.
 The **Knowledge** page (sidebar) shows the knowledge base visually. Every
 note is shown (until 2026-11-06 only the first 2000):
 
+* **Tune** (2026-11-11) — similarity thresholds (note search and answer
+  cache), weights of word and meaning matches, chunking, the embedding model
+  (bigger models too), temporal decay with **🤖 Let the AI decide**, a
+  relevance test with 👍 / 👎 and **📏 Measure**, link strengths and AI link
+  proposals, and who may change the values (you; the AI and agents propose or
+  stay inside safe ranges). See the
+  [Knowledge base guide](knowledge_base_guide.md#tuning-thresholds-decay-models-relevance-link-strength).
+  **⧉ Duplicates** in the toolbar curates duplicate notes (Merge, Keep the
+  other, Different notes, Merge all identical, Curate with AI).
 * **Overview** (the page opens here) — the knowledge base at a glance: notes, facts, links, tags
   and groups of linked notes, each with this week's change; growth by
   **Days / Weeks / Months** (counted by each note's own date, so a re-index

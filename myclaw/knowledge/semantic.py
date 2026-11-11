@@ -54,7 +54,7 @@ import itertools
 import queue
 from concurrent.futures import CancelledError, Future
 from concurrent.futures import TimeoutError as FutureTimeout
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional, Protocol, Sequence, Tuple
 
@@ -79,6 +79,9 @@ class ModelInfo:
     chunk_chars: int      # chunk size that fits the model's input window
     min_score: float      # cosine below this: not a semantic match (estimate, see docs)
     languages: str
+    # 2026-11-11: some models (e5) want a prefix before every query / passage
+    query_prefix: str = ""
+    passage_prefix: str = ""
 
 
 # The two models offered in Settings. bge-small-en-v1.5 is the default: 67 MB,
@@ -96,6 +99,16 @@ MODELS: Dict[str, ModelInfo] = {
     "BAAI/bge-small-en-v1.5": ModelInfo(384, 67, "MIT", 512, 1000, 0.75, "English"),
     "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2": ModelInfo(
         384, 220, "Apache-2.0", 128, 450, 0.6, "about 50 languages, Romanian included"),
+    # 2026-11-11: bigger models (better ranking; slower, more memory and disk).
+    # Their min_score values are estimates from the model family — tune them on
+    # Knowledge → Tune (the test bench shows the real scores of your notes).
+    "BAAI/bge-base-en-v1.5": ModelInfo(768, 210, "MIT", 512, 1000, 0.75, "English"),
+    "BAAI/bge-large-en-v1.5": ModelInfo(1024, 1200, "MIT", 512, 1000, 0.75, "English"),
+    "sentence-transformers/paraphrase-multilingual-mpnet-base-v2": ModelInfo(
+        768, 1000, "Apache-2.0", 128, 450, 0.55, "about 50 languages, Romanian included"),
+    "intfloat/multilingual-e5-large": ModelInfo(
+        1024, 2240, "MIT", 512, 1000, 0.8, "about 100 languages, Romanian included",
+        "query: ", "passage: "),
 }
 _UNKNOWN_MODEL = ModelInfo(0, 0, "see the model card", 512, 1000, 0.5, "see the model card")
 
@@ -128,6 +141,12 @@ _OPTIONS: Dict[str, Any] = {
     "embedding_model": DEFAULT_MODEL,
     "kb_enabled": True,
     "min_score": 0.0,             # 0 = the model's default
+    # 2026-11-11: knowledge.fusion_* / chunk_* (Knowledge → Tune)
+    "fusion_fts_weight": FUSION_FTS_WEIGHT,
+    "fusion_sem_weight": FUSION_SEM_WEIGHT,
+    "fusion_keep_fts": FUSION_KEEP_FTS,
+    "chunk_chars": 0,             # 0 = the model's own chunk size
+    "chunk_overlap": CHUNK_OVERLAP,
 }
 
 
@@ -135,7 +154,9 @@ _APPLIED = False   # settings applied once in this process (later changes are tr
 
 
 def set_options(semantic_search: Optional[bool] = None, embedding_model: Optional[str] = None,
-                kb_enabled: Optional[bool] = None, min_score: Optional[float] = None) -> None:
+                kb_enabled: Optional[bool] = None, min_score: Optional[float] = None,
+                fusion: Optional[Sequence[Any]] = None,
+                chunking: Optional[Sequence[Any]] = None) -> None:
     """Apply the settings. A new model drops the loaded one (its vectors become stale).
 
     2026-10-24 (review): turning the switch on or changing the model after
@@ -143,7 +164,18 @@ def set_options(semantic_search: Optional[bool] = None, embedding_model: Optiona
     every known base.
     """
     global _APPLIED
-    was_on, was_model = enabled(), model_name()
+    was_on, was_model = enabled(), state_tag()
+    try:
+        if fusion is not None:
+            _OPTIONS["fusion_fts_weight"] = max(0.0, min(3.0, float(fusion[0])))
+            _OPTIONS["fusion_sem_weight"] = max(0.0, min(3.0, float(fusion[1])))
+            _OPTIONS["fusion_keep_fts"] = max(0, min(10, int(fusion[2])))
+        if chunking is not None:
+            chars = int(chunking[0])
+            _OPTIONS["chunk_chars"] = 0 if chars <= 0 else max(200, min(4000, chars))
+            _OPTIONS["chunk_overlap"] = max(0, min(1000, int(chunking[1])))
+    except (TypeError, ValueError, IndexError):
+        pass
     if semantic_search is not None:
         _OPTIONS["semantic_search"] = bool(semantic_search)
     if kb_enabled is not None:
@@ -158,7 +190,7 @@ def set_options(semantic_search: Optional[bool] = None, embedding_model: Optiona
         if name != _OPTIONS["embedding_model"]:
             _OPTIONS["embedding_model"] = name
             _reset_caches()
-    transition = (enabled() and not was_on) or model_name() != was_model
+    transition = (enabled() and not was_on) or state_tag() != was_model
     if _APPLIED and transition:
         queue_known_bases()
     _APPLIED = True
@@ -173,7 +205,38 @@ def model_name() -> str:
 
 
 def model_info(name: Optional[str] = None) -> ModelInfo:
-    return MODELS.get(name or model_name(), _UNKNOWN_MODEL)
+    name = name or model_name()
+    known = MODELS.get(name)
+    if known:
+        return known
+    # 2026-11-11: a model typed by the user. The e5 family needs its prefixes.
+    low = name.lower()
+    if "e5" in low and "instruct" not in low:
+        return replace(_UNKNOWN_MODEL, query_prefix="query: ", passage_prefix="passage: ")
+    return _UNKNOWN_MODEL
+
+
+def fusion() -> Tuple[float, float, int]:
+    """(word weight, meaning weight, word matches always kept on top) — knowledge.fusion_*."""
+    return (float(_OPTIONS["fusion_fts_weight"]), float(_OPTIONS["fusion_sem_weight"]),
+            int(_OPTIONS["fusion_keep_fts"]))
+
+
+def chunking(model: Optional[str] = None) -> Tuple[int, int]:
+    """(chunk characters, overlap) used to embed notes; 0 characters = the model's own size."""
+    chars = int(_OPTIONS["chunk_chars"]) or model_info(model).chunk_chars
+    return chars, min(int(_OPTIONS["chunk_overlap"]), max(0, chars // 2))
+
+
+def state_tag(model: Optional[str] = None) -> str:
+    """What ``note_embed_state.model`` holds: the model, plus the chunking when it is
+    not the default — so a chunking change makes every note wait for re-embedding
+    (also after a config edit while ZenSynora was stopped)."""
+    model = model or model_name()
+    chars, overlap = chunking(model)
+    if chars == model_info(model).chunk_chars and overlap == CHUNK_OVERLAP:
+        return model
+    return f"{model}|{chars}/{overlap}"
 
 
 def min_score() -> float:
@@ -256,15 +319,18 @@ class FastEmbedEmbedder:
         self.model = model
         self._m = TextEmbedding(model_name=model, cache_dir=str(cache), threads=threads)
         known = MODELS.get(model)
+        info = model_info(model)
+        self._qp, self._pp = info.query_prefix, info.passage_prefix
         # known models: no probe inference outside the shared inference thread
         self.dim = known.dim if known else int(self.embed_passages(["dimension probe"]).shape[1])
 
     def embed_passages(self, texts: Sequence[str]) -> np.ndarray:
         fn = getattr(self._m, "passage_embed", None) or self._m.embed
-        return _normalise(np.asarray(list(fn(list(texts))), dtype=np.float32))
+        return _normalise(np.asarray(list(fn([self._pp + t for t in texts])), dtype=np.float32))
 
     def embed_query(self, text: str) -> np.ndarray:
         fn = getattr(self._m, "query_embed", None)
+        text = self._qp + text
         vecs = list(fn(text)) if fn is not None else list(self._m.embed([text]))
         return _normalise(np.asarray(vecs[0], dtype=np.float32))[0]
 
@@ -801,7 +867,7 @@ def _stale_ids(conn: sqlite3.Connection, model: str, all_notes: bool = False,
         sql = ("SELECT e.id FROM entities e LEFT JOIN note_embed_state s ON s.entity_id = e.id "
                "WHERE s.entity_id IS NULL OR s.model != ? " + changed +
                "ORDER BY e.updated_at DESC")
-        args = [model]
+        args = [state_tag(model)]   # 2026-11-11: the model and, when changed, the chunking
     if limit is not None:
         sql += " LIMIT ?"
         args.append(int(limit))
@@ -847,7 +913,8 @@ def embed_notes(db_path: Path, ids: Sequence[int], emb: Embedder,
     ids = list(dict.fromkeys(int(i) for i in ids))
     total = len(ids)
     model = emb.model
-    info = model_info(model)
+    chunk_chars, chunk_overlap = chunking(model)
+    tag = state_tag(model)
     conn = _connect(Path(db_path))
     try:
         if not _has_tables(conn):
@@ -863,7 +930,7 @@ def embed_notes(db_path: Path, ids: Sequence[int], emb: Embedder,
                 plans: Dict[int, Dict[str, Any]] = {}
                 for eid, s in srcs.items():
                     chunks = chunk_note(s["title"], s["body"], s["tags"], s["facts"], s["links"],
-                                        max_chars=info.chunk_chars)
+                                        max_chars=chunk_chars, overlap=chunk_overlap)
                     sums = [_sha(c) for c in chunks]
                     plans[eid] = {"chunks": chunks, "sums": sums, "file": s["checksum"],
                                   "text": _sha("\n".join(sums))}
@@ -933,7 +1000,7 @@ def embed_notes(db_path: Path, ids: Sequence[int], emb: Embedder,
                     conn.execute(
                         "INSERT OR REPLACE INTO note_embed_state (entity_id, file_checksum, "
                         "text_checksum, model, chunks, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-                        (eid, p["file"], p["text"], model, n, now))
+                        (eid, p["file"], p["text"], tag, n, now))
                     done["notes"] += 1
                     done["chunks"] += n
                 used = [k for k in vecs]
@@ -1442,7 +1509,8 @@ def _matrix(conn: sqlite3.Connection, path: str, model: str, dim: int
 
 
 def vector_rank(conn: sqlite3.Connection, path: Any, query: str, limit: int,
-                timeout: float = SEARCH_TIMEOUT, wait_load: float = 0.0
+                timeout: float = SEARCH_TIMEOUT, wait_load: float = 0.0,
+                floor: Optional[float] = None
                 ) -> Tuple[Optional[List[Tuple[int, float]]], Optional[str]]:
     """Notes by similarity to ``query``: ([(entity_id, score)], None) or (None, reason)."""
     reason = unavailable_reason()
@@ -1465,7 +1533,7 @@ def vector_rank(conn: sqlite3.Connection, path: Any, query: str, limit: int,
     if not len(ids):
         return None, "no note is embedded yet — run Backfill"
     scores = mat @ q
-    floor = min_score()
+    floor = min_score() if floor is None else floor   # 2026-11-11: auto-tune tries other floors
     out: List[Tuple[int, float]] = []
     seen: set = set()
     for i in np.argsort(-scores):
@@ -1494,13 +1562,17 @@ def rrf(rankings: Sequence[Sequence[int]], k: int = RRF_K) -> List[Tuple[int, fl
 
 
 def fuse(fts_ids: Sequence[int], sem_ids: Sequence[int], k: int = RRF_K,
-         w_fts: float = FUSION_FTS_WEIGHT, w_sem: float = FUSION_SEM_WEIGHT,
-         keep_fts: int = FUSION_KEEP_FTS) -> List[int]:
+         w_fts: Optional[float] = None, w_sem: Optional[float] = None,
+         keep_fts: Optional[int] = None) -> List[int]:
     """Hybrid order (2026-10-24 review): weighted RRF where the word ranking
     counts more than meaning, and the best ``keep_fts`` word matches always
     come first, in their order — plain RRF let a crowd of similar notes push
     the one note with the exact keyword (an error code, a name) out of the
     top results. ``sem_ids`` holds only notes above the similarity floor."""
+    opt = fusion()   # 2026-11-11: knowledge.fusion_* unless given
+    w_fts = opt[0] if w_fts is None else w_fts
+    w_sem = opt[1] if w_sem is None else w_sem
+    keep_fts = opt[2] if keep_fts is None else keep_fts
     scores: Dict[int, float] = {}
     order: Dict[int, int] = {}
     for weight, ranking in ((w_fts, fts_ids), (w_sem, sem_ids)):
@@ -1532,16 +1604,37 @@ def search_entities(db: Any, query: str, limit: int = 10, boolean: bool = False,
                     wait_load: Optional[float] = None,
                     info: Optional[Dict[str, Any]] = None) -> List[Any]:
     """``db.search_fts`` plus vectors. ``info`` (optional) gets ``mode`` (what
-    was used) and ``fallback`` (why semantic search was not used)."""
+    was used) and ``fallback`` (why semantic search was not used).
+
+    2026-11-11: the order then goes through ``relevance.rerank`` (temporal decay
+    and your 👍 / 👎 for this query). With decay off and no feedback the result is
+    exactly the one from before. ``info["explain"] = True`` asks for the score of
+    every result (the test bench on Knowledge → Tune)."""
+    from . import relevance as _relevance
+
     info = info if info is not None else {}
+    base = str(getattr(db, "user_id", "default") or "default")
+    rerank = _relevance.active(base, query)
+    explain = bool(info.get("explain"))
+    fetch = max(limit * 2, 20) if (rerank or explain) else limit
+
+    def finish(entities: List[Any], fts_ids: Sequence[int] = (),
+               sem: Sequence[Tuple[int, float]] = ()) -> List[Any]:
+        if rerank or explain:
+            entities = _relevance.rerank(base, query, entities, info if explain else None,
+                                         fts_ids=fts_ids, sem=sem, apply=rerank)
+        return entities[:limit]
+
     m = normalise_mode(mode) or "auto"
     info["requested"] = m
     if m == "fts" or (m == "auto" and not enabled()):
         info["mode"] = "fts"
-        return db.search_fts(query, limit, boolean=boolean)
+        found = db.search_fts(query, fetch, boolean=boolean)
+        return finish(found, [e.id for e in found])
     if _fts_only_syntax(query):
         info.update(mode="fts", fallback="AND / OR / NOT, \"phrases\" and prefix* use word search")
-        return db.search_fts(query, limit, boolean=boolean)
+        found = db.search_fts(query, fetch, boolean=boolean)
+        return finish(found, [e.id for e in found])
     t = SEARCH_TIMEOUT if timeout is None else float(timeout)
     wl = t if wait_load is None else float(wait_load)
     conn = db._get_connection()
@@ -1549,7 +1642,8 @@ def search_entities(db: Any, query: str, limit: int = 10, boolean: bool = False,
     vec, reason = vector_rank(conn, db.db_path, query, fetch, timeout=t, wait_load=wl)
     if vec is None:
         info.update(mode="fts", fallback=reason)
-        return db.search_fts(query, limit, boolean=boolean)
+        found = db.search_fts(query, fetch if (rerank or explain) else limit, boolean=boolean)
+        return finish(found, [e.id for e in found])
     fts = db.search_fts(query, fetch, boolean=boolean) if m != "semantic" else []
     by_id = {e.id: e for e in fts}
     if m == "semantic":
@@ -1559,14 +1653,15 @@ def search_entities(db: Any, query: str, limit: int = 10, boolean: bool = False,
         ranked = fuse([e.id for e in fts], [eid for eid, _ in vec])
         info["mode"] = "hybrid"
     info["semantic_hits"] = len(vec)
-    ranked = ranked[:limit]
+    if not (rerank or explain):
+        ranked = ranked[:limit]
     missing = [i for i in ranked if i not in by_id]
     if missing:
         from .db import _row_to_entity
 
         for r in conn.execute(f"SELECT * FROM entities WHERE id IN ({_ph(len(missing))})", missing):
             by_id[r["id"]] = _row_to_entity(r)
-    return [by_id[i] for i in ranked if i in by_id]
+    return finish([by_id[i] for i in ranked if i in by_id], [e.id for e in fts], vec)
 
 
 def context_search_kwargs(info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:

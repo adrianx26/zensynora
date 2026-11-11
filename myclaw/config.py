@@ -550,6 +550,28 @@ class KnowledgeConfig(BaseModel):
     evaluate_idle_minutes: float = Field(15.0, ge=1.0, le=10080.0)
     evaluate_mode: Literal["rules", "ai"] = "rules"
     evaluate_batch: int = Field(10, ge=1, le=100)
+    # 2026-11-11: search tuning (Knowledge → Tune; myclaw/knowledge/tuning.py). The
+    # user sets any value; agents / the AI only inside each value's safe range,
+    # anything else becomes a proposal. Every change is logged and can be undone.
+    fusion_fts_weight: float = Field(1.0, ge=0.0, le=3.0)   # hybrid search: weight of the word ranking
+    fusion_sem_weight: float = Field(0.6, ge=0.0, le=3.0)   # … and of the meaning ranking
+    fusion_keep_fts: int = Field(2, ge=0, le=10)            # best word matches that always stay on top
+    chunk_chars: int = Field(0, ge=0, le=4000)              # characters per embedded chunk (0 = the model's own)
+    chunk_overlap: int = Field(150, ge=0, le=1000)          # characters shared by consecutive chunks
+    # Temporal decay: a note not changed or used for one half-life counts half
+    # in search and in the agent's context (never below decay_floor; nothing is
+    # deleted). 0 = no decay. Per fact category: its own half-life in days
+    # (0 = never decays). Notes tagged "evergreen" never decay.
+    decay_half_life_days: float = Field(0.0, ge=0.0, le=36500.0)
+    decay_floor: float = Field(0.3, ge=0.0, le=1.0)
+    decay_categories: dict[str, float] = {}
+    # The AI decides when, why and how decay is used: it reviews the notes' age
+    # and use (button, agent tool, and about once a week while ZenSynora runs)
+    # and sets the values above inside their safe ranges, with its reasons.
+    decay_ai: bool = False   # the AI reviews the decay policy once a week (opt-in)
+    # 2026-11-11: what the AI and agents may do with these values: "suggest" (only
+    # propose; you approve) or "safe" (change inside each value's safe limits; logged, undoable)
+    tuning_ai: Literal["suggest", "safe"] = "suggest"
 
 
 class SwarmConfig(BaseModel):
@@ -1022,7 +1044,17 @@ def _apply_knowledge_semantic(config: AppConfig) -> None:
         set_options(semantic_search=getattr(kc, "semantic_search", False),
                     embedding_model=getattr(kc, "embedding_model", None),
                     kb_enabled=getattr(kc, "enabled", True),
-                    min_score=getattr(kc, "semantic_min_score", 0.0))
+                    min_score=getattr(kc, "semantic_min_score", 0.0),
+                    # 2026-11-11: fusion weights and chunking are settings
+                    fusion=(getattr(kc, "fusion_fts_weight", 1.0), getattr(kc, "fusion_sem_weight", 0.6),
+                            getattr(kc, "fusion_keep_fts", 2)),
+                    chunking=(getattr(kc, "chunk_chars", 0), getattr(kc, "chunk_overlap", 150)))
+        from .knowledge import decay as _decay
+
+        _decay.set_options(half_life_days=getattr(kc, "decay_half_life_days", 0.0),
+                           floor=getattr(kc, "decay_floor", 0.3),
+                           categories=getattr(kc, "decay_categories", {}),
+                           ai=getattr(kc, "decay_ai", False))
     except Exception as e:
         logger.warning("semantic search settings could not be applied (%s); it stays off", e)
 

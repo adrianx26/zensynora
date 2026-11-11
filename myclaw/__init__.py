@@ -21,7 +21,7 @@ Configuration:
 - Thresholds are configurable via TaskThresholdConfig
 - Status updates are printed to console with color coding
 """
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 
 import logging
 import sys

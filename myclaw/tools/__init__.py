@@ -231,6 +231,10 @@ TOOLS.update({
     "resolve_knowledge_conflict": {"func": resolve_knowledge_conflict, "desc": "Resolve one knowledge conflict: keep a, b or both"},
     "knowledge_categories": {"func": knowledge_categories, "desc": "List fact categories with counts and merge suggestions"},
     "find_duplicate_notes": {"func": find_duplicate_notes, "desc": "List possible duplicate knowledge notes (preview only)"},
+    # 2026-11-11: link strength and search tuning
+    "strengthen_relation":  {"func": _LazyCallable("myclaw.knowledge.relations", "strengthen_relation"), "desc": "Make a link between two notes stronger (1-5): stronger links come first in related notes"},
+    "kb_tuning_show":       {"func": _LazyCallable("myclaw.knowledge.tuning", "kb_tuning_show"), "desc": "Show the knowledge search settings (similarity thresholds, weights, decay) with their safe ranges"},
+    "kb_tuning_set":        {"func": _LazyCallable("myclaw.knowledge.tuning", "kb_tuning_set"), "desc": "Change a knowledge search setting inside its safe range, or propose the change to the user"},
     "list_facts":           {"func": list_facts,           "desc": "List distilled facts (deduplicated across notes, with confidence); query filters"},
     "list_scenarios":       {"func": list_scenarios,       "desc": "List distilled scenarios: groups of related facts with a title and summary"},
     "get_persona":          {"func": get_persona,          "desc": "The distilled persona: a short summary of the user from the notes"},

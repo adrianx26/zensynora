@@ -975,7 +975,13 @@ def confidence(category: str, kind: str, weights: Sequence[float], n_sources: in
     else:
         c = base * (0.6 + 0.4 * s)
     c += 0.02 * min(3, max(0, n_sources - 1))
-    if age_days > 180:
+    # 2026-11-11: with temporal decay on, the category's half-life replaces the built-in rule
+    from . import decay as _decay
+
+    decayed = _decay.fact_factor(category, age_days)
+    if decayed is not None:
+        c *= decayed
+    elif age_days > 180:
         c *= max(0.8, 1.0 - (age_days - 180) / 1825.0)
     if conflicted:
         c *= 0.6

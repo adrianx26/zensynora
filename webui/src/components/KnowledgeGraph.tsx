@@ -21,7 +21,7 @@ export interface GNode {
   preview?: string;
   conflicts?: number; // 2026-10-24 (KB phase 2): open conflicts (contradicting facts)
 }
-export interface GEdge { source: string; target: string; type: string }
+export interface GEdge { source: string; target: string; type: string; strength?: number }
 
 interface SimNode { id: string; x: number; y: number; vx: number; vy: number; pinned: boolean; r: number; linked: boolean }
 
@@ -243,7 +243,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
       ctx.strokeStyle = on ? th.accent : colour;
       ctx.globalAlpha = dim ? 0.08 : on ? 1 : 0.72;
       // same width on screen at every zoom level
-      ctx.lineWidth = (on ? 2.6 : 1.3 * lw) / k;
+      ctx.lineWidth = (on ? 2.6 : 1.3 * lw) * (1 + 0.45 * ((e.strength || 1) - 1)) / k;   // 2026-11-11: stronger links are thicker
       const dx = t.x - s.x, dy = t.y - s.y;
       const d = Math.sqrt(dx * dx + dy * dy) || 1;
       const ux = dx / d, uy = dy / d;
@@ -401,6 +401,13 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
     ctx.scale(k, k);
     const glow = dark ? 'lighter' : 'source-over';
 
+    // 2026-11-11: stronger links ("(x3)" in the note) are drawn thicker
+    const strong = new Map<string, number>();
+    for (const e of es) {
+      if ((e.strength || 1) > 1) for (const key of [`${e.source}\u0000${e.target}`, `${e.target}\u0000${e.source}`]) strong.set(key, Math.max(strong.get(key) || 1, e.strength || 1));
+    }
+    const thick = (a: string, b: string) => 1 + 0.45 * ((strong.get(`${a}\u0000${b}`) || 1) - 1);
+
     // branches: parent → child, a smooth curve that leaves the parent along its own direction
     const tree = new Set<string>();
     ctx.globalCompositeOperation = glow;
@@ -425,7 +432,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
       const r2 = ra + (rb - ra) * 0.8, a2 = q.angle - curl * 0.6;
       ctx.strokeStyle = on ? th.accent : colour(id);
       ctx.globalAlpha = dim ? 0.06 : on ? 1 : dark ? 0.55 : 0.6;
-      ctx.lineWidth = (on ? 2 : 0.9 * lw) / k;
+      ctx.lineWidth = (on ? 2 : 0.9 * lw) * thick(q.parent, id) / k;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.bezierCurveTo(ox + Math.cos(a1) * r1, oy + Math.sin(a1) * r1, ox + Math.cos(a2) * r2, oy + Math.sin(a2) * r2, b.x, b.y);
@@ -440,7 +447,7 @@ const KnowledgeGraph = React.forwardRef<GraphHandle, Props>(function KnowledgeGr
       if (focus && !on) continue;
       ctx.strokeStyle = on ? th.accent : colour(e.target);
       ctx.globalAlpha = on ? 0.9 : dark ? 0.09 : 0.12;
-      ctx.lineWidth = (on ? 1.6 : 0.7) / k;
+      ctx.lineWidth = (on ? 1.6 : 0.7) * thick(e.source, e.target) / k;
       const mx = (a.x + b.x) / 2 + (b.y - a.y) * 0.15, my = (a.y + b.y) / 2 - (b.x - a.x) * 0.15;
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);

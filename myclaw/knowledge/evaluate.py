@@ -394,6 +394,13 @@ async def _idle_loop() -> None:
             await idle_tick()
         except Exception as e:  # pragma: no cover - keep the loop alive
             logger.warning("Idle knowledge evaluation failed: %s", e)
+        try:  # 2026-11-11: the weekly AI review of the decay policy (only with knowledge.decay_ai)
+            from ..config import load_config
+            from . import decay as _decay
+
+            await _decay.weekly_review(load_config())
+        except Exception as e:  # pragma: no cover
+            logger.info("Weekly decay review failed: %s", e)
 
 
 async def start_idle() -> None:

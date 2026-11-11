@@ -97,6 +97,12 @@ def get_related_entities(
             
             # Get outgoing relations
             relations = db.get_relations_from(current_id)
+            # 2026-11-11: stronger links first ("(x3)" in the note; default 1)
+            from .relations import strengths_from
+
+            strong = strengths_from(db._get_connection(), current_id)
+            if strong:
+                relations = sorted(relations, key=lambda r: -strong.get((r[0], r[1]), 1))
             
             # Batch fetch target entities to avoid N+1 queries
             target_permalinks = [r[1] for r in relations]
@@ -127,6 +133,8 @@ def get_related_entities(
                         "depth": current_depth + 1,
                         "path": new_path
                     }
+                    if strong.get((rel_type, target_permalink), 1) > 1:
+                        result["strength"] = strong[(rel_type, target_permalink)]
                     if is_hub:
                         result["hub"] = True
                     results.append(result)

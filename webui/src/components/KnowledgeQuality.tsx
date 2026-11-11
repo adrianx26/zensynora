@@ -186,7 +186,8 @@ export const DuplicatesPanel: React.FC<{
   onDone: (message: string, ok: boolean) => void;
   onOpen: (permalink: string) => void;
   onCancel: () => void;
-}> = ({ base, onDone, onOpen, onCancel }) => {
+  onAi?: () => void;
+}> = ({ base, onDone, onOpen, onCancel, onAi }) => {
   const [pairs, setPairs] = useState<Pair[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [active, setActive] = useState<{ keep: string; drop: string } | null>(null);
@@ -230,6 +231,42 @@ export const DuplicatesPanel: React.FC<{
     }
   };
 
+  // 2026-11-11: curate without the preview — merge now, swap, "different notes", merge all identical
+  const act = async (fn: () => Promise<string>) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      onDone(await fn(), true);
+      await load();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const mergeNow = (keep: Pair['keep'], drop: Pair['drop']) => act(async () => {
+    await api(`/api/knowledge/merge?${q(base)}`, { method: 'POST', body: JSON.stringify({ keep: keep.permalink, drop: drop.permalink, dry_run: false }) });
+    return `Merged “${drop.title}” into “${keep.title}”. The merged file is in the trash folder.`;
+  });
+  const different = (p: Pair) => act(async () => {
+    await api(`/api/knowledge/duplicates/dismiss?${q(base)}`, { method: 'POST', body: JSON.stringify({ a: p.keep.permalink, b: p.drop.permalink }) });
+    return `“${p.keep.title}” and “${p.drop.title}” are kept as different notes.`;
+  });
+  const [identical, setIdentical] = useState<unknown[]>([]);  // same text, facts and links (server decides)
+  useEffect(() => {
+    if (!pairs?.some(p => p.reasons.includes('identical text'))) { setIdentical([]); return; }
+    api<{ pairs: unknown[] }>(`/api/knowledge/duplicates/merge-identical?${q(base)}`, { method: 'POST', body: JSON.stringify({ dry_run: true }) })
+      .then(r => setIdentical(r.pairs)).catch(() => setIdentical([]));
+  }, [pairs, base]);
+  const mergeIdentical = () => {
+    if (!window.confirm(`Merge ${identical.length} pair(s) of notes with identical text, facts and links? The merged files go to the trash folder; links keep working.`)) return;
+    void act(async () => {
+      const r = await api<{ merged: number; errors: string[] }>(`/api/knowledge/duplicates/merge-identical?${q(base)}`, { method: 'POST', body: JSON.stringify({ dry_run: false }) });
+      if (r.errors.length) throw new Error(`Merged ${r.merged}; not merged: ${r.errors.join(' · ')}`);
+      return `Merged ${r.merged} pair(s) of identical notes.`;
+    });
+  };
+
   if (active) {
     return (
       <div className="kb-detail">
@@ -264,7 +301,15 @@ export const DuplicatesPanel: React.FC<{
   return (
     <div className="kb-detail">
       <h3>Possible duplicates</h3>
-      <p className="muted small">Same title, a title that is the other note’s alias, or (nearly) the same text. Pick a pair to see the merged note first.</p>
+      <p className="muted small">Same title, a title that is the other note’s alias, or (nearly) the same text. A merge keeps everything of both notes; the merged file goes to the trash folder.</p>
+      {pairs && pairs.length > 0 && (
+        <div className="kb-buttons" style={{ marginBottom: 8 }}>
+          {identical.length > 0 && <button type="button" className="primary-btn" disabled={busy} onClick={mergeIdentical}
+            title="Only pairs with exactly the same text, facts and links">Merge all identical ({identical.length})</button>}
+          {onAi && <button type="button" className="ghost-btn" disabled={busy} onClick={onAi}
+            title="The default model proposes for each pair: merge, keep the other one, or different notes — you approve">🤖 Curate with AI</button>}
+        </div>
+      )}
       {err && <div className="notice error">{err}</div>}
       {!pairs && !err && <div className="muted small">Looking…</div>}
       {pairs && pairs.length === 0 && <div className="muted">No duplicates found.</div>}
@@ -280,7 +325,13 @@ export const DuplicatesPanel: React.FC<{
           </div>
           <div className="muted small">{p.reasons.join(' · ')}</div>
           <div className="kb-buttons" style={{ marginTop: 4 }}>
-            <button type="button" className="ghost-btn" onClick={() => showPreview(p.keep.permalink, p.drop.permalink)}>Preview merge…</button>
+            <button type="button" className="primary-btn" disabled={busy} onClick={() => mergeNow(p.keep, p.drop)}
+              title={`Keep “${p.keep.title}”, add everything from “${p.drop.title}”`}>Merge</button>
+            <button type="button" className="ghost-btn" disabled={busy} onClick={() => mergeNow(p.drop, p.keep)}
+              title={`Keep “${p.drop.title}” instead`}>⇄ Keep the other</button>
+            <button type="button" className="ghost-btn" disabled={busy} onClick={() => showPreview(p.keep.permalink, p.drop.permalink)}>Preview…</button>
+            <button type="button" className="ghost-btn" disabled={busy} onClick={() => different(p)}
+              title="Not duplicates: this pair is not listed again">Different notes</button>
           </div>
         </div>
       ))}
