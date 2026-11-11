@@ -1,6 +1,6 @@
 # ZenSynora Architecture
 
-> **Status:** reflects **v0.8.1** (2026-11-07: Customize page — customization
+> **Status:** reflects **v0.8.2** (2026-11-12: Knowledge → Tune — thresholds, temporal decay, bigger embedding models, relevance test, link strength, curate duplicates; 2026-11-07: Customize page — customization
 > profiles per situation and agent, Telegram teams; see the
 > [Customize guide](customize_guide.md)). v0.8.0 (2026-10-27; knowledge base: see the
 > [Knowledge base guide](knowledge_base_guide.md)). Updated from the v0.4.1
@@ -63,9 +63,9 @@ myclaw/
 │   ├── quality.py           # fact sources, categories, conflicts, hub penalty, duplicates [0.8.0]
 │   ├── semantic.py          # optional embeddings, embed on write, hybrid search [0.8.0]
 │   ├── distill.py           # facts, scenarios, persona, drill_down [0.8.0]
-│   ├── tuning.py            # ranking values: hard / safe limits, AI suggest, proposals, history, undo [Unreleased]
-│   ├── decay.py · relevance.py  # temporal decay; 👍 / 👎, re-rank step, measured auto-tune [Unreleased]
-│   ├── relations.py         # link strength (xN), strengthen from use, AI precise types / new links [Unreleased]
+│   ├── tuning.py            # ranking values: hard / safe limits, AI suggest, proposals, history, undo [0.8.2]
+│   ├── decay.py · relevance.py  # temporal decay; 👍 / 👎, re-rank step, measured auto-tune [0.8.2]
+│   ├── relations.py         # link strength (xN), strengthen from use, AI precise types / new links [0.8.2]
 │   ├── ingest/              # assimilate URL/GitHub/folder/documents, chat & vault importers [0.8.0]
 │   ├── budget.py · watch.py · health.py  # write budget, live re-index, health checks [0.8.0]
 │   ├── path_reasoning.py    # find_paths / shortest_path [Sprint 7]
@@ -107,7 +107,7 @@ myclaw/
 │   ├── evolve_api.py        # Evolve page: overview, levels, change requests, fusion, restore [0.8.1]
 │   ├── doctor_api.py        # Doctor report, errors viewer, report download, health timeline [0.8.1]
 │   ├── knowledge_usage_api.py # Knowledge usage log, benchmarks, overview infographic [0.8.1]
-│   ├── knowledge_tuning_api.py # Knowledge → Tune: values, decay, test bench, relations, curate duplicates [Unreleased]
+│   ├── knowledge_tuning_api.py # Knowledge → Tune: values, decay, test bench, relations, curate duplicates [0.8.2]
 │   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
 │   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [0.8.1]
 │   ├── knowledge_api.py     # Knowledge page: graph, notes, edit, trash, search, conflicts, duplicates [0.8.0]
@@ -186,7 +186,7 @@ channel (web chat / telegram / whatsapp / cli)
                               the profile are left out (customize.HIDDEN_TOOLS);
                               every call fitted to the model's known context
                               (Agent._fitted → context_budget.call_fitted; an
-                              overflow error teaches the limit, one retry) [Unreleased]
+                              overflow error teaches the limit, one retry) [0.8.2]
                               ─ semantic_cache lookup
                               ─ retry/backoff, circuit breaker
                               ─ offline fallback to another local provider
