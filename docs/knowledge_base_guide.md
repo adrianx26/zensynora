@@ -140,11 +140,16 @@ words. Tag search matches whole tags (`py` does not find `python`).
 ## Retain, Recall, Reflect
 
 * **Retain:** Markdown is canonical. A note is parsed, validated and indexed;
-  observation capture time, confidence, verification and supersession metadata
-  are preserved when supplied. Missing research dates remain unknown rather
-  than being guessed.
+  observation capture time (`captured_at`), confidence, verification and
+  supersession metadata are preserved when supplied. Live writes
+  (`write_to_knowledge`, automatic extraction, live ingestion) stamp
+  `captured_at` automatically; missing historical/research dates remain
+  `unknown` rather than being guessed. `backfill_captured_at` can preview and
+  apply verifiable dates from explicit frontmatter or dated note titles.
 * **Recall:** word/FTS, local semantic, graph, and temporal searches run
-  concurrently for each natural-language query. Their candidates are fused,
+  concurrently for each natural-language query. Time-windowed temporal queries
+  prefer `captured_at` and fall back to `updated_at` when `captured_at` is
+  `unknown`. Their candidates are fused,
   deduplicated, and attributed to their contributing strategies under the
   agent's existing context-character budget. A timeout or unavailable stream
   is reported as partial retrieval. Explicit `memory://<permalink>` references

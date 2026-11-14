@@ -491,3 +491,103 @@ def test_retain_recall_reflect_round_trip(knowledge_home, monkeypatch):
     assert permalink in [note.permalink for note in recalled]
     assert reflected["ok"]
     assert "32 GB RAM" in context
+
+
+def test_live_writes_and_extraction_stamp_captured_at(knowledge_home):
+    from myclaw.knowledge import extract, read_note
+    from myclaw.tools.kb import write_to_knowledge
+
+    write_to_knowledge("Live Note", "Captured today.", observations="spec | 16 GB RAM")
+    live = read_note("live-note")
+    assert live.observations[0].captured_at not in (None, "", "unknown")
+
+    write_to_knowledge("Old Note", "Undated research.", observations="fact | Legacy spec", captured_at="unknown")
+    old = read_note("old-note")
+    assert old.observations[0].captured_at is None or old.observations[0].captured_at == "unknown"
+
+    saved = extract.save_items(
+        [{"title": "Extracted Note", "content": "Extracted live.", "tags": "ops",
+          "facts": [{"category": "fact", "text": "Service runs on port 8080"}]}],
+        user_id="default", extra_tags=[], cap=5, log_prefix="[test]", source="chat 2026-11-14",
+    )
+    assert saved == 1
+    ext = read_note("extracted-note")
+    assert ext.observations[0].captured_at not in (None, "", "unknown")
+
+
+def test_windowed_temporal_search_falls_back_to_updated_at_and_ranks_captured_first(knowledge_home):
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.parser import Observation
+
+    write_note("Router Captured", "Router WireGuard setup.",
+               observations=[Observation("spec", "WireGuard port 51820", captured_at="2026-11-14T10:00:00+00:00")])
+    write_note("Router Updated Only", "Router WireGuard fallback.",
+               observations=[Observation("spec", "WireGuard fallback port")])
+    write_note("May Activity", "Hiked Bucegi mountains and configured NAS.",
+               observations=[Observation("fact", "Hiked Bucegi", captured_at="2026-05-12")])
+
+    hits = recall._temporal_search("WireGuard 2026-11-14", "default", 5)
+    permalinks = [note.permalink for note in hits]
+    assert "router-captured" in permalinks
+    assert "router-updated-only" in permalinks
+    assert permalinks.index("router-captured") < permalinks.index("router-updated-only")
+
+    may_hits = recall._temporal_search("what I do in May?", "default", 5)
+    assert [note.permalink for note in may_hits] == ["may-activity"]
+
+
+def test_backfill_captured_at_only_uses_verifiable_dates(knowledge_home):
+    from myclaw.knowledge import quality, read_note, write_note
+    from myclaw.knowledge.parser import Observation
+
+    write_note("Weather Bucharest 2026-10-20", "Sunny 18C.",
+               observations=[Observation("fact", "High 18C")])
+    undated_path = knowledge_home / ".myclaw" / "knowledge" / "default" / "undated-research.md"
+    undated_path.write_text("# Undated Research\n\n- [fact] Historical note\n", encoding="utf-8")
+    from myclaw.knowledge import sync_knowledge
+    sync_knowledge("default")
+
+    preview = quality.backfill_captured_at("default", dry_run=True)
+    assert [c["permalink"] for c in preview["candidates"]] == ["weather-bucharest-2026-10-20"]
+    assert preview["candidates"][0]["captured_at"] == "2026-10-20"
+    assert preview["skipped_unknown"] == 1
+
+    applied = quality.backfill_captured_at("default", dry_run=False)
+    assert applied["updated"] == 1
+    assert read_note("weather-bucharest-2026-10-20").observations[0].captured_at == "2026-10-20"
+    assert read_note("undated-research").observations[0].captured_at in (None, "unknown")
+
+
+def test_access_tracking_and_merge_preserves_combined_use_count(knowledge_home):
+    from myclaw.knowledge import quality, sync_knowledge, write_note
+    from myclaw.knowledge.db import KnowledgeDB
+    from myclaw.knowledge.parser import Observation
+    from myclaw.tools.kb import read_knowledge
+
+    write_note("Alpha", "Alpha router note.", observations=[Observation("spec", "32 GB RAM")])
+    write_note("Beta", "Beta router note.", observations=[Observation("spec", "32 GB RAM")])
+
+    read_knowledge("alpha")
+    read_knowledge("alpha")
+    read_knowledge("beta")
+
+    with KnowledgeDB("default") as db:
+        ea = db.get_entity_by_permalink("alpha")
+        eb = db.get_entity_by_permalink("beta")
+        assert ea.created_at is not None and ea.last_accessed is not None and ea.use_count == 2
+        assert eb.created_at is not None and eb.last_accessed is not None and eb.use_count == 1
+
+    quality.merge_notes("default", "alpha", "beta", dry_run=False)
+    with KnowledgeDB("default") as db:
+        merged = db.get_entity_by_permalink("alpha")
+        assert merged.use_count == 3
+        assert merged.last_accessed is not None
+
+    # Full rebuild preserves combined use_count and last_accessed from frontmatter metadata
+    sync_knowledge("default", force=True)
+    with KnowledgeDB("default") as db:
+        rebuilt = db.get_entity_by_permalink("alpha")
+        assert rebuilt.use_count == 3
+        assert rebuilt.last_accessed is not None
+
+

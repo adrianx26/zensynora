@@ -74,6 +74,17 @@ _TEMPORAL_CUE = re.compile(
     re.IGNORECASE,
 )
 
+_MONTHS = {
+    "january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3,
+    "april": 4, "apr": 4, "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7,
+    "august": 8, "aug": 8, "september": 9, "sep": 9, "sept": 9,
+    "october": 10, "oct": 10, "november": 11, "nov": 11, "december": 12, "dec": 12,
+}
+_MONTH_RX = re.compile(
+    r"\b(?:" + "|".join(sorted(_MONTHS, key=len, reverse=True)) + r")\b(?:\s+(19\d{2}|20\d{2}))?",
+    re.IGNORECASE,
+)
+
 
 def _temporal_window(query: str, now: float) -> Tuple[float, float] | None:
     lower = str(query or "").casefold()
@@ -92,6 +103,16 @@ def _temporal_window(query: str, now: float) -> Tuple[float, float] | None:
         start = _date_timestamp(date_match.group(1))
         if start is not None:
             return start, start + 86400
+    month_match = _MONTH_RX.search(lower)
+    if month_match:
+        month_num = _MONTHS[month_match.group(0).split()[0].casefold()]
+        if month_match.group(1):
+            year = int(month_match.group(1))
+        else:
+            year = current.year if month_num <= current.month else current.year - 1
+        start_dt = datetime(year, month_num, 1)
+        end_dt = datetime(year + 1, 1, 1) if month_num == 12 else datetime(year, month_num + 1, 1)
+        return start_dt.timestamp(), end_dt.timestamp()
     year_match = re.search(r"\b(19\d{2}|20\d{2})\b", lower)
     if year_match:
         year = int(year_match.group(1))
@@ -101,6 +122,7 @@ def _temporal_window(query: str, now: float) -> Tuple[float, float] | None:
 
 def _temporal_query(query: str) -> str:
     text = re.sub(r"\b20\d{2}-\d{2}-\d{2}\b|\b(?:19|20)\d{2}\b", " ", query)
+    text = _MONTH_RX.sub(" ", text)
     text = _TEMPORAL_CUE.sub(" ", text)
     return " ".join(text.split())
 
@@ -108,7 +130,7 @@ def _temporal_query(query: str) -> str:
 def _temporal_search(query: str, user_id: str, limit: int) -> List[Any]:
     """Search dated evidence independently, then rank matches by relevance and time."""
     from .db import KnowledgeDB
-    from .decision import assess_memory
+    from .decision import _tokens, assess_memory
     from .decay import note_factor
     from .storage import _batch_read_notes
 
@@ -121,15 +143,12 @@ def _temporal_search(query: str, user_id: str, limit: int) -> List[Any]:
         "WHEN length(captured_at) = 7 THEN captured_at || '-01' "
         "ELSE captured_at END) AS REAL)"
     )
+    effective_epoch = f"COALESCE({capture_epoch}, CAST(strftime('%s', updated_at) AS REAL))"
     window_filter = ""
     params: Tuple[Any, ...] = (fetch,)
     if window is not None:
-        window_filter = (
-            "WHERE captured_at IS NOT NULL "
-            f"AND {capture_epoch} >= ? "
-            f"AND {capture_epoch} < ? "
-        )
-        params = (window[0], window[1], fetch)
+        window_filter = f"WHERE {effective_epoch} >= ? AND {effective_epoch} < ? "
+        params = (window[0] - 86400, window[1] + 86400, fetch)
     with KnowledgeDB(user_id) as db:
         rows = db._get_connection().execute(
             "WITH dated_entities AS ("
@@ -140,8 +159,7 @@ def _temporal_search(query: str, user_id: str, limit: int) -> List[Any]:
             "GROUP BY e.id) "
             "SELECT permalink, updated_at, captured_at FROM dated_entities "
             + window_filter
-            + f"ORDER BY COALESCE({capture_epoch}, "
-            "CAST(strftime('%s', updated_at) AS REAL)) DESC LIMIT ?",
+            + f"ORDER BY {effective_epoch} DESC LIMIT ?",
             params,
         ).fetchall()
     notes = _batch_read_notes([row["permalink"] for row in rows], user_id)
@@ -169,9 +187,7 @@ def _temporal_search(query: str, user_id: str, limit: int) -> List[Any]:
         dated_at = captured_at if captured_at is not None else updated_at
         if dated_at is None:
             continue
-        if window is not None and (
-            captured_at is None or not window[0] <= captured_at < window[1]
-        ):
+        if window is not None and not window[0] <= dated_at < window[1]:
             continue
         states = [str(getattr(obs, "status", "active")).casefold()
                   for obs in observations]
@@ -184,13 +200,13 @@ def _temporal_search(query: str, user_id: str, limit: int) -> List[Any]:
             (assess_memory(topic_query, claim).relevance_score for claim in claims if claim),
             default=0.0,
         )
-        if topic_query and relevance <= 0:
+        if _tokens(topic_query) and relevance <= 0:
             continue
         capture_for_decay = captured_at if captured_at is not None else dated_at
         factor, age, _half_life = note_factor(
             getattr(note, "tags", []), capture_for_decay, now=now)
         archived = str(metadata.get("status") or "active").casefold() == "archived"
-        scored.append((-relevance, archived, -factor, -dated_at, age, index, note))
+        scored.append((-relevance, archived, captured_at is None, -factor, -dated_at, age, index, note))
     scored.sort(key=lambda item: item[:-1])
     return [item[-1] for item in scored[:limit]]
 
@@ -439,4 +455,9 @@ def parallel_recall(query: str, user_id: str = "default", limit: int = 10,
         partial=any(status != "ok" for status in statuses.values()),
         search_mode="parallel-hybrid",
     )
-    return _fuse(results, limit, query=query, info=info)
+    fused = _fuse(results, limit, query=query, info=info)
+    if fused:
+        from .db import touch_access
+
+        touch_access(user_id, [getattr(note, "permalink", None) for note in fused])
+    return fused

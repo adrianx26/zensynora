@@ -1614,7 +1614,22 @@ class Agent:
                 return True
 
             for i, note in enumerate(notes):
-                header = f"\n**{note.title}** ({note.permalink}):"
+                note_dates = [
+                    str(getattr(obs, "captured_at", "") or "").strip()
+                    for obs in (note.observations or [])
+                    if getattr(obs, "captured_at", None)
+                    and str(obs.captured_at).strip().casefold() != "unknown"
+                ]
+                meta_date = str((getattr(note, "metadata", None) or {}).get("captured_at") or "").strip()
+                if meta_date and meta_date.casefold() != "unknown":
+                    note_dates.append(meta_date)
+                note_date = max(note_dates, default="")[:10]
+                if not note_date:
+                    when = getattr(note, "updated_at", None) or getattr(note, "created_at", None)
+                    if when is not None:
+                        note_date = str(when.isoformat() if hasattr(when, "isoformat") else when)[:10]
+                date_tag = f", {note_date}" if note_date else ""
+                header = f"\n**{note.title}** ({note.permalink}{date_tag}):"
                 if not _add(header):
                     if i == 0:  # always show the best match
                         context_lines.append(header)

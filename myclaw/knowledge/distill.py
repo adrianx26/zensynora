@@ -925,11 +925,23 @@ def _load_notes(conn: sqlite3.Connection, ids: Sequence[int],
     present = list(notes)
     if not present:
         return []
-    for r in conn.execute(f"SELECT entity_id, category, content, tags, provenance_path "
+    for r in conn.execute(f"SELECT entity_id, category, content, tags, provenance_path, captured_at "
                           f"FROM observations WHERE entity_id IN ({_ph(len(present))}) ORDER BY id",
                           present):
-        notes[r["entity_id"]]["obs"].append(
+        eid = r["entity_id"]
+        notes[eid]["obs"].append(
             (r["category"] or "", r["content"] or "", r["tags"] or "[]", r["provenance_path"]))
+        cap = str(r["captured_at"] or "").strip()
+        if cap and cap.casefold() != "unknown":
+            notes[eid].setdefault("_captured", []).append(cap[:19])
+    for note in notes.values():
+        caps = note.pop("_captured", [])
+        if not caps:
+            meta_cap = str(note["meta"].get("captured_at") or "").strip()
+            if meta_cap and meta_cap.casefold() != "unknown":
+                caps = [meta_cap[:19]]
+        if caps:
+            note["date"] = max(caps)
     try:
         for r in conn.execute(f"SELECT rowid, body FROM notes_text_fts "
                               f"WHERE rowid IN ({_ph(len(present))})", present):
@@ -2041,6 +2053,18 @@ def consolidation_proposals(base: str = "default", limit: int = 100) -> Dict[str
         derived_pages = sum(page_sources.get(permalink, 0) for permalink in source_links)
         retrievals = sum(usage.note_usage(base, permalink).get("count", 0)
                          for permalink in source_links if permalink)
+        if conn is not None and source_links:
+            try:
+                ph = ",".join("?" * len(source_links))
+                db_counts = sum(
+                    int(r[0] or 0) for r in conn.execute(
+                        f"SELECT COALESCE(use_count, 0) FROM entities WHERE permalink IN ({ph})",
+                        list(source_links),
+                    ).fetchall()
+                )
+                retrievals = max(retrievals, db_counts)
+            except sqlite3.OperationalError:
+                pass
         evidence_total = len(shared) + len(distinct)
         verification_ratio = verified / max(1, len(shared))
         shared_ratio = len(shared) / max(1, evidence_total)

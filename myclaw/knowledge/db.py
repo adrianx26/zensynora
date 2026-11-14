@@ -11,7 +11,7 @@ import re
 import sqlite3
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Callable, Tuple, Iterable
 
@@ -281,6 +281,8 @@ class Entity:
     # 2026-10-23 (KB phase 0): the note title, so links by title ("[[Home server]]") resolve.
     # None = indexed by an older version (the next sync re-indexes the note).
     title: Optional[str] = None
+    last_accessed: Optional[str] = None
+    use_count: int = 0
 
 
 def _row_to_entity(row) -> Entity:
@@ -305,6 +307,8 @@ def _row_to_entity(row) -> Entity:
         size=_row_get(row, "size"),
         entity_metadata=meta,
         title=_row_get(row, "title"),
+        last_accessed=_row_get(row, "last_accessed"),
+        use_count=int(_row_get(row, "use_count", 0) or 0),
     )
 
 
@@ -677,9 +681,18 @@ class KnowledgeDB:
                 ("confidence", "REAL"),
                 ("verification_status", "TEXT NOT NULL DEFAULT 'unknown'"),
                 ("status", "TEXT NOT NULL DEFAULT 'active'"),
-                ("superseded_by", "TEXT")):
+                ("superseded_by", "TEXT"),
+                ("last_accessed", "TEXT"),
+                ("use_count", "INTEGER NOT NULL DEFAULT 0")):
             try:
                 conn.execute(f"ALTER TABLE observations ADD COLUMN {column} {definition}")
+            except sqlite3.OperationalError:
+                pass
+        for column, definition in (
+                ("last_accessed", "TEXT"),
+                ("use_count", "INTEGER NOT NULL DEFAULT 0")):
+            try:
+                conn.execute(f"ALTER TABLE entities ADD COLUMN {column} {definition}")
             except sqlite3.OperationalError:
                 pass
         conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_status ON observations(status)")
@@ -1869,6 +1882,14 @@ class KnowledgeDB:
                 existing = conn.execute(
                     "SELECT * FROM entities WHERE permalink = ?", (note.permalink,)).fetchone()
 
+            note_meta = getattr(note, "metadata", None)
+            note_meta = note_meta if isinstance(note_meta, dict) else {}
+            try:
+                meta_use_count = max(0, int(note_meta.get("use_count") or 0))
+            except (TypeError, ValueError):
+                meta_use_count = 0
+            meta_last_accessed = str(note_meta.get("last_accessed") or "").strip() or None
+
             if existing is not None:
                 eid = existing["id"]
                 old_folds, old_plinks = self._entity_keys(conn, eid)
@@ -1877,11 +1898,20 @@ class KnowledgeDB:
                         "SELECT 1 FROM entities WHERE name = ? AND id != ?",
                         (name, eid)).fetchone():
                     name = existing["name"]  # name is UNIQUE: keep the old one
+                existing_count = int(_row_get(existing, "use_count", 0) or 0)
+                existing_last = _row_get(existing, "last_accessed")
+                combined_count = max(existing_count, meta_use_count)
+                combined_last = max(
+                    [v for v in (existing_last, meta_last_accessed) if v],
+                    default=None,
+                )
                 sets: Dict[str, Any] = {
                     "name": name, "permalink": note.permalink, "title": title,
                     "entity_metadata": metadata_json, "updated_at": now,
                     "name_fold": _fold(name), "permalink_fold": _fold(note.permalink),
                     "title_fold": _fold(title),
+                    "use_count": combined_count,
+                    "last_accessed": combined_last,
                 }
                 if file_path:
                     sets["file_path"] = file_path
@@ -1907,14 +1937,27 @@ class KnowledgeDB:
                     """
                     INSERT INTO entities (name, permalink, file_path, created_at, updated_at,
                                           checksum, mtime, size, entity_metadata, title,
-                                          name_fold, permalink_fold, title_fold)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                                          name_fold, permalink_fold, title_fold,
+                                          last_accessed, use_count)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (name, note.permalink, file_path or f"{note.permalink}.md", now, now,
                      checksum, mtime, size, metadata_json, title,
-                     _fold(name), _fold(note.permalink), _fold(title)),
+                     _fold(name), _fold(note.permalink), _fold(title),
+                     meta_last_accessed, meta_use_count),
                 )
                 eid = int(cursor.lastrowid or 0)
+
+            # Preserve existing observation usage counters across re-indexes
+            prior_obs_usage: Dict[tuple, tuple] = {}
+            for row in conn.execute(
+                "SELECT category, content, last_accessed, use_count FROM observations WHERE entity_id = ?",
+                (eid,),
+            ).fetchall():
+                prior_obs_usage[(row["category"], row["content"])] = (
+                    _row_get(row, "last_accessed"),
+                    int(_row_get(row, "use_count", 0) or 0),
+                )
 
             # Observations: replace
             conn.execute("DELETE FROM observations WHERE entity_id = ?", (eid,))
@@ -1941,18 +1984,20 @@ class KnowledgeDB:
                 status = str(status).strip().casefold()
                 if status not in {"active", "archived", "superseded"}:
                     status = "unknown"
+                obs_last, obs_count = prior_obs_usage.get(
+                    (obs.category, obs.content), (meta_last_accessed, 0))
                 conn.execute(
                     """
                     INSERT INTO observations
                         (entity_id, category, content, tags, created_at, context, provenance_path,
                          category_norm, captured_at, confidence, verification_status, status,
-                         superseded_by)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         superseded_by, last_accessed, use_count)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (eid, obs.category, obs.content, json.dumps(obs.tags or []), now,
                      getattr(obs, "context", None), getattr(obs, "provenance_path", None),
                      _quality.normalize_category(obs.category), str(captured_at or "unknown"),
-                     confidence, verification, status, superseded_by),
+                     confidence, verification, status, superseded_by, obs_last, obs_count),
                 )
 
             # 2026-10-24 (KB phase 2): contradicting facts of this note (derived
@@ -2062,3 +2107,38 @@ class KnowledgeDB:
             self.index_note_text(row["id"], title, text, [])
             n += 1
         return n
+
+    def record_access(self, permalinks: Any, accessed_at: Optional[str] = None) -> int:
+        """Increment ``use_count`` and set ``last_accessed`` on entities and their observations."""
+        plinks = [str(p).strip() for p in dict.fromkeys(permalinks or ()) if str(p or "").strip()]
+        if not plinks:
+            return 0
+        when = accessed_at or datetime.now(timezone.utc).isoformat(timespec="seconds")
+        ph = ",".join("?" * len(plinks))
+        with self._write_txn() as conn:
+            cur = conn.execute(
+                f"UPDATE entities SET use_count = COALESCE(use_count, 0) + 1, "
+                f"last_accessed = ? WHERE permalink IN ({ph})",
+                (when, *plinks),
+            )
+            conn.execute(
+                f"UPDATE observations SET use_count = COALESCE(use_count, 0) + 1, "
+                f"last_accessed = ? WHERE entity_id IN (SELECT id FROM entities WHERE permalink IN ({ph}))",
+                (when, *plinks),
+            )
+            return int(cur.rowcount or 0)
+
+
+def touch_access(user_id: str, permalinks: Any, db_path: Optional[Path] = None,
+                 accessed_at: Optional[str] = None) -> int:
+    """Best-effort access counter update; never raises."""
+    plinks = [str(p).strip() for p in dict.fromkeys(permalinks or ()) if str(p or "").strip()]
+    if not plinks:
+        return 0
+    try:
+        with KnowledgeDB(user_id, db_path=db_path) as db:
+            return db.record_access(plinks, accessed_at=accessed_at)
+    except Exception as e:
+        logger.debug("record_access skipped: %s", e)
+        return 0
+

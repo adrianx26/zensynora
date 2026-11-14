@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Sequence, Tuple
 
 from .model import Budget, Document, IngestResult, MAX_NOTE_CHARS, NoteRef, Section
@@ -478,6 +478,10 @@ def _write(plan: _Plan, base: str, metadata: Dict[str, object],
     # time under the base's slot of the shared write budget
     from myclaw.knowledge import budget as write_budget
 
+    ingest_ts = str(meta.get("ingested") or "").strip() or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for fact in facts:
+        if getattr(fact, "captured_at", None) is None:
+            fact.captured_at = ingest_ts
     with write_budget.background(base, "import", write_budget.PRIO_INGEST, timeout=60):
         write_note(name=plan.permalink, title=plan.title, content=plan.body, observations=facts,
                    relations=rels, tags=tags, user_id=base, metadata=meta)

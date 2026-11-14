@@ -1633,6 +1633,37 @@ def merge_notes(user_id: str, keep: str, drop: str, dry_run: bool = True,
     else:
         body = k_body
     metadata = {**(d.metadata or {}), **(k.metadata or {})}
+    try:
+        from .db import KnowledgeDB
+
+        with KnowledgeDB(user_id, db_path=db_path) as db:
+            ek = db.get_entity_by_permalink(k.permalink)
+            ed = db.get_entity_by_permalink(d.permalink)
+    except Exception:
+        ek = ed = None
+    try:
+        k_count = max(int((k.metadata or {}).get("use_count") or 0), int(getattr(ek, "use_count", 0) or 0))
+    except (TypeError, ValueError):
+        k_count = int(getattr(ek, "use_count", 0) or 0)
+    try:
+        d_count = max(int((d.metadata or {}).get("use_count") or 0), int(getattr(ed, "use_count", 0) or 0))
+    except (TypeError, ValueError):
+        d_count = int(getattr(ed, "use_count", 0) or 0)
+    merged_use_count = k_count + d_count
+    last_candidates = [
+        str(v).strip()
+        for v in (
+            (k.metadata or {}).get("last_accessed"),
+            (d.metadata or {}).get("last_accessed"),
+            getattr(ek, "last_accessed", None),
+            getattr(ed, "last_accessed", None),
+        )
+        if v and str(v).strip()
+    ]
+    if merged_use_count > 0:
+        metadata["use_count"] = merged_use_count
+    if last_candidates:
+        metadata["last_accessed"] = max(last_candidates)
     preview = {
         "keep": k.permalink, "drop": d.permalink, "title": k.title, "dry_run": bool(dry_run),
         "source_checksums": {
@@ -1674,3 +1705,72 @@ def merge_notes(user_id: str, keep: str, drop: str, dry_run: bool = True,
     from .merge_journal import apply_merge
 
     return apply_merge(user_id, k, d, apply_changes, operation_context, db_path)
+
+
+_DATED_TITLE_RX = re.compile(r"\b(20\d{2})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])\b")
+_COMPACT_DATE_RX = re.compile(r"(?<!\d)(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?!\d)")
+
+
+def _verifiable_note_date(note: Any) -> Optional[str]:
+    """Return an explicit ISO date from metadata, dated title/permalink, or frontmatter; never guess."""
+    meta = getattr(note, "metadata", None) or {}
+    meta_cap = str(meta.get("captured_at") or "").strip()
+    if meta_cap and meta_cap.casefold() != "unknown":
+        return meta_cap
+    for text in (getattr(note, "title", None), getattr(note, "name", None), getattr(note, "permalink", None)):
+        raw = str(text or "")
+        match = _DATED_TITLE_RX.search(raw)
+        if match:
+            return f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+        compact = _COMPACT_DATE_RX.search(raw)
+        if compact:
+            return f"{compact.group(1)}-{compact.group(2)}-{compact.group(3)}"
+    raw_fm = getattr(note, "raw_frontmatter", None) or {}
+    for key, attr in (("created", "created_at"), ("updated", "updated_at")):
+        if key in raw_fm:
+            when = getattr(note, attr, None)
+            if when is not None:
+                return when.isoformat(timespec="seconds")
+    return None
+
+
+def backfill_captured_at(user_id: str = "default", dry_run: bool = True,
+                         db_path: Any = None) -> Dict[str, Any]:
+    """Preview or apply verifiable ``captured_at`` dates on observations missing one."""
+    from .parser import extract_body
+    from .storage import list_notes, update_note
+
+    candidates = []
+    skipped_unknown = 0
+    updated = 0
+    for note in list_notes(user_id, db_path=db_path):
+        observations = list(getattr(note, "observations", None) or [])
+        missing = [
+            obs for obs in observations
+            if not getattr(obs, "captured_at", None)
+            or str(obs.captured_at).strip().casefold() == "unknown"
+        ]
+        if not missing:
+            continue
+        verifiable = _verifiable_note_date(note)
+        if not verifiable:
+            skipped_unknown += 1
+            continue
+        candidates.append({
+            "permalink": note.permalink,
+            "title": note.title or note.name or note.permalink,
+            "captured_at": verifiable,
+            "observations": len(missing),
+        })
+        if not dry_run:
+            for obs in missing:
+                obs.captured_at = verifiable
+            body = extract_body(note.content, note.title)
+            if update_note(note.permalink, user_id, db_path=db_path, observations=observations, content=body):
+                updated += 1
+    return {
+        "dry_run": bool(dry_run),
+        "candidates": candidates,
+        "updated": updated,
+        "skipped_unknown": skipped_unknown,
+    }

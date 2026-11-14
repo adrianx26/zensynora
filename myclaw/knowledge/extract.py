@@ -11,6 +11,7 @@ knowledge graph stayed empty (266 notes, 0 tags/facts/links on mindy01).
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import json
 import logging
 import re
@@ -103,12 +104,15 @@ def save_items(items: List[Any], user_id: str, extra_tags: List[str], cap: int, 
         tags = tags_raw if isinstance(tags_raw, list) else str(tags_raw).split(",")
         tag_list = [re.sub(r"\s+", "-", str(t).strip().lower().lstrip("#")) for t in tags if str(t).strip()][:6]
         tag_list += [t for t in extra_tags if t not in tag_list]
+        captured_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
         obs = []
         for f in item.get("facts") or []:
             if isinstance(f, dict):
                 cat, text = f.get("category", "fact"), f.get("text", "")
+                obs_captured = str(f.get("captured_at") or "").strip() or captured_at
             elif isinstance(f, str):
                 cat, text = "fact", f
+                obs_captured = captured_at
             else:
                 continue
             # 2026-10-24 (KB phase 2): one spelling per category (Facts → fact)
@@ -116,7 +120,8 @@ def save_items(items: List[Any], user_id: str, extra_tags: List[str], cap: int, 
             text = " ".join(str(text).split())[:400]
             if text:
                 obs.append(Observation(category=cat, content=text, tags=[],
-                                       provenance_path=source or None))
+                                       provenance_path=source or None,
+                                       captured_at=obs_captured))
         rels = []
         for link in item.get("links") or []:
             if not isinstance(link, dict):

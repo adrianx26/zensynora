@@ -18,6 +18,7 @@ from .core import (
     is_tool_independent,
 )
 
+from datetime import datetime, timezone
 import re
 from ..knowledge import (
     write_note, read_note, delete_note, list_notes, search_notes,
@@ -42,7 +43,8 @@ def write_to_knowledge(
     tags: str = "",
     observations: str = "",
     relations: str = "",
-    user_id: str = "default"
+    user_id: str = "default",
+    captured_at: str = "",
 ) -> str:
     """
     Write a note to the knowledge base (it appears in the Knowledge graph).
@@ -57,10 +59,12 @@ def write_to_knowledge(
     relations: links to other notes, one per line as "relation | Other note title",
                e.g. "runs_on | Home server" — link to notes that already exist (search_knowledge first)
     user_id: User ID for multi-user isolation
+    captured_at: Optional ISO date/timestamp for when the facts were captured (defaults to current UTC time; pass "unknown" for undated historical notes)
     """
     try:
         # Parse tags
         tag_list = [t.strip() for t in tags.split(",") if t.strip()]
+        obs_captured = str(captured_at or "").strip() or datetime.now(timezone.utc).isoformat(timespec="seconds")
 
         # Parse observations
         obs_list = []
@@ -86,6 +90,7 @@ def write_to_knowledge(
                         content=obs_content.strip(),
                         tags=[],
                         provenance_path=source,
+                        captured_at=obs_captured,
                     ))
 
         # Parse relations
@@ -406,6 +411,10 @@ def read_knowledge(permalink: str, user_id: str = "default") -> str:
         if not note:
             return (f"Note not found: {permalink}. Use search_knowledge(query) or "
                     "list_knowledge() to find the right permalink.")
+
+        from ..knowledge.db import touch_access
+
+        touch_access(user_id, [note.permalink])
 
         lines = [
             f"# {note.title}",
