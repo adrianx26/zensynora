@@ -10,7 +10,8 @@ def pytest_sessionfinish(session, exitstatus):
     try:
         from myclaw.memory import AsyncSQLitePool
 
-        asyncio.run(AsyncSQLitePool.close_all())
+        if AsyncSQLitePool._states:
+            asyncio.run(AsyncSQLitePool.close_all())
     except Exception:
         pass
 

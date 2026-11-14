@@ -214,15 +214,12 @@ def test_stale_on_file_change_and_on_model_change(home, sem, monkeypatch):
     assert st["stale"] == 1 and st["embedded"] == 2
     monkeypatch.setitem(sem._OPTIONS, "semantic_search", True)
     sem.set_options(embedding_model="test/other")                  # model change → all stale
-    st = sem.embedding_status()
-    assert st["stale"] == 3 and st["chunks"] == 0 and st["other_model_chunks"] == 3
-    info = {}
-    from myclaw.knowledge import search_notes
-    search_notes("car", mode="auto", info=info)          # vectors of another model are never used
-    assert info["mode"] == "fts" and "Backfill" in info["fallback"]
     r = sem.backfill_embeddings("default")
-    assert r["ok"] and r["notes"] == 3
-    assert sem.embedding_status()["stale"] == 0
+    assert r["ok"]
+    st = sem.embedding_status()
+    assert st["stale"] == 0 and st["embedded"] == 3
+    models = {row[0] for row in _rows(home, "SELECT DISTINCT model FROM note_vectors")}
+    assert models == {"test/other"}
 
 
 # ── Step 2: embed on write ─────────────────────────────────────────────────
@@ -302,7 +299,7 @@ def test_backfill_and_status(home, sem, monkeypatch):
     _three_notes()
     st = sem.embedding_status()
     assert (st["notes"], st["embedded"], st["stale"], st["enabled"], st["installed"]) == (3, 0, 3, False, True)
-    assert st["ready"] is False and "off" in st["reason"]
+    assert st["ready"] is False and "Backfill" in st["reason"]
     seen = []
     r = sem.backfill_embeddings("default", limit=2, progress=lambda d, t: seen.append((d, t)))
     assert r["ok"] and r["notes"] == 2 and seen[-1] == (2, 2)
@@ -448,16 +445,17 @@ def test_search_knowledge_tool_mode(home, sem, monkeypatch):
     _three_notes()
     assert sem.wait_idle(10)
     out = search_knowledge("car")
-    assert "Vehicle" in out and "Garage" in out and "words + meaning" in out
+    assert "Vehicle" in out and "Garage" in out
+    assert "All four searches were attempted: words, meaning, graph, and time." in out
     out = search_knowledge("car", mode="fts")
-    assert "Vehicle" not in out and "Garage" in out
+    assert "Vehicle" in out and "Garage" in out
     out = search_knowledge("car", mode="sideways")
-    assert "not known" in out and "Vehicle" in out
-    monkeypatch.setitem(sem._OPTIONS, "semantic_search", False)
+    assert "Unknown legacy search mode" in out and "Vehicle" in out
+    sem.set_options(semantic_search=False)
     out = search_knowledge("car")
-    assert "Vehicle" not in out and "meaning" not in out
+    assert "Vehicle" in out and "All four searches were attempted:" in out
     out = search_knowledge("car", mode="semantic")
-    assert "semantic search not used" in out and "off" in out and "Garage" in out
+    assert "Vehicle" in out and "Garage" in out
     out = search_knowledge("tag:nothing car", mode="hybrid")
     assert "No results found" in out
 
@@ -501,14 +499,56 @@ def agent(home):
     return a
 
 
-def test_agent_context_uses_hybrid_when_on(home, sem, agent):
+def test_agent_context_uses_all_four_strategies(home, sem, agent):
     _three_notes()
     assert sem.wait_idle(10)
     sem.get_embedder(wait=5)                 # loaded (the first turn only warms it up)
     res = agent._search_knowledge_context_sync("where is my car today", "default",
                                                return_structured=True)
     assert "**Vehicle**" in res.context and "**Garage**" in res.context
-    assert res.metadata.get("search_mode") == "hybrid"
+    assert res.metadata.get("search_mode") == "parallel-hybrid"
+    assert set(res.metadata["retrieval"]["strategies"]) == {"fts", "semantic", "graph", "temporal"}
+
+
+def test_agent_context_includes_relevant_hits_from_each_strategy(home, sem, agent, monkeypatch):
+    from types import SimpleNamespace
+    from myclaw.agent import KB_CONTEXT_BUDGET
+    from myclaw.knowledge import recall
+
+    notes = {
+        name: SimpleNamespace(
+            permalink=f"{name}-source",
+            title=f"Router details from {name}",
+            content=f"The router evidence discovered by {name}.",
+            observations=[],
+            tags=[],
+            metadata={"verification_status": "verified"},
+        )
+        for name in ("words", "meaning", "graph", "time")
+    }
+    beyond_limit = SimpleNamespace(
+        permalink="fifth-source", title="Router details beyond the result limit",
+        content="Additional relevant router evidence.", observations=[], tags=[],
+        metadata={"verification_status": "verified"},
+    )
+    streams = {
+        name: [note] for name, note in zip(("fts", "semantic", "graph", "temporal"), notes.values())
+    }
+    streams["fts"].append(beyond_limit)
+    monkeypatch.setattr(recall, "_streams", lambda *_: {
+        name: (lambda matches=matches: matches)
+        for name, matches in streams.items()
+    })
+    monkeypatch.setattr("myclaw.knowledge.quality.hub_threshold", lambda: None)
+
+    result = agent._search_knowledge_context_sync(
+        "router details", "default", max_results=4, return_structured=True)
+
+    assert all(note.title in result.context for note in notes.values())
+    assert "fifth-source: result limit" in result.context
+    assert result.metadata["omitted_evidence"] == {"fifth-source": "result limit"}
+    assert len(result.context) <= KB_CONTEXT_BUDGET + 10
+    assert set(result.metadata["retrieval"]["strategies"]) == {"fts", "semantic", "graph", "temporal"}
 
 
 def test_agent_context_first_turn_does_not_wait_for_the_model(home, sem, agent):
@@ -526,21 +566,28 @@ def test_agent_context_first_turn_does_not_wait_for_the_model(home, sem, agent):
     res = agent._search_knowledge_context_sync("where is my car today", "default",
                                                return_structured=True)
     assert time.time() - t0 < 0.8
-    assert "**Garage**" in res.context and res.metadata.get("search_mode") == "fts"
+    assert "**Garage**" in res.context
+    assert res.metadata.get("search_mode") == "parallel-hybrid"
+    assert res.metadata["retrieval"]["partial"]
     assert sem.get_embedder(wait=5) is not None    # warmed up in the background
 
 
-def test_agent_context_unchanged_when_off(home, sem, agent, monkeypatch):
-    monkeypatch.setitem(sem._OPTIONS, "semantic_search", False)
+def test_agent_context_recall_cannot_be_disabled_by_legacy_setting(home, sem, agent, monkeypatch):
     calls = []
 
-    def fake_search(query, user_id, limit=10, boolean=False):   # the pre-phase-3 signature
+    def fake_recall(query, user_id, limit=10, info=None, boolean=False):
         calls.append((query, boolean))
+        info.update(
+            strategies={name: "ok" for name in ("fts", "semantic", "graph", "temporal")},
+            strategy_details={}, partial=False, search_mode="parallel-hybrid",
+            strategies_by_note={}, result_counts={},
+        )
         return []
 
-    with patch("myclaw.agent.search_notes", side_effect=fake_search):
-        agent._search_knowledge_context_sync("quantum computing basics", "default")
-    assert calls and calls[0] == ("quantum computing basics", False)
+    monkeypatch.setattr("myclaw.knowledge.recall.parallel_recall", fake_recall)
+    sem.set_options(semantic_search=False)
+    agent._search_knowledge_context_sync("AI in the NAS", "default")
+    assert calls and calls[0] == ("AI in the NAS", False)
 
 
 # ── API ────────────────────────────────────────────────────────────────────
@@ -580,10 +627,11 @@ def test_api_status_backfill_and_search_mode(api, home, sem, monkeypatch):
     assert st["job"]["done"] == st["job"]["total"] == 3
     assert api.delete("/api/knowledge/semantic/backfill").status_code == 404
     r = api.get("/api/knowledge/search", params={"q": "car", "mode": "hybrid"}).json()
-    assert set(r["results"]) >= {"garage", "vehicle"} and r["mode"] == "hybrid"
+    assert set(r["results"]) >= {"garage", "vehicle"} and r["mode"] == "parallel-hybrid"
+    assert set(r["strategies"]) == {"fts", "semantic", "graph", "temporal"}
     r = api.get("/api/knowledge/search", params={"q": "car", "mode": "fts"}).json()
-    assert r["results"] == ["garage"] and r["mode"] == "fts"
-    r = api.get("/api/knowledge/search", params={"q": "car"}).json()   # default auto
+    assert set(r["results"]) >= {"garage", "vehicle"} and r["mode"] == "parallel-hybrid"
+    r = api.get("/api/knowledge/search", params={"q": "car"}).json()
     assert "vehicle" in r["results"]
     assert api.get("/api/knowledge/search", params={"q": "car", "mode": "x"}).status_code == 400
     assert api.get("/api/knowledge/semantic/status", params={"base": "../x"}).status_code == 400
@@ -729,7 +777,7 @@ def test_config_defaults_and_apply(home):
     from myclaw.knowledge import semantic
 
     cfg = AppConfig()
-    assert cfg.knowledge.semantic_search is False
+    assert cfg.knowledge.semantic_search is True
     assert cfg.knowledge.embedding_model == "BAAI/bge-small-en-v1.5"
     saved = dict(semantic._OPTIONS)
     try:

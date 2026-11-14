@@ -129,6 +129,32 @@ def cli_home(tmp_path, monkeypatch):
     return CliRunner(), cli
 
 
+def test_cli_search_runs_all_four_strategies(cli_home, monkeypatch):
+    from types import SimpleNamespace
+
+    runner, cli = cli_home
+    note = SimpleNamespace(
+        permalink="network", title="Network", observations=[], content="Router details", tags=[])
+    calls = []
+
+    def fake_recall(query, base, limit, info=None, boolean=False):
+        calls.append((query, base, boolean))
+        info.update(
+            strategies={name: "ok" for name in ("fts", "semantic", "graph", "temporal")},
+            strategy_details={}, partial=False, search_mode="parallel-hybrid",
+            strategies_by_note={"network": ["fts", "graph"]},
+        )
+        return [note]
+
+    monkeypatch.setattr("myclaw.knowledge.recall.parallel_recall", fake_recall)
+    result = runner.invoke(cli, ["knowledge", "search", "router details", "--mode", "fts"])
+
+    assert result.exit_code == 0
+    assert calls == [("router details", "default", True)]
+    assert "Searches used: words, meaning, graph, and time." in result.output
+    assert "Found by: fts, graph" in result.output
+
+
 def test_cli_base_option_and_read_shows_text(cli_home):
     runner, cli = cli_home
     from myclaw.knowledge.parser import Observation

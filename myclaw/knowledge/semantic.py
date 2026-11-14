@@ -5,9 +5,10 @@ the base's index database and can always be rebuilt (``backfill_embeddings``).
 
 * **Embedder** — :class:`FastEmbedEmbedder` (fastembed / ONNX, local, CPU,
   ``threads=1``, model cache in ``~/.myclaw/models``) or the deterministic
-  :class:`HashEmbedder` used by the tests. fastembed is optional (extra
-  ``semantic``); without it everything else works and the status says how to
-  install it. Inference never runs on the event loop.
+  :class:`HashEmbedder` used by the tests. fastembed is a core dependency on
+  supported platforms and is imported lazily; if unavailable, the status
+  explains how to restore the required semantic stream. Inference never runs
+  on the event loop.
 * **Store** — ``note_vectors``: one row per (entity_id, chunk_no) with model,
   dimension, the chunk text's checksum and an L2-normalised float32 BLOB;
   ``note_embed_state``: per note, which file version and model it was
@@ -137,7 +138,7 @@ MODES = ("auto", "fts", "semantic", "hybrid")
 # ── Options (config: knowledge.semantic_search / embedding_model / …) ───────
 
 _OPTIONS: Dict[str, Any] = {
-    "semantic_search": False,
+    "semantic_search": True,
     "embedding_model": DEFAULT_MODEL,
     "kb_enabled": True,
     "min_score": 0.0,             # 0 = the model's default
@@ -159,9 +160,8 @@ def set_options(semantic_search: Optional[bool] = None, embedding_model: Optiona
                 chunking: Optional[Sequence[Any]] = None) -> None:
     """Apply the settings. A new model drops the loaded one (its vectors become stale).
 
-    2026-10-24 (review): turning the switch on or changing the model after
-    the first application (a settings save) queues every waiting note of
-    every known base.
+    Legacy attempts to turn semantic retrieval off are ignored. Changing the
+    model after settings have been applied queues waiting notes for known bases.
     """
     global _APPLIED
     was_on, was_model = enabled(), state_tag()
@@ -176,8 +176,9 @@ def set_options(semantic_search: Optional[bool] = None, embedding_model: Optiona
             _OPTIONS["chunk_overlap"] = max(0, min(1000, int(chunking[1])))
     except (TypeError, ValueError, IndexError):
         pass
-    if semantic_search is not None:
-        _OPTIONS["semantic_search"] = bool(semantic_search)
+    if semantic_search is False:
+        logger.info("Knowledge semantic search stays enabled: full recall requires all four strategies")
+    _OPTIONS["semantic_search"] = True
     if kb_enabled is not None:
         _OPTIONS["kb_enabled"] = bool(kb_enabled)
     if min_score is not None:
@@ -191,7 +192,7 @@ def set_options(semantic_search: Optional[bool] = None, embedding_model: Optiona
             _OPTIONS["embedding_model"] = name
             _reset_caches()
     transition = (enabled() and not was_on) or state_tag() != was_model
-    if _APPLIED and transition:
+    if transition or not _APPLIED:
         queue_known_bases()
     _APPLIED = True
 
@@ -246,7 +247,9 @@ def min_score() -> float:
 
 def models_dir() -> Path:
     """Model cache (survives updates; ZenSynora's own folder, not ~/.cache)."""
-    return Path.home() / ".myclaw" / "models"
+    from .storage import default_base_dir
+
+    return default_base_dir() / "models"
 
 
 def install_command() -> List[str]:
@@ -1058,7 +1061,9 @@ def known_db_paths() -> List[str]:
     """Index databases of this computer's knowledge bases (+ any seen in this process)."""
     paths = set(_WORKER.known)
     try:
-        paths.update(str(p) for p in (Path.home() / ".myclaw").glob("knowledge_*.db"))
+        from .storage import default_base_dir
+
+        paths.update(str(p) for p in default_base_dir().glob("knowledge_*.db"))
     except OSError:
         pass
     return sorted(p for p in paths if os.path.isfile(p))
@@ -1069,8 +1074,8 @@ class _Worker:
 
     2026-10-24 (review): nothing waiting is ever dropped — when the model
     cannot be loaded the notes are retried with backoff (1 min … 30 min);
-    the first write to a base in a process, turning the switch on, changing
-    the model and a model load that works again after an error queue a scan
+    the first write to a base in a process, applying a model change, and a
+    model load that works again after an error queue a scan
     for every note still waiting; long-running processes (the Web UI)
     scan every ``SCAN_INTERVAL`` seconds; carry copies are pruned at most
     once a day per base.
@@ -1357,9 +1362,6 @@ def _db_path(base: str, db_path: Optional[Path]) -> Path:
 
 def unavailable_reason(for_search: bool = True) -> Optional[str]:
     """Why semantic search cannot be used now (None = it can)."""
-    if for_search and not enabled():
-        return ("semantic search is off — turn on Settings → Features → "
-                "\"Semantic search\" (knowledge.semantic_search)")
     if not library_installed():
         return f"fastembed is not installed — install with: {INSTALL_HINT}"
     state, err = embedder_state()
@@ -1665,10 +1667,7 @@ def search_entities(db: Any, query: str, limit: int = 10, boolean: bool = False,
 
 
 def context_search_kwargs(info: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """Extra ``search_notes`` arguments for the automatic agent context: none
-    when semantic search is off (the call stays exactly as before)."""
-    if not enabled():
-        return {}
+    """Arguments for full-text + local semantic search in automatic context."""
     kw: Dict[str, Any] = {"mode": "auto", "semantic_timeout": AGENT_TIMEOUT}
     if info is not None:
         kw["info"] = info

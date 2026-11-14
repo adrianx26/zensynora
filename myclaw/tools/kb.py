@@ -231,30 +231,11 @@ def _notes_with_tag(tag: str, user_id: str) -> list:
     return notes
 
 
-def _semantic_args(mode: Any):
-    """``(search_notes kwargs, info dict, note)`` for the tool's ``mode`` (KB phase 3).
-
-    With semantic search off and mode "auto" the kwargs are empty: the search
-    is exactly the word search it always was.
-    """
-    from ..knowledge import semantic as _semantic
-
-    m = _semantic.normalise_mode(mode)
-    note = ""
-    if m is None:
-        note = (f"(mode '{mode}' is not known — use auto, fts, semantic or hybrid; "
-                "used auto.)")
-        m = "auto"
-    if m == "fts" or (m == "auto" and not _semantic.enabled()):
-        return {}, {}, note
-    info: Dict[str, Any] = {}
-    return {"mode": m, "semantic_timeout": _semantic.SEARCH_TIMEOUT, "info": info}, info, note
-
-
 def search_knowledge(query: str, limit: int = 5, user_id: str = "default",
                      mode: str = "auto") -> str:
     """
-    Search the knowledge base using full-text search (and semantic search).
+    Search the knowledge base using four concurrent strategies: words, meaning,
+    graph relationships, and capture time.
 
     When no results are found, returns an actionable guidance payload that includes:
     - Confirmation that no results were found
@@ -269,9 +250,7 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default",
                starts with NOT means "every note (with the tags) except")
         limit: Maximum number of results (default: 5)
         user_id: User ID for multi-user isolation
-        mode: 2026-10-24 (KB phase 3) — "auto" (default: words + meaning when
-              semantic search is on, else words), "fts" (words only),
-              "semantic" (meaning only) or "hybrid" (both)
+        mode: Deprecated compatibility argument; all four strategies always run.
 
     Returns:
         Formatted search results, or standardized "no results" payload with guidance.
@@ -288,21 +267,46 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default",
         except (TypeError, ValueError):
             limit = 5
         fetch = limit * 4 if (tags or negated) else limit
-        sem_kw, sem_info, mode_note = _semantic_args(mode)
-        if positive:
-            # the text is passed on as it is: plain sentences are free text,
-            # AND/OR/NOT and "phrases" are search syntax (db.search_fts)
-            notes = search_notes(positive, user_id, fetch, boolean=True, **sem_kw)
-        elif tags:
-            notes = _notes_with_tag(tags[0], user_id)
-        elif negated:
-            notes = list_notes(user_id)  # "NOT nas" alone: every note without nas
-        else:
-            notes = search_notes(query, user_id, limit, boolean=True)
+        search_query = positive or " ".join(tags or negated) or query
+        search_info: Dict[str, Any] = {}
+        notes = []
+        if search_query:
+            from ..knowledge.recall import parallel_recall
+
+            notes = parallel_recall(
+                search_query, user_id, fetch, info=search_info, boolean=True)
+        if not positive and tags:
+            # Tag-only queries are filter/browse operations; still execute all
+            # four searches, then include every exact tag match.
+            notes = list({n.permalink: n for n in notes + _notes_with_tag(tags[0], user_id)}.values())
+        elif not positive and negated:
+            # "NOT term" means browse all notes except those containing term.
+            notes = list_notes(user_id)
         if tags:
             notes = [n for n in notes if all(t in _note_tags(n) for t in tags)]
         notes = _exclude(list(notes or []), negated, user_id)
         notes = notes[:limit]
+        mode_note = ""
+        if str(mode) not in {"auto", "fts", "semantic", "hybrid"}:
+            mode_note = f"(Unknown legacy search mode '{mode}'; all four searches were used.)"
+        partial_note = ""
+        if search_info.get("partial"):
+            statuses = search_info.get("strategies", {})
+            failed = [
+                f"{name}: {detail.get('fallback') or statuses.get(name, 'unavailable')}"
+                for name, detail in search_info.get("strategy_details", {}).items()
+                if detail.get("fallback")
+            ]
+            missing = [
+                f"{name}: {status}"
+                for name, status in statuses.items()
+                if status != "ok" and not any(item.startswith(f"{name}:") for item in failed)
+            ]
+            partial_note = (
+                "Search is partial; not all four strategies returned results ("
+                + "; ".join(failed + missing)
+                + "). Do not treat this as proof the knowledge base has no answer."
+            )
 
         if not notes:
             # Generate actionable guidance for empty results
@@ -318,8 +322,10 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default",
             ]
             if mode_note:
                 lines.insert(1, mode_note)
-            if sem_kw.get("mode") in ("semantic", "hybrid") and sem_info.get("fallback"):
-                lines.insert(1, f"(semantic search not used: {sem_info['fallback']})")
+            if partial_note:
+                lines.insert(1, partial_note)
+            else:
+                lines.insert(1, "All four search strategies completed.")
 
             if suggested_terms:
                 lines.append(f"  • Try broader search terms: '{broader_query}'")
@@ -343,13 +349,15 @@ def search_knowledge(query: str, limit: int = 5, user_id: str = "default",
         lines = [f"🔍 Search results for '{query}':", ""]
         if mode_note:
             lines[1:1] = [mode_note]
-        if sem_info.get("mode") in ("semantic", "hybrid"):
-            lines[1:1] = [f"(search: {'meaning' if sem_info['mode'] == 'semantic' else 'words + meaning'})"]
-        elif sem_kw.get("mode") in ("semantic", "hybrid") and sem_info.get("fallback"):
-            lines[1:1] = [f"(semantic search not used: {sem_info['fallback']} — showing word matches)"]
+        lines[1:1] = ["All four searches were attempted: words, meaning, graph, and time."]
+        if partial_note:
+            lines[1:1] = [partial_note]
 
         for i, note in enumerate(notes, 1):
             lines.append(f"{i}. **{note.title}** ([{note.permalink}](memory://{note.permalink}))")
+            matched = search_info.get("strategies_by_note", {}).get(note.permalink, [])
+            if matched:
+                lines.append(f"   Found by: {', '.join(matched)}")
             snippet = note_snippet(note, SEARCH_SNIPPET_CHARS)
             if snippet:
                 lines.append(f"   {snippet}")

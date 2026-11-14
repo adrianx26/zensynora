@@ -148,6 +148,7 @@ _LAZY_AGENT_TOOLS = {
     "import_knowledge":          ("myclaw.tools.ingest",         "import_knowledge",          "Import a ChatGPT or Claude.ai export (.zip/.json), an MCP memory file, a folder or zip of Markdown notes (Obsidian vault) or one document into the knowledge base (kind: auto, chatgpt, claude, mcp_memory, markdown, document)"),
     # Medic Agent
     "check_system_health":       ("myclaw.agents.medic_agent",   "check_system_health",       "Check overall system health status"),
+    "diagnose_knowledge_merge":  ("myclaw.agents.medic_agent",   "diagnose_knowledge_merge",  "Read-only audit of a source-note merge, including its original rationale, independent review, checksums and actual diff"),
     "check_memory_usage":        ("myclaw.agents.medic_agent",   "check_memory_usage",        "Checks current system memory usage and logs a warning if it exceeds a threshold."),
     "verify_file_integrity":     ("myclaw.agents.medic_agent",   "verify_file_integrity",     "Verify file integrity against recorded hashes"),
     "recover_file":              ("myclaw.agents.medic_agent",   "recover_file",              "Recover a corrupted or missing file from GitHub"),

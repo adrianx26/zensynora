@@ -489,6 +489,18 @@ async def update_settings(update: SettingsUpdate):
         new_cfg = AppConfig(**raw)
     except ValidationError as e:
         raise HTTPException(status_code=422, detail=f"Invalid settings: {e.errors()[:3]}")
+    decision_cfg = new_cfg.knowledge
+    if decision_cfg.decision_mode != "rules":
+        from myclaw.knowledge.decision import is_loopback_url
+        from myclaw.provider import LOCAL_BUILTIN_PROVIDERS, provider_endpoint
+
+        if decision_cfg.decision_provider not in LOCAL_BUILTIN_PROVIDERS:
+            raise HTTPException(status_code=400, detail="Knowledge decisions require a built-in local provider.")
+        if not decision_cfg.decision_model.strip():
+            raise HTTPException(status_code=400, detail="Choose a local model for knowledge decisions.")
+        endpoint = provider_endpoint(new_cfg, decision_cfg.decision_provider)
+        if not endpoint or not endpoint.get("local") or not is_loopback_url(endpoint.get("base_url", "")):
+            raise HTTPException(status_code=400, detail="Knowledge decisions may only use a loopback model server.")
     # v0.7.5: an agent or rotation entry must not point at a key that does not exist.
     if any(p.startswith("agents.") or p.endswith(".keys") or p == "providers.custom" for p in update.changes):
         from myclaw.provider_keys import missing_key_refs

@@ -988,6 +988,9 @@ def _title_key(text: Any) -> str:
 def _body_of(note: Any) -> str:
     from .parser import extract_body
 
+    body = getattr(note, "body", None)
+    if isinstance(body, str):
+        return body
     try:
         return extract_body(getattr(note, "content", "") or "", getattr(note, "title", None))
     except Exception:
@@ -1004,6 +1007,163 @@ def _note_summary(note: Any, degree: int) -> Dict[str, Any]:
             "facts": len(note.observations or []), "links": degree,
             "created": created.isoformat() if created else None,
             "file": str(note.file_path) if note.file_path else None}
+
+
+def _cross_note_conflicts(keep: Any, drop: Any) -> list:
+    conflicts = []
+    for left in keep.observations or []:
+        if getattr(left, "status", "active") != "active":
+            continue
+        for right in drop.observations or []:
+            if getattr(right, "status", "active") != "active":
+                continue
+            category = normalize_category(left.category)
+            if category != normalize_category(right.category):
+                continue
+            kind = conflict_kind(left.content, right.content, category)
+            if kind:
+                conflicts.append({
+                    "category": category,
+                    "kind": kind,
+                    "keep": left.content,
+                    "drop": right.content,
+                    "keep_status": getattr(left, "status", "active"),
+                    "drop_status": getattr(right, "status", "active"),
+                })
+    return conflicts
+
+
+def _merge_candidate_evidence(user_id: str, pair: Dict[str, Any],
+                              reasons: list, db_path: Any = None) -> Dict[str, Any]:
+    """Build read-only, source-linked evidence for a proposed note merge."""
+    from .storage import read_note
+
+    keep = read_note(pair["keep"]["permalink"], user_id, db_path=db_path)
+    drop = read_note(pair["drop"]["permalink"], user_id, db_path=db_path)
+    if keep is None or drop is None:
+        missing = [p for p, note in ((pair["keep"]["permalink"], keep),
+                                     (pair["drop"]["permalink"], drop)) if note is None]
+        return {"conflict_free": False, "error": f"Source note unavailable: {', '.join(missing)}"}
+
+    def fact_record(observation: Any) -> Dict[str, Any]:
+        return {
+            "category": observation.category,
+            "content": observation.content,
+            "provenance": getattr(observation, "provenance_path", None),
+            "captured_at": getattr(observation, "captured_at", None),
+            "confidence": getattr(observation, "confidence", None),
+            "verification_status": getattr(observation, "verification_status", "unknown"),
+            "status": getattr(observation, "status", "active"),
+            "superseded_by": getattr(observation, "superseded_by", None),
+        }
+
+    def fact_key(observation: Any) -> tuple:
+        return (normalize_category(observation.category), _norm_text(observation.content),
+                getattr(observation, "provenance_path", None))
+
+    def fact_order(key: tuple) -> tuple:
+        return (key[0], key[1], key[2] or "")
+
+    keep_facts = {fact_key(o): o for o in keep.observations or []}
+    drop_facts = {fact_key(o): o for o in drop.observations or []}
+    shared = keep_facts.keys() & drop_facts.keys()
+    keep_only = keep_facts.keys() - shared
+    drop_only = drop_facts.keys() - shared
+    conflicts = []
+    for conflict in _cross_note_conflicts(keep, drop):
+        keep_obs = next(o for o in keep.observations or []
+                        if o.content == conflict["keep"] and normalize_category(o.category) == conflict["category"]
+                        and getattr(o, "status", "active") == conflict["keep_status"])
+        drop_obs = next(o for o in drop.observations or []
+                        if o.content == conflict["drop"] and normalize_category(o.category) == conflict["category"]
+                        and getattr(o, "status", "active") == conflict["drop_status"])
+        conflicts.append({
+            **conflict,
+            "keep": fact_record(keep_obs),
+            "drop": fact_record(drop_obs),
+        })
+
+    def relation_record(relation: Any) -> Dict[str, Any]:
+        return {"type": relation.relation_type, "target": relation.target,
+                "strength": getattr(relation, "strength", 1)}
+
+    def relation_key(relation: Any) -> tuple:
+        return (relation.relation_type, _squash(relation.target).casefold())
+
+    keep_relations = {relation_key(r): r for r in keep.relations or []}
+    drop_relations = {relation_key(r): r for r in drop.relations or []}
+    shared_relations = keep_relations.keys() & drop_relations.keys()
+    names = _fold_names(keep) | _fold_names(drop)
+    removed_self_links = []
+    for owner, relations in (("keep", keep.relations or []), ("drop", drop.relations or [])):
+        for relation in relations:
+            target = _squash(relation.target).split("|", 1)[0].split("#", 1)[0].casefold()
+            if target in names:
+                removed_self_links.append({"source": owner, **relation_record(relation)})
+
+    sources = []
+    for note in (keep, drop):
+        try:
+            raw = note.file_path.read_bytes()
+        except (AttributeError, OSError) as exc:
+            return {"reviewable": False, "error": f"Cannot checksum {note.permalink}: {exc}"}
+        sources.append({
+            "permalink": note.permalink,
+            "title": note.title,
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "updated_at": note.updated_at.isoformat() if note.updated_at else None,
+            "status": (note.metadata or {}).get("status"),
+        })
+
+    score = 0.0
+    if "same title" in reasons or "identical text" in reasons:
+        score = 1.0
+    elif "title is an alias of the other note" in reasons:
+        score = 0.95
+    else:
+        match = next((re.search(r"(\d+)\s*%", reason) for reason in reasons
+                      if reason.startswith("very similar text")), None)
+        if match:
+            score = int(match.group(1)) / 100
+
+    def value_diff(left: list, right: list) -> Dict[str, list]:
+        left_by_key = {_squash(value).casefold(): value for value in left if _squash(value)}
+        right_by_key = {_squash(value).casefold(): value for value in right if _squash(value)}
+        shared_keys = left_by_key.keys() & right_by_key.keys()
+        return {
+            "shared": [left_by_key[key] for key in sorted(shared_keys)],
+            "keep_only": [left_by_key[key] for key in sorted(left_by_key.keys() - shared_keys)],
+            "drop_only": [right_by_key[key] for key in sorted(right_by_key.keys() - shared_keys)],
+        }
+
+    keep_body = _squash(_body_of(keep))
+    drop_body = _squash(_body_of(drop))
+    return {
+        "generation_reasons": list(reasons),
+        "candidate_score": score,
+        "sources": sources,
+        "facts": {
+            "shared": [fact_record(keep_facts[key]) for key in sorted(shared, key=fact_order)],
+            "keep_only": [fact_record(keep_facts[key]) for key in sorted(keep_only, key=fact_order)],
+            "drop_only": [fact_record(drop_facts[key]) for key in sorted(drop_only, key=fact_order)],
+        },
+        "body": {
+            "keep_characters": len(keep_body),
+            "drop_characters": len(drop_body),
+            "drop_text_appended": bool(drop_body and drop_body.casefold() not in keep_body.casefold()),
+        },
+        "tags": value_diff(list(keep.tags or []), list(drop.tags or [])),
+        "aliases": value_diff(list(keep.aliases or []), list(drop.aliases or [])),
+        "relations": {
+            "shared": [relation_record(keep_relations[key]) for key in sorted(shared_relations)],
+            "keep_only": [relation_record(keep_relations[key]) for key in sorted(keep_relations.keys() - shared_relations)],
+            "drop_only": [relation_record(drop_relations[key]) for key in sorted(drop_relations.keys() - shared_relations)],
+            "removed_self_links": removed_self_links,
+        },
+        "conflicts": conflicts,
+        "conflict_free": not conflicts,
+        "unresolved": ["contradictory facts require user review"] if conflicts else [],
+    }
 
 
 def _older_key(note: Any) -> tuple:
@@ -1031,7 +1191,8 @@ def _jaccard(a: frozenset, b: frozenset) -> float:
 
 
 def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 100,
-                    report: bool = False, time_budget: Optional[float] = None) -> Any:
+                    report: bool = False, time_budget: Optional[float] = None,
+                    include_evidence: bool = True) -> Any:
     """Candidate pairs of duplicate notes, best evidence first. Changes nothing.
 
     A pair is listed when the titles are the same after normalising (case,
@@ -1050,8 +1211,10 @@ def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 
     import difflib
     import time as _time
 
+    from types import SimpleNamespace
+
     from .db import KnowledgeDB
-    from .storage import list_notes
+    from .storage import _inside, get_knowledge_dir
 
     started = _time.monotonic()
 
@@ -1063,7 +1226,86 @@ def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 
             return {"pairs": pairs, "partial": partial, "message": message}
         return pairs
 
-    notes = [n for n in list_notes(user_id) if getattr(n, "permalink", None)]
+    def _parse_aliases(raw: Any) -> list:
+        if not raw:
+            return []
+        if isinstance(raw, list):
+            return [str(v).strip() for v in raw if str(v).strip()]
+        text = str(raw).strip()
+        if not text:
+            return []
+        if text.startswith("[") and text.endswith("]"):
+            text = text[1:-1]
+        return [item.strip().strip("\"'") for item in text.split(",") if item.strip()]
+
+    def _read_note_file(file_path: Any):
+        try:
+            text = file_path.read_text(encoding="utf-8")
+        except Exception:
+            return None
+        body = text
+        title = file_path.stem
+        permalink = file_path.stem.lower().replace(" ", "-")
+        aliases: list = []
+        lines = text.replace("\r\n", "\n").split("\n")
+        if lines and lines[0].strip() == "---":
+            i = 1
+            while i < len(lines) and lines[i].strip() != "---":
+                line = lines[i].strip()
+                if line.startswith("title:"):
+                    title = line.split(":", 1)[1].strip().strip("\"'") or title
+                elif line.startswith("permalink:"):
+                    permalink = line.split(":", 1)[1].strip().strip("\"'") or permalink
+                elif line.startswith("aliases:"):
+                    aliases = _parse_aliases(line.split(":", 1)[1])
+                i += 1
+            if i + 1 < len(lines):
+                body = "\n".join(lines[i + 1:])
+        body_lines = body.split("\n")
+        for idx, raw in enumerate(body_lines):
+            s = raw.strip()
+            if not s:
+                continue
+            m = re.match(r"^#\s+(.*)$", s)
+            if m:
+                title = m.group(1).strip() if m.group(1).strip() else title
+                body_lines = body_lines[:idx] + body_lines[idx + 1:]
+                break
+        out = []
+        for raw in body_lines:
+            s = raw.rstrip()
+            if not s:
+                continue
+            if re.match(r"^- \[[^\]]*\]\s", s) or re.match(r"^- \[\[.*\]\]", s):
+                continue
+            if re.match(r"^##?\s+", s):
+                continue
+            out.append(s)
+        body = "\n".join(out).strip()
+        return SimpleNamespace(
+            permalink=permalink,
+            name=file_path.stem,
+            title=title,
+            content=text,
+            aliases=aliases,
+            file_path=file_path,
+            observations=[],
+            body=body,
+        )
+
+    knowledge_dir = get_knowledge_dir(user_id)
+    files = sorted(knowledge_dir.glob("*.md")) + sorted(
+        f for f in knowledge_dir.glob("*/**/*.md")
+        if _inside(f, knowledge_dir)
+        and not any(part.startswith(".") for part in f.relative_to(knowledge_dir).parts[:-1])
+    )
+    notes = []
+    for file_path in files:
+        if file_path.name.startswith("."):
+            continue
+        note = _read_note_file(file_path)
+        if note is not None and getattr(note, "permalink", None):
+            notes.append(note)
     if len(notes) < 2:
         return _result([], False, "")
     try:
@@ -1131,10 +1373,19 @@ def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 
     message = ""
     checked = 0
     seen_pairs: set = set()
-    for t in sorted(index, key=lambda x: df[x]):
-        members = index[t]
-        if len(members) > 200:  # a common word: pairs come from rarer ones
+    # Only compare notes that share a fairly rare word and a small enough pool of
+    # candidate notes; otherwise large bases spend most of their time inside the
+    # pairwise similarity loop without producing meaningful duplicate checks.
+    candidate_keys = []
+    for token, members in index.items():
+        uniq = list(dict.fromkeys(members))
+        if len(uniq) <= 1 or len(uniq) > 64:
             continue
+        candidate_keys.append((df.get(token, 0), token, uniq))
+    for _, token, members in sorted(candidate_keys, key=lambda x: (x[0], x[1])):
+        if _over_budget():
+            partial = True
+            break
         for i in range(len(members)):
             for j in range(i + 1, len(members)):
                 pa, pb = members[i], members[j]
@@ -1194,6 +1445,10 @@ def find_duplicates(user_id: str = "default", db_path: Any = None, limit: int = 
     out.sort(key=lambda d: (min(strength.get(r, 2) for r in d["reasons"]), -len(d["reasons"]),
                             d["keep"]["permalink"], d["drop"]["permalink"]))
     limit = max(1, int(limit))
+    if report and include_evidence:
+        for pair in out[:limit]:
+            pair["evidence"] = _merge_candidate_evidence(
+                user_id, pair, pair["reasons"], db_path=db_path)
     if len(out) > limit and not message:
         message = f"Showing {limit} of {len(out)} pairs."
     return _result(out[:limit], partial, message)
@@ -1236,7 +1491,7 @@ def merge_identical(user_id: str = "default", dry_run: bool = True) -> Dict[str,
     to it open the kept note). ``dry_run=True`` lists the pairs only."""
     from .storage import read_note
 
-    report = find_duplicates(user_id, None, 1_000_000, True, 20.0)   # every pair; no cut
+    report = find_duplicates(user_id, None, 1_000_000, True, 20.0, include_evidence=False)
 
     def content(permalink: str) -> Any:
         n = read_note(permalink, user_id)
@@ -1246,12 +1501,14 @@ def merge_identical(user_id: str = "default", dry_run: bool = True) -> Dict[str,
                 sorted((r.relation_type, _squash(r.target).casefold()) for r in n.relations or []))
 
     pairs = []
+    pair_evidence = {}
     for p in report["pairs"]:
         if "identical text" not in p["reasons"]:
             continue
         a, b = content(p["keep"]["permalink"]), content(p["drop"]["permalink"])
         if a is not None and a == b:
             pairs.append(p)
+            pair_evidence[(p["keep"]["permalink"], p["drop"]["permalink"])] = p
     out: Dict[str, Any] = {"pairs": [{"keep": p["keep"]["permalink"], "keep_title": p["keep"]["title"],
                                       "drop": p["drop"]["permalink"], "drop_title": p["drop"]["title"]}
                                      for p in pairs],
@@ -1264,7 +1521,21 @@ def merge_identical(user_id: str = "default", dry_run: bool = True) -> Dict[str,
         if drop in gone or keep == drop:
             continue
         try:
-            merge_notes(user_id, keep, drop, dry_run=False)
+            candidate = pair_evidence[(p["keep"], p["drop"])]
+            evidence = _merge_candidate_evidence(
+                user_id, candidate, candidate["reasons"])
+            source_checksums = {
+                source["permalink"]: source["sha256"]
+                for source in evidence.get("sources", [])
+            }
+            merge_notes(
+                user_id, keep, drop, dry_run=False,
+                operation_context={
+                    "rationale": "Identical text, facts, and links approved in the batch preview",
+                    "proposal_reasons": candidate["reasons"],
+                    "source_checksums": source_checksums,
+                },
+            )
             gone[drop] = keep
             out["merged"] += 1
         except Exception as e:
@@ -1278,7 +1549,8 @@ def _fold_names(note: Any) -> set:
 
 
 def merge_notes(user_id: str, keep: str, drop: str, dry_run: bool = True,
-                db_path: Any = None) -> Dict[str, Any]:
+                db_path: Any = None,
+                operation_context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Merge note ``drop`` into note ``keep``.
 
     Result: the union of tags, aliases, facts and links (links between the
@@ -1306,6 +1578,7 @@ def merge_notes(user_id: str, keep: str, drop: str, dry_run: bool = True,
     d = read_note(drop, user_id, db_path=db_path)
     if d is None:
         raise LookupError(f"Note not found: {drop}")
+    conflicts = _cross_note_conflicts(k, d)
 
     def _uniq(items: Any) -> list:
         out: list = []
@@ -1329,7 +1602,12 @@ def merge_notes(user_id: str, keep: str, drop: str, dry_run: bool = True,
             continue
         seen_f.add(key)
         facts.append(Observation(category=o.category, content=o.content, tags=list(o.tags or []),
-                                 context=o.context, provenance_path=o.provenance_path))
+                                 context=o.context, provenance_path=o.provenance_path,
+                                 captured_at=getattr(o, "captured_at", None),
+                                 confidence=getattr(o, "confidence", None),
+                                 verification_status=getattr(o, "verification_status", "unknown"),
+                                 status=getattr(o, "status", "active"),
+                                 superseded_by=getattr(o, "superseded_by", None)))
     both = _fold_names(k) | _fold_names(d)
     links: list = []
     seen_l = set()
@@ -1357,10 +1635,15 @@ def merge_notes(user_id: str, keep: str, drop: str, dry_run: bool = True,
     metadata = {**(d.metadata or {}), **(k.metadata or {})}
     preview = {
         "keep": k.permalink, "drop": d.permalink, "title": k.title, "dry_run": bool(dry_run),
+        "source_checksums": {
+            k.permalink: hashlib.sha256(k.file_path.read_bytes()).hexdigest(),
+            d.permalink: hashlib.sha256(d.file_path.read_bytes()).hexdigest(),
+        },
         "tags": tags, "aliases": aliases,
         "facts": [f"[{o.category}] {o.content}" for o in facts],
         "links": [f"{r.relation_type} [[{r.target}]]" for r in links],
         "body": body,
+        "conflicts": conflicts,
         "added": {
             "tags": [t for t in tags if t.casefold() not in {x.casefold() for x in (k.tags or [])}],
             "aliases": [a for a in aliases if a.casefold() not in {x.casefold() for x in (k.aliases or [])}],
@@ -1373,10 +1656,21 @@ def merge_notes(user_id: str, keep: str, drop: str, dry_run: bool = True,
     }
     if dry_run:
         return preview
-    if not update_note(k.permalink, user_id, db_path=db_path, tags=tags, aliases=aliases,
-                       observations=facts, relations=links, content=body,
-                       metadata=metadata):
-        raise LookupError(f"Note not found: {keep}")
-    delete_note(d.permalink, user_id, db_path=db_path)
-    preview["dry_run"] = False
-    return preview
+    if conflicts:
+        first = conflicts[0]
+        raise ValueError(
+            f"Cannot merge unresolved [{first['category']}] conflict: "
+            f"{first['keep']} vs {first['drop']}. Resolve or mark one fact non-active first.")
+    def apply_changes() -> Dict[str, Any]:
+        if not update_note(k.permalink, user_id, db_path=db_path, tags=tags, aliases=aliases,
+                           observations=facts, relations=links, content=body,
+                           metadata=metadata):
+            raise LookupError(f"Note not found: {keep}")
+        if not delete_note(d.permalink, user_id, db_path=db_path):
+            raise LookupError(f"Note not found: {drop}")
+        preview["dry_run"] = False
+        return preview
+
+    from .merge_journal import apply_merge
+
+    return apply_merge(user_id, k, d, apply_changes, operation_context, db_path)

@@ -11,7 +11,7 @@ from .agent import Agent
 from .onboard import onboard as onboard_script
 from .gateway import start
 from .knowledge import (
-    search_notes, list_notes, read_note, sync_knowledge, get_all_tags,
+    list_notes, read_note, sync_knowledge, get_all_tags,
     write_note, Observation
 )
 
@@ -240,26 +240,29 @@ _BASE_OPTION = click.option("--base", "-b", default="default", show_default=True
 @knowledge.command()
 @click.argument('query', required=False)
 @_BASE_OPTION
-@click.option("--mode", default="fts", show_default=True,
+@click.option("--mode", default="auto", show_default=True,
               type=click.Choice(["auto", "fts", "semantic", "hybrid"]),
-              help="fts = words; semantic = by meaning; hybrid = both; auto = hybrid when "
-                   "semantic search is on and ready")
+              help="Legacy option; all four knowledge searches always run")
 def search(query, base, mode):
-    """Search knowledge base (supports AND / OR / NOT and "quoted phrases")"""
+    """Search words, meaning, graph relations, and time together."""
     if not query:
         query = click.prompt("Search query")
-    # 2026-10-23 (KB phase 0): boolean=True keeps AND/OR/NOT as search syntax.
+    from myclaw.knowledge.recall import parallel_recall
+
     info: dict = {}
-    if mode == "fts":
-        notes = search_notes(query, base, boolean=True)
-    else:  # 2026-10-24 (KB phase 3)
-        notes = search_notes(query, base, boolean=True, mode=mode, info=info)
-        if info.get("fallback"):
-            click.echo(f"(semantic search not used: {info['fallback']})")
+    notes = parallel_recall(query, base, 20, info=info, boolean=True)
+    if info.get("partial"):
+        statuses = ", ".join(f"{name}: {status}" for name, status in info.get("strategies", {}).items())
+        click.echo(f"Partial search; not all four strategies completed ({statuses}).")
+    else:
+        click.echo("Searches used: words, meaning, graph, and time.")
     if notes:
         click.echo(f"\n🔍 Found {len(notes)} results for '{query}':\n")
         for i, note in enumerate(notes, 1):
             click.echo(f"{i}. {note.title} ({note.permalink})")
+            matched = info.get("strategies_by_note", {}).get(note.permalink, [])
+            if matched:
+                click.echo(f"   Found by: {', '.join(matched)}")
             if note.observations:
                 for obs in note.observations[:2]:
                     click.echo(f"   - [{obs.category}] {obs.content[:60]}...")
@@ -354,7 +357,7 @@ def embed_cmd(base, all_notes, limit):
     load_config()  # applies knowledge.embedding_model
     st = semantic.embedding_status(base)
     click.echo(f"Model: {st['model']} · {st['embedded']}/{st['notes']} notes embedded"
-               f"{'' if st['enabled'] else ' · semantic search is off (knowledge.semantic_search)'}")
+               f"{'' if st['enabled'] else ' · required semantic retrieval is unavailable'}")
     if not st["installed"]:
         raise click.ClickException(
             f"fastembed is not installed. Install it with:\n  {sys.executable} -m pip install "

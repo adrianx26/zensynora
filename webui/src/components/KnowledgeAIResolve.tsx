@@ -9,6 +9,7 @@ interface Proposal {
   kind: 'conflict' | 'duplicate';
   id?: number; permalink?: string; title?: string; category?: string; a?: string; b?: string;
   keep?: NoteRef; drop?: NoteRef; reasons?: string[];
+  review?: { status: 'pass' | 'hold' | 'reject'; reasons: string[]; conflicts?: { category: string; kind: string; keep: string; drop: string }[] };
   action: string | null; reason: string; confidence: number; error: string | null;
 }
 interface ProposeResult { proposals: Proposal[]; stopped: string; remaining: { conflicts: number; duplicates: number } }
@@ -48,7 +49,11 @@ const KnowledgeAIResolve: React.FC<{
         body: JSON.stringify({ limit: 10, kinds: Object.entries(kinds).filter(([, v]) => v).map(([k]) => k) }),
       });
       setRes(r);
-      setChoice(Object.fromEntries(r.proposals.filter(p => p.action).map(p => [key(p), p.action as string])));
+      setChoice(Object.fromEntries(r.proposals.filter(p => p.action).map(p => [
+        key(p),
+        p.kind === 'duplicate' && p.review?.status !== 'pass' && p.action !== 'keep_both'
+          ? '' : p.action as string,
+      ])));
       setPicked(new Set());
     } catch (e) {
       setErr((e as Error).message);
@@ -118,12 +123,22 @@ const KnowledgeAIResolve: React.FC<{
                 </label>
                 {p.kind === 'conflict' && <div className="muted small">[{p.category}] a: “{p.a}” · b: “{p.b}”</div>}
                 {p.kind === 'duplicate' && <div className="muted small">{(p.reasons || []).join(', ')}</div>}
+                {p.kind === 'duplicate' && p.review && (
+                  <div className={`notice ${p.review.status === 'pass' ? '' : 'error'}`}>
+                    Independent review: {p.review.status} — {p.review.reasons.join('; ')}
+                    {p.review.conflicts?.map((conflict, i) => <div key={i}>
+                      [{conflict.category}/{conflict.kind}] {conflict.keep} ↔ {conflict.drop}
+                    </div>)}
+                  </div>
+                )}
                 {p.error ? <div className="muted small">⚠ {p.error}</div> : (
                   <div className="small">AI: {p.reason} <span className="muted">({Math.round(p.confidence * 100)} % sure)</span></div>
                 )}
                 <select className="field-input small" value={choice[k] || ''} onChange={e => { setChoice({ ...choice, [k]: e.target.value }); }}>
                   {!choice[k] && <option value="">Choose…</option>}
-                  {CHOICES[p.kind].map(c => <option key={c.value} value={c.value}>{c.label(p)}{c.value === p.action ? '  ← AI' : ''}</option>)}
+                  {CHOICES[p.kind]
+                    .filter(c => p.kind !== 'duplicate' || c.value === 'keep_both' || p.review?.status === 'pass')
+                    .map(c => <option key={c.value} value={c.value}>{c.label(p)}{c.value === p.action ? '  ← AI' : ''}</option>)}
                 </select>
               </div>
             );

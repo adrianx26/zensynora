@@ -13,8 +13,8 @@ import KnowledgeAIResolve from './KnowledgeAIResolve';
 import KnowledgeEvaluate from './KnowledgeEvaluate';
 import KnowledgeTune from './KnowledgeTune';
 import { CategoriesCard, CategoryMergePanel, ConflictsSection, DuplicatesPanel, type Conflict } from './KnowledgeQuality';
-import { SearchModePicker, SemanticCard } from './KnowledgeSemantic';
-import { useSemanticStatus, type SearchMode } from '../knowledgeSemantic';
+import { SemanticCard } from './KnowledgeSemantic';
+import { useSemanticStatus } from '../knowledgeSemantic';
 import { useAutoClear } from '../notice';
 
 interface Count { name: string; count: number }
@@ -49,7 +49,6 @@ type ColorBy = 'group' | 'tag' | 'links' | 'none';
 // Categorical palette (works on the dark and light themes).
 const PALETTE = ['#58a6ff', '#3fb950', '#d29922', '#f778ba', '#a371f7', '#39c5cf', '#ff7b72', '#e3b341', '#7ee787', '#79c0ff'];
 const BASE_KEY = 'zensynora_kb_base';
-const MODE_KEY = 'zensynora_kb_search_mode'; // KB phase 3: words / meaning / both
 const VIEW_KEY = 'zensynora_kb_graph_view';   // 2026-10-31: colour, links, labels
 // Link-type colours: distinct from the note colours' blue so links stand out.
 const LINK_PALETTE = ['#e3b341', '#3fb950', '#f778ba', '#39c5cf', '#ff7b72', '#a371f7', '#7ee787', '#79c0ff', '#d29922', '#58a6ff'];
@@ -107,9 +106,7 @@ const KnowledgeView: React.FC = () => {
   // filters
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<Set<string> | null>(null);
-  // 2026-10-24 (KB phase 3): semantic search mode + status
-  const [mode, setMode] = useState<SearchMode>(() => (stored(MODE_KEY) as SearchMode) || 'auto');
-  const [modeNote, setModeNote] = useState<string | null>(null);
+  const [searchNote, setSearchNote] = useState<string | null>(null);
   const [tagFilter, setTagFilter] = useState<string[]>([]);
   const [relFilter, setRelFilter] = useState<string[]>([]);
   const [hideMissing, setHideMissing] = useState(false);
@@ -150,7 +147,6 @@ const KnowledgeView: React.FC = () => {
 
   useEffect(() => { loadBases(); }, [loadBases]);
   const semantic = useSemanticStatus(base, data);
-  const searchMode: SearchMode = semantic.st?.enabled ? mode : 'fts';
   useEffect(() => { store(BASE_KEY, base); setSelected(null); setTagFilter([]); setRelFilter([]); setCatFilter([]); setSide(null); load(); }, [base, load]);
 
   const loadDetail = useCallback(async (id: string) => {
@@ -173,20 +169,26 @@ const KnowledgeView: React.FC = () => {
   useEffect(() => {
     const q = query.trim();
     const seq = ++searchSeq.current;
-    if (!q) { setHits(null); setModeNote(null); return; }
+    if (!q) { setHits(null); setSearchNote(null); return; }
     const t = window.setTimeout(async () => {
       try {
-        const r = await api<{ results: string[]; note?: string | null }>(`/api/knowledge/search?base=${encodeURIComponent(base)}&q=${encodeURIComponent(q)}&mode=${searchMode}`);
+        const r = await api<{ results: string[]; note?: string | null; partial?: boolean }>(
+          `/api/knowledge/search?base=${encodeURIComponent(base)}&q=${encodeURIComponent(q)}`);
         if (seq !== searchSeq.current) return; // a newer search was started meanwhile
-        setModeNote(searchMode === 'fts' ? null : r.note || null);
+        setSearchNote(r.partial ? (r.note || 'Some search strategies did not finish; these results are partial.') : null);
         const ql = q.toLowerCase();
         const s = new Set(r.results);
         data?.nodes.forEach(n => { if (n.title.toLowerCase().includes(ql) || n.id.includes(ql)) s.add(n.id); });
         setHits(s);
-      } catch { if (seq === searchSeq.current) setHits(new Set()); }
+      } catch (e) {
+        if (seq === searchSeq.current) {
+          setHits(new Set());
+          setSearchNote((e as Error).message);
+        }
+      }
     }, 250);
     return () => window.clearTimeout(t);
-  }, [query, base, data, searchMode]);
+  }, [query, base, data]);
 
   // ── Filtered graph ──
   const view = useMemo(() => {
@@ -428,8 +430,10 @@ const KnowledgeView: React.FC = () => {
           {bases.map(b => <option key={b.name} value={b.name}>{b.name === 'default' ? 'Shared (default)' : b.name} · {b.notes}</option>)}
         </select>
         <input className="field-input kb-search" placeholder="Search notes and facts…" value={query} onChange={e => setQuery(e.target.value)} />
-        <SearchModePicker mode={mode} status={semantic.st} note={query.trim() ? modeNote : null}
-          onChange={m => { setMode(m); store(MODE_KEY, m); }} />
+        <span className="muted small" title="Every query searches words, meaning, links, and time together">
+          All four searches
+        </span>
+        {query.trim() && searchNote && <span className="muted small" role="status">{searchNote}</span>}
         <div className="kb-tabs" role="tablist">
           {(['overview', 'graph', 'notes', 'tags', 'distilled', 'usage', 'tune'] as Tab[]).map(t => (
             <button key={t} role="tab" aria-selected={tab === t} className={`settings-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>

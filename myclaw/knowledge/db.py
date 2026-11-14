@@ -339,7 +339,12 @@ class KnowledgeDB:
             except Exception as e:
                 logger.warning("Knowledge: could not move old notes: %s", e)
         self.user_id = user_id
-        self.db_path = db_path or (Path.home() / ".myclaw" / f"knowledge_{user_id}.db")
+        if db_path is None:
+            from . import storage as _storage
+
+            self.db_path = _storage.default_base_dir() / f"knowledge_{user_id}.db"
+        else:
+            self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
         self._conn: Optional[sqlite3.Connection] = None
@@ -667,6 +672,19 @@ class KnowledgeDB:
             conn.execute("ALTER TABLE observations ADD COLUMN provenance_path TEXT")
         except sqlite3.OperationalError:
             pass
+        for column, definition in (
+                ("captured_at", "TEXT NOT NULL DEFAULT 'unknown'"),
+                ("confidence", "REAL"),
+                ("verification_status", "TEXT NOT NULL DEFAULT 'unknown'"),
+                ("status", "TEXT NOT NULL DEFAULT 'active'"),
+                ("superseded_by", "TEXT")):
+            try:
+                conn.execute(f"ALTER TABLE observations ADD COLUMN {column} {definition}")
+            except sqlite3.OperationalError:
+                pass
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_status ON observations(status)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_observations_captured_at "
+                     "ON observations(captured_at)")
 
         # 2026-10-24 (KB phase 2): normalised fact category (indexed; the file
         # keeps the category as written), the category registry and conflicts.
@@ -1133,20 +1151,38 @@ class KnowledgeDB:
             conn.execute("DELETE FROM kb_keep")
 
     def add_observation(self, entity_id: int, category: str, content: str, tags: List[str] = None,
-                        context: Optional[str] = None, provenance_path: Optional[str] = None):
+                        context: Optional[str] = None, provenance_path: Optional[str] = None,
+                        captured_at: Optional[str] = None, confidence: Optional[float] = None,
+                        verification_status: str = "unknown", status: str = "active",
+                        superseded_by: Optional[str] = None):
         """Add an observation to an entity."""
         conn = self._get_connection()
         now = datetime.now().isoformat()
         tags_json = json.dumps(tags or [])
+        capture = str(captured_at or "unknown").strip() or "unknown"
+        try:
+            score = float(confidence) if confidence is not None else None
+        except (TypeError, ValueError):
+            score = None
+        if score is not None and not 0.0 <= score <= 1.0:
+            score = None
+        verification = str(verification_status or "unknown").strip().casefold()
+        if verification not in {"verified", "inferred", "unverified", "unknown"}:
+            verification = "unknown"
+        state = str(status or "active").strip().casefold()
+        if state not in {"active", "archived", "superseded"}:
+            state = "unknown"
 
         conn.execute(
             """
             INSERT INTO observations (entity_id, category, content, tags, created_at, context,
-                                      provenance_path, category_norm)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                      provenance_path, category_norm, captured_at, confidence,
+                                      verification_status, status, superseded_by)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (entity_id, category, content, tags_json, now, context, provenance_path,
-             _quality.normalize_category(category)),
+             _quality.normalize_category(category), capture, score, verification, state,
+             superseded_by),
         )
         conn.commit()
 
@@ -1167,6 +1203,11 @@ class KnowledgeDB:
                     tags=tags,
                     context=_row_get(row, "context"),
                     provenance_path=_row_get(row, "provenance_path"),
+                    captured_at=_row_get(row, "captured_at", "unknown"),
+                    confidence=_row_get(row, "confidence"),
+                    verification_status=_row_get(row, "verification_status", "unknown"),
+                    status=_row_get(row, "status", "active"),
+                    superseded_by=_row_get(row, "superseded_by"),
                 )
             )
         return observations
@@ -1878,16 +1919,40 @@ class KnowledgeDB:
             # Observations: replace
             conn.execute("DELETE FROM observations WHERE entity_id = ?", (eid,))
             for obs in note.observations:
+                metadata = getattr(note, "metadata", None)
+                metadata = metadata if isinstance(metadata, dict) else {}
+                captured_at = getattr(obs, "captured_at", None) or metadata.get("captured_at") or "unknown"
+                confidence = getattr(obs, "confidence", None)
+                if confidence is None:
+                    confidence = metadata.get("confidence")
+                verification = getattr(obs, "verification_status", None)
+                verification = verification or metadata.get("verification_status") or "unknown"
+                status = getattr(obs, "status", None) or metadata.get("status") or "active"
+                superseded_by = getattr(obs, "superseded_by", None) or metadata.get("superseded_by")
+                try:
+                    confidence = float(confidence) if confidence is not None else None
+                except (TypeError, ValueError):
+                    confidence = None
+                if confidence is not None and not 0.0 <= confidence <= 1.0:
+                    confidence = None
+                verification = str(verification).strip().casefold()
+                if verification not in {"verified", "inferred", "unverified", "unknown"}:
+                    verification = "unknown"
+                status = str(status).strip().casefold()
+                if status not in {"active", "archived", "superseded"}:
+                    status = "unknown"
                 conn.execute(
                     """
                     INSERT INTO observations
                         (entity_id, category, content, tags, created_at, context, provenance_path,
-                         category_norm)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                         category_norm, captured_at, confidence, verification_status, status,
+                         superseded_by)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (eid, obs.category, obs.content, json.dumps(obs.tags or []), now,
                      getattr(obs, "context", None), getattr(obs, "provenance_path", None),
-                     _quality.normalize_category(obs.category)),
+                     _quality.normalize_category(obs.category), str(captured_at or "unknown"),
+                     confidence, verification, status, superseded_by),
                 )
 
             # 2026-10-24 (KB phase 2): contradicting facts of this note (derived

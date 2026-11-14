@@ -114,6 +114,18 @@ def get_health_report(offline: bool = False, as_json: bool = False) -> str:
     return json.dumps(report.to_dict(), indent=2) if as_json else report.to_text()
 
 
+def diagnose_knowledge_merge(operation_id: str) -> str:
+    """Read the merge rationale, reviewer evidence, and exact before/after diff."""
+    from ..knowledge.merge_journal import diagnose_operation
+
+    try:
+        report = diagnose_operation("default", operation_id)
+    except (LookupError, ValueError) as exc:
+        return (f"Could not diagnose merge {operation_id!r}: {exc} "
+                "Check the operation id in Knowledge → Possible duplicates → Merge history.")
+    return json.dumps(report, ensure_ascii=False, indent=2)
+
+
 # ── Integrity & recovery ─────────────────────────────────────────────────────
 def scan_files(file_paths: str = "") -> str:
     """
@@ -484,6 +496,9 @@ class MedicAgent:
     def health_report(self, offline: bool = False) -> str:
         return get_health_report(offline=offline)
 
+    def diagnose_knowledge_merge(self, operation_id: str) -> str:
+        return diagnose_knowledge_merge(operation_id)
+
     def verify_integrity(self, file_path: str = "") -> str:
         return verify_file_integrity(file_path)
 
@@ -499,6 +514,7 @@ class MedicAgent:
 
 __all__ = [
     "MedicAgent", "set_config", "check_memory_usage", "check_system_health", "get_health_report",
+    "diagnose_knowledge_merge",
     "scan_files", "verify_file_integrity", "enable_hash_check", "create_backup", "list_backups",
     "recover_file", "detect_errors_in_file", "validate_modification", "check_file_virustotal",
     "record_task_execution", "get_task_analytics", "prevent_infinite_loop",

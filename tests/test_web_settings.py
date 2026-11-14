@@ -61,6 +61,32 @@ def test_rejects_unknown_paths_and_providers(client):
     assert c.put("/api/settings", json={"changes": bad_agent}).status_code == 400
 
 
+def test_knowledge_decision_settings_require_a_loopback_model(client):
+    c, _ = client
+    missing_model = c.put("/api/settings", json={"changes": {
+        "knowledge.decision_mode": "local",
+    }})
+    assert missing_model.status_code == 400
+    assert "Choose a local model" in missing_model.json()["detail"]
+
+    remote = c.put("/api/settings", json={"changes": {
+        "knowledge.decision_mode": "local",
+        "knowledge.decision_provider": "llamacpp",
+        "knowledge.decision_model": "small",
+        "providers.llamacpp.base_url": "https://example.com/v1",
+    }})
+    assert remote.status_code == 400
+    assert "loopback" in remote.json()["detail"]
+
+    saved = c.put("/api/settings", json={"changes": {
+        "knowledge.decision_mode": "rules_then_local",
+        "knowledge.decision_provider": "ollama",
+        "knowledge.decision_model": "small-local",
+    }})
+    assert saved.status_code == 200
+    assert c.get("/api/settings").json()["config"]["knowledge"]["decision_model"] == "small-local"
+
+
 def test_remote_clients_are_refused(client):
     from myclaw.web import settings_api
 

@@ -1383,22 +1383,14 @@ class Agent:
             logger.debug("knowledge usage not recorded: %s", e)
 
     def _search_knowledge_context_sync(
-        self, message: str, user_id: str, max_results: int = 3, return_structured: bool = False
+        self, message: str, user_id: str, max_results: int = 4, return_structured: bool = False
     ) -> Union[str, KnowledgeSearchResult]:
-        """Synchronous implementation of knowledge context search.
-
-        Uses a multi-strategy search:
-        1. Resolves any explicit memory:// permalink references
-        2. Searches using the full message (FTS5 ranked)
-        3. Falls back to bigram + keyword OR-query for fuzzy matching
-
-        When both strategies return nothing the topic is recorded as a KB gap
-        so it can be flagged for manual review or KB-entry creation.
+        """Search all four KB strategies and build context from their fused evidence.
 
         Args:
             message: The user's message to extract search terms from
             user_id: User ID for per-user knowledge isolation
-            max_results: Maximum notes to retrieve (default: 3)
+            max_results: Maximum notes to retrieve (at least one slot per strategy)
             return_structured: If True, return KnowledgeSearchResult dataclass.
                              If False (default), return context string for backward compatibility.
 
@@ -1424,12 +1416,14 @@ class Agent:
 
         _t0 = time.perf_counter()  # 2026-10-27: latency for the usage log
         try:
+            max_results = max(4, int(max_results))
             # Resolve explicit memory:// references
             memory_refs = re.findall(r"memory://([\w\-]+)", message)
 
             # Clean the message for keyword extraction
             cleaned = re.sub(r"[^\w\s]", " ", message.lower())
-            words = [w for w in cleaned.split() if len(w) > 3]
+            stop_words = {"hi", "hey", "hello", "thanks", "thank", "ok", "okay", "yes", "no"}
+            words = [w for w in cleaned.split() if len(w) > 1 and w not in stop_words]
 
             notes = []
             searched = message
@@ -1437,32 +1431,51 @@ class Agent:
             # are fetched, so a very linked note can be ranked below a specific one.
             from .knowledge.quality import hub_threshold, rank_with_hub_penalty
             fetch = max_results + 3 if hub_threshold() is not None else max_results
-            # 2026-10-24 (KB phase 3): with knowledge.semantic_search on, strategy 1
-            # is hybrid (FTS + vectors, RRF) when notes are embedded; the query
-            # embedding gets ~1.5 s, else this turn uses FTS and the model warms
-            # up in the background. Off: the call is exactly as before.
-            from .knowledge import semantic as _semantic
-            search_info: dict = {}
-            semantic_kw = _semantic.context_search_kwargs(search_info)
-            if semantic_kw:
-                semantic_kw["semantic_wait"] = 0.0
+            retrieval_info: dict = {}
             if words:
-                # Strategy 1: search with full message text (FTS5 ranked)
-                notes = search_notes(message, user_id, limit=fetch, **semantic_kw)
-                if search_info.get("mode"):
-                    metadata["search_mode"] = search_info["mode"]
+                from .knowledge import recall as _recall
 
-                if not notes:
-                    # Strategy 2: bigram + single-keyword OR query
-                    bigrams = [f"{words[i]} {words[i + 1]}" for i in range(len(words) - 1)]
-                    candidates = bigrams[:3] + words[:5]
-                    query = " OR ".join(f'"{t}"' if " " in t else t for t in candidates)
-                    # 2026-10-23 (KB phase 0): boolean=True so OR means OR
-                    # (as free text every word had to match).
-                    notes = search_notes(query, user_id, limit=fetch, boolean=True)
-                    searched = query  # 2026-10-27: the usage log shows what was really searched
+                notes = _recall.parallel_recall(
+                    message, user_id, limit=fetch, info=retrieval_info)
+                metadata["retrieval"] = retrieval_info
+                metadata["search_mode"] = retrieval_info.get("search_mode", "parallel-hybrid")
+                if retrieval_info.get("partial"):
+                    failures = [
+                        f"{name}: {detail.get('fallback') or retrieval_info['strategies'].get(name)}"
+                        for name, detail in retrieval_info.get("strategy_details", {}).items()
+                        if detail.get("fallback")
+                    ]
+                    missing = [
+                        f"{name}: {status}" for name, status in retrieval_info.get("strategies", {}).items()
+                        if status != "ok" and not any(item.startswith(f"{name}:") for item in failures)
+                    ]
+                    retrieval_info["warning"] = "; ".join(failures + missing)
+            retrieval_warning = ""
+            if retrieval_info.get("partial"):
+                retrieval_warning = (
+                    "Knowledge retrieval is partial; not all four search strategies returned "
+                    f"results ({retrieval_info.get('warning') or 'see strategy status'}). "
+                    "Do not treat this search as proof that the knowledge base has no answer."
+                )
             if fetch != max_results and notes:
-                notes = rank_with_hub_penalty(notes, user_id)[:max_results]
+                reranked = rank_with_hub_penalty(notes, user_id)
+                strategies_by_note = retrieval_info.get("strategies_by_note", {})
+                covered = []
+                covered_permalinks = set()
+                for strategy in ("fts", "semantic", "graph", "temporal"):
+                    candidate = next(
+                        (note for note in reranked
+                         if getattr(note, "permalink", "") not in covered_permalinks
+                         and strategy in strategies_by_note.get(getattr(note, "permalink", ""), [])),
+                        None,
+                    )
+                    if candidate is not None:
+                        covered.append(candidate)
+                        covered_permalinks.add(getattr(candidate, "permalink", ""))
+                notes = (covered + [
+                    note for note in reranked
+                    if getattr(note, "permalink", "") not in covered_permalinks
+                ])[:max_results]
 
             # 2026-10-24 (KB phase 4): knowledge.distill on → "What I know about
             # you / relevant facts" first (persona > scenarios > facts), inside
@@ -1499,7 +1512,10 @@ class Agent:
                 self._record_kb_usage(searched, user_id, notes, metadata, _t0, bool(distilled))
 
             if not notes and distilled:
-                context = "## Relevant Knowledge" + distilled + "\n\n---\n"
+                context = "## Relevant Knowledge\n"
+                if retrieval_warning:
+                    context += retrieval_warning + "\n\n"
+                context += distilled + "\n\n---\n"
                 result = KnowledgeSearchResult(
                     context=context, has_results=True, suggested_topics=[], gap_logged=False,
                     metadata={**metadata, "results_count": 0},
@@ -1513,13 +1529,14 @@ class Agent:
                 # "## Relevant Knowledge" block is no longer sent when only an
                 # unknown memory:// reference was given.
                 gap_logged = (self._record_kb_gap(user_id, message[:120])
-                              if words and not memory_refs else False)
+                              if words and not memory_refs and not retrieval_info.get("partial") else False)
                 suggested_topics = self._extract_suggested_topics(message)
 
                 # Build contextual guidance for empty results
                 guidance_lines = [
                     "## Knowledge Base Status",
-                    f"\nNo existing knowledge entries found for your query.",
+                    (f"\n{retrieval_warning}" if retrieval_warning else
+                     "\nNo existing knowledge entries found for your query."),
                     f"\n**Suggested topics to explore:**",
                 ]
                 for topic in suggested_topics[:5]:
@@ -1553,9 +1570,37 @@ class Agent:
             # agents only saw titles and facts, and most notes are plain text.
             from .knowledge.graph import note_text, shorten_text
 
+            selected = {getattr(note, "permalink", "") for note in notes}
+            decisions = retrieval_info.get("decisions", {})
+            candidate_titles = retrieval_info.get("candidate_titles", {})
+            omitted: Dict[str, str] = {}
+            for permalink, decision in decisions.items():
+                if (permalink not in selected and decision.get("include")
+                        and decision.get("relevant")):
+                    omitted[permalink] = "result limit"
+
+            source_text = {note.permalink: note_text(note) for note in notes}
+            estimated = len("## Relevant Knowledge") + len(retrieval_warning) + len(distilled)
+            for note in notes:
+                estimated += len(f"\n**{note.title}** ({note.permalink}):")
+                estimated += min(len(source_text[note.permalink]), KB_CONTEXT_NOTE_TEXT)
+                observations = note.observations or []
+                estimated += sum(
+                    min(len(str(obs.content)) + len(str(obs.category)) + 5, 205)
+                    for obs in observations[:KB_CONTEXT_FACTS]
+                )
+                if len(source_text[note.permalink]) > KB_CONTEXT_NOTE_TEXT:
+                    omitted.setdefault(note.permalink, "note text shortened by context budget")
+                if len(observations) > KB_CONTEXT_FACTS:
+                    omitted.setdefault(note.permalink, "facts beyond per-note limit")
+
             context_lines = ["## Relevant Knowledge"]
             used = len(context_lines[0])
-            budget = KB_CONTEXT_BUDGET
+            omission_reserve = min(500, KB_CONTEXT_BUDGET // 4) if omitted or estimated > KB_CONTEXT_BUDGET else 0
+            budget = KB_CONTEXT_BUDGET - omission_reserve - (len("\n---\n") + 2)
+            if retrieval_warning:
+                context_lines.append(retrieval_warning)
+                used += len(retrieval_warning) + 1
             if distilled:  # KB phase 4: distilled lines first
                 context_lines.append(distilled)
                 used += len(distilled) + 1
@@ -1575,14 +1620,21 @@ class Agent:
                         context_lines.append(header)
                         used += len(header) + 1
                     else:
+                        for omitted_note in notes[i:]:
+                            omitted.setdefault(
+                                omitted_note.permalink, "context budget")
                         break
                 room = budget - used - 1
-                text = shorten_text(note_text(note), min(KB_CONTEXT_NOTE_TEXT, room))
+                text = shorten_text(source_text[note.permalink], min(KB_CONTEXT_NOTE_TEXT, room))
                 if text and len(text) > 20:
                     _add(text)
+                elif source_text[note.permalink]:
+                    omitted[note.permalink] = "note text did not fit the context budget"
 
-                for obs in (note.observations or [])[:KB_CONTEXT_FACTS]:
+                observations = note.observations or []
+                for obs in observations[:KB_CONTEXT_FACTS]:
                     if not _add(f"- [{obs.category}] {shorten_text(str(obs.content), 200)}"):
+                        omitted[note.permalink] = "facts did not fit the context budget"
                         break
 
                 if note.permalink in memory_refs:
@@ -1592,6 +1644,30 @@ class Agent:
                         _add("\nRelated context:")
                         _add(shorten_text(full_context, min(500, room), collapse=False))
 
+            if omitted:
+                entries = [
+                    f"{candidate_titles.get(permalink, next(
+                        (note.title for note in notes if note.permalink == permalink), permalink))}"
+                    f" ({permalink}: {reason})"
+                    for permalink, reason in omitted.items()
+                ]
+                summary = "Relevant KB evidence not included: "
+                included = []
+                for entry in entries:
+                    candidate = summary + "; ".join(included + [entry])
+                    if len(candidate) + used + 1 > KB_CONTEXT_BUDGET - len("\n---\n"):
+                        break
+                    included.append(entry)
+                summary += "; ".join(included)
+                remainder = len(entries) - len(included)
+                if remainder:
+                    summary += f"; {remainder} additional source(s) omitted for the same context budget"
+                remaining = KB_CONTEXT_BUDGET - used - len("\n---\n") - 2
+                summary = shorten_text(summary, remaining)
+                if summary:
+                    context_lines.append(summary)
+                    used += len(summary) + 1
+
             context_lines.append("\n---\n")
             context = "\n".join(context_lines)
 
@@ -1600,7 +1676,8 @@ class Agent:
                 has_results=True,
                 suggested_topics=[],
                 gap_logged=False,
-                metadata={**metadata, "results_count": len(notes)},
+                metadata={**metadata, "results_count": len(notes),
+                          "omitted_evidence": omitted},
             )
 
             return result if return_structured else context
@@ -1618,7 +1695,7 @@ class Agent:
             return result if return_structured else ""
 
     async def _search_knowledge_context(
-        self, message: str, user_id: str, max_results: int = 3, return_structured: bool = False
+        self, message: str, user_id: str, max_results: int = 4, return_structured: bool = False
     ) -> Union[str, KnowledgeSearchResult]:
         """Async wrapper for knowledge context search.
 

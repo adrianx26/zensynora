@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from .quality import normalize_category  # 2026-10-24 (KB phase 2)
 
@@ -56,15 +56,19 @@ def parse_json_array(raw: str) -> List[Any]:
 def existing_titles(text: str, user_id: str, limit: int = 12) -> List[str]:
     """Titles of notes related to ``text`` — offered to the model as link targets."""
     try:
-        from .storage import search_notes
+        from .recall import parallel_recall
 
         words = [w for w in re.findall(r"[\w-]{4,}", text or "")][:12]
         if not words:
             return []
-        notes = search_notes(" OR ".join(words), user_id, limit)
+        info: Dict[str, Any] = {}
+        notes = parallel_recall(" OR ".join(words), user_id, limit, info=info, boolean=True)
+        if info.get("partial"):
+            logger.warning("Existing-note title lookup used partial four-way retrieval: %s",
+                           info.get("strategies"))
         return [n.title for n in notes if n.title][:limit]
     except Exception as e:  # never block extraction
-        logger.debug("existing_titles failed: %s", e)
+        logger.warning("Existing-note title lookup failed; continuing extraction without link hints: %s", e)
         return []
 
 

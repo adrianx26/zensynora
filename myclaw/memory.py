@@ -64,7 +64,8 @@ class AsyncSQLitePool:
 
     Maintains multiple connections per database (default: 3) with a
     semaphore-based checkout system to allow concurrent operations to the
-    same user's DB without complete serialization.
+    same user's DB without complete serialization. Each event loop owns its
+    own locks, semaphores, and connections.
 
     SECURITY / STABILITY FIX (2026-04-23):
         - Tracks checked-out connections by id(conn) to prevent double-release
@@ -75,37 +76,37 @@ class AsyncSQLitePool:
     """
 
     _pool_size: int = 3
-    _pools: dict[str, list[aiosqlite.Connection]] = {}
-    _checked_out: dict[str, set[int]] = {}  # Track by id(conn)
-    _semaphores: dict[str, asyncio.Semaphore] = {}
-    _locks: dict[int, asyncio.Lock] = {}
+    _states: dict[int, "_AsyncPoolState"] = {}
 
     @classmethod
-    def _get_lock(cls) -> asyncio.Lock:
-        """Return a lock bound to the current event loop."""
+    def _state(cls) -> "_AsyncPoolState":
+        """Return pool data owned by the current event loop."""
         loop = asyncio.get_running_loop()
-        if id(loop) not in cls._locks:
-            cls._locks[id(loop)] = asyncio.Lock()
-        return cls._locks[id(loop)]
+        state = cls._states.get(id(loop))
+        if state is None or state.loop is not loop:
+            state = _AsyncPoolState(loop)
+            cls._states[id(loop)] = state
+        return state
 
     @classmethod
     async def get_connection(cls, db_path: Path) -> aiosqlite.Connection:
         """Get a pooled async connection (checkout from pool)."""
         key = str(db_path)
+        state = cls._state()
 
-        async with cls._get_lock():
-            if key not in cls._semaphores:
-                cls._semaphores[key] = asyncio.Semaphore(cls._pool_size)
-                cls._checked_out[key] = set()
-                cls._pools[key] = []
+        async with state.lock:
+            if key not in state.semaphores:
+                state.semaphores[key] = asyncio.Semaphore(cls._pool_size)
+                state.checked_out[key] = set()
+                state.pools[key] = []
 
         # Acquire semaphore (blocks if all connections are checked out)
-        await cls._semaphores[key].acquire()
+        await state.semaphores[key].acquire()
 
         try:
-            async with cls._get_lock():
-                pool = cls._pools[key]
-                checked = cls._checked_out[key]
+            async with state.lock:
+                pool = state.pools[key]
+                checked = state.checked_out[key]
 
                 # Return an existing free connection if available
                 for conn in pool:
@@ -134,7 +135,7 @@ class AsyncSQLitePool:
                 )
         except Exception:
             # Release semaphore on error so other waiters can proceed
-            cls._semaphores[key].release()
+            state.semaphores[key].release()
             raise
 
     @classmethod
@@ -146,28 +147,58 @@ class AsyncSQLitePool:
             conn: The connection object that was checked out.
         """
         key = str(db_path)
-        async with cls._get_lock():
-            checked = cls._checked_out.get(key, set())
+        state = cls._state()
+        async with state.lock:
+            checked = state.checked_out.get(key, set())
             if id(conn) in checked:
                 checked.remove(id(conn))
             # Only release semaphore if we actually had it checked out
-            if key in cls._semaphores:
-                cls._semaphores[key].release()
+            if key in state.semaphores:
+                state.semaphores[key].release()
 
     @classmethod
     async def close_all(cls):
-        """Close all pooled connections."""
-        async with cls._get_lock():
-            for conn_list in cls._pools.values():
-                for conn in conn_list:
-                    try:
-                        await conn.close()
-                    except Exception:
-                        pass
-            cls._pools.clear()
-            cls._checked_out.clear()
-            cls._semaphores.clear()
-            cls._locks.clear()
+        """Close pools from every loop without sharing their asyncio locks."""
+        current_loop = asyncio.get_running_loop()
+        states = list(cls._states.values())
+        for state in states:
+            if state.loop is current_loop:
+                await cls._close_state(state, lock=True)
+            elif state.loop.is_running():
+                future = asyncio.run_coroutine_threadsafe(cls._close_state(state, lock=True), state.loop)
+                await asyncio.wrap_future(future)
+            else:
+                await cls._close_state(state, lock=False)
+            cls._states.pop(id(state.loop), None)
+
+    @classmethod
+    async def _close_state(cls, state: "_AsyncPoolState", lock: bool) -> None:
+        if lock:
+            async with state.lock:
+                await cls._close_state_connections(state)
+        else:
+            await cls._close_state_connections(state)
+
+    @staticmethod
+    async def _close_state_connections(state: "_AsyncPoolState") -> None:
+        for conn_list in state.pools.values():
+            for conn in conn_list:
+                try:
+                    await conn.close()
+                except Exception as exc:
+                    logger.warning("Could not close pooled SQLite connection: %s", exc)
+        state.pools.clear()
+        state.checked_out.clear()
+        state.semaphores.clear()
+
+
+class _AsyncPoolState:
+    def __init__(self, loop: asyncio.AbstractEventLoop):
+        self.loop = loop
+        self.lock = asyncio.Lock()
+        self.pools: dict[str, list[aiosqlite.Connection]] = {}
+        self.checked_out: dict[str, set[int]] = {}
+        self.semaphores: dict[str, asyncio.Semaphore] = {}
 
 
 # ── Sync SQLite Connection Pool (legacy, for backwards compatibility) ─────────

@@ -361,8 +361,8 @@ def test_agent_context_with_distill_on_order_and_budget(on, agent):
     assert '"mindy01 has 32 GB RAM"' in ctx[i_facts:i_note]     # quoted
     assert "(f" in ctx and "confidence" in ctx
     assert len(ctx) <= KB_CONTEXT_BUDGET + 200     # the best note may exceed by its header only
-    persona_block = ctx[i_persona:i_facts]
-    assert len(persona_block) <= on.CONTEXT_PERSONA_CHARS + 40
+    persona_line = ctx[i_persona:i_facts].splitlines()[0]
+    assert len(persona_line) <= on.CONTEXT_PERSONA_CHARS + 40
 
 
 def test_agent_context_distilled_only_and_persona_only_when_relevant(on, agent):
@@ -483,7 +483,7 @@ def test_set_options_and_config(home, monkeypatch):
     assert distill.enabled()
     _apply_knowledge_distill(AppConfig(knowledge={"enabled": False, "distill": True}))
     assert not distill.enabled()
-    assert AppConfig().knowledge.distill is False and AppConfig().knowledge.distill_every == 20
+    assert AppConfig().knowledge.distill is True and AppConfig().knowledge.distill_every == 20
 
 
 # ── tools ──────────────────────────────────────────────────────────────────
@@ -550,6 +550,8 @@ def test_api_routes(api, home):
     assert sc and sc[0]["facts"]
     p = api.get("/api/knowledge/persona").json()["persona"]
     assert p["version"] == 1
+    pages = api.get("/api/knowledge/pages?q=RAM").json()["pages"]
+    assert pages and all("sources" in page for page in pages)
     d = api.get(f"/api/knowledge/drill/fact/{facts[0]['id']}").json()
     assert "home-server" in d["notes"]
     assert api.get(f"/api/knowledge/drill/scenario/{sc[0]['id']}").status_code == 200
@@ -559,6 +561,37 @@ def test_api_routes(api, home):
     assert api.get("/api/knowledge/drill/nope/1").status_code == 400
     assert api.get("/api/knowledge/persona?version=7").status_code == 404
     assert api.get("/api/knowledge/facts?base=../x").status_code == 400
+
+
+def test_pages_api_returns_empty_for_an_uninitialized_index(api, home):
+    response = api.get("/api/knowledge/pages", headers={"X-ZenSynora-UI": "1"})
+
+    assert response.status_code == 200
+    assert response.json() == {"pages": [], "total": 0, "distilled": False}
+
+
+def test_pages_api_lists_derived_pages(api, home):
+    from myclaw.knowledge import distill
+
+    path = distill.db_path_for(create=True)
+    conn = distill._connect(path)
+    try:
+        distill.ensure_schema(conn)
+        conn.execute(
+            "INSERT INTO memory_pages "
+            "(page_key, title, content, source_permalinks, confidence, checksum, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            ("scenario:network", "Network", "The router uses WireGuard",
+             '["network"]', 0.9, "test-checksum", "2026-11-14T10:00:00"))
+        conn.commit()
+    finally:
+        conn.close()
+
+    response = api.get("/api/knowledge/pages", headers={"X-ZenSynora-UI": "1"})
+
+    assert response.status_code == 200
+    assert response.json()["pages"][0]["sources"] == ["network"]
+    assert response.json()["total"] == 1
 
 
 # ── old databases, rebuildable ─────────────────────────────────────────────
@@ -580,7 +613,8 @@ def test_old_database_opens_and_distils(home):
     assert distill.list_facts()["distilled"] is False
     assert distill.list_scenarios()["distilled"] is False
     assert distill.get_persona() is None
-    assert distill.context_items("default", "old style") == {"persona": None, "scenarios": [], "facts": []}
+    assert distill.context_items("default", "old style") == {
+        "persona": None, "scenarios": [], "facts": [], "pages": []}
     assert distill.status()["pending"] == 1
     r = distill.distill()
     assert r["ok"] and r["notes_read"] == 1
@@ -975,7 +1009,7 @@ def test_review_incremental_equals_full_with_renames_merges_deletes(home):
     delete_note("note-5")
     write_note("Renamed 7", content="I prefer option 2 for things.", observations=[O("spec", "0 GB RAM")])
     delete_note("note-7")
-    quality.merge_notes("default", "note-1", "note-2", dry_run=False)
+    quality.merge_notes("default", "note-1", "note-22", dry_run=False)
     distill.distill()
 
     def snap():

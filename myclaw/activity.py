@@ -120,6 +120,7 @@ def recorded(kind: str, name_of: Callable[..., str]) -> Callable:
                     raise
                 record(kind, _name(a, k), "ok", time.time() - t)
                 return out
+            awrapper.__signature__ = inspect.signature(fn, eval_str=True)
             return awrapper
 
         @functools.wraps(fn)
@@ -132,5 +133,6 @@ def recorded(kind: str, name_of: Callable[..., str]) -> Callable:
                 raise
             record(kind, _name(a, k), "ok", time.time() - t)
             return out
+        wrapper.__signature__ = inspect.signature(fn, eval_str=True)
         return wrapper
     return deco

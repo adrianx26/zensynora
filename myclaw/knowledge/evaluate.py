@@ -77,7 +77,9 @@ def set_options(idle: Optional[bool] = None, idle_minutes: Optional[float] = Non
 # ── storage ─────────────────────────────────────────────────────────────────
 
 def _db() -> sqlite3.Connection:
-    path = Path.home() / ".myclaw" / "knowledge-eval.db"
+    from .storage import default_base_dir
+
+    path = default_base_dir() / "knowledge-eval.db"
     path.parent.mkdir(parents=True, exist_ok=True)
     con = sqlite3.connect(path, timeout=10)
     con.row_factory = sqlite3.Row

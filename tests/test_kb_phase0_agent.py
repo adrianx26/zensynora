@@ -57,17 +57,23 @@ def test_context_contains_note_text_and_respects_the_budget(agent):
     assert first.count("- [fact]") <= 3
 
 
-def test_context_strategy_two_uses_boolean_or(agent):
+def test_context_uses_all_four_recall_strategies(agent, monkeypatch):
     calls = []
 
-    def fake_search(query, user_id, limit=10, boolean=False):
-        calls.append((query, boolean))
+    def fake_recall(query, user_id, limit=10, info=None, boolean=False):
+        calls.append((query, user_id, limit, boolean))
+        info.update(
+            strategies={name: "ok" for name in ("fts", "semantic", "graph", "temporal")},
+            strategy_details={}, partial=False, search_mode="parallel-hybrid",
+            strategies_by_note={}, result_counts={},
+        )
         return []
 
-    with patch("myclaw.agent.search_notes", side_effect=fake_search):
-        agent._search_knowledge_context_sync("quantum computing basics", "default")
-    assert calls[0][1] is False                    # strategy 1: free text
-    assert " OR " in calls[1][0] and calls[1][1] is True
+    monkeypatch.setattr("myclaw.knowledge.recall.parallel_recall", fake_recall)
+    agent._search_knowledge_context_sync("quantum computing basics", "default")
+    assert len(calls) == 1
+    assert calls[0][0:2] == ("quantum computing basics", "default")
+    assert calls[0][2] >= 4 and calls[0][3] is False
 
 
 def test_short_messages_are_no_knowledge_gap(agent):
@@ -79,6 +85,15 @@ def test_short_messages_are_no_knowledge_gap(agent):
 def test_gap_hint_uses_newest_gap_and_writes_gap_file(agent, home, monkeypatch):
     import myclaw.agent as agent_mod
 
+    def empty_recall(query, user_id, limit=10, info=None, boolean=False):
+        info.update(
+            strategies={name: "ok" for name in ("fts", "semantic", "graph", "temporal")},
+            strategy_details={}, partial=False, search_mode="parallel-hybrid",
+            strategies_by_note={}, result_counts={},
+        )
+        return []
+
+    monkeypatch.setattr("myclaw.knowledge.recall.parallel_recall", empty_recall)
     gap_file = home / "gaps.jsonl"
     monkeypatch.setattr(agent_mod, "GAP_FILE", gap_file)
     agent._kb_gaps.pop("default", None)

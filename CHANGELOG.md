@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-11-14
+
+### Changed
+
+- Knowledge retrieval now uses four-way recall for note-link suggestions, with
+  partial results reported instead of silently treated as complete.
+- Duplicate scans exclude trashed and other hidden notes; merge proposals remain
+  reviewable and recoverable through the merge journal.
+- Added the bounded local decision-model fallback and readiness controls for
+  knowledge recall and evidence-ranked distillation proposals.
+
 ## [0.8.2] - 2026-11-12
 
 ### Added

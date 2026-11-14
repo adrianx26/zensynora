@@ -113,7 +113,7 @@ def test_curate_duplicates_dismiss_and_merge_identical(client):
     assert client.post("/api/knowledge/duplicates/dismiss", json={"a": c, "b": d}).json() == {"ok": True}
     assert client.post("/api/knowledge/duplicates/dismiss", json={"a": c, "b": c}).status_code == 400
     done = client.post("/api/knowledge/duplicates/merge-identical", json={"dry_run": False}).json()
-    assert done["merged"] == 1 and not done["errors"]
+    assert done["merged"] == 1 and not done["errors"], done
     left = {n.permalink for n in list_notes("default")}
     assert len(left) == 3 and len({a, b} & left) == 1
     assert len(list((get_knowledge_dir("default") / ".trash").iterdir())) == 1     # kept, not deleted

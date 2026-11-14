@@ -71,12 +71,15 @@ def test_duplicate_merge_and_keep_both(home, monkeypatch):  # noqa: F811
     write_note("Router", content="Router config A: port 80 open, port 22 closed.")
     write_note("Office router", content="Router config A: port 80 open, port 22 closed.")
     assert len(find_duplicates("default")) == 2
+    seen = []
     _fake(monkeypatch, [
         {"action": "merge", "reason": "Same note twice.", "confidence": 0.95},
         {"action": "keep_both", "reason": "Different devices.", "confidence": 0.7},
-    ])
+    ], seen)
     r = _propose(limit=5)
     assert [p["kind"] for p in r["proposals"]] == ["duplicate", "duplicate"]
+    assert all(p["evidence"]["sources"] for p in r["proposals"])
+    assert "Read-only evidence" in seen[0][1]["content"]
     out = apply("default", r["proposals"])
     assert len(out["applied"]) == 2 and not out["failed"]
     assert find_duplicates("default") == []                 # merged + dismissed
@@ -96,6 +99,46 @@ def test_swap_keeps_the_other_note(home, monkeypatch):  # noqa: F811
     keep, drop = p["drop"]["permalink"], p["keep"]["permalink"]   # swapped
     assert apply("default", [p])["applied"]
     assert read_note(keep) is not None and read_note(drop) is None
+
+
+def test_independent_review_holds_conflicts_and_blocks_ai_merge(home, monkeypatch):
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.parser import Observation
+    from myclaw.knowledge.ai_resolve import apply
+
+    write_note("Server A", title="Home server", content="Office server.",
+               observations=[Observation("spec", "Server has 32 GB RAM")])
+    write_note("Server B", title="Home server", content="Home server.",
+               observations=[Observation("spec", "Server has 64 GB RAM")])
+    before = {path.name: path.read_bytes() for path in _kdir(home).glob("*.md")}
+    _fake(monkeypatch, [{"action": "merge", "reason": "Same title.", "confidence": 0.99}])
+
+    proposal = _propose(limit=1)["proposals"][0]
+
+    assert proposal["review"]["status"] == "hold"
+    assert proposal["review"]["conflicts"][0]["kind"] == "number"
+    out = apply("default", [proposal])
+    assert not out["applied"] and "contradictory facts" in out["failed"][0]["message"]
+    assert {path.name: path.read_bytes() for path in _kdir(home).glob("*.md")} == before
+    assert _trash(home) == []
+
+
+def test_independent_review_rejects_stale_ai_merge_proposal(home, monkeypatch):
+    from myclaw.knowledge import read_note, update_note, write_note
+    from myclaw.knowledge.ai_resolve import apply
+
+    text = "The home server runs nightly backups to the NAS."
+    write_note("Server A", content=text)
+    write_note("Server B", content=text)
+    _fake(monkeypatch, [{"action": "merge", "reason": "Same note.", "confidence": 0.99}])
+    proposal = _propose(limit=1)["proposals"][0]
+    update_note("server-b", content="The home server now runs weekly backups.")
+
+    out = apply("default", [proposal])
+
+    assert not out["applied"]
+    assert "source changed after candidate generation" in out["failed"][0]["message"]
+    assert read_note("server-a") is not None and read_note("server-b") is not None
 
 
 def test_bad_answers_are_not_applied_and_errors_stop(home, monkeypatch):  # noqa: F811

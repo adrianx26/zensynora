@@ -22,10 +22,7 @@ def memory(tmp_path):
 async def reset_pool():
     """Reset the pool singleton state before each test."""
     await AsyncSQLitePool.close_all()
-    AsyncSQLitePool._pools.clear()
-    AsyncSQLitePool._checked_out.clear()
-    AsyncSQLitePool._semaphores.clear()
-    AsyncSQLitePool._locks.clear()
+    AsyncSQLitePool._states.clear()
 
 
 @pytest.mark.asyncio
@@ -78,6 +75,27 @@ async def test_pool_exhaustion_and_reuse(tmp_path):
     await AsyncSQLitePool.release_connection(db_path, c2)
     await AsyncSQLitePool.release_connection(db_path, c3)
     await AsyncSQLitePool.close_all()
+
+
+@pytest.mark.asyncio
+async def test_pool_state_is_isolated_by_event_loop(tmp_path):
+    db_path = tmp_path / "pool_loop.db"
+    first = await AsyncSQLitePool.get_connection(db_path)
+
+    def use_another_loop():
+        async def open_and_release():
+            conn = await AsyncSQLitePool.get_connection(db_path)
+            await AsyncSQLitePool.release_connection(db_path, conn)
+            return conn
+        return asyncio.run(open_and_release())
+
+    second = await asyncio.to_thread(use_another_loop)
+
+    assert second is not first
+    assert len(AsyncSQLitePool._states) == 2
+    await AsyncSQLitePool.release_connection(db_path, first)
+    await AsyncSQLitePool.close_all()
+    assert not AsyncSQLitePool._states
 
 
 @pytest.mark.asyncio

@@ -50,17 +50,38 @@ def get_file_metadata(file_path: Path) -> Dict[str, Any]:
 # honoured. None = the default ``~/.myclaw/knowledge`` (computed on every call,
 # so tests that change HOME keep working).
 _KNOWLEDGE_ROOT: Optional[Path] = None
+_KNOWLEDGE_ROOT_ENV: Optional[str] = None
+
+
+def _root_env_key() -> str:
+    return os.environ.get("MYCLAW_HOME") or os.environ.get("HOME") or os.environ.get("USERPROFILE") or str(Path.home())
 
 
 def set_knowledge_root(path: Optional[Any]) -> None:
     """Use another folder for the knowledge bases (None = ~/.myclaw/knowledge)."""
-    global _KNOWLEDGE_ROOT
+    global _KNOWLEDGE_ROOT, _KNOWLEDGE_ROOT_ENV
     _KNOWLEDGE_ROOT = Path(str(path)).expanduser() if path else None
+    _KNOWLEDGE_ROOT_ENV = _root_env_key()
+
+
+def default_base_dir() -> Path:
+    """The user's MyClaw base directory, honoring MYCLAW_HOME / HOME / USERPROFILE."""
+    override = os.environ.get("MYCLAW_HOME")
+    if override and override.strip():
+        return Path(override).expanduser()
+    for key in ("HOME", "USERPROFILE"):
+        value = os.environ.get(key)
+        if value and value.strip():
+            return Path(value).expanduser() / ".myclaw"
+    return Path.home() / ".myclaw"
 
 
 def knowledge_root() -> Path:
     """The folder that holds one sub-folder per knowledge base."""
-    return _KNOWLEDGE_ROOT or (Path.home() / ".myclaw" / "knowledge")
+    global _KNOWLEDGE_ROOT
+    if _KNOWLEDGE_ROOT is not None and _KNOWLEDGE_ROOT_ENV is not None and _root_env_key() != _KNOWLEDGE_ROOT_ENV:
+        _KNOWLEDGE_ROOT = None
+    return _KNOWLEDGE_ROOT or (default_base_dir() / "knowledge")
 
 
 def get_knowledge_dir(user_id: str = "default") -> Path:

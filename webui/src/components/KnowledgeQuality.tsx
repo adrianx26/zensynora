@@ -174,11 +174,31 @@ export const CategoryMergePanel: React.FC<{
 // ── Duplicate notes ──────────────────────────────────────────────────────────
 
 interface NoteRef { permalink: string; title: string; facts: number; links: number; created: string | null }
-interface Pair { keep: NoteRef; drop: NoteRef; reasons: string[] }
+interface MergeEvidence {
+  candidate_score: number;
+  sources: { permalink: string; title: string; sha256: string; updated_at: string | null; status: string | null }[];
+  facts: { shared: { category: string; content: string; captured_at: string | null; confidence: number | null; verification_status: string; status: string }[];
+    keep_only: { category: string; content: string }[]; drop_only: { category: string; content: string }[] };
+  conflicts: { category: string; kind: string; keep: { content: string }; drop: { content: string } }[];
+  body: { keep_characters: number; drop_characters: number; drop_text_appended: boolean };
+  tags: { shared: string[]; keep_only: string[]; drop_only: string[] };
+  aliases: { shared: string[]; keep_only: string[]; drop_only: string[] };
+  relations: { keep_only: { type: string; target: string }[]; drop_only: { type: string; target: string }[];
+    removed_self_links: { source: string; type: string; target: string }[] };
+  conflict_free: boolean; unresolved: string[];
+}
+interface Pair { keep: NoteRef; drop: NoteRef; reasons: string[]; evidence?: MergeEvidence }
 interface MergePreview {
-  keep: string; drop: string; title: string; dry_run: boolean; tags: string[]; aliases: string[];
+  keep: string; drop: string; title: string; dry_run: boolean; operation_id?: string;
+  source_checksums: Record<string, string>; tags: string[]; aliases: string[];
   facts: string[]; links: string[]; body: string;
+  conflicts: { category: string; kind: string; keep: string; drop: string }[];
   added: { tags: string[]; aliases: string[]; facts: number; links: number; text: boolean };
+}
+interface MergeOperation {
+  operation_id: string; status: string; created_at?: string; applied_at?: string;
+  rolled_back_at?: string; recovered_at?: string; keep?: string; drop?: string;
+  rationale?: string; error?: string;
 }
 
 export const DuplicatesPanel: React.FC<{
@@ -193,11 +213,17 @@ export const DuplicatesPanel: React.FC<{
   const [active, setActive] = useState<{ keep: string; drop: string } | null>(null);
   const [preview, setPreview] = useState<MergePreview | null>(null);
   const [busy, setBusy] = useState(false);
+  const [operations, setOperations] = useState<MergeOperation[]>([]);
 
   const load = useCallback(async () => {
     setErr(null);
     try {
-      setPairs((await api<{ pairs: Pair[] }>(`/api/knowledge/duplicates?${q(base)}`)).pairs);
+      const [duplicates, journal] = await Promise.all([
+        api<{ pairs: Pair[] }>(`/api/knowledge/duplicates?${q(base)}`),
+        api<{ operations: MergeOperation[] }>(`/api/knowledge/merge-operations?${q(base)}`),
+      ]);
+      setPairs(duplicates.pairs);
+      setOperations(journal.operations);
     } catch (e) {
       setErr((e as Error).message);
     }
@@ -219,8 +245,12 @@ export const DuplicatesPanel: React.FC<{
     if (!active) return;
     setBusy(true);
     try {
-      await api<MergePreview>(`/api/knowledge/merge?${q(base)}`, { method: 'POST', body: JSON.stringify({ ...active, dry_run: false }) });
-      onDone(`Merged “${active.drop}” into “${active.keep}”. The merged file is in the trash folder; links to it now open “${active.keep}”.`, true);
+      if (!preview) throw new Error('Review the merge preview before applying.');
+      const result = await api<MergePreview>(`/api/knowledge/merge?${q(base)}`, {
+        method: 'POST',
+        body: JSON.stringify({ ...active, dry_run: false, source_checksums: preview.source_checksums }),
+      });
+      onDone(`Merged “${active.drop}” into “${active.keep}”. Rollback id: ${result.operation_id}.`, true);
       setActive(null);
       setPreview(null);
       load();
@@ -244,10 +274,6 @@ export const DuplicatesPanel: React.FC<{
       setBusy(false);
     }
   };
-  const mergeNow = (keep: Pair['keep'], drop: Pair['drop']) => act(async () => {
-    await api(`/api/knowledge/merge?${q(base)}`, { method: 'POST', body: JSON.stringify({ keep: keep.permalink, drop: drop.permalink, dry_run: false }) });
-    return `Merged “${drop.title}” into “${keep.title}”. The merged file is in the trash folder.`;
-  });
   const different = (p: Pair) => act(async () => {
     await api(`/api/knowledge/duplicates/dismiss?${q(base)}`, { method: 'POST', body: JSON.stringify({ a: p.keep.permalink, b: p.drop.permalink }) });
     return `“${p.keep.title}” and “${p.drop.title}” are kept as different notes.`;
@@ -264,6 +290,24 @@ export const DuplicatesPanel: React.FC<{
       const r = await api<{ merged: number; errors: string[] }>(`/api/knowledge/duplicates/merge-identical?${q(base)}`, { method: 'POST', body: JSON.stringify({ dry_run: false }) });
       if (r.errors.length) throw new Error(`Merged ${r.merged}; not merged: ${r.errors.join(' · ')}`);
       return `Merged ${r.merged} pair(s) of identical notes.`;
+    });
+  };
+  const rollback = (operation: MergeOperation) => {
+    if (!window.confirm(`Restore both original notes from merge ${operation.operation_id}?`)) return;
+    void act(async () => {
+      await api(`/api/knowledge/merge-operations/${encodeURIComponent(operation.operation_id)}/rollback?${q(base)}`, {
+        method: 'POST', body: JSON.stringify({}),
+      });
+      return `Merge ${operation.operation_id} rolled back; original notes were restored and re-indexed.`;
+    });
+  };
+  const recover = (operation: MergeOperation) => {
+    if (!window.confirm(`Restore the original notes for interrupted merge ${operation.operation_id}? Any current partial files will first be preserved in the merge journal.`)) return;
+    void act(async () => {
+      await api(`/api/knowledge/merge-operations/${encodeURIComponent(operation.operation_id)}/recover?${q(base)}`, {
+        method: 'POST', body: JSON.stringify({}),
+      });
+      return `Merge ${operation.operation_id} recovered; partial files were preserved and original notes re-indexed.`;
     });
   };
 
@@ -285,13 +329,20 @@ export const DuplicatesPanel: React.FC<{
                 Adds {preview.added.facts} fact(s), {preview.added.links} link(s){preview.added.tags.length ? `, tags ${preview.added.tags.map(t => '#' + t).join(' ')}` : ''}{preview.added.text ? ', and the other note’s text' : ''}.
               </div>
             </section>
+            {preview.conflicts.length > 0 && (
+              <div className="notice error">Resolve these contradictory facts before merging:
+                {preview.conflicts.map((conflict, i) => <div key={i}>
+                  [{conflict.category}/{conflict.kind}] {conflict.keep} ↔ {conflict.drop}
+                </div>)}
+              </div>
+            )}
             {preview.body && <div className="kb-body" style={{ maxHeight: 220, overflow: 'auto' }}>{preview.body}</div>}
             {preview.facts.length > 0 && <section><h4>Facts <span className="muted">{preview.facts.length}</span></h4><div className="kb-obs-group"><ul>{preview.facts.map((f, i) => <li key={i}>{f}</li>)}</ul></div></section>}
             {preview.links.length > 0 && <section><h4>Links <span className="muted">{preview.links.length}</span></h4><div className="kb-obs-group"><ul>{preview.links.map((l, i) => <li key={i}>{l}</li>)}</ul></div></section>}
           </>
         )}
         <div className="kb-buttons">
-          <button type="button" className="primary-btn" disabled={busy || !preview} onClick={merge}>{busy ? 'Merging…' : 'Merge'}</button>
+          <button type="button" className="primary-btn" disabled={busy || !preview || preview.conflicts.length > 0} onClick={merge}>{busy ? 'Merging…' : 'Merge'}</button>
           <button type="button" className="ghost-btn" onClick={() => { setActive(null); setPreview(null); setErr(null); }}>Back</button>
         </div>
       </div>
@@ -324,10 +375,34 @@ export const DuplicatesPanel: React.FC<{
             <span className="muted small"> ({p.drop.links} links, {p.drop.facts} facts)</span>
           </div>
           <div className="muted small">{p.reasons.join(' · ')}</div>
+          {p.evidence && (
+            <details className="small">
+              <summary>Evidence (heuristic score {Math.round(p.evidence.candidate_score * 100)}%, not confidence)</summary>
+              <ul className="plain-list">
+                {p.evidence.sources.map(source => (
+                  <li key={source.permalink}><code>{source.permalink}</code> · SHA-256 <code>{source.sha256}</code>
+                    {source.updated_at ? ` · updated ${source.updated_at}` : ''}</li>
+                ))}
+              </ul>
+              {!p.evidence.conflict_free && <div className="notice error">Conflicting facts need resolution:
+                {p.evidence.conflicts.map((conflict, i) => <div key={i}>
+                  [{conflict.category}/{conflict.kind}] {conflict.keep.content} ↔ {conflict.drop.content}
+                </div>)}
+              </div>}
+              <div className="muted small">
+                Facts: {p.evidence.facts.keep_only.length} keep-only, {p.evidence.facts.drop_only.length} drop-only, {p.evidence.facts.shared.length} shared.
+                Text: {p.evidence.body.keep_characters} + {p.evidence.body.drop_characters} characters
+                {p.evidence.body.drop_text_appended ? '; dropped text is appended' : '; dropped text is already represented'}.
+              </div>
+              {p.evidence.relations.removed_self_links.length > 0 && (
+                <div className="muted small">Merge preview omits {p.evidence.relations.removed_self_links.length} self-link(s).</div>
+              )}
+            </details>
+          )}
           <div className="kb-buttons" style={{ marginTop: 4 }}>
-            <button type="button" className="primary-btn" disabled={busy} onClick={() => mergeNow(p.keep, p.drop)}
+            <button type="button" className="primary-btn" disabled={busy || p.evidence?.conflict_free === false} onClick={() => showPreview(p.keep.permalink, p.drop.permalink)}
               title={`Keep “${p.keep.title}”, add everything from “${p.drop.title}”`}>Merge</button>
-            <button type="button" className="ghost-btn" disabled={busy} onClick={() => mergeNow(p.drop, p.keep)}
+            <button type="button" className="ghost-btn" disabled={busy || p.evidence?.conflict_free === false} onClick={() => showPreview(p.drop.permalink, p.keep.permalink)}
               title={`Keep “${p.drop.title}” instead`}>⇄ Keep the other</button>
             <button type="button" className="ghost-btn" disabled={busy} onClick={() => showPreview(p.keep.permalink, p.drop.permalink)}>Preview…</button>
             <button type="button" className="ghost-btn" disabled={busy} onClick={() => different(p)}
@@ -335,6 +410,25 @@ export const DuplicatesPanel: React.FC<{
           </div>
         </div>
       ))}
+      {operations.length > 0 && (
+        <section>
+          <h4>Merge history</h4>
+          {operations.map(operation => (
+            <div className="kb-link" key={operation.operation_id}>
+              <span><code>{operation.operation_id}</code> · {operation.keep} ← {operation.drop} · {operation.status}
+                {operation.rationale ? ` · ${operation.rationale}` : ''}</span>
+              {operation.status === 'applied' && (
+                <button type="button" className="ghost-btn" disabled={busy} onClick={() => rollback(operation)}>Rollback</button>
+              )}
+              {['preparing', 'prepared', 'applying', 'recovery_required', 'recovering',
+                'rolling_back', 'rollback_verification_failed', 'preparation_failed'].includes(operation.status) && (
+                <button type="button" className="ghost-btn" disabled={busy} onClick={() => recover(operation)}>Recover</button>
+              )}
+              {operation.error && <div className="notice error">{operation.error}</div>}
+            </div>
+          ))}
+        </section>
+      )}
       <div className="kb-buttons"><button type="button" className="ghost-btn" onClick={onCancel}>Close</button></div>
     </div>
   );

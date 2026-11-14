@@ -164,7 +164,9 @@ def allowed_roots() -> List[Path]:
     """Where agents may read local files from: the workspace and the home folder."""
     from myclaw.tools import core as _core  # read at call time (tests change it)
 
-    roots = [Path(_core.WORKSPACE).expanduser(), Path.home()]
+    from ..storage import default_base_dir
+
+    roots = [Path(_core.WORKSPACE).expanduser(), default_base_dir().parent]
     out: List[Path] = []
     for r in roots:
         try:

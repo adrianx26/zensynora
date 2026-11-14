@@ -12,8 +12,10 @@ Provides search capabilities beyond plain FTS5:
 RRF only re-sorted the FTS result) and every candidate was embedded again
 with sentence-transformers on every search. Now the semantic list is a real
 ranking from the stored vectors, notes found only by meaning are included
-(after the same filters), and nothing is embedded per candidate. When
-semantic search is off or not ready the result is the FTS one.
+(after the same filters), and nothing is embedded per candidate. If the
+semantic stream is unavailable, this low-level helper returns its lexical
+fallback; user-facing natural-language recall uses all four strategies and
+reports partial retrieval explicitly.
 """
 from __future__ import annotations
 

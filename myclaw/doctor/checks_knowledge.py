@@ -40,7 +40,8 @@ def _per_base(ctx, part: str) -> Dict[str, Dict[str, Any]]:
     from ..knowledge import health
 
     fns = {"index": health.index_drift, "links": health.links, "conflicts": health.conflicts,
-           "embeddings": health.embeddings, "distill": health.distillation, "trash": health.trash}
+           "embeddings": health.embeddings, "distill": health.distillation, "trash": health.trash,
+           "merges": health.merge_operations}
     def safe(base: str) -> Dict[str, Any]:
         try:
             return fns[part](base)
@@ -156,14 +157,14 @@ def _kb_conflicts(ctx):
     return _result(_warnings(ctx, "conflicts"), "no open conflicts")
 
 
-@check("kb_embeddings", "Knowledge: semantic search", CAT)
+@check("kb_embeddings", "Knowledge: semantic retrieval", CAT)
 def _kb_embeddings(ctx):
     from ..knowledge import semantic
 
     if not _kb_on(ctx):
         return OK, "knowledge base turned off"
     if not semantic.enabled():
-        return OK, "semantic search is off (knowledge.semantic_search)"
+        return WARN, "required semantic retrieval is disabled; check the loaded knowledge settings"
     per = _per_base(ctx, "embeddings")
     notes = sum(d.get("notes", 0) for d in per.values())
     done = sum(d.get("embedded", 0) for d in per.values())
@@ -232,3 +233,13 @@ def _kb_trash(ctx):
     size = sum(d.get("bytes", 0) for d in per.values())
     return _result(_warnings(ctx, "trash"),
                    f"{files} earlier version(s) / deleted note(s), {health.human_bytes(size)}")
+
+
+@check("kb_merges", "Knowledge: merge journals", CAT)
+def _kb_merges(ctx):
+    if not _kb_on(ctx):
+        return OK, "knowledge base turned off"
+    per = _per_base(ctx, "merges")
+    operations = sum(d.get("operations", 0) for d in per.values())
+    return _result(_warnings(ctx, "merges"),
+                   f"{operations} journaled source-note merge(s), no integrity issues")

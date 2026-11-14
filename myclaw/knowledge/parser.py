@@ -29,6 +29,11 @@ class Observation:
     tags: List[str] = field(default_factory=list)
     context: Optional[str] = None  # Phase 2 (MemoPad import): provenance note
     provenance_path: Optional[str] = None  # Phase 2 (MemoPad import): source file path
+    captured_at: Optional[str] = None
+    confidence: Optional[float] = None
+    verification_status: str = "unknown"
+    status: str = "active"
+    superseded_by: Optional[str] = None
 
 
 @dataclass
@@ -557,6 +562,26 @@ def parse_note_text(content: str, file_path: Path) -> Note:
             return value.strip()
         return default
 
+    metadata = {k: v for k, v in frontmatter.items() if k not in RESERVED_KEYS}
+    observations = parse_observations(content)
+    evidence_metadata = metadata.get("observation_metadata")
+    for observation in observations:
+        values = evidence_metadata.get(observation_key(observation)) if isinstance(
+            evidence_metadata, dict) else None
+        values = values if isinstance(values, dict) else {}
+        observation.captured_at = _optional_text(
+            values.get("captured_at", metadata.get("captured_at")))
+        observation.confidence = _optional_confidence(
+            values.get("confidence", metadata.get("confidence")))
+        observation.verification_status = _evidence_choice(
+            values.get("verification_status", metadata.get("verification_status")),
+            {"verified", "inferred", "unverified"})
+        observation.status = _evidence_choice(
+            values.get("status", metadata.get("status")),
+            {"active", "archived", "superseded"}, default="active")
+        observation.superseded_by = _optional_text(
+            values.get("superseded_by", metadata.get("superseded_by")))
+
     return Note(
         name=_text('name', base_name),
         permalink=_text('permalink', base_name.lower().replace(' ', '-')),
@@ -565,14 +590,40 @@ def parse_note_text(content: str, file_path: Path) -> Note:
         tags=_clean_list(frontmatter.get('tags'), 'tags'),
         created_at=parse_datetime(_text('created', '')),
         updated_at=parse_datetime(_text('updated', '')),
-        observations=parse_observations(content),
+        observations=observations,
         relations=parse_relations(content),
         file_path=file_path,
         # 2026-10-23 (KB phase 0): aliases + every other frontmatter key
         aliases=_clean_list(frontmatter.get('aliases'), 'aliases'),
-        metadata={k: v for k, v in frontmatter.items() if k not in RESERVED_KEYS},
+        metadata=metadata,
         raw_frontmatter=raws,
     )
+
+
+def observation_key(observation: Observation) -> str:
+    """Stable key for per-observation evidence metadata in note frontmatter."""
+    import hashlib
+
+    value = f"{observation.category.strip().casefold()}\0{' '.join(observation.content.split())}"
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
+
+
+def _optional_text(value: Any) -> Optional[str]:
+    text = str(value).strip() if value is not None else ""
+    return text or None
+
+
+def _optional_confidence(value: Any) -> Optional[float]:
+    try:
+        confidence = float(value)
+    except (TypeError, ValueError):
+        return None
+    return confidence if 0.0 <= confidence <= 1.0 else None
+
+
+def _evidence_choice(value: Any, allowed: set, default: str = "unknown") -> str:
+    choice = str(value or default).strip().casefold()
+    return choice if choice in allowed else default
 
 
 def parse_note(file_path: Path) -> Note:
@@ -736,7 +787,31 @@ def generate_markdown(note: Note) -> str:
     aliases = _clean_list(note.aliases, 'aliases')
     if aliases:
         put('aliases', aliases, f'aliases: [{", ".join(_yaml_item(a) for a in aliases)}]')
-    for key, value in (note.metadata or {}).items():
+    metadata = dict(note.metadata or {})
+    old_evidence = metadata.get("observation_metadata")
+    evidence = dict(old_evidence) if isinstance(old_evidence, dict) else {}
+    for observation in note.observations:
+        values = {
+            "captured_at": observation.captured_at,
+            "confidence": observation.confidence,
+            "verification_status": observation.verification_status,
+            "status": observation.status,
+            "superseded_by": observation.superseded_by,
+        }
+        if any(value is not None for value in values.values()) and (
+                values["captured_at"] is not None
+                or values["verification_status"] != "unknown"
+                or values["status"] != "active"):
+            evidence[observation_key(observation)] = {
+                key: value for key, value in values.items() if value is not None
+            }
+    if evidence:
+        try:
+            evidence["version"] = max(1, int(evidence.get("version", 1)))
+        except (TypeError, ValueError):
+            evidence["version"] = 1
+        metadata["observation_metadata"] = evidence
+    for key, value in metadata.items():
         line = _metadata_line(key, value)
         if line:
             put(str(key).strip(), value, line)

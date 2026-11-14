@@ -1,8 +1,6 @@
-// Semantic search status for the Knowledge page (KB phase 3, 2026-10-24).
+// Local semantic-stream status for the Knowledge page.
 import { useCallback, useEffect, useState } from 'react';
 import { api } from './api';
-
-export type SearchMode = 'auto' | 'fts' | 'semantic' | 'hybrid';
 
 interface ModelInfo { dim: number; size_mb: number; licence: string; languages: string; known?: boolean }
 interface Job { status: 'running' | 'done' | 'error' | 'stopped'; phase: string; done: number; total: number; error: string | null; result: { message?: string } | null }

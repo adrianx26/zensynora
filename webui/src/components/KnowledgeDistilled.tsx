@@ -1,8 +1,5 @@
-// Distilled knowledge (KB phase 4, 2026-10-24): the persona (L3), scenarios (L2)
-// and facts (L1) worked out from the notes, each with its confidence and a
-// drill-down to the notes and lines it comes from. Data: /api/knowledge/facts,
-// /scenarios, /persona, /drill/{kind}/{id}, /distill(/status). Derived data:
-// nothing here changes a note.
+// Distilled knowledge: profile, evidence-linked pages, scenarios, and facts
+// derived from notes. Nothing here changes a note.
 import React, { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 
@@ -12,15 +9,31 @@ interface Fact {
   display?: string; instruction?: boolean;
 }
 interface Scenario { id: number; title: string; summary: string; confidence: number; size: number; notes: number; grouped_by: string; facts: Fact[] }
+interface Page { key: string; title: string; content: string; sources: string[]; confidence: number }
 interface PersonaItem { id: number; text: string; confidence: number; support: number }
 interface Persona { version: number; created_at: string; summary: string; sections: Record<string, PersonaItem[]>; titles: Record<string, string>; confidence: number; versions: number[] }
 interface Evidence { permalink: string; title: string; line: string; source?: string | null; exists: boolean; merged: boolean }
 interface Drill { kind: string; facts: (Fact & { evidence: Evidence[] })[]; notes: string[] }
 interface Status {
-  enabled: boolean; facts: number; scenarios: number; persona_version: number; notes: number; pending: number;
+  enabled: boolean; facts: number; scenarios: number; pages: number; persona_version: number; notes: number; pending: number;
   last_run: string | null; running: boolean; last_error?: string | null;
   options: { distill_every: number; idle_minutes: number };
   job?: { status: string; phase: string; done: number; total: number; error?: string | null; result?: { message?: string } | null } | null;
+}
+interface DecisionStatus {
+  mode: string; provider: string; model: string; state: string; latency_ms?: number | null;
+  timeout_ms: number; error?: string | null;
+}
+interface ConsolidationProposals {
+  merge_proposals: {
+    keep: { permalink: string; title: string }; drop: { permalink: string; title: string };
+    reasons: string[]; priority_score: number; priority_is_confidence: false;
+    review_status: string; conflict_count: number; shared_facts: number;
+    verified_shared_facts: number; mean_shared_confidence: number; source_freshness: number;
+    derived_page_references: number; retrieval_count: number;
+  }[];
+  redundant_work: { kind: string; count: number; safe_to_skip: boolean; scope: string; reason: string }[];
+  partial: boolean; message?: string | null;
 }
 
 const q = (base: string) => `base=${encodeURIComponent(base)}`;
@@ -79,8 +92,11 @@ const DrillView: React.FC<{ base: string; kind: string; id: number | 'latest'; o
 
 const KnowledgeDistilled: React.FC<{ base: string; onOpenNote: (permalink: string) => void }> = ({ base, onOpenNote }) => {
   const [st, setSt] = useState<Status | null>(null);
+  const [decisionStatus, setDecisionStatus] = useState<DecisionStatus | null>(null);
+  const [proposals, setProposals] = useState<ConsolidationProposals | null>(null);
   const [persona, setPersona] = useState<Persona | null>(null);
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [pages, setPages] = useState<Page[]>([]);
   const [facts, setFacts] = useState<Fact[]>([]);
   const [factTotal, setFactTotal] = useState(0);
   const [query, setQuery] = useState('');
@@ -89,9 +105,11 @@ const KnowledgeDistilled: React.FC<{ base: string; onOpenNote: (permalink: strin
   const [open, setOpen] = useState<string | null>(null); // "f12" | "s3" | "p"
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const timer = useRef<number | null>(null);
+  const decisionTimer = useRef<number | null>(null);
 
   const [reload, setReload] = useState(0);       // bump → persona, scenarios, facts again
   const [poll, setPoll] = useState(0);           // bump → status again
+  const [decisionPoll, setDecisionPoll] = useState(0);
   const wasRunning = useRef(false);
 
   // status (polled while a run is going; when it ends, the lists are reloaded)
@@ -113,13 +131,35 @@ const KnowledgeDistilled: React.FC<{ base: string; onOpenNote: (permalink: strin
 
   useEffect(() => {
     let live = true;
+    api<DecisionStatus>('/api/knowledge/decision/status')
+      .then(d => {
+        if (!live) return;
+        setDecisionStatus(d);
+        if (d.state === 'warming') decisionTimer.current = window.setTimeout(() => setDecisionPoll(n => n + 1), 500);
+      })
+      .catch(e => { if (live) setErr((e as Error).message); });
+    return () => { live = false; if (decisionTimer.current) window.clearTimeout(decisionTimer.current); };
+  }, [base, decisionPoll]);
+
+  useEffect(() => {
+    let live = true;
+    api<ConsolidationProposals>(`/api/knowledge/distill/proposals?${q(base)}&limit=100`)
+      .then(d => { if (live) setProposals(d); })
+      .catch(e => { if (live) setErr((e as Error).message); });
+    return () => { live = false; };
+  }, [base, reload]);
+
+  useEffect(() => {
+    let live = true;
     Promise.all([
       api<{ persona: Persona | null }>(`/api/knowledge/persona?${q(base)}`),
       api<{ scenarios: Scenario[] }>(`/api/knowledge/scenarios?${q(base)}&limit=100`),
-    ]).then(([p, s]) => {
+      api<{ pages: Page[] }>(`/api/knowledge/pages?${q(base)}&limit=100`),
+    ]).then(([p, s, m]) => {
       if (!live) return;
       setPersona(p.persona);
       setScenarios(s.scenarios || []);
+      setPages(m.pages || []);
       setErr(null);
     }).catch(e => { if (live) setErr((e as Error).message); });
     return () => { live = false; };
@@ -151,6 +191,17 @@ const KnowledgeDistilled: React.FC<{ base: string; onOpenNote: (permalink: strin
     setPoll(n => n + 1);
   };
 
+  const warmDecision = async () => {
+    try {
+      const status = await api<DecisionStatus>('/api/knowledge/decision/warm', { method: 'POST' });
+      setDecisionStatus(status);
+      setErr(null);
+      if (status.state === 'warming') setDecisionPoll(n => n + 1);
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    }
+  };
+
   const toggle = (key: string) => setOpen(o => (o === key ? null : key));
   const shown = facts;
   const job = st?.job;
@@ -170,9 +221,27 @@ const KnowledgeDistilled: React.FC<{ base: string; onOpenNote: (permalink: strin
                 ? ` — after ${st.options.distill_every} changed notes or ${st.options.idle_minutes} min without changes; the agent sees the persona and matching facts first.`
                 : ' — turn on in Settings → Features (“Distil facts, scenarios and a persona”) for background runs and the distilled agent context.'}</span>
             </div>
+            {decisionStatus && (decisionStatus.mode !== 'rules' || decisionStatus.model) && (
+              <>
+                <div className="small muted" style={{ marginBottom: 6 }}>
+                  Decision model: {decisionStatus.mode === 'rules' ? 'rules (local fallback)' : decisionStatus.mode} · {decisionStatus.state}
+                  {decisionStatus.model ? ` · ${decisionStatus.provider}/${decisionStatus.model}` : ''}
+                  {decisionStatus.latency_ms != null ? ` · ${decisionStatus.latency_ms} ms` : ''}
+                  {decisionStatus.error ? ` · ${decisionStatus.error}` : ''}
+                  {decisionStatus.mode !== 'rules' ? ` · ${decisionStatus.timeout_ms} ms deadline` : ''}
+                </div>
+                {decisionStatus.mode !== 'rules' && (
+                  <button type="button" className="ghost-btn" disabled={decisionStatus.state === 'warming'}
+                    onClick={warmDecision} title="Retry after starting or loading the local model server">
+                    {decisionStatus.state === 'warming' ? 'Warming…' : 'Warm / retry local model'}
+                  </button>
+                )}
+              </>
+            )}
             <div className="kb-stats" style={{ padding: 0 }}>
               <span><b>{st.facts}</b> facts</span>
               <span><b>{st.scenarios}</b> scenarios</span>
+              <span><b>{st.pages}</b> pages</span>
               <span>persona <b>{st.persona_version ? `v${st.persona_version}` : '—'}</b></span>
               <span title="Notes changed since the last run"><b>{st.pending}</b> waiting</span>
               <span className="muted small">{st.last_run ? `last run ${st.last_run.replace('T', ' ')}` : 'never run'}</span>
@@ -188,6 +257,58 @@ const KnowledgeDistilled: React.FC<{ base: string; onOpenNote: (permalink: strin
             </div>
           </>
         )}
+      </section>
+
+      <section className="settings-card">
+        <h3>Reflective proposals</h3>
+        <p className="muted small">Read-only suggestions ranked by source verification, fact confidence, freshness, retrieval use, and derived-page links. A priority score is a sorting aid, not confidence; conflicts are held for review.</p>
+        {proposals?.partial && <div className="notice">{proposals.message || 'Proposal scan stopped at its time budget; refresh for another bounded scan.'}</div>}
+        {!proposals ? <div className="muted small">Loading proposals…</div> : (
+          <>
+            {proposals.merge_proposals.length === 0
+              ? <div className="muted small">No note-merge candidates found.</div>
+              : proposals.merge_proposals.slice(0, 20).map(proposal => (
+                <div className="kb-link" key={`${proposal.keep.permalink}|${proposal.drop.permalink}`}>
+                  <div>
+                    <button type="button" className="kb-sort" onClick={() => onOpenNote(proposal.keep.permalink)}>{proposal.keep.title}</button>
+                    {' ← '}
+                    <button type="button" className="kb-sort" onClick={() => onOpenNote(proposal.drop.permalink)}>{proposal.drop.title}</button>
+                    <span className="muted small"> · {proposal.review_status} · priority {Math.round(proposal.priority_score * 100)}%</span>
+                  </div>
+                  <div className="muted small">
+                    {proposal.shared_facts} shared facts ({proposal.verified_shared_facts} verified) ·
+                    confidence {proposal.mean_shared_confidence.toFixed(2)} · freshness {proposal.source_freshness.toFixed(2)} ·
+                    {proposal.derived_page_references} derived-page references · {proposal.retrieval_count} retrievals
+                    {proposal.conflict_count ? ` · ${proposal.conflict_count} conflict(s)` : ''}
+                  </div>
+                  <div className="muted small">{proposal.reasons.join(' · ')}</div>
+                  <span className="muted small">Review and apply only in Knowledge → Possible duplicates; no notes were changed.</span>
+                </div>
+              ))}
+            {proposals.redundant_work.map(item => (
+              <div className="kb-link" key={item.kind}>
+                <b>{item.count} unchanged note(s)</b> · safe to skip {item.scope}.
+                <div className="muted small">{item.reason}</div>
+              </div>
+            ))}
+          </>
+        )}
+      </section>
+
+      <section className="settings-card">
+        <h3>Memory pages</h3>
+        <p className="muted small">Rebuildable topic and user-profile summaries, with links to their source notes.</p>
+        {pages.length === 0 ? <p className="muted small">Pages appear after the first distillation run.</p> : pages.map(page => (
+          <div key={page.key} style={{ marginBottom: 10 }}>
+            <div className="small"><b>{page.title}</b> · <Conf value={page.confidence} /></div>
+            <div className="small" style={{ whiteSpace: 'pre-wrap' }}>{page.content}</div>
+            <div className="small muted">
+              Sources: {page.sources.length ? page.sources.map(source => (
+                <button key={source} type="button" className="chip small-chip" onClick={() => onOpenNote(source)}>{source}</button>
+              )) : 'none'}
+            </div>
+          </div>
+        ))}
       </section>
 
       <section className="settings-card">

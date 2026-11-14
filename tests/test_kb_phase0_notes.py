@@ -144,6 +144,47 @@ def test_checkboxes_are_not_observations_and_stay_in_the_body():
     assert "real fact" not in body
 
 
+def test_observation_evidence_metadata_round_trips_and_indexes(home):
+    from myclaw.knowledge import read_note, write_note
+    from myclaw.knowledge.db import KnowledgeDB
+    from myclaw.knowledge.parser import Observation
+
+    observation = Observation(
+        "spec", "The server has 32 GB RAM", captured_at="2026-11-14T10:00:00+00:00",
+        confidence=0.9, verification_status="verified", status="active")
+    write_note("Evidence", "Research note", observations=[observation])
+
+    note = read_note("evidence")
+    assert len(note.observations) == 1
+    assert str(note.metadata["observation_metadata"]["version"]) == "1"
+    actual = note.observations[0]
+    assert (actual.captured_at, actual.confidence, actual.verification_status, actual.status) == (
+        "2026-11-14T10:00:00+00:00", 0.9, "verified", "active")
+
+    with KnowledgeDB("default") as db:
+        entity = db.get_entity_by_permalink("evidence")
+        indexed = db.get_observations(entity.id)[0]
+    assert (indexed.captured_at, indexed.confidence, indexed.verification_status, indexed.status) == (
+        "2026-11-14T10:00:00+00:00", 0.9, "verified", "active")
+
+
+def test_invalid_observation_evidence_metadata_uses_conservative_defaults():
+    from pathlib import Path
+    from myclaw.knowledge.parser import parse_note_text
+
+    note = parse_note_text(
+        "---\ncaptured_at: unknown\nconfidence: 1.5\nverification_status: guessed\nstatus: draft\n"
+        "---\n# Research\n\n- [spec] A model has 7B parameters\n",
+        Path("research.md"),
+    )
+
+    observation = note.observations[0]
+    assert observation.captured_at == "unknown"
+    assert observation.confidence is None
+    assert observation.verification_status == "unknown"
+    assert observation.status == "active"
+
+
 def test_write_note_keeps_checkbox_lines(home):
     from myclaw.knowledge import read_note, write_note
 

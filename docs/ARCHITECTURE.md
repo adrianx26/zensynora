@@ -1,6 +1,6 @@
 # ZenSynora Architecture
 
-> **Status:** reflects **v0.8.2** (2026-11-12: Knowledge → Tune — thresholds, temporal decay, bigger embedding models, relevance test, link strength, curate duplicates; 2026-11-07: Customize page — customization
+> **Status:** reflects **v0.8.3** (2026-11-14: four-way knowledge recall, safe merge review/recovery, local decision fallback, and evidence-ranked distillation proposals; 2026-11-12: Knowledge → Tune — thresholds, temporal decay, bigger embedding models, relevance test, link strength, curate duplicates; 2026-11-07: Customize page — customization
 > profiles per situation and agent, Telegram teams; see the
 > [Customize guide](customize_guide.md)). v0.8.0 (2026-10-27; knowledge base: see the
 > [Knowledge base guide](knowledge_base_guide.md)). Updated from the v0.4.1
@@ -61,8 +61,10 @@ myclaw/
 ├── knowledge/               # scope.py: one shared knowledge base for internal ids [0.7.5]
 │   ├── db.py                # FTS5 notes + composite (role, timestamp) index
 │   ├── quality.py           # fact sources, categories, conflicts, hub penalty, duplicates [0.8.0]
-│   ├── semantic.py          # optional embeddings, embed on write, hybrid search [0.8.0]
-│   ├── distill.py           # facts, scenarios, persona, drill_down [0.8.0]
+│   ├── semantic.py          # required local-semantic recall stream; embeddings report readiness [0.8.0]
+│   ├── decision.py          # deterministic ranking + optional loopback-model decisions [KB evolution]
+│   ├── merge_review.py · merge_journal.py # read-only review, checksummed apply/recover/rollback
+│   ├── distill.py           # facts, scenarios, profile/pages, evidence-ranked proposals [0.8.0]
 │   ├── tuning.py            # ranking values: hard / safe limits, AI suggest, proposals, history, undo [0.8.2]
 │   ├── decay.py · relevance.py  # temporal decay; 👍 / 👎, re-rank step, measured auto-tune [0.8.2]
 │   ├── relations.py         # link strength (xN), strengthen from use, AI precise types / new links [0.8.2]
@@ -70,7 +72,7 @@ myclaw/
 │   ├── budget.py · watch.py · health.py  # write budget, live re-index, health checks [0.8.0]
 │   ├── path_reasoning.py    # find_paths / shortest_path [Sprint 7]
 │   ├── storage.py           # Batched parallel note reads [Sprint 1 + 8]; write_note keeps text + tags + facts + links [0.8.1]
-│   ├── extract.py           # Model output → notes with tags, facts, links; ✨ enrich [0.8.1]
+│   ├── extract.py           # Model output → notes; four-way lookup for related link targets [0.8.1]
 │   └── ...
 ├── logging_config.py        # Structured logger + PII scrubber [Sprint 2]
 ├── marketplace/             # Multi-source plugin discovery + HMAC manifests [Sprint 9]

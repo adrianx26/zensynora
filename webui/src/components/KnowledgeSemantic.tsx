@@ -1,24 +1,8 @@
-// Semantic search of the knowledge base (KB phase 3, 2026-10-24): status card
-// (installed? N of M notes embedded, Backfill with progress, Install when the
-// optional package is missing) and the search-mode picker. Data:
-// /api/knowledge/semantic/*. Everything runs on this computer.
+// Local semantic search status and backfill controls for the required
+// four-strategy knowledge recall. Data: /api/knowledge/semantic/*.
 import React, { useState } from 'react';
 import { api } from '../api';
-import type { SearchMode, SemanticStatus, useSemanticStatus } from '../knowledgeSemantic';
-
-export const SearchModePicker: React.FC<{ mode: SearchMode; onChange: (m: SearchMode) => void; status: SemanticStatus | null; note?: string | null }> = ({ mode, onChange, status, note }) => {
-  if (!status?.enabled) return null;
-  const title = note ? `Semantic search not used: ${note}` : !status.ready ? (status.reason || 'Semantic search is not ready') : 'How to match notes';
-  return (
-    <select className="field-input kb-mode" value={mode} onChange={e => onChange(e.target.value as SearchMode)} aria-label="Search mode" title={title}
-      style={note ? { borderColor: '#d29922' } : undefined}>
-      <option value="auto">Auto</option>
-      <option value="fts">Words</option>
-      <option value="semantic">Meaning</option>
-      <option value="hybrid">Words + meaning</option>
-    </select>
-  );
-};
+import type { useSemanticStatus } from '../knowledgeSemantic';
 
 const q = (base: string) => `base=${encodeURIComponent(base)}`;
 
@@ -44,7 +28,7 @@ export const SemanticCard: React.FC<{ base: string; status: ReturnType<typeof us
 
   return (
     <section className="settings-card">
-      <h3>Semantic search</h3>
+      <h3>Local meaning search</h3>
       <p className="muted small">Finds notes by meaning, not only by their words (“my car” finds a note about an <i>automobile</i>). Runs on this computer; the model is downloaded once{info?.size_mb ? ` (${info.size_mb} MB)` : ''} into <code>~/.myclaw/models</code>.</p>
       {err && <div className="notice error">{err}</div>}
       {msg && <div className={`notice ${msg.ok ? '' : 'error'}`}>{msg.text}</div>}
@@ -52,7 +36,7 @@ export const SemanticCard: React.FC<{ base: string; status: ReturnType<typeof us
         <>
           <div className="small" style={{ marginBottom: 6 }}>
             <b>{st.enabled ? 'On' : 'Off'}</b>
-            {!st.enabled && <span className="muted"> — turn on in Settings → Features (“Semantic search”). Notes can be embedded before that.</span>}
+            {!st.enabled && <span className="muted"> — this required search stream is unavailable; check the Knowledge Doctor and local model setup.</span>}
           </div>
           <div className="muted small" style={{ marginBottom: 8 }} title={info?.known === false ? 'A model not in the list: check its size and licence on its model card.' : undefined}>
             Model <code>{st.model}</code>{info?.known !== false && info ? ` · ${info.licence} · ${info.languages}` : ''}
@@ -60,7 +44,7 @@ export const SemanticCard: React.FC<{ base: string; status: ReturnType<typeof us
 
           {!st.installed ? (
             <>
-              <p className="small">Needs the optional package <code>fastembed</code> (ONNX Runtime, CPU only).</p>
+              <p className="small">Needs <code>fastembed</code> (ONNX Runtime, CPU only) for local meaning search.</p>
               {st.in_venv ? (
                 <button type="button" className="primary-btn" disabled={!!st.install?.running} onClick={() => call('/api/knowledge/semantic/install', 'POST')}>
                   {st.install?.running ? 'Installing…' : 'Install'}

@@ -520,9 +520,32 @@ def test_doctor_all_ok_on_a_clean_base(home):
     write_note("A", content="x", relations=None)
     rep = run_checks(offline=True, categories=["knowledge"])
     assert {r.id for r in rep.results} == {"kb_links", "kb_conflicts", "kb_embeddings", "kb_distill",
-                                          "kb_watcher", "kb_ingest", "kb_trash"}
-    assert all(r.status == "ok" for r in rep.results), [(r.id, r.detail) for r in rep.results]
+                                          "kb_watcher", "kb_ingest", "kb_trash", "kb_merges"}
+    results = {r.id: r for r in rep.results}
+    assert results["kb_merges"].status == "ok", results["kb_merges"].detail
+    assert results["kb_embeddings"].status == "warn"
+    bad = [(r.id, r.status, r.detail) for r in rep.results
+           if r.id not in {"kb_embeddings"} and r.status != "ok"]
+    assert not bad, bad
     assert _check("knowledge_index").status == "ok"
+
+
+def test_doctor_audits_merge_journal_snapshots(home):
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.quality import merge_notes
+
+    write_note("Keep", content="Kept note.")
+    write_note("Drop", content="Dropped note.")
+    result = merge_notes("default", "keep", "drop", dry_run=False)
+    snapshot = _kdir(home) / ".merge-journal" / result["operation_id"] / "keep.md"
+    snapshot.write_text("corrupted snapshot", encoding="utf-8")
+
+    report = _check("kb_merges")
+
+    assert report.status == "warn"
+    assert "snapshot checksum mismatch" in report.detail
+    assert result["operation_id"] in report.detail
+    assert "saved proposal rationale" in report.hint
 
 
 def test_doctor_index_drift_and_fix(home):
@@ -571,7 +594,7 @@ def test_doctor_embeddings(home, monkeypatch):
 
     write_note("A", content="x")
     write_note("B", content="y")
-    assert "off" in _check("kb_embeddings").detail
+    assert "disabled" in _check("kb_embeddings").detail
     monkeypatch.setitem(semantic._OPTIONS, "semantic_search", True)
     monkeypatch.setattr(semantic, "library_installed", lambda: False)
     r = _check("kb_embeddings")
@@ -674,7 +697,8 @@ def test_doctor_checks_never_raise(home, monkeypatch):
     assert h["links"]["error"].startswith("RuntimeError")
     # an unreadable index database
     _db(home).write_bytes(b"not a database")
-    for id_ in ("knowledge_index", "kb_links", "kb_conflicts", "kb_embeddings", "kb_distill", "kb_trash"):
+    for id_ in ("knowledge_index", "kb_links", "kb_conflicts", "kb_embeddings", "kb_distill", "kb_trash",
+                "kb_merges"):
         assert _check(id_).status in ("ok", "warn"), id_
 
 

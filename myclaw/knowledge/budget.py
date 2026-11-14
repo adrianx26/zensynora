@@ -122,8 +122,9 @@ def key_for(base_or_path: Any) -> str:
     if isinstance(base_or_path, Path) or str(base_or_path).endswith(".db"):
         return str(Path(str(base_or_path)))
     from .scope import kb_user
+    from .storage import default_base_dir
 
-    return str(Path.home() / ".myclaw" / f"knowledge_{kb_user(str(base_or_path or 'default'))}.db")
+    return str(default_base_dir() / f"knowledge_{kb_user(str(base_or_path or 'default'))}.db")
 
 
 def _held() -> Dict[str, _Ticket]:

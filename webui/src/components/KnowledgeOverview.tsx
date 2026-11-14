@@ -76,7 +76,7 @@ const KnowledgeOverview: React.FC<{
 
   const load = useCallback(async () => {
     setDups(null);
-    api<Dups>(`/api/knowledge/duplicates?base=${encodeURIComponent(base)}&limit=500`)
+    api<Dups>(`/api/knowledge/duplicates?base=${encodeURIComponent(base)}&limit=500&evidence=false`)
       .then(setDups).catch(() => setDups({ pairs: [], partial: true }));
     try {
       setData(await api<Overview>(`/api/knowledge/overview?base=${encodeURIComponent(base)}`));

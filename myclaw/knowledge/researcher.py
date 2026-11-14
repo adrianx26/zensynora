@@ -24,8 +24,10 @@ from .storage import write_note, get_knowledge_dir
 
 logger = logging.getLogger(__name__)
 
-GAP_FILE = Path.home() / ".myclaw" / "knowledge_gaps.jsonl"
-RESEARCH_LOG = Path.home() / ".myclaw" / "research_log.jsonl"
+from .storage import default_base_dir
+
+GAP_FILE = default_base_dir() / "knowledge_gaps.jsonl"
+RESEARCH_LOG = default_base_dir() / "research_log.jsonl"
 
 class GapResearcher:
     """Background worker that fills knowledge gaps using web search."""

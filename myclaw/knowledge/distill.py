@@ -63,12 +63,12 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set,
 
 logger = logging.getLogger(__name__)
 
-DISTILL_VERSION = 2               # bump when the rules change: every note is read again
+DISTILL_VERSION = 3               # bump when the rules change: every note is read again
 
 # ── Options (config: knowledge.distill / distill_every / distill_idle_minutes) ─
 
 _OPTIONS: Dict[str, Any] = {
-    "distill": False,              # off by default (changes the agent's context)
+    "distill": True,               # on by default; users can disable it in settings
     "distill_every": 20,           # changed notes that start a background run
     "idle_minutes": 10,            # … or this long after the last change
     "kb_enabled": True,
@@ -96,7 +96,7 @@ def set_options(distill: Optional[bool] = None, distill_every: Optional[int] = N
             _OPTIONS["idle_minutes"] = max(0.0, float(idle_minutes))
         except (TypeError, ValueError):
             pass
-    if enabled() and not was:
+    if enabled() and (not was or not _APPLIED):
         _SCHED.kick()
     _APPLIED = True
 
@@ -545,6 +545,20 @@ def extract_sentences(body: str, limit: int = MAX_SENTENCES_PER_NOTE,
 
 # ── Schema ──────────────────────────────────────────────────────────────────
 
+def _ensure_pages_schema(conn: sqlite3.Connection) -> None:
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS memory_pages (
+            page_key TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            source_permalinks TEXT NOT NULL DEFAULT '[]',
+            confidence REAL NOT NULL DEFAULT 0,
+            checksum TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        )
+    """)
+
+
 def ensure_schema(conn: sqlite3.Connection) -> None:
     """Derived tables (additive, never dropped; safe on any older index database)."""
     conn.execute("""
@@ -640,6 +654,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             checksum TEXT
         )
     """)
+    _ensure_pages_schema(conn)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS distill_notes (
             permalink TEXT PRIMARY KEY,
@@ -697,7 +712,9 @@ def db_path_for(base: str = "default", db_path: Optional[Path] = None,
             return Path(db.db_path)
     from .scope import kb_user
 
-    path = Path.home() / ".myclaw" / f"knowledge_{kb_user(base)}.db"
+    from .storage import default_base_dir
+
+    path = default_base_dir() / f"knowledge_{kb_user(base)}.db"
     return path if path.is_file() else None
 
 
@@ -1624,12 +1641,30 @@ _HOST = socket.gethostname()
 
 
 def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x1000, False, int(pid))  # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.GetLastError() == 5  # ERROR_ACCESS_DENIED => alive
+        try:
+            exit_code = ctypes.c_ulong()
+            if kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return exit_code.value == 259  # STILL_ACTIVE
+            return False
+        finally:
+            kernel32.CloseHandle(handle)
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
         return False
-    except (PermissionError, OSError):
+    except PermissionError:
         return True
+    except OSError:
+        return False
     return True
 
 
@@ -1723,7 +1758,8 @@ def distill(base: str = "default", db_path: Optional[Path] = None, full: bool = 
         conn = _connect(path)
         if not _has_tables(conn) or not _has_columns(conn):
             ensure_schema(conn)
-            conn.commit()
+        _ensure_pages_schema(conn)
+        conn.commit()
         if not _lease(conn, True):
             return {"ok": False, "busy": True,
                     "message": "Another ZenSynora process is distilling this knowledge base "
@@ -1806,12 +1842,15 @@ def _distill_locked(conn: sqlite3.Connection, key: str, full: bool, budget: Opti
                       "scenarios": conn.execute("SELECT COUNT(*) FROM scenarios").fetchone()[0],
                       "persona_version": conn.execute("SELECT COALESCE(MAX(version), 0) FROM persona")
                       .fetchone()[0], "persona_changed": False})
+        if conn.execute("SELECT 1 FROM memory_pages LIMIT 1").fetchone() is None:
+            stats["pages"] = _refresh_pages(conn, now_iso)
     else:
         emb = _embedder(wait=5.0)
         stats.update(_finalise_facts(conn, now, emb, stopped, None if full else touched))
         _lease(conn, True)
         stats.update(_build_scenarios(conn, now, emb))
         stats.update(_build_persona(conn, now))
+        stats["pages"] = _refresh_pages(conn, now_iso)
     left = total - done
     stats["pending"] = left
     stats["partial"] = bool(partial and left > 0)
@@ -1829,6 +1868,240 @@ def _distill_locked(conn: sqlite3.Connection, key: str, full: bool, budget: Opti
            + (f" ({left} note(s) left — run again to continue)" if stats["partial"] else "") + ".")
     logger.info("Knowledge: %s (%s)", msg, Path(key).name)
     return {"ok": True, **stats, "message": msg}
+
+
+def _refresh_pages(conn: sqlite3.Connection, updated_at: str) -> int:
+    """Rebuild evidence-linked topic/profile pages from the current distilled state."""
+    pages = []
+    for scenario in conn.execute("SELECT * FROM scenarios ORDER BY skey").fetchall():
+        sources = [r[0] for r in conn.execute(
+            "SELECT DISTINCT fs.permalink FROM scenario_facts sf "
+            "JOIN fact_sources fs ON fs.fact_id = sf.fact_id "
+            "WHERE sf.scenario_id = ? ORDER BY fs.permalink", (scenario["id"],))]
+        facts = conn.execute(
+            "SELECT d.category, d.text FROM scenario_facts sf "
+            "JOIN distilled_facts d ON d.id = sf.fact_id "
+            "WHERE sf.scenario_id = ? ORDER BY sf.rank", (scenario["id"],)).fetchall()
+        lines = [scenario["summary"].strip()] if scenario["summary"] else []
+        lines.extend(f"- [{row['category']}] {row['text']}" for row in facts)
+        pages.append((f"scenario:{scenario['skey']}", scenario["title"], "\n".join(lines),
+                      sources, float(scenario["confidence"] or 0)))
+
+    persona = conn.execute("SELECT * FROM persona ORDER BY version DESC LIMIT 1").fetchone()
+    if persona is not None:
+        summary = str(persona["summary"] or "").strip()
+        sections = json.loads(persona["sections"] or "{}")
+        lines = [summary] if summary else []
+        if isinstance(sections, dict):
+            for title, value in sections.items():
+                if isinstance(value, list):
+                    entries = [str(item.get("text") or "").strip() if isinstance(item, dict)
+                               else str(item).strip() for item in value]
+                else:
+                    entries = [str(value or "").strip()]
+                entries = [entry for entry in entries if entry]
+                if entries:
+                    lines.extend((f"## {title}", *[f"- {entry}" for entry in entries]))
+        try:
+            fact_ids = json.loads(persona["fact_ids"] or "[]")
+        except (TypeError, ValueError):
+            fact_ids = []
+        sources = []
+        if fact_ids:
+            ids = [int(value) for value in fact_ids if str(value).isdigit()]
+            if ids:
+                sources = [r[0] for r in conn.execute(
+                    f"SELECT DISTINCT permalink FROM fact_sources WHERE fact_id IN ({_ph(len(ids))}) "
+                    "ORDER BY permalink", ids)]
+        pages.append(("profile:user", "User mental profile", "\n\n".join(lines), sources,
+                      float(persona["confidence"] or 0)))
+
+    def save_pages() -> None:
+        existing = {row["page_key"]: row["checksum"]
+                    for row in conn.execute("SELECT page_key, checksum FROM memory_pages")}
+        page_keys = {page[0] for page in pages}
+        for key in existing.keys() - page_keys:
+            conn.execute("DELETE FROM memory_pages WHERE page_key = ?", (key,))
+        for key, title, content, sources, confidence in pages:
+            checksum = hashlib.sha256(
+                (key + "\0" + title + "\0" + content + "\0" + json.dumps(sources)
+                 + "\0" + str(confidence)).encode("utf-8")
+            ).hexdigest()
+            if existing.get(key) == checksum:
+                continue
+            conn.execute(
+                "INSERT INTO memory_pages (page_key, title, content, source_permalinks, confidence, "
+                "checksum, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(page_key) DO UPDATE SET title=excluded.title, content=excluded.content, "
+                "source_permalinks=excluded.source_permalinks, confidence=excluded.confidence, "
+                "checksum=excluded.checksum, updated_at=excluded.updated_at",
+                (key, title, content, json.dumps(sources), confidence, checksum, updated_at))
+
+    _write(conn, save_pages)
+    return len(pages)
+
+
+def _matching_pages(conn: sqlite3.Connection, query: str, limit: int = 2) -> List[Dict[str, Any]]:
+    terms = set(_content_words(query))
+    if not terms:
+        return []
+    if not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_pages'").fetchone():
+        return []
+    pages = []
+    for row in conn.execute("SELECT * FROM memory_pages"):
+        words = set(_content_words(f"{row['title']} {row['content']}"))
+        overlap = len(terms & words)
+        if not overlap:
+            continue
+        try:
+            sources = json.loads(row["source_permalinks"] or "[]")
+        except (TypeError, ValueError):
+            sources = []
+        pages.append({"key": row["page_key"], "title": row["title"], "content": row["content"],
+                      "sources": sources, "confidence": row["confidence"], "overlap": overlap})
+    pages.sort(key=lambda page: (-page["overlap"], -page["confidence"], page["key"]))
+    return pages[:max(0, limit)]
+
+
+def list_pages(base: str = "default", query: str = "", limit: int = 50,
+               db_path: Optional[Path] = None) -> Dict[str, Any]:
+    """List rebuildable topic/profile pages, optionally matching query terms."""
+    conn = _open(base, db_path)
+    if conn is None:
+        return {"pages": [], "total": 0, "distilled": False}
+    try:
+        if not conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_pages'").fetchone():
+            return {"pages": [], "total": 0, "distilled": True}
+        rows = _matching_pages(conn, query, max(0, int(limit))) if query else [
+            {"key": row["page_key"], "title": row["title"], "content": row["content"],
+             "sources": json.loads(row["source_permalinks"] or "[]"),
+             "confidence": row["confidence"]}
+            for row in conn.execute("SELECT * FROM memory_pages ORDER BY page_key LIMIT ?",
+                                    (max(0, int(limit)),))
+        ]
+        total = conn.execute("SELECT COUNT(*) FROM memory_pages").fetchone()[0]
+        return {"pages": rows, "total": total, "distilled": True}
+    finally:
+        conn.close()
+
+
+def consolidation_proposals(base: str = "default", limit: int = 100) -> Dict[str, Any]:
+    """Build read-only, evidence-prioritized merge and redundant-work proposals."""
+    from .quality import find_duplicates
+
+    report = find_duplicates(base, limit=max(1, min(int(limit), 500)), report=True,
+                             time_budget=5.0, include_evidence=True)
+    duplicates = report.get("pairs", [])
+    page_sources: Dict[str, int] = defaultdict(int)
+    conn = _open(base)
+    if conn is not None:
+        try:
+            if conn.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_pages'").fetchone():
+                for row in conn.execute("SELECT source_permalinks FROM memory_pages"):
+                    try:
+                        for permalink in json.loads(row[0] or "[]"):
+                            page_sources[str(permalink)] += 1
+                    except (TypeError, ValueError):
+                        continue
+        finally:
+            conn.close()
+
+    merge_proposals = []
+    from . import usage
+
+    for pair in duplicates:
+        evidence = pair.get("evidence") or {}
+        sources = evidence.get("sources") or []
+        facts = evidence.get("facts") or {}
+        shared = facts.get("shared") or []
+        distinct = (facts.get("keep_only") or []) + (facts.get("drop_only") or [])
+        conflict_count = len(evidence.get("conflicts") or [])
+        verified = sum(1 for fact in shared
+                       if fact.get("verification_status") == "verified"
+                       and fact.get("provenance"))
+        confidences = [float(fact["confidence"]) for fact in shared
+                       if isinstance(fact.get("confidence"), (int, float))]
+        mean_confidence = sum(confidences) / len(confidences) if confidences else 0.0
+        fresh_scores = []
+        now = datetime.now().astimezone()
+        for source in sources:
+            try:
+                updated = datetime.fromisoformat(str(source.get("updated_at") or ""))
+                if updated.tzinfo is None:
+                    updated = updated.astimezone()
+                age_days = max(0.0, (now - updated.astimezone()).total_seconds() / 86400)
+                fresh_scores.append(1.0 / (1.0 + age_days / 365))
+            except (TypeError, ValueError, OverflowError):
+                continue
+        freshness = sum(fresh_scores) / len(fresh_scores) if fresh_scores else 0.0
+        source_links = {str(item.get("permalink") or "") for item in sources}
+        derived_pages = sum(page_sources.get(permalink, 0) for permalink in source_links)
+        retrievals = sum(usage.note_usage(base, permalink).get("count", 0)
+                         for permalink in source_links if permalink)
+        evidence_total = len(shared) + len(distinct)
+        verification_ratio = verified / max(1, len(shared))
+        shared_ratio = len(shared) / max(1, evidence_total)
+        priority = min(1.0, (
+            0.25 * shared_ratio + 0.20 * verification_ratio + 0.10 * mean_confidence
+            + 0.10 * freshness + 0.15 * min(derived_pages, 3) / 3
+            + 0.10 * min(retrievals, 10) / 10
+            + 0.10 * float(evidence.get("candidate_score") or 0)
+        ))
+        reasons = list(pair.get("reasons") or [])
+        if shared:
+            reasons.append(f"{len(shared)} shared distilled fact(s), {verified} verified with provenance")
+        if derived_pages:
+            reasons.append(f"cited by {derived_pages} derived page reference(s)")
+        if retrievals:
+            reasons.append(f"retrieved {retrievals} time(s)")
+        merge_proposals.append({
+            "keep": pair.get("keep"),
+            "drop": pair.get("drop"),
+            "reasons": reasons,
+            "evidence": evidence,
+            "priority_score": round(priority, 4),
+            "priority_is_confidence": False,
+            "review_status": "hold" if conflict_count or not evidence.get("conflict_free", False) else "review",
+            "conflict_count": conflict_count,
+            "shared_facts": len(shared),
+            "verified_shared_facts": verified,
+            "mean_shared_confidence": round(mean_confidence, 3),
+            "source_freshness": round(freshness, 3),
+            "derived_page_references": derived_pages,
+            "retrieval_count": retrievals,
+            "source_checksums": {str(item.get("permalink")): str(item.get("sha256"))
+                                 for item in sources if item.get("permalink") and item.get("sha256")},
+        })
+    merge_proposals.sort(key=lambda item: (
+        item["review_status"] == "hold", -item["priority_score"],
+        str((item.get("keep") or {}).get("permalink") or ""),
+        str((item.get("drop") or {}).get("permalink") or "")))
+
+    state = status(base)
+    unchanged = max(0, int(state.get("notes") or 0) - int(state.get("pending") or 0))
+    redundant_work = []
+    if unchanged:
+        redundant_work.append({
+            "kind": "unchanged_distillation_inputs",
+            "count": unchanged,
+            "safe_to_skip": True,
+            "scope": "derived extraction and page rebuilds for unchanged note checksums only",
+            "evidence": {"indexed_notes": state.get("notes", 0), "pending_notes": state.get("pending", 0),
+                         "last_run": state.get("last_run")},
+            "reason": "The incremental distiller already has current checksums; source retention, "
+                      "failed retries, and index repair are never skipped.",
+        })
+    return {
+        "base": base,
+        "merge_proposals": merge_proposals,
+        "redundant_work": redundant_work,
+        "partial": bool(report.get("partial")),
+        "message": report.get("message"),
+        "generated_from": "source notes, distilled fact provenance, derived-page links, and usage records",
+    }
 
 
 # ── Reading (tools, API, context) ───────────────────────────────────────────
@@ -2118,7 +2391,7 @@ def drill_down(ref: Any, base: str = "default", db_path: Optional[Path] = None) 
 def status(base: str = "default", db_path: Optional[Path] = None) -> Dict[str, Any]:
     """Counts and the last run, for the status line / API / doctor."""
     out: Dict[str, Any] = {"base": base, "enabled": enabled(), "options": options(),
-                           "facts": 0, "scenarios": 0, "persona_version": 0, "notes": 0,
+                           "facts": 0, "scenarios": 0, "pages": 0, "persona_version": 0, "notes": 0,
                            "pending": 0, "last_run": None, "last_stats": None,
                            "running": False, "last_error": None}
     path = db_path_for(base, db_path, create=False)
@@ -2135,6 +2408,8 @@ def status(base: str = "default", db_path: Optional[Path] = None) -> Dict[str, A
         out["facts"] = conn.execute("SELECT COUNT(*) FROM distilled_facts WHERE merged_into IS NULL "
                                     "AND support > 0").fetchone()[0]
         out["scenarios"] = conn.execute("SELECT COUNT(*) FROM scenarios").fetchone()[0]
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_pages'").fetchone():
+            out["pages"] = conn.execute("SELECT COUNT(*) FROM memory_pages").fetchone()[0]
         v = conn.execute("SELECT MAX(version) FROM persona").fetchone()[0]
         out["persona_version"] = v or 0
         ids, gone = pending_notes(conn)
@@ -2172,7 +2447,7 @@ def context_items(base: str, message: str, db_path: Optional[Path] = None
     """What the automatic context gets: persona (when the message is about the
     user), matching scenarios and facts — ranked L3 > L2 > L1. Never secrets
     or instructions."""
-    out: Dict[str, Any] = {"persona": None, "scenarios": [], "facts": []}
+    out: Dict[str, Any] = {"persona": None, "scenarios": [], "facts": [], "pages": []}
     conn = _open(base, db_path)
     if conn is None:
         return out
@@ -2208,6 +2483,8 @@ def context_items(base: str, message: str, db_path: Optional[Path] = None
         if persona is not None and persona["summary"] and is_about_user(message):
             out["persona"] = {"version": persona["version"], "summary": persona["summary"],
                               "confidence": persona["confidence"]}
+        out["pages"] = [page for page in _matching_pages(conn, message)
+                        if page["key"] != "profile:user"]
         return out
     finally:
         conn.close()
@@ -2275,7 +2552,7 @@ def context_block(base: str, message: str, budget: int = CONTEXT_BUDGET,
     """The distilled lines for the automatic context ("" when nothing matches):
     labelled as data, each item quoted. At most ``budget`` characters."""
     items = context_items(base, message, db_path)
-    if not (items["persona"] or items["scenarios"] or items["facts"]):
+    if not (items["persona"] or items["scenarios"] or items["facts"] or items["pages"]):
         return ""
     lines: List[str] = []
     used = 0
@@ -2293,6 +2570,12 @@ def context_block(base: str, message: str, budget: int = CONTEXT_BUDGET,
     if items["persona"]:
         add("What I know about you: " + _quote(items["persona"]["summary"],
                                                min(CONTEXT_PERSONA_CHARS, budget - used - 30)))
+    for page in items["pages"]:
+        sources = ", ".join(page["sources"][:2])
+        citation = f" [sources: {sources}]" if sources else ""
+        if not add(f"- topic page {_quote(page['title'], 60)}: "
+                   f"{_quote(page['content'], 180)}{citation}"):
+            break
     if items["scenarios"] or items["facts"]:
         if not add("Relevant facts:"):
             return "\n".join(lines)

@@ -438,6 +438,59 @@ def test_find_duplicates_reasons_and_keep_choice(home):
     assert _trash(home) == []
 
 
+def test_find_duplicates_ignores_trash_notes(home):
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.quality import find_duplicates
+
+    write_note("Saved", content="The original source note.")
+    trash = _kdir(home) / ".trash"
+    trash.mkdir()
+    (trash / "saved-copy.md").write_text(
+        "# Saved\n\nThe original source note.\n", encoding="utf-8")
+
+    assert find_duplicates("default") == []
+
+
+def test_duplicate_report_includes_source_versions_diffs_and_conflicts(home):
+    import hashlib
+
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.parser import Observation, Relation
+    from myclaw.knowledge.quality import find_duplicates
+
+    write_note("Server A", title="Home server", content="The server in the office.",
+               observations=[Observation("spec", "Server has 32 GB RAM",
+                                         captured_at="2026-11-10", confidence=0.9,
+                                         verification_status="verified")],
+               relations=[Relation("runs", "Ollama")])
+    write_note("Server B", title="Home server", content="The home server.",
+               observations=[Observation("spec", "Server has 64 GB RAM",
+                                         captured_at="2026-11-12", confidence=0.6,
+                                         verification_status="inferred")],
+               relations=[Relation("uses", "Ollama")])
+    originals = {path.name: path.read_bytes() for path in _kdir(home).glob("*.md")}
+
+    report = find_duplicates("default", report=True)
+
+    assert len(report["pairs"]) == 1
+    evidence = report["pairs"][0]["evidence"]
+    assert evidence["candidate_score"] == 1.0
+    assert evidence["generation_reasons"] == ["same title"]
+    assert {source["permalink"]: source["sha256"] for source in evidence["sources"]} == {
+        "server-a": hashlib.sha256(originals["server-a.md"]).hexdigest(),
+        "server-b": hashlib.sha256(originals["server-b.md"]).hexdigest(),
+    }
+    assert evidence["facts"]["keep_only"] or evidence["facts"]["drop_only"]
+    assert evidence["conflicts"][0]["category"] == "spec"
+    assert evidence["conflicts"][0]["kind"] == "number"
+    assert evidence["conflict_free"] is False
+    assert evidence["unresolved"] == ["contradictory facts require user review"]
+    assert "Ollama" in str(evidence["relations"])
+    assert evidence["body"]["drop_text_appended"] is True
+    assert {path.name: path.read_bytes() for path in _kdir(home).glob("*.md")} == originals
+    assert _trash(home) == []
+
+
 def test_merge_notes_preview_then_apply_keeps_links_working(home):
     from myclaw.knowledge import read_note, write_note
     from myclaw.knowledge.db import KnowledgeDB
@@ -484,6 +537,31 @@ def test_merge_notes_preview_then_apply_keeps_links_working(home):
     assert {"notes-a", "notes-b", "notes-c"} <= {b["permalink"] for b in get_backlinks("home-server")}
 
 
+def test_merge_notes_preserves_observation_evidence_metadata(home):
+    from myclaw.knowledge import read_note, write_note
+    from myclaw.knowledge.parser import Observation
+    from myclaw.knowledge.quality import merge_notes
+
+    write_note("Research A", "First source",
+               observations=[Observation("spec", "Server RAM is 32 GB",
+                                         captured_at="2026-11-10", confidence=0.8,
+                                         verification_status="verified")])
+    write_note("Research B", "Second source",
+               observations=[Observation("url", "Hardware reference URL",
+                                         captured_at="2026-11-12", confidence=0.6,
+                                         verification_status="inferred", status="archived")])
+
+    merge_notes("default", "research-a", "research-b", dry_run=False)
+    merged = read_note("research-a")
+
+    evidence = {item.category: item for item in merged.observations}
+    assert evidence["spec"].captured_at == "2026-11-10"
+    assert evidence["spec"].verification_status == "verified"
+    assert evidence["url"].captured_at == "2026-11-12"
+    assert evidence["url"].confidence == 0.6
+    assert evidence["url"].status == "archived"
+
+
 def test_merge_notes_bad_input(home):
     from myclaw.knowledge import write_note
     from myclaw.knowledge.quality import merge_notes
@@ -493,6 +571,25 @@ def test_merge_notes_bad_input(home):
         merge_notes("default", "a", "a")
     with pytest.raises(LookupError):
         merge_notes("default", "a", "nope")
+
+
+def test_merge_preview_exposes_conflicts_and_apply_preserves_both_notes(home):
+    from myclaw.knowledge import read_note, write_note
+    from myclaw.knowledge.parser import Observation
+    from myclaw.knowledge.quality import merge_notes
+
+    write_note("Server A", title="Home server", content="Office server.",
+               observations=[Observation("spec", "Server has 32 GB RAM")])
+    write_note("Server B", title="Home server", content="Home server.",
+               observations=[Observation("spec", "Server has 64 GB RAM")])
+
+    preview = merge_notes("default", "server-a", "server-b")
+
+    assert preview["conflicts"][0]["kind"] == "number"
+    with pytest.raises(ValueError, match="Cannot merge unresolved"):
+        merge_notes("default", "server-a", "server-b", dry_run=False)
+    assert read_note("server-a") is not None and read_note("server-b") is not None
+    assert _trash(home) == []
 
 
 # ── Step 6: agent tools and API ─────────────────────────────────────────────
@@ -581,15 +678,192 @@ def test_api_duplicates_and_merge_routes(api, home):
 
     write_note("Home server", content="One.")
     write_note("home-server-2", title="Home server", content="Two.")
+    originals = {path.name: path.read_bytes() for path in _kdir(home).glob("*.md")}
     pairs = api.get("/api/knowledge/duplicates").json()["pairs"]
     assert len(pairs) == 1
     keep, drop = pairs[0]["keep"]["permalink"], pairs[0]["drop"]["permalink"]
     prev = api.post("/api/knowledge/merge", json={"keep": keep, "drop": drop}).json()
     assert prev["dry_run"] and (_kdir(home) / f"{drop}.md").exists()
-    done = api.post("/api/knowledge/merge", json={"keep": keep, "drop": drop, "dry_run": False})
-    assert done.status_code == 200 and not (_kdir(home) / f"{drop}.md").exists()
-    assert api.post("/api/knowledge/merge", json={"keep": keep, "drop": drop}).status_code == 404
+    done = api.post("/api/knowledge/merge", json={
+        "keep": keep, "drop": drop, "dry_run": False,
+        "source_checksums": prev["source_checksums"],
+    })
+    assert done.status_code == 200 and done.json()["operation_id"]
+    operation_id = done.json()["operation_id"]
+    assert not (_kdir(home) / f"{drop}.md").exists()
+    operations = api.get("/api/knowledge/merge-operations").json()["operations"]
+    assert operations[0]["operation_id"] == operation_id and operations[0]["status"] == "applied"
+    rolled_back = api.post(f"/api/knowledge/merge-operations/{operation_id}/rollback", json={})
+    assert rolled_back.status_code == 200 and rolled_back.json()["checksums_verified"]
+    assert (_kdir(home) / f"{keep}.md").exists() and (_kdir(home) / f"{drop}.md").exists()
+    assert {path.name: path.read_bytes() for path in _kdir(home).glob("*.md")} == originals
+    assert api.get("/api/knowledge/merge-operations").json()["operations"][0]["status"] == "rolled_back"
     assert api.post("/api/knowledge/merge", json={"keep": keep, "drop": keep}).status_code == 400
+
+
+def test_api_merge_rejects_unresolved_cross_note_conflicts(api, home):
+    from myclaw.knowledge import write_note
+
+    write_note("Server A", title="Home server", content="Office server.",
+               observations=_facts(("spec", "Server has 32 GB RAM")))
+    write_note("Server B", title="Home server", content="Home server.",
+               observations=_facts(("spec", "Server has 64 GB RAM")))
+    preview = api.post("/api/knowledge/merge", json={
+        "keep": "server-a", "drop": "server-b",
+    })
+    assert preview.status_code == 200 and preview.json()["conflicts"]
+    apply = api.post("/api/knowledge/merge", json={
+        "keep": "server-a", "drop": "server-b", "dry_run": False,
+    })
+    assert apply.status_code == 400 and "Cannot merge unresolved" in apply.json()["detail"]
+    assert (_kdir(home) / "server-a.md").exists() and (_kdir(home) / "server-b.md").exists()
+    assert _trash(home) == []
+
+
+def test_merge_journal_recovers_both_notes_after_partial_apply(home, monkeypatch):
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge import storage
+    from myclaw.knowledge.db import KnowledgeDB
+    from myclaw.knowledge.merge_journal import list_operations
+    from myclaw.knowledge.quality import merge_notes
+
+    write_note("Keep", content="Original kept note.")
+    write_note("Drop", content="Original dropped note.")
+    originals = {path.name: path.read_bytes() for path in _kdir(home).glob("*.md")}
+
+    def fail_delete(*args, **kwargs):
+        raise OSError("injected delete failure")
+
+    monkeypatch.setattr(storage, "delete_note", fail_delete)
+    with pytest.raises(RuntimeError, match="both source notes were restored"):
+        merge_notes("default", "keep", "drop", dry_run=False)
+
+    assert {path.name: path.read_bytes() for path in _kdir(home).glob("*.md")} == originals
+    assert list_operations("default")[0]["status"] == "rolled_back"
+    assert _trash(home) == []
+    with KnowledgeDB("default") as db:
+        assert db.get_entity_by_permalink("keep") is not None
+        assert db.get_entity_by_permalink("drop") is not None
+
+
+def test_merge_journal_serializes_same_pair_operations(home):
+    from myclaw.knowledge.merge_journal import _pair_lock
+
+    with _pair_lock(_kdir(home), "keep", "drop"):
+        with pytest.raises(ValueError, match="already in progress"):
+            with _pair_lock(_kdir(home), "drop", "keep"):
+                pass
+
+
+def test_rollback_refuses_to_overwrite_a_post_merge_edit(api, home):
+    from myclaw.knowledge import read_note, update_note, write_note
+
+    write_note("Keep", content="Original kept note.")
+    write_note("Drop", content="Original dropped note.")
+    preview = api.post("/api/knowledge/merge", json={"keep": "keep", "drop": "drop"}).json()
+    applied = api.post("/api/knowledge/merge", json={
+        "keep": "keep", "drop": "drop", "dry_run": False,
+        "source_checksums": preview["source_checksums"],
+    }).json()
+    update_note("keep", content="A later user edit.")
+
+    rollback = api.post(
+        f"/api/knowledge/merge-operations/{applied['operation_id']}/rollback", json={})
+
+    assert rollback.status_code == 409
+    assert "changed after this operation" in rollback.json()["detail"]
+    assert "A later user edit." in read_note("keep").content
+    assert read_note("drop") is None
+
+
+def test_interrupted_merge_recovery_preserves_partial_files_and_restores_sources(api, home):
+    import json
+
+    from myclaw.knowledge import read_note, update_note, write_note
+    from myclaw.knowledge.db import KnowledgeDB
+
+    write_note("Keep", content="Original kept note.")
+    write_note("Drop", content="Original dropped note.")
+    original_keep = (_kdir(home) / "keep.md").read_bytes()
+    original_drop = (_kdir(home) / "drop.md").read_bytes()
+    preview = api.post("/api/knowledge/merge", json={
+        "keep": "keep", "drop": "drop", "dry_run": True,
+    }).json()
+    applied = api.post("/api/knowledge/merge", json={
+        "keep": "keep", "drop": "drop", "dry_run": False,
+        "source_checksums": preview["source_checksums"],
+    }).json()
+    update_note("keep", content="Partial merged file with a later edit.")
+    manifest_path = (_kdir(home) / ".merge-journal" / applied["operation_id"] / "manifest.json")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["status"] = "recovery_required"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+    recovered = api.post(
+        f"/api/knowledge/merge-operations/{applied['operation_id']}/recover", json={})
+
+    assert recovered.status_code == 200
+    assert recovered.json()["partial_state_preserved"] is True
+    assert (_kdir(home) / "keep.md").read_bytes() == original_keep
+    assert (_kdir(home) / "drop.md").read_bytes() == original_drop
+    result = json.loads(manifest_path.read_text(encoding="utf-8"))
+    preserved = result["recovery_attempt"]["preserved_state"][0]
+    saved_partial = (_kdir(home) / ".merge-journal" / applied["operation_id"] / preserved["snapshot"])
+    assert "Partial merged file with a later edit." in saved_partial.read_text(encoding="utf-8")
+    assert result["status"] == "recovered"
+    with KnowledgeDB("default") as db:
+        assert db.get_entity_by_permalink("keep") is not None
+        assert db.get_entity_by_permalink("drop") is not None
+    assert read_note("keep") is not None
+
+
+def test_medic_can_explain_merge_rationale_and_actual_diff(home):
+    import json
+
+    from myclaw.knowledge import write_note
+    from myclaw.knowledge.quality import merge_notes
+    from myclaw.tools import TOOLS
+
+    write_note("Keep", content="Original kept note.")
+    write_note("Drop", content="Original dropped note.")
+    preview = merge_notes("default", "keep", "drop")
+    result = merge_notes(
+        "default", "keep", "drop", dry_run=False,
+        operation_context={
+            "rationale": "Candidate was proposed as a duplicate for review.",
+            "proposal_reasons": ["same title"],
+            "review": {"status": "pass", "reasons": ["sources verified"]},
+            "source_checksums": preview["source_checksums"],
+        },
+    )
+
+    assert "diagnose_knowledge_merge" in TOOLS
+    from myclaw.agents.medic_agent import diagnose_knowledge_merge
+
+    diagnosis = json.loads(diagnose_knowledge_merge(result["operation_id"]))
+    assert diagnosis["rationale"] == "Candidate was proposed as a duplicate for review."
+    assert diagnosis["proposal_reasons"] == ["same title"]
+    assert diagnosis["review"]["status"] == "pass"
+    assert "Original dropped note." in diagnosis["actual_merge_diff"]
+    assert diagnosis["source_checksums_valid"] and diagnosis["merged_snapshot_checksum_valid"]
+
+
+def test_merge_refuses_stale_preview_checksums(api, home):
+    from myclaw.knowledge import read_note, update_note, write_note
+
+    write_note("Keep", content="Original kept note.")
+    write_note("Drop", content="Original dropped note.")
+    preview = api.post("/api/knowledge/merge", json={"keep": "keep", "drop": "drop"}).json()
+    update_note("keep", content="Edited after preview.")
+
+    applied = api.post("/api/knowledge/merge", json={
+        "keep": "keep", "drop": "drop", "dry_run": False,
+        "source_checksums": preview["source_checksums"],
+    })
+
+    assert applied.status_code == 400
+    assert "Source changed after review" in applied.json()["detail"]
+    assert read_note("keep") is not None and read_note("drop") is not None
 
 
 def test_year_like_values_after_a_key_are_values():

@@ -9,7 +9,7 @@ GET    /api/knowledge/note/{permalink}      one note: markdown, observations, li
 POST   /api/knowledge/note                  create a note ({name, title?, tags?, content?})
 PUT    /api/knowledge/note/{permalink}      replace a note's markdown ({content})
 DELETE /api/knowledge/note/{permalink}      move a note to the base's .trash folder (undo: move it back)
-GET    /api/knowledge/search?q=&base=&mode= full-text search; mode auto|fts|semantic|hybrid (KB phase 3)
+GET    /api/knowledge/search?q=&base=&mode= four-way search; mode retained for compatibility
 POST   /api/knowledge/sync?base=            re-index the markdown files into the database
 POST   /api/knowledge/enrich?base=          add tags, facts and links to plain notes (default model)
 
@@ -20,9 +20,13 @@ GET    /api/knowledge/categories?base=             fact categories with counts +
 POST   /api/knowledge/categories/merge?base=       rename a category in every note ({from, to, dry_run})
 GET    /api/knowledge/duplicates?base=             candidate pairs of duplicate notes (no changes)
 POST   /api/knowledge/merge?base=                  merge two notes ({keep, drop, dry_run})
+GET    /api/knowledge/merge-operations?base=       list durable merge journal entries
+POST   /api/knowledge/merge-operations/{id}/rollback restore exact source snapshots
+POST   /api/knowledge/merge-operations/{id}/recover  restore interrupted merge snapshots safely
 
 Every change to note files has a preview (``dry_run``, default true) and keeps
-the previous versions in the base's .trash folder. The note route returns
+the previous versions in the base's .trash folder. Applied merges also retain
+exact, checksummed snapshots in .merge-journal for rollback. The note route returns
 ``conflicts`` and each fact's ``source``; graph nodes carry ``conflicts`` and
 ``categories``.
 
@@ -449,37 +453,52 @@ async def remove_note(permalink: str, base: str | None = None):
 
 @router.get("/api/knowledge/search", dependencies=guard)
 async def search(q: str, base: str | None = None, limit: int = 30, mode: str = "auto"):
-    """Full-text search; falls back to matching titles and text when the index finds nothing.
+    """Search words, meaning, graph relations, and time concurrently.
 
-    2026-10-23 (KB phase 0): AND / OR / NOT and "quoted phrases" work (boolean=True).
-    2026-10-24 (KB phase 3): ``mode`` auto | fts | semantic | hybrid; the answer
-    also says which was used (``mode``) and why not semantic (``note``).
+    ``mode`` is retained for old clients but no longer disables a strategy.
     """
     from myclaw.knowledge import semantic
-    from myclaw.knowledge.storage import search_notes
+    from myclaw.knowledge.recall import parallel_recall
 
     b = _base(base)
     q = (q or "").strip()
-    m = semantic.normalise_mode(mode)
-    if m is None:
+    if semantic.normalise_mode(mode) is None:
         raise HTTPException(status_code=400, detail="mode must be auto, fts, semantic or hybrid.")
     if not q:
-        return {"results": [], "mode": "fts", "note": None}
-    hits: list[str] = []
+        return {"results": [], "mode": "parallel-hybrid", "note": None, "partial": False,
+                "strategies": {}, "strategies_by_note": {}}
     info: dict[str, Any] = {}
     try:
-        kw: dict[str, Any] = {} if (m == "fts" or (m == "auto" and not semantic.enabled())) else {
-            "mode": m, "info": info, "semantic_timeout": semantic.SEARCH_TIMEOUT}
-        hits = [n.permalink for n in await asyncio.to_thread(
-            lambda: search_notes(q, b, max(1, min(limit, 100)), None, True, **kw))]
+        notes = await asyncio.to_thread(
+            parallel_recall, q, b, max(1, min(limit, 100)), info, True)
     except Exception as e:
-        logger.debug("FTS search failed: %s", e)
-    if not hits:
-        ql = q.lower()
-        for n in await asyncio.to_thread(_parse_all, b):
-            if ql in (n.title or "").lower() or ql in n.permalink or ql in (n.content or "").lower():
-                hits.append(n.permalink)
-    return {"results": hits[:limit], "mode": info.get("mode", "fts"), "note": info.get("fallback")}
+        logger.exception("Four-way knowledge recall failed")
+        raise HTTPException(
+            status_code=503,
+            detail="Knowledge search could not run. Check the Knowledge Doctor and try again.",
+        ) from e
+    status = info.get("strategies", {})
+    issues = [
+        f"{name}: {detail.get('fallback') or status.get(name, 'unavailable')}"
+        for name, detail in info.get("strategy_details", {}).items()
+        if detail.get("fallback")
+    ]
+    issues.extend(
+        f"{name}: {value}"
+        for name, value in status.items()
+        if value != "ok" and not any(item.startswith(f"{name}:") for item in issues)
+    )
+    note = None
+    if info.get("partial"):
+        note = "Partial results; some strategies were unavailable: " + "; ".join(issues)
+    return {
+        "results": [n.permalink for n in notes],
+        "mode": "parallel-hybrid",
+        "note": note,
+        "partial": bool(info.get("partial")),
+        "strategies": status,
+        "strategies_by_note": info.get("strategies_by_note", {}),
+    }
 
 
 class EnrichRequest(BaseModel):
@@ -643,17 +662,19 @@ async def merge_categories(req: CategoryMerge, base: str | None = None):
 
 
 @router.get("/api/knowledge/duplicates", dependencies=guard)
-async def duplicates(base: str | None = None, limit: int = Query(100, ge=1, le=500)):
+async def duplicates(base: str | None = None, limit: int = Query(100, ge=1, le=500),
+                     evidence: bool = True):
     from myclaw.knowledge.quality import find_duplicates
 
     # 2026-10-24 (KB phase 2 review): {"pairs", "partial", "message"}; at most ~20 s
-    return await asyncio.to_thread(find_duplicates, _base(base), None, limit, True, 20.0)
+    return await asyncio.to_thread(find_duplicates, _base(base), None, limit, True, 20.0, evidence)
 
 
 class NoteMerge(BaseModel):
     keep: str
     drop: str
     dry_run: bool = True
+    source_checksums: dict[str, str] | None = None
 
 
 @router.post("/api/knowledge/merge", dependencies=guard)
@@ -661,8 +682,49 @@ async def merge(req: NoteMerge, base: str | None = None):
     from myclaw.knowledge.quality import merge_notes
 
     try:
-        return await asyncio.to_thread(merge_notes, _base(base), req.keep, req.drop, req.dry_run)
+        return await asyncio.to_thread(
+            merge_notes, _base(base), req.keep, req.drop, req.dry_run, None,
+            {"rationale": "User approved the merge preview",
+             "source_checksums": req.source_checksums or {}},
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/api/knowledge/merge-operations", dependencies=guard)
+async def merge_operations(base: str | None = None):
+    from myclaw.knowledge.merge_journal import list_operations
+
+    return {"operations": await asyncio.to_thread(list_operations, _base(base))}
+
+
+@router.post("/api/knowledge/merge-operations/{operation_id}/rollback", dependencies=guard)
+async def rollback_merge(operation_id: str, base: str | None = None):
+    from myclaw.knowledge.merge_journal import rollback_merge as rollback
+
+    try:
+        return await asyncio.to_thread(rollback, _base(base), operation_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/knowledge/merge-operations/{operation_id}/recover", dependencies=guard)
+async def recover_merge(operation_id: str, base: str | None = None):
+    from myclaw.knowledge.merge_journal import recover_operation
+
+    try:
+        return await asyncio.to_thread(recover_operation, _base(base), operation_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except RuntimeError as e:
+        raise HTTPException(status_code=500, detail=str(e))

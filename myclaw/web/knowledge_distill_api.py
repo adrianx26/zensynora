@@ -5,11 +5,15 @@ Routes
 GET  /api/knowledge/facts?base=&q=&limit=&offset=&category=   distilled facts (L1), best first
 GET  /api/knowledge/scenarios?base=&q=&limit=                 scenarios (L2) with their first facts
 GET  /api/knowledge/persona?base=&version=                    the persona (L3), newest or one version
+GET  /api/knowledge/pages?base=&q=&limit=                     derived topic pages and mental profile
 GET  /api/knowledge/drill/{kind}/{id}?base=                   the notes and fact lines behind a fact,
                                                               scenario or persona (kind: fact |
                                                               scenario | persona; id: number, or
                                                               "latest" for the persona)
 GET  /api/knowledge/distill/status?base=                      counts, last run, waiting notes, job
+GET  /api/knowledge/distill/proposals?base=&limit=             read-only merge / redundant-work proposals
+GET  /api/knowledge/decision/status                            selected decision mode, readiness and latency
+POST /api/knowledge/decision/warm                              retry a configured local decision model warm-up
 POST /api/knowledge/distill?base=&full=                       run it now in a background thread
                                                               (incremental; full = read every note)
 DELETE /api/knowledge/distill?base=                           ask a running job to stop (keeps what
@@ -75,6 +79,14 @@ async def persona(base: str | None = None, version: Optional[int] = Query(None, 
     return {"base": b, "persona": p}
 
 
+@router.get("/api/knowledge/pages", dependencies=guard)
+async def pages(base: str | None = None, q: str = "", limit: int = Query(50, ge=1, le=500)):
+    from myclaw.knowledge import distill
+
+    b = _base(base)
+    return await asyncio.to_thread(distill.list_pages, b, q[:500], limit)
+
+
 @router.get("/api/knowledge/drill/{kind}/{item_id}", dependencies=guard)
 async def drill(kind: str, item_id: str, base: str | None = None):
     from myclaw.knowledge import distill
@@ -106,6 +118,32 @@ async def distill_status(base: str | None = None):
     with _lock:
         st["job"] = _job_view(_jobs.get(b))
     return st
+
+
+@router.get("/api/knowledge/decision/status", dependencies=guard)
+async def decision_status():
+    from myclaw.knowledge import decision
+    from myclaw.config import load_config
+
+    return await asyncio.to_thread(decision.status, load_config())
+
+
+@router.post("/api/knowledge/decision/warm", dependencies=guard)
+async def decision_warm():
+    from myclaw.knowledge import decision
+    from myclaw.config import load_config
+
+    try:
+        return await asyncio.to_thread(decision.warm, load_config())
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/api/knowledge/distill/proposals", dependencies=guard)
+async def distill_proposals(base: str | None = None, limit: int = Query(100, ge=1, le=500)):
+    from myclaw.knowledge import distill
+
+    return await asyncio.to_thread(distill.consolidation_proposals, _base(base), limit)
 
 
 def _run(b: str, job: Dict[str, Any], full: bool) -> None:

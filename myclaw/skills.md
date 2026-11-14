@@ -392,6 +392,11 @@ twelve of them were advertised but missing). Full guide:
 - **Input Contract**: `offline: bool = False` (skip network checks); `get_health_report` also takes `as_json: bool`.
 - **Output Contract**: `"OK|WARN|FAIL: n checks ok, …"` followed by each problem and its fix hint / full report.
 
+### SK-12.1a — `diagnose_knowledge_merge`
+- **Description**: Read the saved merge proposal rationale, independent review, source checksums, and exact before/after diff for a journaled merge. It never edits notes.
+- **Input Contract**: `operation_id` from Knowledge → Possible duplicates → Merge history.
+- **Output Contract**: JSON diagnosis with proposal evidence and actual merge diff, or an actionable message for an invalid/missing operation.
+
 ### SK-12.2 — `scan_files` / `verify_file_integrity` / `enable_hash_check`
 - **Description**: Record and verify SHA-256 hashes of the installed code.
 - **Input Contract**: `file_paths` (comma-separated, relative to the install) / `file_path` / `enabled: bool`.

@@ -63,7 +63,9 @@ def bases() -> List[str]:
 
     names = set()
     try:
-        for p in (Path.home() / ".myclaw").glob("knowledge_*.db"):
+        from .storage import default_base_dir
+
+        for p in default_base_dir().glob("knowledge_*.db"):
             names.add(p.name[len("knowledge_"):-len(".db")])
     except OSError:
         pass
@@ -394,6 +396,12 @@ def trash(base: str = "default") -> Dict[str, Any]:
     return out
 
 
+def merge_operations(base: str = "default") -> Dict[str, Any]:
+    from .merge_journal import audit_operations
+
+    return audit_operations(base)
+
+
 def human_bytes(n: int) -> str:
     size = float(n)
     for unit in ("B", "KB", "MB", "GB"):
@@ -467,6 +475,13 @@ def warnings_for(h: Dict[str, Any]) -> List[Dict[str, str]]:
         _warn(w, "trash", f".trash holds {t['files']} file(s), {human_bytes(t['bytes'])}",
               f"Check {t.get('path')} and delete old versions you do not need "
               "(ZenSynora never empties it).")
+    merges = h.get("merges") or {}
+    for finding in merges.get("findings", []):
+        _warn(w, "merges",
+              f"Merge {finding.get('operation_id')}: {finding.get('message')}",
+              f"Knowledge → Possible duplicates → Merge history. Review the saved proposal rationale "
+              f"and journal; use Recover to restore verified source snapshots while preserving "
+              f"partial files, or rollback {finding.get('operation_id')} if its merged note has not changed.")
     return w
 
 
@@ -488,7 +503,8 @@ def health(base: str = "default") -> Dict[str, Any]:
     parts = (("index", lambda: index_drift(base)), ("links", lambda: links(base)),
              ("conflicts", lambda: conflicts(base)), ("embeddings", lambda: embeddings(base)),
              ("distill", lambda: distillation(base)), ("watcher", watcher),
-             ("ingest", lambda: ingest_errors(base=base)), ("trash", lambda: trash(base)))
+             ("ingest", lambda: ingest_errors(base=base)), ("trash", lambda: trash(base)),
+             ("merges", lambda: merge_operations(base)))
     for name, fn in parts:
         try:
             out[name] = fn()

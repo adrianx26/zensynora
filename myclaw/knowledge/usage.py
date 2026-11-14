@@ -92,7 +92,9 @@ def options() -> Dict[str, Any]:
 
 def db_path() -> Path:
     """``~/.myclaw/knowledge-usage.db`` of the current HOME (tests change HOME)."""
-    return Path.home() / ".myclaw" / "knowledge-usage.db"
+    from .storage import default_base_dir
+
+    return default_base_dir() / "knowledge-usage.db"
 
 
 # ── turn context ────────────────────────────────────────────────────────────

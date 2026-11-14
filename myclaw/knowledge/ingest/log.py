@@ -20,7 +20,9 @@ _lock = threading.Lock()
 
 
 def log_path() -> Path:
-    return Path.home() / ".myclaw" / "logs" / "knowledge_ingest.jsonl"
+    from ..storage import default_base_dir
+
+    return default_base_dir() / "logs" / "knowledge_ingest.jsonl"
 
 
 def append(result: IngestResult, error: str = "") -> None:

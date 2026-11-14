@@ -126,6 +126,7 @@ All tools are registered in `myclaw/tools/__init__.py` and implemented in
 |---|---|
 | `check_system_health(offline=False)` | One-line verdict plus every warning/failure from the doctor |
 | `get_health_report(offline=False, as_json=False)` | Full doctor report |
+| `diagnose_knowledge_merge(operation_id)` | Read-only merge rationale, reviewer result, snapshot checksums, and exact before/after diff |
 | `check_memory_usage(threshold_percent=85)` | RAM usage, warns above the threshold |
 | `scan_files(file_paths="")` | Record SHA-256 hashes of the installed code as the integrity baseline |
 | `verify_file_integrity(file_path="")` | Report files modified or missing since the baseline |

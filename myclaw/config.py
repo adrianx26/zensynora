@@ -525,15 +525,21 @@ class KnowledgeConfig(BaseModel):
     detect_conflicts: bool = True
     hub_penalty: bool = True
     hub_degree: int = Field(25, ge=1, le=10000)
-    # 2026-10-24 (KB phase 3): semantic search (local embeddings, optional
-    # package fastembed). Off by default; vectors live in the index database.
-    semantic_search: bool = False
+    # Full knowledge recall always runs local semantic search alongside FTS,
+    # graph, and temporal retrieval. Kept for config compatibility.
+    semantic_search: bool = True
     embedding_model: str = "BAAI/bge-small-en-v1.5"
     # cosine similarity below which a note is no semantic match (0 = the model's default)
     semantic_min_score: float = Field(0.0, ge=0.0, le=1.0)
-    # 2026-10-24 (KB phase 4): L0–L3 distillation (facts, scenarios, persona) in
-    # the background and first in the agent's context. Off by default.
-    distill: bool = False
+    parallel_recall: bool = True  # compatibility field; full four-way recall is always on
+    recall_timeout_seconds: float = Field(1.5, ge=0.1, le=30.0)
+    # Optional on-device classification for recall; rules remain the default and fallback.
+    decision_mode: Literal["rules", "local", "rules_then_local"] = "rules"
+    decision_provider: Literal["ollama", "lmstudio", "llamacpp", "nvpair", "freetoken"] = "ollama"
+    decision_model: str = ""
+    # L0–L3 distillation is local and deterministic. It is enabled by default
+    # and can be disabled when distilled facts/persona should not enter context.
+    distill: bool = True
     distill_every: int = Field(20, ge=1, le=100000)          # changed notes per background run
     distill_idle_minutes: float = Field(10.0, ge=0.0, le=10080.0)  # … or this long after the last change
     # 2026-10-25 (KB phase 6): the Web UI re-indexes note files changed by hand
@@ -1035,13 +1041,15 @@ def _apply_knowledge_quality(config: AppConfig) -> None:
 
 
 def _apply_knowledge_semantic(config: AppConfig) -> None:
-    """Apply ``knowledge.semantic_search`` / ``embedding_model`` /
-    ``semantic_min_score`` (2026-10-24, KB phase 3). Never makes loading fail."""
+    """Apply local semantic retrieval and the mandatory four-way recall settings."""
     try:
         kc = getattr(config, "knowledge", None)
+        if kc is not None:
+            kc.semantic_search = True
+            kc.parallel_recall = True
         from .knowledge.semantic import set_options
 
-        set_options(semantic_search=getattr(kc, "semantic_search", False),
+        set_options(semantic_search=True,
                     embedding_model=getattr(kc, "embedding_model", None),
                     kb_enabled=getattr(kc, "enabled", True),
                     min_score=getattr(kc, "semantic_min_score", 0.0),
@@ -1055,8 +1063,12 @@ def _apply_knowledge_semantic(config: AppConfig) -> None:
                            floor=getattr(kc, "decay_floor", 0.3),
                            categories=getattr(kc, "decay_categories", {}),
                            ai=getattr(kc, "decay_ai", False))
+        from .knowledge import recall as _recall
+
+        _recall.set_options(enabled=True,
+                            timeout_seconds=getattr(kc, "recall_timeout_seconds", 1.5))
     except Exception as e:
-        logger.warning("semantic search settings could not be applied (%s); it stays off", e)
+        logger.warning("knowledge retrieval settings could not be applied (%s)", e)
 
 
 def _apply_knowledge_distill(config: AppConfig) -> None:
@@ -1072,6 +1084,17 @@ def _apply_knowledge_distill(config: AppConfig) -> None:
                     kb_enabled=getattr(kc, "enabled", True))
     except Exception as e:
         logger.warning("distillation settings could not be applied (%s); it stays off", e)
+
+
+def _apply_knowledge_decision(config: AppConfig) -> None:
+    try:
+        from .knowledge.decision import set_options
+
+        kc = config.knowledge
+        set_options(mode=kc.decision_mode, provider=kc.decision_provider,
+                    model=kc.decision_model, config=config)
+    except Exception as e:
+        logger.warning("knowledge decision settings could not be applied (%s)", e)
 
 
 def _apply_doctor_ai(config: AppConfig) -> None:
@@ -1160,6 +1183,7 @@ def load_config(force_reload: bool = False) -> AppConfig:
             _apply_knowledge_quality(_cached_config)
             _apply_knowledge_semantic(_cached_config)
             _apply_knowledge_distill(_cached_config)
+            _apply_knowledge_decision(_cached_config)
             _apply_knowledge_evaluate(_cached_config)
             _apply_doctor_ai(_cached_config)
             _apply_knowledge_watch(_cached_config)

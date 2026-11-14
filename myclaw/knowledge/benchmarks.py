@@ -229,7 +229,9 @@ def _from_index(con: sqlite3.Connection, out: Dict[str, Any]) -> None:
 
 def benchmarks(base: str = "default", max_age: float = CACHE_SECONDS) -> Dict[str, Any]:
     """:func:`compute`, cached for ``max_age`` seconds per base (and HOME)."""
-    key = (str(Path.home()), base)
+    from .storage import default_base_dir
+
+    key = (str(default_base_dir()), base)
     now = time.monotonic()
     with _lock:
         hit = _cache.get(key)
