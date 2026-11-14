@@ -1769,11 +1769,16 @@ words. Tag search matches whole tags (<code>py</code> does not find <code>python
 <h2 id="retain-recall-reflect">Retain, Recall, Reflect<a class="headerlink" href="#retain-recall-reflect" title="Permanent link">&para;</a></h2>
 <ul>
 <li><strong>Retain:</strong> Markdown is canonical. A note is parsed, validated and indexed;
-  observation capture time, confidence, verification and supersession metadata
-  are preserved when supplied. Missing research dates remain unknown rather
-  than being guessed.</li>
+  observation capture time (<code>captured_at</code>), confidence, verification and
+  supersession metadata are preserved when supplied. Live writes
+  (<code>write_to_knowledge</code>, automatic extraction, live ingestion) stamp
+  <code>captured_at</code> automatically; missing historical/research dates remain
+  <code>unknown</code> rather than being guessed. <code>backfill_captured_at</code> can preview and
+  apply verifiable dates from explicit frontmatter or dated note titles.</li>
 <li><strong>Recall:</strong> word/FTS, local semantic, graph, and temporal searches run
-  concurrently for each natural-language query. Their candidates are fused,
+  concurrently for each natural-language query. Time-windowed temporal queries
+  prefer <code>captured_at</code> and fall back to <code>updated_at</code> when <code>captured_at</code> is
+  <code>unknown</code>. Their candidates are fused,
   deduplicated, and attributed to their contributing strategies under the
   agent's existing context-character budget. A timeout or unavailable stream
   is reported as partial retrieval. Explicit <code>memory://&lt;permalink&gt;</code> references
