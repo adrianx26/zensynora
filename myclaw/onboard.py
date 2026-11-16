@@ -7,11 +7,16 @@ _PROVIDER_HINTS = {
     "llamacpp":   "Local — llama.cpp server (http://localhost:8080/v1)",
     "nvpair":     "Local — NVIDIA PAIR, routes to a free GPU at home (http://127.0.0.1:11434/v1)",
     "freetoken":  "Local — FreeToken / FreeToken Desktop (http://127.0.0.1:1919/v1)",
+    "bionic":     "Local — Bionic / BionicGPT (http://127.0.0.1:8080/v1)",
     "openai":     "Online — OpenAI (requires api_key)",
     "anthropic":  "Online — Anthropic Claude (requires api_key)",
     "gemini":     "Online — Google Gemini (requires api_key)",
     "groq":       "Online — Groq (requires api_key, very fast)",
     "openrouter": "Online — OpenRouter (requires api_key, 100+ models)",
+    "copilot":    "Online — GitHub Copilot (requires api_key)",
+    "github":     "Online — GitHub Models (requires api_key)",
+    "kilo":       "Online — Kilo Gateway (requires api_key)",
+    "opencode":   "Online — OpenCode Zen (requires api_key)",
 }
 
 
@@ -39,18 +44,24 @@ def onboard():
         "llamacpp":   "local-model",
         "nvpair":     "llama3.2",
         "freetoken":  "local-model",
+        "bionic":     "local-model",
         "openai":     "gpt-4o-mini",
         "anthropic":  "claude-3-5-sonnet-20241022",
         "gemini":     "gemini-1.5-flash",
         "groq":       "llama3-70b-8192",
         "openrouter": "openai/gpt-4o-mini",
+        "copilot":    "gpt-4o",
+        "github":     "openai/gpt-4o-mini",
+        "kilo":       "anthropic/claude-sonnet-4",
+        "opencode":   "claude-sonnet-4-5",
     }
     default_model = _model_hints.get(provider, "llama3.2")
     model = input(f"Model name (default: {default_model}): ").strip() or default_model
 
     # ── API key (online only) ──────────────────────────────────────────────────
     api_key = ""
-    online = {"openai", "anthropic", "gemini", "groq", "openrouter"}
+    online = {"openai", "anthropic", "gemini", "groq", "openrouter",
+              "copilot", "github", "kilo", "opencode"}
     if provider in online:
         api_key = input(f"API key for {provider}: ").strip()
 
@@ -85,11 +96,16 @@ def onboard():
             "llamacpp":   {"base_url": "http://localhost:8080/v1",  "api_key": "no-key"},
             "nvpair":     {"base_url": "http://127.0.0.1:11434/v1", "api_key": "no-key"},
             "freetoken":  {"base_url": "http://127.0.0.1:1919/v1",  "api_key": "no-key"},
+            "bionic":     {"base_url": "http://127.0.0.1:8080/v1",  "api_key": "no-key"},
             "openai":     {"api_key": api_key if provider == "openai"     else ""},
             "anthropic":  {"api_key": api_key if provider == "anthropic"  else ""},
             "gemini":     {"api_key": api_key if provider == "gemini"     else ""},
             "groq":       {"api_key": api_key if provider == "groq"       else ""},
             "openrouter": {"api_key": api_key if provider == "openrouter" else ""},
+            "copilot":    {"api_key": api_key if provider == "copilot"    else ""},
+            "github":     {"api_key": api_key if provider == "github"     else ""},
+            "kilo":       {"api_key": api_key if provider == "kilo"       else ""},
+            "opencode":   {"api_key": api_key if provider == "opencode"   else ""},
         },
         "agents": {
             "defaults": {
@@ -164,7 +180,7 @@ def onboard():
     if gdpr_enabled:
         print("🔒 GDPR compliance enabled. Use `zensynora gdpr delete <user_id>` to erase user data.")
 
-    if provider in {"ollama", "lmstudio", "llamacpp", "nvpair", "freetoken"}:
+    if provider in {"ollama", "lmstudio", "llamacpp", "nvpair", "freetoken", "bionic"}:
         print(f"\nMake sure your {provider} server is running, then: zensynora agent")
     else:
         print("\nRun `zensynora agent` to start chatting.")

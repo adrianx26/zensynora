@@ -1002,6 +1002,12 @@ class FreeTokenProvider(_LocalOpenAIProvider):
     NAME, DEFAULT_URL = "freetoken", "http://127.0.0.1:1919/v1"
 
 
+class BionicProvider(_LocalOpenAIProvider):
+    """Bionic / BionicGPT local OpenAI-compatible server."""
+
+    NAME, DEFAULT_URL = "bionic", "http://127.0.0.1:8080/v1"
+
+
 class LlamaCppProvider(OpenAICompatProvider):
     """llama-server (llama.cpp) — OpenAI-compat, default http://localhost:8080/v1."""
 
@@ -1074,6 +1080,49 @@ class OpenRouterProvider(OpenAICompatProvider):
         if site_name:
             headers["X-OpenRouter-Title"] = site_name
         super().__init__(api_key=api_key, base_url=base_url, timeout=timeout, extra_headers=headers)
+
+
+class _CloudOpenAIProvider(OpenAICompatProvider):
+    """Online OpenAI-compatible provider reading ``config.providers.<NAME>``."""
+
+    NAME: str = ""
+    DEFAULT_URL: str = ""
+
+    def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
+        try:
+            cfg = getattr(config.providers, self.NAME)
+            api_key = cfg.api_key.get_secret_value()
+            base_url = getattr(cfg, "base_url", "") or self.DEFAULT_URL
+        except Exception:
+            api_key = ""
+            base_url = self.DEFAULT_URL
+        if not api_key:
+            raise ValueError(f"{self.NAME}.api_key is not set in config.")
+        super().__init__(api_key=api_key, base_url=base_url, timeout=timeout)
+
+
+class CopilotProvider(_CloudOpenAIProvider):
+    """GitHub Copilot OpenAI-compatible provider."""
+
+    NAME, DEFAULT_URL = "copilot", "https://api.githubcopilot.com"
+
+
+class GitHubProvider(_CloudOpenAIProvider):
+    """GitHub Models OpenAI-compatible provider."""
+
+    NAME, DEFAULT_URL = "github", "https://models.github.ai/inference"
+
+
+class KiloProvider(_CloudOpenAIProvider):
+    """Kilo Gateway OpenAI-compatible provider."""
+
+    NAME, DEFAULT_URL = "kilo", "https://api.kilo.ai/api/gateway"
+
+
+class OpenCodeProvider(_CloudOpenAIProvider):
+    """OpenCode Zen OpenAI-compatible provider."""
+
+    NAME, DEFAULT_URL = "opencode", "https://opencode.ai/zen/v1"
 
 
 class AnthropicProvider(BaseLLMProvider):
@@ -1388,11 +1437,16 @@ _PROVIDER_MAP = {
     "llamacpp": LlamaCppProvider,
     "nvpair": NVPairProvider,
     "freetoken": FreeTokenProvider,
+    "bionic": BionicProvider,
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "gemini": GeminiProvider,
     "groq": GroqProvider,
     "openrouter": OpenRouterProvider,
+    "copilot": CopilotProvider,
+    "github": GitHubProvider,
+    "kilo": KiloProvider,
+    "opencode": OpenCodeProvider,
 }
 
 SUPPORTED_PROVIDERS = list(_PROVIDER_MAP.keys())
@@ -1516,7 +1570,7 @@ def provider_names(config=None) -> List[str]:
     return names
 
 
-LOCAL_BUILTIN_PROVIDERS = ("ollama", "lmstudio", "llamacpp", "nvpair", "freetoken")
+LOCAL_BUILTIN_PROVIDERS = ("ollama", "lmstudio", "llamacpp", "nvpair", "freetoken", "bionic")
 _CLOUD_DEFAULT_URLS = {
     "anthropic": "https://api.anthropic.com/v1",
     "gemini": "https://generativelanguage.googleapis.com/v1beta",
@@ -1544,7 +1598,7 @@ def provider_endpoint(config, name: str, key_id: Optional[str] = None) -> Option
         key = pcfg.api_key.get_secret_value() if pcfg is not None and hasattr(pcfg, "api_key") else ""
         kind = name if name in ("ollama", "anthropic", "gemini") else "openai"
         url = getattr(pcfg, "base_url", "") or _CLOUD_DEFAULT_URLS.get(name, "")
-        if name in ("lmstudio", "llamacpp", "nvpair", "freetoken"):
+        if name in ("lmstudio", "llamacpp", "nvpair", "freetoken", "bionic"):
             url = _with_v1(url)  # v0.7.3: same URL the provider really uses
         return {"kind": kind, "base_url": url.rstrip("/"), "api_key": key,
                 "local": name in LOCAL_BUILTIN_PROVIDERS, "label": name, "custom": False}

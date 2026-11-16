@@ -121,7 +121,12 @@ ENV_OVERRIDES = {
     "providers.lmstudio.base_url": "MYCLAW_LMSTUDIO_BASE_URL",
     "providers.nvpair.base_url": "MYCLAW_NVPAIR_BASE_URL",        # 2026-11-08
     "providers.freetoken.base_url": "MYCLAW_FREETOKEN_BASE_URL",  # 2026-11-08
+    "providers.bionic.base_url": "MYCLAW_BIONIC_BASE_URL",
     "providers.openrouter.api_key": "MYCLAW_OPENROUTER_API_KEY",
+    "providers.copilot.api_key": "MYCLAW_COPILOT_API_KEY",
+    "providers.github.api_key": "MYCLAW_GITHUB_API_KEY",
+    "providers.kilo.api_key": "MYCLAW_KILO_API_KEY",
+    "providers.opencode.api_key": "MYCLAW_OPENCODE_API_KEY",
     # Telegram
     "channels.telegram.token": "MYCLAW_TELEGRAM_TOKEN",
     # WhatsApp
@@ -362,6 +367,13 @@ class FreeTokenConfig(MultiKeyMixin):
     api_key: SecretStr = SecretStr("no-key")
 
 
+class BionicConfig(MultiKeyMixin):
+    """Bionic / BionicGPT local server — OpenAI-compatible REST API."""
+
+    base_url: str = "http://127.0.0.1:8080/v1"
+    api_key: SecretStr = SecretStr("no-key")
+
+
 # ── Online Providers ──────────────────────────────────────────────────────────
 
 
@@ -388,6 +400,26 @@ class OpenRouterConfig(MultiKeyMixin):
     base_url: str = "https://openrouter.ai/api/v1"
     site_url: str = ""  # optional X-OpenRouter-Site-URL header
     site_name: str = ""  # optional X-OpenRouter-Title header
+
+
+class CopilotConfig(MultiKeyMixin):
+    api_key: SecretStr = SecretStr("")
+    base_url: str = "https://api.githubcopilot.com"
+
+
+class GitHubModelsConfig(MultiKeyMixin):
+    api_key: SecretStr = SecretStr("")
+    base_url: str = "https://models.github.ai/inference"
+
+
+class KiloConfig(MultiKeyMixin):
+    api_key: SecretStr = SecretStr("")
+    base_url: str = "https://api.kilo.ai/api/gateway"
+
+
+class OpenCodeConfig(MultiKeyMixin):
+    api_key: SecretStr = SecretStr("")
+    base_url: str = "https://opencode.ai/zen/v1"
 
 
 # ── Providers Container ───────────────────────────────────────────────────────
@@ -417,11 +449,16 @@ class ProvidersConfig(BaseModel):
     llamacpp: LlamaCppConfig = LlamaCppConfig()
     nvpair: NVPairConfig = NVPairConfig()          # 2026-11-08
     freetoken: FreeTokenConfig = FreeTokenConfig()  # 2026-11-08
+    bionic: BionicConfig = BionicConfig()
     openai: OpenAIConfig = OpenAIConfig()
     anthropic: AnthropicConfig = AnthropicConfig()
     gemini: GeminiConfig = GeminiConfig()
     groq: GroqConfig = GroqConfig()
     openrouter: OpenRouterConfig = OpenRouterConfig()
+    copilot: CopilotConfig = CopilotConfig()
+    github: GitHubModelsConfig = GitHubModelsConfig()
+    kilo: KiloConfig = KiloConfig()
+    opencode: OpenCodeConfig = OpenCodeConfig()
     # v0.7.1: user-defined providers (see CustomProviderConfig).
     custom: list[CustomProviderConfig] = []
 
@@ -535,7 +572,7 @@ class KnowledgeConfig(BaseModel):
     recall_timeout_seconds: float = Field(1.5, ge=0.1, le=30.0)
     # Optional on-device classification for recall; rules remain the default and fallback.
     decision_mode: Literal["rules", "local", "rules_then_local"] = "rules"
-    decision_provider: Literal["ollama", "lmstudio", "llamacpp", "nvpair", "freetoken"] = "ollama"
+    decision_provider: Literal["ollama", "lmstudio", "llamacpp", "nvpair", "freetoken", "bionic"] = "ollama"
     decision_model: str = ""
     # L0–L3 distillation is local and deterministic. It is enabled by default
     # and can be disabled when distilled facts/persona should not enter context.
@@ -912,7 +949,8 @@ def _validate_config(config: AppConfig) -> None:
         has_local = True
 
     # Check cloud provider API keys
-    for prov_name in ("openai", "anthropic", "gemini", "groq", "openrouter"):
+    for prov_name in ("openai", "anthropic", "gemini", "groq", "openrouter",
+                      "copilot", "github", "kilo", "opencode"):
         prov = getattr(config.providers, prov_name, None)
         if prov and prov.api_key and prov.api_key.get_secret_value():
             has_api_key = True

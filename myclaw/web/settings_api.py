@@ -42,9 +42,14 @@ _PROVIDER_SDK = {
     "llamacpp": ("openai", "openai"),
     "nvpair": ("openai", "openai"),
     "freetoken": ("openai", "openai"),
+    "bionic": ("openai", "openai"),
     "openai": ("openai", "openai"),
     "groq": ("openai", "openai"),
     "openrouter": ("openai", "openai"),
+    "copilot": ("openai", "openai"),
+    "github": ("openai", "openai"),
+    "kilo": ("openai", "openai"),
+    "opencode": ("openai", "openai"),
     "anthropic": ("anthropic", "anthropic"),
     "gemini": ("google.generativeai", "google-generativeai"),
 }
@@ -674,7 +679,8 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str],
 
     # Built-in cloud providers always need a key. Custom ones may not (local
     # servers); a cloud server without a key answers 401, reported below.
-    if provider in ("openai", "groq", "openrouter", "anthropic", "gemini") and not key:
+    if provider in ("openai", "groq", "openrouter", "anthropic", "gemini",
+                    "copilot", "github", "kilo", "opencode") and not key:
         return {"ok": False, "error": "API key is not set.", "models": [], "url": url}
 
     started = time.monotonic()

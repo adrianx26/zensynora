@@ -18,7 +18,7 @@ from .quality import normalize_category
 
 logger = logging.getLogger(__name__)
 MODEL_TIMEOUT_SECONDS = 0.9
-_LOCAL_PROVIDERS = frozenset({"ollama", "lmstudio", "llamacpp", "nvpair", "freetoken"})
+_LOCAL_PROVIDERS = frozenset({"ollama", "lmstudio", "llamacpp", "nvpair", "freetoken", "bionic"})
 _STATE_LOCK = threading.Lock()
 _STATE: dict[str, Any] = {"state": "not_run", "latency_ms": None, "error": None}
 _OPTIONS: dict[str, str] = {

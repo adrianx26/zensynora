@@ -21,13 +21,18 @@ PROVIDER_SDK = {
     "llamacpp": ("openai", "openai"),
     "nvpair": ("openai", "openai"),
     "freetoken": ("openai", "openai"),
+    "bionic": ("openai", "openai"),
     "openai": ("openai", "openai"),
     "groq": ("openai", "openai"),
     "openrouter": ("openai", "openai"),
+    "copilot": ("openai", "openai"),
+    "github": ("openai", "openai"),
+    "kilo": ("openai", "openai"),
+    "opencode": ("openai", "openai"),
     "anthropic": ("anthropic", "anthropic"),
     "gemini": ("google.generativeai", "google-generativeai"),
 }
-LOCAL_PROVIDERS = {"ollama", "lmstudio", "llamacpp", "nvpair", "freetoken"}
+LOCAL_PROVIDERS = {"ollama", "lmstudio", "llamacpp", "nvpair", "freetoken", "bionic"}
 CORE_MODULES = ["fastapi", "uvicorn", "websockets", "httpx", "h2", "aiosqlite", "telegram",
                 "yaml", "pydantic", "numpy", "openai", "psutil", "rich", "mcp"]
 DATA_FOLDERS = ["workspace", "knowledge", "tools", "skills", "logs", "medic", "plugins", "hub"]

@@ -130,6 +130,7 @@ def get_provider_health() -> List[Dict[str, Any]]:
         "llamacpp": ("http://localhost:8080/v1/models", 2.0),
         "nvpair": ("http://127.0.0.1:11434/v1/models", 2.0),
         "freetoken": ("http://127.0.0.1:1919/v1/models", 2.0),
+        "bionic": ("http://127.0.0.1:8080/v1/models", 2.0),
     }
 
     for provider in SUPPORTED_PROVIDERS:

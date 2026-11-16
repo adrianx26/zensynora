@@ -48,7 +48,12 @@ _PRICING = {
     "llamacpp": {},
     "nvpair": {},
     "freetoken": {},
+    "bionic": {},
     "openrouter": {},
+    "copilot": {},
+    "github": {},
+    "kilo": {},
+    "opencode": {},
 }
 
 

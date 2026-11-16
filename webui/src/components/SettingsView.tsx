@@ -36,11 +36,34 @@ const PROVIDER_LABELS: Record<string, string> = {
   llamacpp: 'llama.cpp server (local)',
   nvpair: 'NVIDIA PAIR — Personal AI Router (local)',
   freetoken: 'FreeToken / FreeToken Desktop (local)',
+  bionic: 'Bionic / BionicGPT (local)',
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   gemini: 'Google Gemini',
   groq: 'Groq',
   openrouter: 'OpenRouter',
+  copilot: 'GitHub Copilot',
+  github: 'GitHub Models',
+  kilo: 'Kilo',
+  opencode: 'OpenCode',
+};
+
+const PROVIDER_API_KEY_LINKS: Record<string, { url: string; label: string }> = {
+  ollama: { url: 'https://ollama.com/download', label: 'Website / docs' },
+  lmstudio: { url: 'https://lmstudio.ai/docs/app/api', label: 'API docs' },
+  llamacpp: { url: 'https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md', label: 'Server docs' },
+  nvpair: { url: 'https://github.com/NVIDIA/Personal-AI-Router', label: 'Setup / docs' },
+  freetoken: { url: 'https://github.com/FlashML/FreeToken', label: 'Setup / docs' },
+  bionic: { url: 'https://bionic-gpt.com/docs/administration/api-keys', label: 'API key docs' },
+  openai: { url: 'https://platform.openai.com/api-keys', label: 'API keys' },
+  anthropic: { url: 'https://console.anthropic.com/settings/keys', label: 'API keys' },
+  gemini: { url: 'https://aistudio.google.com/apikey', label: 'API keys' },
+  groq: { url: 'https://console.groq.com/keys', label: 'API keys' },
+  openrouter: { url: 'https://openrouter.ai/settings/keys', label: 'API keys' },
+  copilot: { url: 'https://github.com/settings/copilot', label: 'Copilot / token page' },
+  github: { url: 'https://github.com/settings/tokens', label: 'GitHub tokens' },
+  kilo: { url: 'https://app.kilo.ai/settings/api-keys', label: 'API keys' },
+  opencode: { url: 'https://opencode.ai/auth', label: 'API keys' },
 };
 
 const TABS = ['Model', 'Providers', 'Agents', 'Channels', 'Features', 'Security'] as const;
@@ -78,7 +101,7 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
       { path: 'knowledge.hub_degree', label: 'A note is a hub above this many links', kind: 'number', help: 'Default 25.' },
       { path: 'knowledge.recall_timeout_seconds', label: 'Knowledge recall time budget (seconds)', kind: 'number', help: 'All four searches (word, meaning, graph, and time) run concurrently. This is the maximum wait; if any stream misses it, the answer is marked partial. Default 1.5 seconds.' },
       { path: 'knowledge.decision_mode', label: 'Knowledge decision strategy', kind: 'select', options: ['rules', 'local', 'rules_then_local'], help: 'rules: deterministic only (default). local: use the selected loopback model, falling back to rules on timeout/error. rules_then_local: use the model only when rule signals are uncertain. Model requests have a 900 ms deadline and only rerank evidence; they never remove source notes.' },
-      { path: 'knowledge.decision_provider', label: 'Local decision provider', kind: 'select', options: ['ollama', 'lmstudio', 'llamacpp', 'nvpair', 'freetoken'], help: 'Only built-in local providers bound to a loopback address are accepted; cloud providers are refused.' },
+      { path: 'knowledge.decision_provider', label: 'Local decision provider', kind: 'select', options: ['ollama', 'lmstudio', 'llamacpp', 'nvpair', 'freetoken', 'bionic'], help: 'Only built-in local providers bound to a loopback address are accepted; cloud providers are refused.' },
       { path: 'knowledge.decision_model', label: 'Small local decision model', kind: 'text', help: 'Model identifier as configured by the selected local server. Required for local and rules-then-local modes.' },
       { path: 'knowledge.distill', label: 'Distil facts, scenarios and a persona', kind: 'bool', help: 'Enabled by default. Local, deterministic processing builds deduplicated facts, scenarios, a user profile and evidence-linked pages; matching distilled information can enter agent context. Turn off to stop automatic processing and omit distilled context. Source notes are not modified; secrets are excluded.' },
       { path: 'knowledge.distill_every', label: 'Distil after this many changed notes', kind: 'number', help: 'Default 20 (or after the idle time below).' },
@@ -216,6 +239,16 @@ const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [probe, setProbe] = useState<Record<string, ProbeResult & { loading?: boolean }>>({});
+  const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const copyProviderLink = async (provider: string, url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedLink(provider);
+      window.setTimeout(() => setCopiedLink(prev => (prev === provider ? null : prev)), 2000);
+    } catch {
+      setNotice({ kind: 'error', text: `Could not copy link: ${url}` });
+    }
+  };
   // v0.7.1: index of the named agent whose prompt is being generated
   const [generating, setGenerating] = useState<number | null>(null);
   // v0.7.5: skills that can be given to agents (names + descriptions)
@@ -520,6 +553,21 @@ const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
     return out;
   };
 
+  const ProviderLinkRow: React.FC<{ provider: string }> = ({ provider }) => {
+    const info = PROVIDER_API_KEY_LINKS[provider];
+    if (!info) return null;
+    return (
+      <div className="probe-row small" style={{ marginBottom: 8 }}>
+        <span className="muted">{info.label}:</span>{' '}
+        <a href={info.url} target="_blank" rel="noopener noreferrer">{info.url}</a>
+        <button type="button" className="ghost-btn" onClick={() => copyProviderLink(provider, info.url)}
+          title="Copy link to clipboard">
+          {copiedLink === provider ? 'Copied!' : 'Copy link'}
+        </button>
+      </div>
+    );
+  };
+
   const ProbeLine: React.FC<{ provider: string }> = ({ provider }) => {
     const r = probe[provider];
     return (
@@ -619,6 +667,7 @@ const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
         {tab === 'Providers' && data.providers.filter(p => PROVIDER_LABELS[p]).map(p => (
           <div className="settings-card" key={p}>
             <h3>{PROVIDER_LABELS[p] || p}{p === defaultProvider && <span className="badge default-badge">default</span>}</h3>
+            <ProviderLinkRow provider={p} />
             {providerFields(p).map(renderField)}
             <ProbeLine provider={p} />
             <ProviderKeysPanel provider={p} keysMap={keysMap} onChanged={next => { setKeysMap(next); onSaved?.(); }} />

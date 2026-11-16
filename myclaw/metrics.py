@@ -89,7 +89,12 @@ class PrometheusMetrics:
         "llamacpp": {},
         "nvpair": {},
         "freetoken": {},
+        "bionic": {},
         "openrouter": {},
+        "copilot": {},
+        "github": {},
+        "kilo": {},
+        "opencode": {},
     }
 
     def __init__(self):

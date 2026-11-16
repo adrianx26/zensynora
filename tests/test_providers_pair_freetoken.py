@@ -11,7 +11,8 @@ import pytest
 
 
 @pytest.mark.parametrize("name,url", [("nvpair", "http://127.0.0.1:11434/v1"),
-                                      ("freetoken", "http://127.0.0.1:1919/v1")])
+                                      ("freetoken", "http://127.0.0.1:1919/v1"),
+                                      ("bionic", "http://127.0.0.1:8080/v1")])
 def test_builtin_local_openai_compatible(name, url):
     from myclaw.config import AppConfig
     from myclaw.provider import (LOCAL_BUILTIN_PROVIDERS, SUPPORTED_PROVIDERS, OpenAICompatProvider,
@@ -27,10 +28,35 @@ def test_builtin_local_openai_compatible(name, url):
     assert provider_endpoint(cfg, name)["base_url"] == "http://127.0.0.1:1235/v1"
 
 
+@pytest.mark.parametrize("name,url", [
+    ("copilot", "https://api.githubcopilot.com"),
+    ("github", "https://models.github.ai/inference"),
+    ("kilo", "https://api.kilo.ai/api/gateway"),
+    ("opencode", "https://opencode.ai/zen/v1"),
+])
+def test_builtin_cloud_openai_compatible(name, url):
+    from pydantic import SecretStr
+    from myclaw.config import AppConfig
+    from myclaw.provider import (LOCAL_BUILTIN_PROVIDERS, SUPPORTED_PROVIDERS, OpenAICompatProvider,
+                                 get_provider, provider_endpoint, provider_names)
+
+    cfg = AppConfig()
+    assert name in SUPPORTED_PROVIDERS and name not in LOCAL_BUILTIN_PROVIDERS and name in provider_names(cfg)
+    ep = provider_endpoint(cfg, name)
+    assert ep["kind"] == "openai" and ep["base_url"] == url and not ep["local"]
+    with pytest.raises(ValueError, match="api_key is not set"):
+        get_provider(cfg, name)
+    getattr(cfg.providers, name).api_key = SecretStr("test-key")
+    prov = get_provider(cfg, name)
+    assert isinstance(prov, OpenAICompatProvider) and str(prov.client.base_url).rstrip("/") == url
+
+
 def test_listed_as_local_everywhere():
     from myclaw.doctor.checks import LOCAL_PROVIDERS
     from myclaw.offline import _LOCAL_PROVIDERS
     from myclaw.onboard import _PROVIDER_HINTS as PROVIDERS
 
-    for name in ("nvpair", "freetoken"):
+    for name in ("nvpair", "freetoken", "bionic"):
         assert name in LOCAL_PROVIDERS and name in _LOCAL_PROVIDERS and name in PROVIDERS
+    for name in ("copilot", "github", "kilo", "opencode"):
+        assert name not in LOCAL_PROVIDERS and name in PROVIDERS
