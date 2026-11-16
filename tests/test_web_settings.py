@@ -116,3 +116,34 @@ def test_chat_changes_an_agents_provider_and_model(client):
     assert c.put("/api/settings/agent-model", json={"agent": "Ghost", "provider": "ollama", "model": "x"}).status_code == 404
     assert c.put("/api/settings/agent-model", json={"agent": "Mindy", "provider": "nope", "model": "x"}).status_code == 400
     assert c.put("/api/settings/agent-model", json={"agent": "Mindy", "provider": "ollama", "model": " "}).status_code == 400
+
+
+def test_damage_control_run_command_direct_and_policy_and_guards(client):
+    c, _ = client
+
+    # Blank command rejected
+    assert c.post("/api/settings/damage-control/run", json={"command": "   "}).status_code == 400
+
+    # Direct operator command works on localhost with UI header
+    direct = c.post("/api/settings/damage-control/run", json={"command": "echo hello-dc", "mode": "direct"})
+    assert direct.status_code == 200, direct.text
+    body = direct.json()
+    assert body["ok"] is True
+    assert body["mode"] == "direct"
+    assert body["exit_code"] == 0
+    assert "hello-dc" in body["output"]
+
+    # Policy mode checks agent shell rules (blocks python interpreter)
+    blocked = c.post("/api/settings/damage-control/run", json={"command": "python -V", "mode": "policy"})
+    assert blocked.status_code == 200
+    assert blocked.json()["ok"] is False
+    assert blocked.json()["mode"] == "policy"
+
+    # Missing UI header is refused
+    plain = TestClient(c.app, headers={})
+    assert plain.post("/api/settings/damage-control/run", json={"command": "echo no"}).status_code == 403
+
+    # Remote client without admin key is refused
+    remote = TestClient(c.app, client=("192.168.1.50", 5000))
+    assert remote.post("/api/settings/damage-control/run", json={"command": "echo no"}).status_code == 403
+

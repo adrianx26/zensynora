@@ -66,7 +66,7 @@ const PROVIDER_API_KEY_LINKS: Record<string, { url: string; label: string }> = {
   opencode: { url: 'https://opencode.ai/auth', label: 'API keys' },
 };
 
-const TABS = ['Model', 'Providers', 'Agents', 'Channels', 'Features', 'Security'] as const;
+const TABS = ['Model', 'Providers', 'Agents', 'Channels', 'Features', 'Security', 'Damage Control'] as const;
 type Tab = typeof TABS[number];
 
 const CHANNEL_FIELDS: FieldDef[] = [
@@ -179,6 +179,23 @@ const SECURITY_FIELDS: FieldDef[] = [
   { path: 'security.gdpr_enabled', label: 'GDPR helpers', kind: 'bool' },
 ];
 
+const DAMAGE_CONTROL_GUARDRAILS: FieldDef[] = [
+  { path: 'sandbox.enabled', label: 'Sandbox for generated tools', kind: 'bool', help: 'Runs agent-created tools in an isolated process without ZenSynora data.' },
+  { path: 'sandbox.allow_network', label: 'Sandbox may use the network', kind: 'bool' },
+  { path: 'sandbox.max_time_seconds', label: 'Sandbox max run time (s)', kind: 'number' },
+  { path: 'timeouts.shell_seconds', label: 'Shell command timeout (s)', kind: 'number' },
+  { path: 'security.allowed_commands', label: 'Shell commands the agent may run', kind: 'list', help: 'One per line. Interpreters and shells (python, bash, node, env, xargs, sudo, nc …) are never run.' },
+  { path: 'security.blocked_commands', label: 'Always-blocked shell commands', kind: 'list', help: 'One per line.' },
+];
+
+const DAMAGE_CONTROL_RECOVERY: FieldDef[] = [
+  { path: 'medic.enabled', label: 'Medic Agent system health monitoring', kind: 'bool' },
+  { path: 'medic.enable_hash_check', label: 'Verify core file integrity hashes', kind: 'bool' },
+  { path: 'medic.self_update.enabled', label: 'Agents may propose code updates', kind: 'bool', help: 'Nothing is installed without your approval.' },
+  { path: 'knowledge.enabled', label: 'Knowledge base automatic actions', kind: 'bool' },
+  { path: 'knowledge.detect_conflicts', label: 'Flag contradicting knowledge facts', kind: 'bool' },
+];
+
 function getPath(obj: Json, path: string): Json {
   return path.split('.').reduce((o, k) => (o == null ? undefined : o[k]), obj);
 }
@@ -239,7 +256,50 @@ const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [probe, setProbe] = useState<Record<string, ProbeResult & { loading?: boolean }>>({});
+  const [dcCmd, setDcCmd] = useState('');
+  const [dcMode, setDcMode] = useState<'direct' | 'policy'>('direct');
+  const [dcTimeout, setDcTimeout] = useState(30);
+  const [dcBusy, setDcBusy] = useState(false);
+  const [dcResult, setDcResult] = useState<{ ok: boolean; mode: string; exit_code: number; output: string; duration_ms: number } | null>(null);
+  const [dcDoctorBusy, setDcDoctorBusy] = useState(false);
+  const [dcDoctor, setDcDoctor] = useState<{ summary?: Record<string, number>; error?: string } | null>(null);
   const [copiedLink, setCopiedLink] = useState<string | null>(null);
+  const runDamageCommand = async (e?: React.FormEvent, overrideCmd?: string) => {
+    if (e) e.preventDefault();
+    const command = (overrideCmd ?? dcCmd).trim();
+    if (!command) return;
+    if (overrideCmd !== undefined) setDcCmd(overrideCmd);
+    setDcBusy(true);
+    try {
+      const res = await api<{ ok: boolean; mode: string; exit_code: number; output: string; duration_ms: number }>(
+        '/api/settings/damage-control/run',
+        { method: 'POST', body: JSON.stringify({ command, mode: dcMode, timeout: dcTimeout }) },
+      );
+      setDcResult(res);
+    } catch (err) {
+      setDcResult({ ok: false, mode: dcMode, exit_code: 1, output: (err as Error).message, duration_ms: 0 });
+    } finally {
+      setDcBusy(false);
+    }
+  };
+
+  const runDoctorQuick = async (fix: boolean) => {
+    setDcDoctorBusy(true);
+    try {
+      if (fix) {
+        const res = await api<{ report: { summary: Record<string, number> } }>('/api/system/doctor/fix', { method: 'POST' });
+        setDcDoctor({ summary: res.report?.summary });
+      } else {
+        const res = await api<{ summary: Record<string, number> }>('/api/system/doctor');
+        setDcDoctor({ summary: res.summary });
+      }
+    } catch (err) {
+      setDcDoctor({ error: (err as Error).message });
+    } finally {
+      setDcDoctorBusy(false);
+    }
+  };
+
   const copyProviderLink = async (provider: string, url: string) => {
     try {
       await navigator.clipboard.writeText(url);
@@ -843,6 +903,97 @@ const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
             {(data.security_warnings || []).map(w => <div className="notice error" key={w}>{w}</div>)}
             {SECURITY_FIELDS.map(renderField)}
           </div>
+        )}
+
+        {tab === 'Damage Control' && (
+          <>
+            <div className="settings-card">
+              <h3>Run command</h3>
+              <p className="muted">Run a diagnostic or recovery command directly from the Web UI (localhost or Admin API key required), or test what the agent shell policy allows.</p>
+              <form onSubmit={e => runDamageCommand(e)}>
+                <div className="field-row" style={{ marginBottom: 8 }}>
+                  <input
+                    className="field-input"
+                    type="text"
+                    value={dcCmd}
+                    onChange={e => setDcCmd(e.target.value)}
+                    placeholder="e.g. git status, zensynora doctor, ls"
+                    aria-label="Command to run"
+                  />
+                  <select
+                    className="field-input"
+                    style={{ maxWidth: 210 }}
+                    value={dcMode}
+                    onChange={e => setDcMode(e.target.value as 'direct' | 'policy')}
+                    aria-label="Execution mode"
+                  >
+                    <option value="direct">Direct operator shell</option>
+                    <option value="policy">Agent shell policy check</option>
+                  </select>
+                  <input
+                    className="field-input"
+                    style={{ maxWidth: 85 }}
+                    type="number"
+                    min={1}
+                    max={120}
+                    value={dcTimeout}
+                    onChange={e => setDcTimeout(Math.max(1, Math.min(120, Number(e.target.value) || 30)))}
+                    title="Timeout in seconds (1–120)"
+                    aria-label="Timeout seconds"
+                  />
+                  <button className="primary-btn" type="submit" disabled={dcBusy || !dcCmd.trim()}>
+                    {dcBusy ? 'Running…' : 'Run command'}
+                  </button>
+                </div>
+              </form>
+              <div className="probe-row small" style={{ marginBottom: 8 }}>
+                <span className="muted">Quick commands:</span>
+                {['git status', 'zensynora doctor', 'python -V'].map(preset => (
+                  <button key={preset} type="button" className="ghost-btn" disabled={dcBusy}
+                    onClick={() => runDamageCommand(undefined, preset)}>
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              {dcResult && (
+                <div style={{ marginTop: 8 }}>
+                  <div className={dcResult.ok ? 'probe-ok small' : 'probe-err small'} style={{ marginBottom: 4 }}>
+                    {dcResult.ok ? 'OK' : 'Failed'} · mode: {dcResult.mode} · exit {dcResult.exit_code} · {dcResult.duration_ms} ms
+                  </div>
+                  <pre className="field-input" style={{ whiteSpace: 'pre-wrap', maxHeight: 320, overflow: 'auto', fontFamily: 'monospace' }}>
+                    {dcResult.output}
+                  </pre>
+                </div>
+              )}
+            </div>
+
+            <div className="settings-card">
+              <h3>Containment &amp; shell guardrails</h3>
+              <p className="muted">Control what tools and shell commands agents are permitted to execute.</p>
+              {(data.security_warnings || []).map(w => <div className="notice error" key={w}>{w}</div>)}
+              {DAMAGE_CONTROL_GUARDRAILS.map(renderField)}
+            </div>
+
+            <div className="settings-card">
+              <h3>Integrity, Medic &amp; recovery</h3>
+              <p className="muted">Monitor file integrity, control self-update proposals, and run Doctor diagnostics.</p>
+              {DAMAGE_CONTROL_RECOVERY.map(renderField)}
+              <div className="probe-row" style={{ marginTop: 8 }}>
+                <button type="button" className="ghost-btn" disabled={dcDoctorBusy} onClick={() => runDoctorQuick(false)}>
+                  {dcDoctorBusy ? 'Checking…' : 'Run Doctor check'}
+                </button>
+                <button type="button" className="ghost-btn" disabled={dcDoctorBusy} onClick={() => runDoctorQuick(true)}>
+                  Apply safe Doctor fixes
+                </button>
+                {dcDoctor?.error && <span className="probe-err">{dcDoctor.error}</span>}
+                {dcDoctor?.summary && (
+                  <span className="probe-ok small">
+                    Doctor: {dcDoctor.summary.ok ?? 0} ok · {dcDoctor.summary.warn ?? 0} warn · {dcDoctor.summary.fail ?? 0} fail
+                  </span>
+                )}
+              </div>
+            </div>
+          </>
         )}
       </div>
 

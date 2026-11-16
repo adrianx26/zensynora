@@ -14,11 +14,11 @@ import logging
 import re
 import secrets
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, SecretStr, ValidationError
+from pydantic import BaseModel, Field, SecretStr, ValidationError
 
 from myclaw import activity
 from myclaw.config import (
@@ -814,6 +814,75 @@ async def doctor_fix():
     done = await asyncio.to_thread(apply_fixes, report)
     after = await asyncio.to_thread(run_checks)
     return {"applied": done, "report": after.to_dict()}
+
+
+class DamageControlRunRequest(BaseModel):
+    command: str = Field(..., min_length=1, max_length=2000)
+    mode: Literal["direct", "policy"] = "direct"
+    timeout: int = Field(30, ge=1, le=120)
+
+
+@router.post("/api/settings/damage-control/run", dependencies=ui_guard)
+@activity.recorded("settings", "damage_control_run")
+async def run_damage_control_command(req: DamageControlRunRequest):
+    """Run a command from Settings → Damage Control (localhost / admin + UI header only)."""
+    import subprocess
+    from pathlib import Path
+
+    cmd = req.command.strip()
+    if not cmd:
+        raise HTTPException(status_code=400, detail="Command cannot be empty.")
+
+    started = time.monotonic()
+    if req.mode == "policy":
+        from myclaw.tools.shell import shell_async
+
+        output = await shell_async(cmd, timeout=req.timeout)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        ok = not output.startswith(("Error:", "Security error:", "Blocked:"))
+        return {
+            "ok": ok,
+            "mode": "policy",
+            "exit_code": 0 if ok else 1,
+            "output": output,
+            "duration_ms": elapsed_ms,
+        }
+
+    cwd = str(Path(__file__).resolve().parent.parent.parent)
+
+    def _run_direct():
+        return subprocess.run(
+            cmd,
+            shell=True,
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=req.timeout,
+        )
+
+    try:
+        proc = await asyncio.to_thread(_run_direct)
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        parts = [p for p in (proc.stdout, proc.stderr) if p]
+        output = "\n".join(parts).strip() or "(no output)"
+        return {
+            "ok": proc.returncode == 0,
+            "mode": "direct",
+            "exit_code": proc.returncode,
+            "output": output[:20000],
+            "duration_ms": elapsed_ms,
+        }
+    except subprocess.TimeoutExpired:
+        elapsed_ms = int((time.monotonic() - started) * 1000)
+        return {
+            "ok": False,
+            "mode": "direct",
+            "exit_code": 124,
+            "output": f"Error: Command timed out after {req.timeout} seconds.",
+            "duration_ms": elapsed_ms,
+        }
 
 
 # ── Conversation history (server side) ───────────────────────────────────────
