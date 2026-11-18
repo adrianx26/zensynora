@@ -25,6 +25,14 @@
 >   `freetoken`, URL `http://127.0.0.1:1919/v1` (`ft serve`). Its context comes
 >   from the model (`--max-seq-len-override`); set the same number as the
 >   provider's *Context length*.
+>   **FreeToken on another computer** (2026-11-18): `ft serve` listens on
+>   `127.0.0.1` only. On the computer that runs it start `ft serve --host 0.0.0.0`
+>   (`--api-key …` if you want a key), allow port 1919 in its firewall, and set
+>   ZenSynora's FreeToken URL to `http://<that computer's address>:1919/v1`. The
+>   connection test waits up to 15 s and retries once; if it still fails, its
+>   message says which case it is (no answer: off, asleep or firewalled; refused:
+>   not running or wrong port). Official project:
+>   <https://github.com/FlashML-org/FreeToken>.
 > * `zensynora doctor` tells you whether the server is reachable and whether the
 >   configured model exists on it.
 

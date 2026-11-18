@@ -60,3 +60,70 @@ def test_listed_as_local_everywhere():
         assert name in LOCAL_PROVIDERS and name in _LOCAL_PROVIDERS and name in PROVIDERS
     for name in ("copilot", "github", "kilo", "opencode"):
         assert name not in LOCAL_PROVIDERS and name in PROVIDERS
+
+
+# ── 2026-11-18: the connection test of a FreeToken server on another computer ──
+def _fake_get(monkeypatch, outcomes):
+    import httpx
+
+    from myclaw.web import settings_api
+
+    calls = []
+
+    async def get(self, url, headers=None, params=None):
+        calls.append(url)
+        item = outcomes.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return httpx.Response(200, json={"data": [{"id": "glm"}]}, request=httpx.Request("GET", url))
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", get)
+    monkeypatch.setattr(settings_api, "_missing_sdk", lambda provider: "")
+    return calls
+
+
+@pytest.mark.asyncio
+async def test_probe_timeout_on_lan_server_names_the_fix(monkeypatch):
+    import httpx
+
+    from myclaw.web import settings_api
+
+    calls = _fake_get(monkeypatch, [httpx.ConnectTimeout("t"), httpx.ConnectTimeout("t")])
+    res = await settings_api._probe("freetoken", "http://192.168.8.102:1919/v1", None)
+    assert res["ok"] is False and len(calls) == settings_api.PROBE_ATTEMPTS      # one retry
+    assert "192.168.8.102:1919" in res["error"] and "--host 0.0.0.0" in res["error"]
+    assert "firewall" in res["error"]
+
+
+@pytest.mark.asyncio
+async def test_probe_retry_succeeds_when_the_server_was_slow(monkeypatch):
+    import httpx
+
+    from myclaw.web import settings_api
+
+    calls = _fake_get(monkeypatch, [httpx.ConnectTimeout("t"), None])
+    res = await settings_api._probe("freetoken", "http://192.168.8.102:1919/v1", None)
+    assert res["ok"] is True and res["models"] == ["glm"] and len(calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_probe_refused_port_is_not_retried_and_says_so(monkeypatch):
+    import httpx
+
+    from myclaw.web import settings_api
+
+    calls = _fake_get(monkeypatch, [httpx.ConnectError("[Errno 111] Connection refused")])
+    res = await settings_api._probe("freetoken", "http://192.168.8.102:1919/v1", None)
+    assert res["ok"] is False and len(calls) == 1
+    assert "nothing accepts connections" in res["error"] and "--host 0.0.0.0" in res["error"]
+
+
+@pytest.mark.asyncio
+async def test_probe_loopback_freetoken_suggests_starting_it(monkeypatch):
+    import httpx
+
+    from myclaw.web import settings_api
+
+    _fake_get(monkeypatch, [httpx.ConnectError("[Errno 111] Connection refused")])
+    res = await settings_api._probe("freetoken", "http://127.0.0.1:1919/v1", None)
+    assert "Start FreeToken first" in res["error"] and "0.0.0.0" not in res["error"]

@@ -18,6 +18,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added the bounded local decision-model fallback and readiness controls for
   knowledge recall and evidence-ranked distillation proposals.
 
+## [Unreleased — FreeToken connection test]
+
+- The connection test of a provider (Settings → Providers → Test) waited 6 s
+  with one attempt, while chat waits 60 s and retries a connection error. A
+  FreeToken server on the LAN that was slow to answer worked in chat and failed
+  the test ("Cannot reach …: ConnectTimeout"). The test now waits 15 s to connect,
+  10 s to answer, and retries once.
+- The error now says what to do: no answer (off, asleep, firewall, or the server
+  only on 127.0.0.1); refused (not running or wrong port); for FreeToken on
+  another computer, `ft serve --host 0.0.0.0` (its default is 127.0.0.1).
+- The "Setup / docs" link for FreeToken points to the official repository
+  (FlashML-org/FreeToken).
+
 ## [0.8.2] - 2026-11-12
 
 ### Added
