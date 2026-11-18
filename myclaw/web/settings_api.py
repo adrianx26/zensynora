@@ -685,8 +685,7 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str],
 
     started = time.monotonic()
     try:
-        async with httpx.AsyncClient(timeout=6.0) as client:
-            resp = await client.get(endpoint, headers=headers, params=params)
+        resp = await _get_with_retry(endpoint, headers, params)
         latency_ms = int((time.monotonic() - started) * 1000)
         if resp.status_code >= 400:
             hint = " (check the API key)" if resp.status_code in (401, 403) else ""
@@ -706,8 +705,55 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str],
         models = sorted({m for m in models if m} | set(ep.get("models") or []))
         return {"ok": True, "models": models, "latency_ms": latency_ms, "url": url}
     except Exception as e:
-        return {"ok": False, "error": f"Cannot reach {url}: {e.__class__.__name__}",
+        return {"ok": False, "error": _reach_error(url, provider, e),
                 "models": list(ep.get("models") or []), "url": url}
+
+
+# 2026-11-18: the probe waited 6 s with one attempt, while chat waits 60 s and the
+# OpenAI client retries a connection error — a server that is slow to answer (a
+# computer waking up, Wi-Fi) worked in chat and failed the test. The probe now uses
+# the same kind of patience: 15 s to connect, 10 s to answer, one retry.
+PROBE_CONNECT_S, PROBE_READ_S, PROBE_ATTEMPTS = 15.0, 10.0, 2
+
+
+async def _get_with_retry(endpoint: str, headers: Dict[str, str], params: Dict[str, str]) -> httpx.Response:
+    last: Optional[Exception] = None
+    timeout = httpx.Timeout(PROBE_READ_S, connect=PROBE_CONNECT_S)
+    for _attempt in range(PROBE_ATTEMPTS):
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                return await client.get(endpoint, headers=headers, params=params)
+        except httpx.ConnectError as e:      # refused or no route: a retry can help only for a slow start
+            last = e
+            if "refused" in str(e).lower():
+                break
+        except httpx.TimeoutException as e:
+            last = e
+    assert last is not None
+    raise last
+
+
+def _reach_error(url: str, provider: str, e: Exception) -> str:
+    """What the user needs to fix, from the kind of failure (2026-11-18)."""
+    from urllib.parse import urlsplit
+
+    host = (urlsplit(url).hostname or "").lower()
+    loopback = host in ("localhost", "::1") or host.startswith("127.")
+    text = str(e).lower()
+    if isinstance(e, httpx.TimeoutException):
+        cause = (f"no answer from {url} within {int(PROBE_CONNECT_S)} s. The computer may be off or asleep, "
+                 "a firewall may block the port, or the server may listen only on this computer.")
+    elif "refused" in text:
+        cause = f"nothing accepts connections at {url} (the server is not running, or the port is wrong)."
+    else:
+        cause = f"could not connect to {url} ({e.__class__.__name__})."
+    hint = ""
+    if provider == "freetoken" and not loopback:
+        hint = (" FreeToken listens on 127.0.0.1 by default: on the computer that runs it start "
+                "`ft serve --host 0.0.0.0` (add --api-key to require a key), and allow port 1919 in its firewall.")
+    elif provider == "freetoken" and loopback:
+        hint = " Start FreeToken first (`ft serve`) or FreeToken Desktop."
+    return f"Cannot reach {url}: {cause}{hint}"
 
 
 @router.post("/api/settings/probe", dependencies=guard)

@@ -53,7 +53,7 @@ const PROVIDER_API_KEY_LINKS: Record<string, { url: string; label: string }> = {
   lmstudio: { url: 'https://lmstudio.ai/docs/app/api', label: 'API docs' },
   llamacpp: { url: 'https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md', label: 'Server docs' },
   nvpair: { url: 'https://github.com/NVIDIA/Personal-AI-Router', label: 'Setup / docs' },
-  freetoken: { url: 'https://github.com/FlashML/FreeToken', label: 'Setup / docs' },
+  freetoken: { url: 'https://github.com/FlashML-org/FreeToken', label: 'Setup / docs' },
   bionic: { url: 'https://bionic-gpt.com/docs/administration/api-keys', label: 'API key docs' },
   openai: { url: 'https://platform.openai.com/api-keys', label: 'API keys' },
   anthropic: { url: 'https://console.anthropic.com/settings/keys', label: 'API keys' },
