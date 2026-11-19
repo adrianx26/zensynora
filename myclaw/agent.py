@@ -1653,12 +1653,12 @@ class Agent:
                         _add(shorten_text(full_context, min(500, room), collapse=False))
 
             if omitted:
-                entries = [
-                    f"{candidate_titles.get(permalink, next(
-                        (note.title for note in notes if note.permalink == permalink), permalink))}"
-                    f" ({permalink}: {reason})"
-                    for permalink, reason in omitted.items()
-                ]
+                entries = []
+                for permalink, reason in omitted.items():
+                    fallback_title = next(
+                        (note.title for note in notes if note.permalink == permalink), permalink)
+                    title = candidate_titles.get(permalink, fallback_title)
+                    entries.append(f"{title} ({permalink}: {reason})")
                 summary = "Relevant KB evidence not included: "
                 included = []
                 for entry in entries:
