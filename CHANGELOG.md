@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-11-19
+
+### Added
+
+- Provider configuration for Ollama Local and Ollama Cloud, LM Studio model
+  selection, compatible LLM endpoints, and direct provider API-key links.
+- AI-assisted fusion evaluation, graveyard lifecycle controls, and Medic revive
+  support for agent evolution.
+
+### Fixed
+
+- Backup restores and chat mutations are serialized and reject stale channel or
+  message snapshots after a database restore.
+
 ## [0.8.3] - 2026-11-14
 
 ### Changed

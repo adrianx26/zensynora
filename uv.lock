@@ -4917,7 +4917,7 @@ wheels = [
 
 [[package]]
 name = "zensynora"
-version = "0.4.1"
+version = "0.8.4"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },

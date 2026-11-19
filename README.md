@@ -9,7 +9,7 @@ your conversations, builds a personal knowledge base, uses 121 tools, and can
 split work across teams of agents — with a local model like llama.cpp or
 Ollama, or any major cloud provider.
 
-[![Version](https://img.shields.io/badge/version-0.8.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.4-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)](#requirements)
 [![Tests](https://img.shields.io/badge/tests-1128-brightgreen.svg)](#development)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
