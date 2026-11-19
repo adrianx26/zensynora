@@ -1654,8 +1654,8 @@ class Agent:
 
             if omitted:
                 entries = [
-                    f"{candidate_titles.get(permalink, next(
-                        (note.title for note in notes if note.permalink == permalink), permalink))}"
+                    f"""{candidate_titles.get(permalink, next(
+                        (note.title for note in notes if note.permalink == permalink), permalink))}"""
                     f" ({permalink}: {reason})"
                     for permalink, reason in omitted.items()
                 ]
