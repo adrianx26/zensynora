@@ -526,7 +526,7 @@ def test_windowed_temporal_search_falls_back_to_updated_at_and_ranks_captured_fi
     write_note("May Activity", "Hiked Bucegi mountains and configured NAS.",
                observations=[Observation("fact", "Hiked Bucegi", captured_at="2026-05-12")])
 
-    hits = recall._temporal_search("WireGuard 2026-11-14", "default", 5)
+    hits = recall._temporal_search("WireGuard last year", "default", 5)
     permalinks = [note.permalink for note in hits]
     assert "router-captured" in permalinks
     assert "router-updated-only" in permalinks
