@@ -67,11 +67,15 @@ async def list_backups():
 
 @router.post("/api/backups", dependencies=guard)
 async def create_backup(body: CreateIn = CreateIn()):
+    from myclaw.evolve import LifecycleError
+
     bad = [p for p in (body.parts or []) if p not in backup.PARTS]
     if bad:
         raise HTTPException(status_code=400, detail=f"Unknown part(s): {', '.join(bad)}")
     try:
         return await asyncio.to_thread(backup.create_backup, body.parts, "manual", body.note)
+    except (ValueError, LifecycleError) as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except OSError as e:
         raise HTTPException(status_code=500, detail=f"Backup failed: {e}")
 
@@ -100,11 +104,13 @@ async def verify_backup(name: str):
 
 @router.post("/api/backups/{name}/restore", dependencies=guard)
 async def restore_backup(name: str, body: RestoreIn = RestoreIn()):
+    from myclaw.evolve import LifecycleError
+
     try:
         result = await asyncio.to_thread(backup.restore_backup, name, body.parts)
     except FileNotFoundError:
         raise _not_found(name)
-    except ValueError as e:
+    except (ValueError, LifecycleError) as e:
         raise HTTPException(status_code=400, detail=str(e))
     if _on_restored:
         try:

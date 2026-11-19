@@ -33,6 +33,7 @@ import json
 import logging
 import os
 import re
+import uuid
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -49,6 +50,26 @@ _ENCRYPTION_MARKER = "__encrypted__"
 _FERNET_KEY_RE = re.compile(r"^(?:base64:)?([A-Za-z0-9_\-]{43}=)$")
 # Minimum entropy for a Fernet key — reject keys that are obviously weak.
 _MIN_KEY_ENTROPY = 64  # bits-equivalent threshold shrunk to length heuristic
+
+
+def _atomic_write(path: Path, text: str) -> None:
+    """Write and flush a sibling before replacing the previous config."""
+    tmp = path.with_name(path.name + "." + uuid.uuid4().hex + ".tmp")
+    try:
+        fd = os.open(tmp, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            out.write(text)
+            out.flush()
+            os.fsync(out.fileno())
+        os.replace(tmp, path)
+        if os.name != "nt":
+            directory = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 try:
@@ -247,7 +268,7 @@ def encrypt_config(config_path: Optional[Path] = None) -> None:
         {_ENCRYPTION_MARKER: True, "data": base64.b64encode(ciphertext).decode("ascii")}, indent=2
     )
 
-    path.write_text(encrypted, encoding="utf-8")
+    _atomic_write(path, encrypted)
     logger.info(f"Config encrypted: {path}")
 
 
@@ -290,7 +311,7 @@ def decrypt_config(config_path: Optional[Path] = None) -> None:
             "The encryption key may have changed or the file is damaged."
         )
 
-    path.write_text(plaintext, encoding="utf-8")
+    _atomic_write(path, plaintext)
     logger.info(f"Config decrypted: {path}")
 
 
@@ -366,8 +387,8 @@ def save_encrypted(path: Path, data: Dict[str, Any]) -> None:
             {_ENCRYPTION_MARKER: True, "data": base64.b64encode(ciphertext).decode("ascii")},
             indent=2,
         )
-        path.write_text(encrypted, encoding="utf-8")
+        _atomic_write(path, encrypted)
         logger.debug(f"Config saved encrypted: {path}")
     else:
-        path.write_text(text, encoding="utf-8")
+        _atomic_write(path, text)
         logger.debug(f"Config saved plaintext: {path}")

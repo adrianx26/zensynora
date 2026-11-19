@@ -503,22 +503,15 @@ class Agent:
             logger.critical(f"Task {update.task_id} reached maximum timeout")
 
     def _track_preload(self, task: asyncio.Task) -> None:
-        """Safely track a preload task with bounded memory.
-
-        PERF FIX (2026-04-23): Evicts oldest completed tasks if the set
-        exceeds _max_pending_preloads to prevent unbounded growth.
-        """
+        """Track live preload tasks; prune completed tasks when the set grows."""
         # Prune completed tasks if we're near the limit
         if len(self._pending_preloads) >= self._max_pending_preloads:
             completed = {t for t in self._pending_preloads if t.done()}
             self._pending_preloads.difference_update(completed)
-            # If still at limit, evict oldest by removing arbitrary tasks
-            while len(self._pending_preloads) >= self._max_pending_preloads:
-                try:
-                    self._pending_preloads.pop()
-                except KeyError:
-                    break
         self._pending_preloads.add(task)
+        from .executions import track_background
+
+        track_background(task)
 
     # ── Context-gap tracking ─────────────────────────────────────────────────
     # Tracks topics per user for which the KB returned no results, so they can
@@ -2089,6 +2082,12 @@ class Agent:
             ``result.ok``; on success ``result.data`` is the parsed object
             (a Pydantic instance when a model was passed in).
         """
+        from .executions import execution
+
+        async with execution(self.name, "structured"):
+            return await self._complete_structured_tracked(messages, schema, model, max_repair_attempts)
+
+    async def _complete_structured_tracked(self, messages, schema, model, max_repair_attempts):
         from .structured_output import repair_json
 
         target_model = model or self.model
@@ -2122,6 +2121,16 @@ class Agent:
         the full request fan-out into provider/tool/KB child spans. The
         span is a no-op when OpenTelemetry is not installed/enabled.
         """
+        from .evolve import LifecycleError
+        from .executions import execution
+
+        try:
+            async with execution(self.name, "turn"):
+                return await self._tracked_think(user_message, user_id, _depth)
+        except LifecycleError as exc:
+            return f"Cannot run agent: {exc}"
+
+    async def _tracked_think(self, user_message: str, user_id: str, _depth: int) -> str:
         from . import activity as _activity
         from .knowledge import usage as _kb_usage
         from .knowledge.scope import KB_USER, for_turn
@@ -2258,6 +2267,19 @@ class Agent:
         self, user_message: str, user_id: str = "default", _depth: int = 0
     ) -> AsyncIterator[str]:
         """Streaming answer; the tools it calls use this turn's knowledge base (v0.7.5)."""
+        from .evolve import LifecycleError
+        from .executions import execution
+
+        try:
+            async with execution(self.name, "stream"):
+                async for chunk in self._tracked_stream_think(user_message, user_id, _depth):
+                    yield chunk
+        except LifecycleError as exc:
+            yield f"Cannot run agent: {exc}"
+
+    async def _tracked_stream_think(
+        self, user_message: str, user_id: str, _depth: int
+    ) -> AsyncIterator[str]:
         from . import activity as _activity
         from .knowledge import usage as _kb_usage
         from .knowledge.scope import KB_USER, for_turn

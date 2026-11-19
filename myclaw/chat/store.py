@@ -19,10 +19,13 @@ use from threads (``asyncio.to_thread``) and from several processes.
 
 from __future__ import annotations
 
+import errno
 import json
+import os
 import re
 import secrets
 import sqlite3
+import threading
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -30,6 +33,12 @@ from pathlib import Path
 from typing import Any
 
 REPLY_MODES = ("lead", "all", "parallel")
+_database_lock = threading.RLock()
+_database_lock_state = threading.local()
+
+
+class ChatRecoveryError(ValueError):
+    """Chat cannot be accessed until an interrupted restore is recovered."""
 # lead     — the first member answers (others only when @mentioned)
 # all      — every member answers in turn and sees the earlier answers
 # parallel — every member answers at the same time
@@ -55,6 +64,17 @@ CREATE TABLE IF NOT EXISTS messages (
     created REAL NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_messages_channel ON messages(channel_id, id);
+CREATE TABLE IF NOT EXISTS fusion_message_origins (
+    message_id INTEGER NOT NULL,
+    source_channel_id TEXT NOT NULL,
+    destination_channel_id TEXT NOT NULL,
+    PRIMARY KEY (message_id, source_channel_id, destination_channel_id)
+);
+CREATE TABLE IF NOT EXISTS fusion_retired_dms (
+    channel_id TEXT PRIMARY KEY,
+    agent TEXT NOT NULL,
+    destination_channel_id TEXT NOT NULL
+);
 """
 
 
@@ -62,18 +82,69 @@ def db_path() -> Path:
     return Path.home() / ".myclaw" / "chat.db"
 
 
+def restore_generation() -> str:
+    try:
+        return (db_path().parent / ".chat-restore-generation").read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return ""
+
+
+@contextmanager
+def database_guard() -> Iterator[None]:
+    """Keep chat operations and database replacement mutually exclusive."""
+    with _database_lock:
+        path = db_path().with_suffix(".lock")
+        held = getattr(_database_lock_state, "path", None)
+        if held is not None:
+            if held != path:
+                raise RuntimeError("Cannot change chat database while its lock is held.")
+            yield
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a+b") as lock:
+            if os.name == "nt":
+                import msvcrt
+
+                while True:
+                    lock.seek(0)
+                    try:
+                        msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
+                        break
+                    except OSError as exc:
+                        if exc.errno not in (errno.EACCES, errno.EAGAIN, errno.EDEADLK):
+                            raise
+                        time.sleep(0.05)
+            else:
+                import fcntl
+
+                fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            _database_lock_state.path = path
+            try:
+                yield
+            finally:
+                del _database_lock_state.path
+                if os.name == "nt":
+                    lock.seek(0)
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+                else:
+                    fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
 @contextmanager
 def _conn() -> Iterator[sqlite3.Connection]:
-    path = db_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, timeout=10)
-    conn.row_factory = sqlite3.Row
-    try:
-        conn.executescript(_SCHEMA)
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+    with database_guard():
+        path = db_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if (path.parent / ".lifecycle-restore-pending.json").exists():
+            raise ChatRecoveryError("Backup restore needs recovery; restore the named safety backup before using chat.")
+        conn = sqlite3.connect(path, timeout=10)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.executescript(_SCHEMA)
+            yield conn
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def _channel(row: sqlite3.Row) -> dict[str, Any]:
@@ -165,6 +236,57 @@ def rename_member(old: str, new: str) -> None:
                 and not c.execute("SELECT 1 FROM channels WHERE id = ?", (new_dm,)).fetchone():
             c.execute("UPDATE channels SET id = ?, name = ? WHERE id = ?", (new_dm, new, old_dm))
             c.execute("UPDATE messages SET channel_id = ? WHERE channel_id = ?", (new_dm, old_dm))
+
+
+def fuse_members(sources: list[str], destination: str) -> None:
+    """Move channel membership and DM messages atomically, retaining source DM records."""
+    dest_id = f"dm-{slug(destination)}"
+    source_ids = list(dict.fromkeys(f"dm-{slug(name)}" for name in sources))
+    if len(source_ids) != len(sources) or dest_id in source_ids:
+        raise ValueError("These agent names share a DM address; choose a different fusion name.")
+    with _conn() as c:
+        c.execute("BEGIN IMMEDIATE")
+        existing_sources = []
+        for source_id in source_ids:
+            row = c.execute("SELECT kind, members FROM channels WHERE id = ?", (source_id,)).fetchone()
+            if row and (row["kind"] not in ("dm", "retired_dm") or
+                        any(m not in [destination, *sources] for m in json.loads(row["members"] or "[]"))):
+                raise ValueError(f"Source DM {source_id} belongs to another conversation; resolve the collision.")
+            if row:
+                existing_sources.append(source_id)
+        dest = c.execute("SELECT * FROM channels WHERE id = ?", (dest_id,)).fetchone()
+        if dest and (dest["kind"] != "dm" or
+                     any(m not in [destination, *sources] for m in json.loads(dest["members"] or "[]"))):
+            raise ValueError(f"Destination DM {dest_id} belongs to another conversation; rename the agent.")
+        if dest is None:
+            for source_id in existing_sources:
+                source = c.execute("SELECT * FROM channels WHERE id = ? AND kind IN ('dm', 'retired_dm')",
+                                   (source_id,)).fetchone()
+                if source:
+                    c.execute("INSERT INTO channels (id, name, kind, topic, members, reply_mode, created, updated) "
+                              "VALUES (?, ?, 'dm', ?, ?, ?, ?, ?)",
+                              (dest_id, destination, source["topic"], json.dumps([destination]),
+                               source["reply_mode"], source["created"], time.time()))
+                    break
+        for row in c.execute("SELECT id, members FROM channels").fetchall():
+            if row["id"] in existing_sources:
+                continue
+            members = json.loads(row["members"] or "[]")
+            replaced = list(dict.fromkeys(destination if m in sources else m for m in members))
+            if replaced != members:
+                c.execute("UPDATE channels SET members = ?, updated = ? WHERE id = ?",
+                          (json.dumps(replaced), time.time(), row["id"]))
+        for source_id in existing_sources:
+            if source_id != dest_id:
+                c.execute("INSERT OR IGNORE INTO fusion_message_origins "
+                          "(message_id, source_channel_id, destination_channel_id) "
+                          "SELECT id, channel_id, ? FROM messages WHERE channel_id = ?", (dest_id, source_id))
+                c.execute("UPDATE messages SET channel_id = ? WHERE channel_id = ?", (dest_id, source_id))
+                source_name = next(name for name in sources if f"dm-{slug(name)}" == source_id)
+                c.execute("INSERT OR REPLACE INTO fusion_retired_dms VALUES (?, ?, ?)",
+                          (source_id, source_name, dest_id))
+                c.execute("UPDATE channels SET kind = 'retired_dm', updated = ? WHERE id = ?",
+                          (time.time(), source_id))
 
 
 def close_interrupted() -> int:
@@ -267,11 +389,37 @@ def delete_channel(channel_id: str) -> bool:
     return n > 0
 
 
+def is_legacy_fusion_dm(ch: dict[str, Any]) -> bool:
+    if ch["kind"] != "dm":
+        return False
+    from ..evolve import _read_trash
+
+    return any(t.get("type") == "fusion" and t.get("state") in {"pending", "complete"}
+               and any(ch["id"] == f"dm-{slug(source)}" for source in t.get("sources", []))
+               and t.get("destination") in ch["members"] for t in _read_trash())
+
+
 def dm_channel(agent: str) -> dict[str, Any]:
     """The direct-message channel for one agent (created on first use)."""
     cid = f"dm-{slug(agent)}"
     ch = get_channel(cid)
     if ch:
+        if ch["kind"] == "retired_dm" or is_legacy_fusion_dm(ch):
+            from ..config import load_config
+            from ..evolve import fusion_blocks_agent
+
+            with _conn() as c:
+                retired = c.execute("SELECT agent FROM fusion_retired_dms WHERE channel_id = ?", (cid,)).fetchone()
+                active = any(a.name == agent for a in load_config(force_reload=True).agents.named)
+                matches = retired["agent"] == agent if retired else ch["name"] == agent
+                if not matches or not active or fusion_blocks_agent(agent):
+                    raise ValueError("This conversation is retired; open the fused agent's DM instead.")
+                c.execute("UPDATE channels SET kind = 'dm', members = ?, updated = ? WHERE id = ?",
+                          (json.dumps([agent]), time.time(), cid))
+                c.execute("DELETE FROM fusion_retired_dms WHERE channel_id = ?", (cid,))
+            return get_channel(cid)
+        if ch["kind"] != "dm" or ch["members"] != [agent]:
+            raise ValueError("This DM address belongs to another conversation; choose a different agent name.")
         return ch
     return create_channel(agent, [agent], kind="dm", channel_id=cid)
 
@@ -286,9 +434,20 @@ def ensure_default_channel(default_agent: str = "default") -> dict[str, Any]:
 
 # ── Messages ─────────────────────────────────────────────────────────────────
 def add_message(channel_id: str, role: str, sender: str, text: str,
-                meta: dict[str, Any] | None = None) -> dict[str, Any]:
+                meta: dict[str, Any] | None = None,
+                expected_channel: dict[str, Any] | None = None) -> dict[str, Any]:
     now = time.time()
     with _conn() as c:
+        channel = c.execute("SELECT * FROM channels WHERE id = ?", (channel_id,)).fetchone()
+        if channel is None:
+            raise ValueError("This channel no longer exists; reopen a channel before sending the message.")
+        if channel["kind"] == "retired_dm":
+            raise ValueError("This conversation is retired; open the fused agent's DM instead.")
+        if expected_channel is not None:
+            current = _channel(channel)
+            keys = ("id", "name", "kind", "topic", "members", "reply_mode", "created")
+            if any(current[key] != expected_channel[key] for key in keys):
+                raise ValueError("This channel changed; reload it and retry sending the message.")
         cur = c.execute(
             "INSERT INTO messages (channel_id, role, sender, text, meta, created) VALUES (?, ?, ?, ?, ?, ?)",
             (channel_id, role, sender, text, json.dumps(meta or {}), now))
@@ -299,8 +458,16 @@ def add_message(channel_id: str, role: str, sender: str, text: str,
 
 
 def update_message(message_id: int, text: str | None = None,
-                   meta: dict[str, Any] | None = None) -> None:
+                   meta: dict[str, Any] | None = None,
+                   expected: dict[str, Any] | None = None,
+                   expected_generation: str | None = None) -> None:
     with _conn() as c:
+        if expected_generation is not None and restore_generation() != expected_generation:
+            raise ValueError("Chat history was restored; reload the channel and retry.")
+        if expected is not None:
+            row = c.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
+            if row is None or _message(row) != expected:
+                raise ValueError("This message changed or disappeared; reload the channel and retry.")
         if text is not None:
             c.execute("UPDATE messages SET text = ? WHERE id = ?", (text, message_id))
         if meta is not None:
@@ -350,33 +517,65 @@ def reply_ids(channel_id: str, message_id: int) -> list[int]:
     return out
 
 
-def delete_messages(channel_id: str, ids: list[int]) -> list[int]:
+def delete_messages(channel_id: str, ids: list[int],
+                    expected: list[dict[str, Any]] | None = None,
+                    expected_generation: str | None = None) -> list[int]:
     """Delete messages of one channel; returns the ids that were deleted."""
     ids = [int(i) for i in ids]
     if not ids:
         return []
     marks = ",".join("?" * len(ids))
     with _conn() as c:
-        found = [r["id"] for r in c.execute(
-            f"SELECT id FROM messages WHERE channel_id = ? AND id IN ({marks}) ORDER BY id",
-            (channel_id, *ids)).fetchall()]
+        if expected_generation is not None and restore_generation() != expected_generation:
+            raise ValueError("Chat history was restored; reload the channel and retry.")
+        rows = c.execute(
+            f"SELECT * FROM messages WHERE channel_id = ? AND id IN ({marks}) ORDER BY id",
+            (channel_id, *ids)).fetchall()
+        if expected is not None and [_message(row) for row in rows] != sorted(expected, key=lambda msg: msg["id"]):
+            raise ValueError("These messages changed or disappeared; reload the channel and retry.")
+        found = [row["id"] for row in rows]
         if found:
             c.execute(f"DELETE FROM messages WHERE channel_id = ? AND id IN ({marks})", (channel_id, *ids))
     return found
 
 
-def edit_message(message_id: int, text: str) -> dict[str, Any] | None:
+def edit_message(message_id: int, text: str, expected: dict[str, Any] | None = None,
+                 expected_generation: str | None = None) -> dict[str, Any] | None:
     """Change a message's text and mark it edited (meta.edited_at)."""
-    m = get_message(message_id)
-    if m is None:
-        return None
-    meta = {**m["meta"], "edited_at": time.time()}
-    update_message(message_id, text, meta)
-    return {**m, "text": text, "meta": meta}
-
-
-def clear_messages(channel_id: str) -> int:
     with _conn() as c:
+        if expected_generation is not None and restore_generation() != expected_generation:
+            raise ValueError("Chat history was restored; reload the channel and retry.")
+        row = c.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
+        if row is None:
+            if expected is not None:
+                raise ValueError("This message changed or disappeared; reload the channel and retry.")
+            return None
+        message = _message(row)
+        if expected is not None and message != expected:
+            raise ValueError("This message changed or disappeared; reload the channel and retry.")
+        meta = {**message["meta"], "edited_at": time.time()}
+        c.execute("UPDATE messages SET text = ?, meta = ? WHERE id = ?", (text, json.dumps(meta), message_id))
+        return {**message, "text": text, "meta": meta}
+
+
+def clear_messages(channel_id: str, expected: list[dict[str, Any]] | None = None,
+                   expected_generation: str | None = None) -> int:
+    """Delete every message in one channel.
+
+    A caller that already showed the history passes that snapshot and the
+    restore generation. The check happens in the same guarded transaction as
+    the delete, so a restore that reused these message ids cannot be cleared.
+    """
+    with _conn() as c:
+        if expected_generation is not None and restore_generation() != expected_generation:
+            raise ValueError("Chat history was restored; reload the channel and retry.")
+        rows = c.execute("SELECT * FROM messages WHERE channel_id = ? ORDER BY id",
+                         (channel_id,)).fetchall()
+        current = [_message(row) for row in rows]
+        if expected is not None and current != expected:
+            raise ValueError("These messages changed or disappeared; reload the channel and retry.")
+        if not current:
+            return 0
         return c.execute("DELETE FROM messages WHERE channel_id = ?", (channel_id,)).rowcount
 
 

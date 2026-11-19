@@ -5,7 +5,9 @@ PUT  /api/evolve/agents/{name}/level    {"level": 1-9}
 POST /api/evolve/request                {action, target_kind, target, goal, agent} → a one-off job
 POST /api/evolve/fuse/preview           {a, b} → the merged agent to review (changes nothing)
 POST /api/evolve/fuse                   {a, b, name, description, system_prompt, model_from}
-POST /api/evolve/trash/restore          {name}
+POST /api/evolve/fuse/evaluate          {"limit": 8} → local model assessments
+POST /api/evolve/fuse/resume            {"id": "..."} → resume interrupted fusion
+POST /api/evolve/graveyard/revive       {name, mode} (Medic-controlled revive)
 GET  /api/evolve/files?q=                program files (picker for "Where")       2026-11-04
 GET  /api/evolve/functions?path=         functions / classes of a Python file
 POST /api/evolve/suggest                 the model's ideas for requests (nothing starts by itself)
@@ -41,13 +43,15 @@ async def overview():
                "description": "The main agent", "skills": []}]
     agents += [{"name": a.name, "level": a.level, "provider": a.provider or d.provider, "model": a.model,
                 "description": a.description, "skills": a.skills} for a in cfg.agents.named]
+    try:
+        trash = evolve.agent_trash()
+    except evolve.LifecycleError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     return {
-        "agents": agents,
-        "proposals": await asyncio.to_thread(selfupdate.list_proposals, None),
-        "requests": await asyncio.to_thread(evolve.change_requests),
-        "trash": evolve.agent_trash(),
-        "models": model_health.snapshot(),
-        "self_update": cfg.medic.self_update.model_dump(),
+        "agents": agents, "proposals": await asyncio.to_thread(selfupdate.list_proposals, None),
+        "requests": await asyncio.to_thread(evolve.change_requests), "trash": trash,
+        "models": model_health.snapshot(), "self_update": cfg.medic.self_update.model_dump(),
+        "pending_fusions": evolve.pending_fusions(),
     }
 
 
@@ -61,6 +65,8 @@ async def set_level(name: str, body: LevelIn):
         return {"name": name, "level": await evolve.set_level(name, body.level)}
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except evolve.LifecycleError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 class RequestIn(BaseModel):
@@ -91,6 +97,8 @@ async def fuse_preview(body: PairIn):
         return await evolve.fusion_preview(body.a, body.b)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except evolve.LifecycleError as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 class FuseIn(PairIn):
@@ -106,18 +114,70 @@ async def fuse(body: FuseIn):
         return await evolve.fuse(body.a, body.b, body.name, body.description, body.system_prompt, body.model_from)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except evolve.LifecycleError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+class FuseEvalIn(BaseModel):
+    limit: int = Field(8, ge=1, le=50)
+
+
+class ResumeFusionIn(BaseModel):
+    id: str
+
+
+@router.post("/api/evolve/fuse/resume", dependencies=guard)
+async def resume_fusion(body: ResumeFusionIn):
+    try:
+        return await evolve.resume_fusion(body.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except evolve.LifecycleError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@router.post("/api/evolve/fuse/evaluate", dependencies=guard)
+async def fuse_evaluate(body: FuseEvalIn = FuseEvalIn()):
+    from myclaw.fusion_evaluation import evaluate_fusion_candidates
+
+    try:
+        result = await evaluate_fusion_candidates(limit=body.limit)
+        for candidate in result["candidates"]:
+            try:
+                evolve._pair(candidate["a"], candidate["b"])
+            except ValueError as exc:
+                candidate["blocked_reason"] = str(exc)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except (TimeoutError, evolve.LifecycleError) as e:
+        raise HTTPException(status_code=503, detail=str(e))
 
 
 class NameIn(BaseModel):
     name: str
 
 
-@router.post("/api/evolve/trash/restore", dependencies=guard)
-async def restore(body: NameIn):
+class ReviveIn(NameIn):
+    mode: Literal["active", "fusion"] = "active"
+    entry_id: str | None = None
+
+
+@router.post("/api/evolve/graveyard/revive", dependencies=guard)
+async def revive(body: ReviveIn):
+    from myclaw.agents.medic_agent import MedicAgent
+
     try:
-        return await evolve.restore_agent(body.name)
+        return await MedicAgent().revive_agent(body.name, mode=body.mode, entry_id=body.entry_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except evolve.LifecycleError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@router.post("/api/evolve/trash/restore", dependencies=guard)
+async def restore_legacy(_: NameIn):
+    raise HTTPException(status_code=403, detail="Use /api/evolve/graveyard/revive (Medic-controlled) instead.")
 
 
 # ── 2026-11-04 ───────────────────────────────────────────────────────────────
@@ -168,3 +228,5 @@ async def create_agent(body: NewAgentIn):
         return await evolve.create_agent(body.name, body.description, body.system_prompt, body.skills)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except evolve.LifecycleError as e:
+        raise HTTPException(status_code=503, detail=str(e))

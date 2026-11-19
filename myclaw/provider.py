@@ -612,13 +612,32 @@ class BaseLLMProvider(ABC):
 
 
 class OllamaProvider(BaseLLMProvider):
-    """Ollama native API (http://localhost:11434)."""
+    """Ollama native API (http://localhost:11434 or Ollama Cloud)."""
+
+    NAME = "ollama"
+    DEFAULT_URL = "http://localhost:11434"
+    REQUIRE_KEY = False
 
     def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
+        self.api_key = ""
+        self.keep_alive = ""
+        self.temperature: Optional[float] = None
+        self.max_tokens: int = 0
         try:
-            self.base_url = config.providers.ollama.base_url
+            cfg = getattr(config.providers, self.NAME)
+            self.base_url = (getattr(cfg, "base_url", "") or self.DEFAULT_URL).rstrip("/")
+            if hasattr(cfg, "api_key") and cfg.api_key:
+                self.api_key = cfg.api_key.get_secret_value()
+            self.keep_alive = str(getattr(cfg, "keep_alive", "") or "").strip()
+            self.temperature = getattr(cfg, "temperature", None)
+            self.max_tokens = int(getattr(cfg, "max_tokens", 0) or 0)
+            cfg_timeout = int(getattr(cfg, "timeout_seconds", 0) or 0)
+            if cfg_timeout > 0:
+                timeout = cfg_timeout
         except Exception:
-            self.base_url = "http://localhost:11434"
+            self.base_url = self.DEFAULT_URL
+        if self.REQUIRE_KEY and not self.api_key:
+            raise ValueError(f"{self.NAME}.api_key is not set in config.")
         self.timeout = timeout
 
     @retry_with_backoff(max_retries=3, base_delay=1.0)
@@ -632,17 +651,27 @@ class OllamaProvider(BaseLLMProvider):
                     logger.debug(f"Semantic cache hit for {model}")
                     return cached
 
-        payload = {
+        payload: Dict[str, Any] = {
             "model": model,
             "messages": messages,
             "stream": stream,
             "tools": _get_tool_schemas(),
         }
+        if self.keep_alive:
+            payload["keep_alive"] = self.keep_alive
+        options: Dict[str, Any] = {}
         from .context_budget import CONTEXT_LENGTH
 
         # the agent's context length, or this provider's if smaller (set per call in Agent._fitted)
         if CONTEXT_LENGTH.get() > 0:
-            payload["options"] = {"num_ctx": CONTEXT_LENGTH.get()}
+            options["num_ctx"] = CONTEXT_LENGTH.get()
+        if self.temperature is not None:
+            options["temperature"] = float(self.temperature)
+        if self.max_tokens > 0:
+            options["num_predict"] = int(self.max_tokens)
+        if options:
+            payload["options"] = options
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
         try:
             # Use pooled client instead of creating new one
             client = HTTPClientPool.get_client(self.timeout)
@@ -654,7 +683,7 @@ class OllamaProvider(BaseLLMProvider):
                 async def generate():
                     _final_msg = None
                     async with client.stream(
-                        "POST", f"{self.base_url}/api/chat", json=payload
+                        "POST", f"{self.base_url}/api/chat", json=payload, headers=headers
                     ) as r:
                         r.raise_for_status()
                         async for line in r.aiter_lines():
@@ -692,6 +721,7 @@ class OllamaProvider(BaseLLMProvider):
             r = await client.post(
                 f"{self.base_url}/api/chat",
                 json=payload,
+                headers=headers,
             )
             r.raise_for_status()
             msg = r.json()["message"]
@@ -733,6 +763,14 @@ class OllamaProvider(BaseLLMProvider):
             yield chunk
 
 
+class OllamaCloudProvider(OllamaProvider):
+    """Ollama Cloud (https://ollama.com) using an Ollama API key."""
+
+    NAME = "ollama_cloud"
+    DEFAULT_URL = "https://ollama.com"
+    REQUIRE_KEY = True
+
+
 class OpenAICompatProvider(BaseLLMProvider):
     """
     Generic OpenAI-compatible provider.
@@ -747,6 +785,8 @@ class OpenAICompatProvider(BaseLLMProvider):
         base_url: str,
         timeout: int = DEFAULT_TIMEOUT,
         extra_headers: Optional[Dict[str, str]] = None,
+        temperature: Optional[float] = None,
+        max_tokens: int = 0,
     ):
         try:
             from openai import AsyncOpenAI
@@ -763,6 +803,8 @@ class OpenAICompatProvider(BaseLLMProvider):
             timeout=timeout,
             default_headers=extra_headers or {},
         )
+        self.temperature = temperature
+        self.max_tokens = int(max_tokens or 0)
 
     # None = unknown, False = the server rejected tool definitions once
     # (e.g. llama-server started without --jinja); then we stop sending them.
@@ -795,6 +837,10 @@ class OpenAICompatProvider(BaseLLMProvider):
         """chat.completions.create() that retries once without `tools` when
         the server cannot handle them (llama.cpp without --jinja, some LM
         Studio models), so plain chat still works."""
+        if getattr(self, "temperature", None) is not None and "temperature" not in kwargs:
+            kwargs["temperature"] = float(self.temperature)
+        if getattr(self, "max_tokens", 0) > 0 and "max_tokens" not in kwargs:
+            kwargs["max_tokens"] = int(self.max_tokens)
         if self._tools_supported is not False:
             try:
                 return await self.client.chat.completions.create(tools=_get_tool_schemas(), **kwargs)
@@ -1125,6 +1171,30 @@ class OpenCodeProvider(_CloudOpenAIProvider):
     NAME, DEFAULT_URL = "opencode", "https://opencode.ai/zen/v1"
 
 
+class CompatibleProvider(OpenAICompatProvider):
+    """Generic OpenAI-compatible LLM provider (local or cloud)."""
+
+    def __init__(self, config, timeout: int = DEFAULT_TIMEOUT):
+        try:
+            cfg = config.providers.compatible
+            base_url = _with_v1(cfg.base_url or "http://localhost:8000/v1")
+            api_key = cfg.api_key.get_secret_value() or "no-key"
+            temperature = getattr(cfg, "temperature", None)
+            max_tokens = int(getattr(cfg, "max_tokens", 0) or 0)
+            cfg_timeout = int(getattr(cfg, "timeout_seconds", 0) or 0)
+            if cfg_timeout > 0:
+                timeout = cfg_timeout
+        except Exception:
+            base_url = "http://localhost:8000/v1"
+            api_key = "no-key"
+            temperature = None
+            max_tokens = 0
+        super().__init__(
+            api_key=api_key, base_url=base_url, timeout=timeout,
+            temperature=temperature, max_tokens=max_tokens,
+        )
+
+
 class AnthropicProvider(BaseLLMProvider):
     """Anthropic Claude (claude-3-5-sonnet-20241022, claude-3-haiku-20240307, …)."""
 
@@ -1433,11 +1503,13 @@ class GeminiProvider(BaseLLMProvider):
 
 _PROVIDER_MAP = {
     "ollama": OllamaProvider,
+    "ollama_cloud": OllamaCloudProvider,
     "lmstudio": LMStudioProvider,
     "llamacpp": LlamaCppProvider,
     "nvpair": NVPairProvider,
     "freetoken": FreeTokenProvider,
     "bionic": BionicProvider,
+    "compatible": CompatibleProvider,
     "openai": OpenAIProvider,
     "anthropic": AnthropicProvider,
     "gemini": GeminiProvider,
@@ -1531,11 +1603,19 @@ def get_provider(config, provider_name: str = "ollama", key_id: Optional[str] = 
         else:
             logger.debug(f"Initialising provider: {name} (key {kid or 'default'})")
             if kid is not None:
-                if name == "ollama":
-                    raise ValueError("ollama does not use API keys")
                 provider = cls(config_with_key(config, name, key_secret(config, name, kid)))
             else:
                 provider = cls(config)
+            if isinstance(provider, OpenAICompatProvider):
+                pcfg = getattr(config.providers, name, None)
+                if pcfg is not None:
+                    if getattr(pcfg, "temperature", None) is not None:
+                        provider.temperature = float(pcfg.temperature)
+                    if int(getattr(pcfg, "max_tokens", 0) or 0) > 0:
+                        provider.max_tokens = int(pcfg.max_tokens)
+                    cfg_timeout = int(getattr(pcfg, "timeout_seconds", 0) or 0)
+                    if cfg_timeout > 0:
+                        provider.client.timeout = cfg_timeout
         _provider_cache[cache_key] = provider
         _provider_cache_timestamps[cache_key] = now
         return provider
@@ -1596,12 +1676,16 @@ def provider_endpoint(config, name: str, key_id: Optional[str] = None) -> Option
     if name in SUPPORTED_PROVIDERS:
         pcfg = getattr(config.providers, name, None)
         key = pcfg.api_key.get_secret_value() if pcfg is not None and hasattr(pcfg, "api_key") else ""
-        kind = name if name in ("ollama", "anthropic", "gemini") else "openai"
+        kind = "ollama" if name in ("ollama", "ollama_cloud") else (
+            name if name in ("anthropic", "gemini") else "openai"
+        )
         url = getattr(pcfg, "base_url", "") or _CLOUD_DEFAULT_URLS.get(name, "")
-        if name in ("lmstudio", "llamacpp", "nvpair", "freetoken", "bionic"):
+        if name in ("lmstudio", "llamacpp", "nvpair", "freetoken", "bionic", "compatible"):
             url = _with_v1(url)  # v0.7.3: same URL the provider really uses
+        is_local = bool(getattr(pcfg, "local", False)) if name == "compatible" else (name in LOCAL_BUILTIN_PROVIDERS)
         return {"kind": kind, "base_url": url.rstrip("/"), "api_key": key,
-                "local": name in LOCAL_BUILTIN_PROVIDERS, "label": name, "custom": False}
+                "local": is_local, "label": name, "custom": False,
+                "models": list(getattr(pcfg, "models", []) or [])}
     cp = find_custom_provider(config, name)
     if cp is None:
         return None

@@ -130,6 +130,22 @@ def create_agent(name: str, description: str, system_prompt: str = "", model: st
     skills: comma-separated skill names to give it (see list_skills)
     key: id of the provider's API key to use (empty = the default key)
     """
+    from .evolve import LifecycleError, _lifecycle_guard, agent_trash, pending_fusions
+
+    try:
+        with _lifecycle_guard():
+            if pending_fusions():
+                return "Error: recover the pending fusion before creating an agent."
+            normalized = (name or "").strip().lstrip("@").replace(" ", "_").casefold()
+            if any(t["agent"]["name"].casefold() == normalized for t in agent_trash()):
+                return "Error: that name belongs to a graveyard agent; ask the user to use Medic revival."
+            return _create_agent_locked(name, description, system_prompt, model, provider, skills, key)
+    except LifecycleError as exc:
+        return f"Error: {exc}"
+
+
+def _create_agent_locked(name: str, description: str, system_prompt: str = "", model: str = "",
+                         provider: str = "", skills: str = "", key: str = "") -> str:
     from .config import CONFIG_FILE, AppConfig, load_config, load_encrypted_or_plain, save_config
     from .events import CURRENT_AGENT, emit
 

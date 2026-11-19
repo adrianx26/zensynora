@@ -100,6 +100,7 @@ async def _reset_agent_registry() -> None:
     _apply_security(load_config())
     old = _agent_registry
     _agent_registry = {}
+    set_registry({})
     for agent in old.values():
         try:
             await agent.close()
@@ -520,7 +521,21 @@ async def chat_websocket(websocket: WebSocket, agent_name: str):
 
             # Re-resolve per message: saving settings rebuilds the registry,
             # and an open socket must pick up the new provider/model.
-            agent = _ensure_registry().get(agent_name) or agent
+            from myclaw.evolve import LifecycleError, fusion_pending_for
+
+            try:
+                blocked = await asyncio.to_thread(fusion_pending_for, agent_name)
+            except LifecycleError:
+                blocked = True
+            if blocked:
+                await websocket.send_text("__ERROR__: Agent fusion is pending recovery.")
+                await websocket.close()
+                break
+            agent = _ensure_registry().get(agent_name)
+            if agent is None:
+                await websocket.send_text("__ERROR__: Agent no longer exists; reconnect to an active agent.")
+                await websocket.close()
+                break
 
             # Signal the start of streaming
             await websocket.send_text("__STREAM_START__")

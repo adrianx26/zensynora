@@ -112,6 +112,10 @@ def _start_config_watcher():
 ENV_OVERRIDES = {
     # Providers
     "providers.ollama.base_url": "MYCLAW_OLLAMA_BASE_URL",
+    "providers.ollama_cloud.api_key": "MYCLAW_OLLAMA_CLOUD_API_KEY",
+    "providers.ollama_cloud.base_url": "MYCLAW_OLLAMA_CLOUD_BASE_URL",
+    "providers.compatible.base_url": "MYCLAW_COMPATIBLE_BASE_URL",
+    "providers.compatible.api_key": "MYCLAW_COMPATIBLE_API_KEY",
     "providers.openai.api_key": "MYCLAW_OPENAI_API_KEY",
     "providers.anthropic.api_key": "MYCLAW_ANTHROPIC_API_KEY",
     "providers.gemini.api_key": "MYCLAW_GEMINI_API_KEY",
@@ -312,6 +316,11 @@ class MultiKeyMixin(BaseModel):
     # (0 = unknown / the model's default). Requests are fitted to it, also when
     # the routing moves a turn to this provider; Ollama gets it as num_ctx.
     context_length: int = Field(0, ge=0, le=10_000_000)
+    # Generic compatible-LLM settings: optional saved models, sampling & limits.
+    models: list[str] = []
+    temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
+    max_tokens: int = Field(0, ge=0, le=1_000_000)
+    timeout_seconds: int = Field(0, ge=0, le=3600)
 
     @field_validator("keys")
     @classmethod
@@ -326,10 +335,28 @@ class MultiKeyMixin(BaseModel):
 # ── Local Providers ───────────────────────────────────────────────────────────
 
 
-class OllamaConfig(BaseModel):
+class OllamaConfig(MultiKeyMixin):
+    """Ollama Local server (native /api/chat and /api/tags)."""
+
     base_url: str = "http://localhost:11434"
-    # 2026-11-08: see MultiKeyMixin.context_length (sent as num_ctx)
-    context_length: int = Field(0, ge=0, le=10_000_000)
+    api_key: SecretStr = SecretStr("")  # optional bearer token for proxied local Ollama
+    keep_alive: str = ""  # e.g. "5m", "0", "-1"
+
+
+class OllamaCloudConfig(MultiKeyMixin):
+    """Ollama Cloud (https://ollama.com) using an Ollama API key."""
+
+    base_url: str = "https://ollama.com"
+    api_key: SecretStr = SecretStr("")
+    keep_alive: str = ""
+
+
+class CompatibleConfig(MultiKeyMixin):
+    """Generic OpenAI-compatible LLM endpoint (local or cloud)."""
+
+    base_url: str = "http://localhost:8000/v1"
+    api_key: SecretStr = SecretStr("")
+    local: bool = False
 
 
 class LMStudioConfig(MultiKeyMixin):
@@ -445,11 +472,13 @@ class CustomProviderConfig(MultiKeyMixin):
 
 class ProvidersConfig(BaseModel):
     ollama: OllamaConfig = OllamaConfig()
+    ollama_cloud: OllamaCloudConfig = OllamaCloudConfig()
     lmstudio: LMStudioConfig = LMStudioConfig()
     llamacpp: LlamaCppConfig = LlamaCppConfig()
     nvpair: NVPairConfig = NVPairConfig()          # 2026-11-08
     freetoken: FreeTokenConfig = FreeTokenConfig()  # 2026-11-08
     bionic: BionicConfig = BionicConfig()
+    compatible: CompatibleConfig = CompatibleConfig()
     openai: OpenAIConfig = OpenAIConfig()
     anthropic: AnthropicConfig = AnthropicConfig()
     gemini: GeminiConfig = GeminiConfig()
@@ -949,7 +978,7 @@ def _validate_config(config: AppConfig) -> None:
         has_local = True
 
     # Check cloud provider API keys
-    for prov_name in ("openai", "anthropic", "gemini", "groq", "openrouter",
+    for prov_name in ("ollama_cloud", "openai", "anthropic", "gemini", "groq", "openrouter",
                       "copilot", "github", "kilo", "opencode"):
         prov = getattr(config.providers, prov_name, None)
         if prov and prov.api_key and prov.api_key.get_secret_value():

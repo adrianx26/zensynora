@@ -246,6 +246,13 @@ def is_safe(key: str, value: Any) -> bool:
 
 
 def _write_config(changes: Dict[str, Any]) -> None:
+    from ..evolve import _lifecycle_guard
+
+    with _lifecycle_guard():
+        _write_config_locked(changes)
+
+
+def _write_config_locked(changes: Dict[str, Any]) -> None:
     from ..config import CONFIG_FILE, AppConfig, load_config, load_encrypted_or_plain, save_config
 
     # no config file yet: only our values are written (a dump of the defaults would

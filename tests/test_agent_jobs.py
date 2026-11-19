@@ -37,6 +37,7 @@ def env(tmp_path, monkeypatch):
     from myclaw.web import jobs_api
 
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     agents = {"default": _Agent("default"), "Coder": _Agent("Coder", "Tests pass.")}
     chat = _Chat()
     runner = JobRunner(lambda: agents, lambda: chat)

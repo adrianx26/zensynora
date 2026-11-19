@@ -388,6 +388,9 @@ class ParallelToolExecutor:
             return processed_results
 
         except asyncio.TimeoutError:
+            from ..executions import retain_until_exit
+
+            retain_until_exit()
             logger.error(f"Parallel tool execution timed out after {self.timeout}s")
             return [
                 {

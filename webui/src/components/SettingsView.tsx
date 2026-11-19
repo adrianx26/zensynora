@@ -28,15 +28,21 @@ interface FieldDef {
   help?: string;
   options?: string[];
   placeholder?: string;
+  step?: string;
+  min?: number;
+  max?: number;
+  nullable?: boolean;
 }
 
 const PROVIDER_LABELS: Record<string, string> = {
-  ollama: 'Ollama (local)',
+  ollama: 'Ollama Local (local)',
+  ollama_cloud: 'Ollama Cloud',
   lmstudio: 'LM Studio (local)',
   llamacpp: 'llama.cpp server (local)',
   nvpair: 'NVIDIA PAIR — Personal AI Router (local)',
   freetoken: 'FreeToken / FreeToken Desktop (local)',
   bionic: 'Bionic / BionicGPT (local)',
+  compatible: 'Compatible LLM (OpenAI-compatible)',
   openai: 'OpenAI',
   anthropic: 'Anthropic',
   gemini: 'Google Gemini',
@@ -50,11 +56,13 @@ const PROVIDER_LABELS: Record<string, string> = {
 
 const PROVIDER_API_KEY_LINKS: Record<string, { url: string; label: string }> = {
   ollama: { url: 'https://ollama.com/download', label: 'Website / docs' },
+  ollama_cloud: { url: 'https://ollama.com/settings/keys', label: 'API keys' },
   lmstudio: { url: 'https://lmstudio.ai/docs/app/api', label: 'API docs' },
   llamacpp: { url: 'https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md', label: 'Server docs' },
   nvpair: { url: 'https://github.com/NVIDIA/Personal-AI-Router', label: 'Setup / docs' },
   freetoken: { url: 'https://github.com/FlashML-org/FreeToken', label: 'Setup / docs' },
   bionic: { url: 'https://bionic-gpt.com/docs/administration/api-keys', label: 'API key docs' },
+  compatible: { url: 'https://platform.openai.com/docs/api-reference', label: 'OpenAI-compatible API spec' },
   openai: { url: 'https://platform.openai.com/api-keys', label: 'API keys' },
   anthropic: { url: 'https://console.anthropic.com/settings/keys', label: 'API keys' },
   gemini: { url: 'https://aistudio.google.com/apikey', label: 'API keys' },
@@ -256,6 +264,7 @@ const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [probe, setProbe] = useState<Record<string, ProbeResult & { loading?: boolean }>>({});
+  const [providerModelPick, setProviderModelPick] = useState<Record<string, string>>({});
   const [dcCmd, setDcCmd] = useState('');
   const [dcMode, setDcMode] = useState<'direct' | 'policy'>('direct');
   const [dcTimeout, setDcTimeout] = useState(30);
@@ -557,8 +566,11 @@ const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
       );
     } else if (f.kind === 'number') {
       control = (
-        <input id={id} className="field-input narrow" type="number" value={value ?? ''}
-          onChange={e => update(f.path, e.target.value === '' ? 0 : Number(e.target.value))} />
+        <input id={id} className="field-input narrow" type="number"
+          step={f.step} min={f.min} max={f.max}
+          placeholder={f.placeholder}
+          value={value ?? ''}
+          onChange={e => update(f.path, e.target.value === '' ? (f.nullable ? null : 0) : Number(e.target.value))} />
       );
     } else if (f.kind === 'list') {
       control = (
@@ -603,14 +615,105 @@ const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
     const cfg = getPath(draft, `providers.${p}`) || {};
     const out: FieldDef[] = [];
     if ('base_url' in cfg) out.push({ path: `providers.${p}.base_url`, label: 'Server URL', kind: 'text' });
-    if ('api_key' in cfg) out.push({ path: `providers.${p}.api_key`, label: 'API key', kind: 'password' });
+    if ('api_key' in cfg) out.push({
+      path: `providers.${p}.api_key`,
+      label: p === 'ollama' ? 'API key (optional)' : 'API key',
+      kind: 'password',
+    });
+    if ('local' in cfg) out.push({
+      path: `providers.${p}.local`, label: 'Local server (runs on this computer / LAN)', kind: 'bool',
+    });
     if ('site_url' in cfg) out.push({ path: `providers.${p}.site_url`, label: 'Site URL (optional header)', kind: 'text' });
     if ('site_name' in cfg) out.push({ path: `providers.${p}.site_name`, label: 'Site name (optional header)', kind: 'text' });
     // 2026-11-08: the context this provider's models run with; kept when the routing moves a turn here
     if ('context_length' in cfg) out.push({ path: `providers.${p}.context_length`, label: 'Context length (tokens)', kind: 'number',
       help: p === 'nvpair' ? '0 = unknown. PAIR sends each request to one machine: use the smallest context among them.'
         : '0 = unknown. Set what the models run with (LM Studio: the context you load the model with); requests are fitted to it, also after the rotation picks this provider. The smaller of this and the agent’s own context length wins.' });
+    if ('keep_alive' in cfg) out.push({
+      path: `providers.${p}.keep_alive`, label: 'Keep alive (Ollama)', kind: 'text',
+      placeholder: '5m', help: 'How long Ollama keeps the model in memory after a request (e.g. 5m, 30m, 0, -1). Leave empty for server default.',
+    });
     return out;
+  };
+
+  const compatibleFields = (p: string): FieldDef[] => {
+    const cfg = getPath(draft, `providers.${p}`) || {};
+    const out: FieldDef[] = [];
+    if ('models' in cfg) out.push({
+      path: `providers.${p}.models`, label: 'Saved / custom models', kind: 'list',
+      help: 'One model ID per line. Merged with live /models results so you can pick models even when the server is offline.',
+    });
+    if ('temperature' in cfg) out.push({
+      path: `providers.${p}.temperature`, label: 'Default temperature', kind: 'number',
+      step: '0.1', min: 0, max: 2, nullable: true, placeholder: 'server default',
+      help: '0.0–2.0; leave empty to use the server default.',
+    });
+    if ('max_tokens' in cfg) out.push({
+      path: `providers.${p}.max_tokens`, label: 'Max output tokens', kind: 'number',
+      min: 0, help: '0 = use the model/server default.',
+    });
+    if ('timeout_seconds' in cfg) out.push({
+      path: `providers.${p}.timeout_seconds`, label: 'Request timeout (s)', kind: 'number',
+      min: 0, max: 3600, help: '0 = use global LLM request timeout (Settings → Features).',
+    });
+    return out;
+  };
+
+  const ProviderModelSelector: React.FC<{ provider: string }> = ({ provider }) => {
+    const probed = probe[provider]?.models || [];
+    const saved: string[] = getPath(draft, `providers.${provider}.models`) || [];
+    const available = Array.from(new Set([...probed, ...saved])).filter(Boolean);
+    const activeDefault = defaultProvider === provider ? (getPath(draft, 'agents.defaults.model') || '') : '';
+    const selected = providerModelPick[provider] ?? (activeDefault || available[0] || '');
+    const setSelected = (val: string) => setProviderModelPick(prev => ({ ...prev, [provider]: val }));
+    const applyDefault = () => {
+      const m = selected.trim();
+      if (!m) return;
+      update('agents.defaults.provider', provider);
+      update('agents.defaults.model', m);
+      if (!saved.includes(m) && getPath(draft, `providers.${provider}.models`) !== undefined) {
+        update(`providers.${provider}.models`, [...saved, m]);
+      }
+    };
+    return (
+      <div className="field" style={{ marginTop: 8 }}>
+        <label className="field-label">
+          Select / set model
+          {defaultProvider === provider && activeDefault && (
+            <span className="badge default-badge" style={{ marginLeft: 8 }}>active: {activeDefault}</span>
+          )}
+        </label>
+        <div className="field-row">
+          {available.length > 0 ? (
+            <select className="field-input" value={available.includes(selected) ? selected : ''}
+              aria-label={`Select model for ${provider}`}
+              onChange={e => setSelected(e.target.value)}>
+              <option value="">Pick a model…</option>
+              {available.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          ) : null}
+          <input className="field-input" type="text" value={selected}
+            placeholder="Type or select model ID (e.g. qwen2.5-7b)"
+            aria-label={`Model ID for ${provider}`}
+            onChange={e => setSelected(e.target.value)} />
+          <button type="button" className="ghost-btn" disabled={!selected.trim()} onClick={applyDefault}
+            title="Set this provider and model as the default agent model (click Save settings to persist)">
+            Use as default
+          </button>
+        </div>
+        {available.length > 0 && (
+          <div className="chip-row" style={{ marginTop: 4 }}>
+            {available.slice(0, 12).map(m => (
+              <button type="button" key={m}
+                className={`chip ${selected === m ? 'active' : ''}`}
+                onClick={() => setSelected(m)}>
+                {m}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const ProviderLinkRow: React.FC<{ provider: string }> = ({ provider }) => {
@@ -724,15 +827,27 @@ const SettingsView: React.FC<Props> = ({ onSaved, only }) => {
         {tab === 'Providers' && (
           <div className="notice">Add local or online providers of your own (vLLM, LocalAI, DeepSeek, Mistral, Cerebras, GitHub Models…) on the <b>Models</b> page.</div>
         )}
-        {tab === 'Providers' && data.providers.filter(p => PROVIDER_LABELS[p]).map(p => (
-          <div className="settings-card" key={p}>
-            <h3>{PROVIDER_LABELS[p] || p}{p === defaultProvider && <span className="badge default-badge">default</span>}</h3>
-            <ProviderLinkRow provider={p} />
-            {providerFields(p).map(renderField)}
-            <ProbeLine provider={p} />
-            <ProviderKeysPanel provider={p} keysMap={keysMap} onChanged={next => { setKeysMap(next); onSaved?.(); }} />
-          </div>
-        ))}
+        {tab === 'Providers' && data.providers.filter(p => PROVIDER_LABELS[p]).map(p => {
+          const extra = compatibleFields(p);
+          return (
+            <div className="settings-card" key={p}>
+              <h3>{PROVIDER_LABELS[p] || p}{p === defaultProvider && <span className="badge default-badge">default</span>}</h3>
+              <ProviderLinkRow provider={p} />
+              {providerFields(p).map(renderField)}
+              <ProbeLine provider={p} />
+              <ProviderModelSelector provider={p} />
+              {extra.length > 0 && (
+                <details style={{ marginTop: 8 }} open={p === 'compatible' || p === 'lmstudio' || p === 'ollama' || p === 'ollama_cloud'}>
+                  <summary className="small muted" style={{ cursor: 'pointer', marginBottom: 6 }}>
+                    Model list &amp; compatible LLM settings
+                  </summary>
+                  {extra.map(renderField)}
+                </details>
+              )}
+              <ProviderKeysPanel provider={p} keysMap={keysMap} onChanged={next => { setKeysMap(next); onSaved?.(); }} />
+            </div>
+          );
+        })}
 
         {tab === 'Agents' && (data.model_warnings || []).length > 0 && (
           <div className="notice error">

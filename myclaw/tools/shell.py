@@ -513,6 +513,8 @@ def shell(cmd: str) -> str:
 
 async def shell_async(cmd: str, timeout: int = 30) -> str:
     """Async version of shell() (same rules; runs in a worker thread)."""
+    from ..executions import tracked_to_thread
+
     if not await _rate_limiter.acheck("shell", max_calls=10, window=60):
         _tool_audit_logger.log("shell_async", "", 0, False, "Rate limit exceeded")
         return "Error: Rate limit exceeded for shell tool (10 calls/minute)"
@@ -522,7 +524,7 @@ async def shell_async(cmd: str, timeout: int = 30) -> str:
         return str(e)
     start_time = time.time()
     try:
-        result = await asyncio.wait_for(asyncio.to_thread(_execute, groups), timeout=timeout + 5)
+        result = await asyncio.wait_for(tracked_to_thread(_execute, groups), timeout=timeout + 5)
         _tool_audit_logger.log("shell_async", "", (time.time() - start_time) * 1000, True)
         return result
     except (asyncio.TimeoutError, subprocess.TimeoutExpired):

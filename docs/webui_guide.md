@@ -166,6 +166,13 @@ what is there when a file is missing.
   provider then appears everywhere a provider can be chosen. Keys are stored
   in `~/.myclaw/config.json` and never sent back to the browser.
 
+**Settings → Providers** separates Ollama Local from Ollama Cloud; configure
+the cloud API key separately. Each provider card offers model selection and
+saved model names. For LM Studio, test the connection to list available
+models, or enter a model name. The Compatible LLM card accepts an
+OpenAI-compatible endpoint, optional key and model settings; select whether
+the endpoint is local. Saving these settings does not start a model server.
+
 ### Several keys for one provider
 
 A provider can have more than one API key — for example two free OpenRouter
@@ -696,20 +703,33 @@ anything fails. *Updates → Roll back* undoes it later.
    model (change that in *Settings → Agents*). Every agent has a level from 1 to 9 (new
    agents start at 1; for now it is a label), changed here
    (`agents.named[].level`, `agents.defaults.level`). **Fuse two agents into
-   one:** pick two named agents and *Draft the merged agent*. The default
+   one:** **🤖 Evaluate fusion candidates** uses the configured local
+   knowledge-decision model to assess pairs. Compatibility and fusion-success
+   numbers are uncalibrated model estimates, not measured probabilities;
+   progress summarizes available job history. Quality, performance and
+   security findings are suggestions, not verified tests or scans. A local
+   loopback provider and model must be configured under Settings → Features;
+   errors are shown if the model is unavailable. Then pick two named agents
+   and *Draft the merged agent*. The default
    model writes a name, description and one system prompt that keeps the
    duties and rules of both; if the model is unavailable, both prompts are
    joined. You edit the draft and pick whose model (provider, key, context
    length) to keep. Skills are combined and the level is the lower of the
    two. *Replace A and B by …* saves it. Channels, direct messages and jobs
-   of both move to the new agent, and the two originals go to the **agent
-   trash** (`~/.myclaw/agents-trash.json`). *Restore* brings one back (its
-   channels and jobs stay with the fused agent). The default agent cannot be
-   fused.
+   of both move to the new agent, and the two originals go to the
+   **Graveyard** (`~/.myclaw/agents-graveyard.json`), removed from the active
+   configuration. Recovery snapshots retain their previous configuration;
+   the graveyard overview does not expose it. The guarded revival action
+   delegates to the Medic service; revived agents can be fused again. The
+   default agent cannot be fused; Mindy and Medic, including their fusion
+   lineages, cannot be fused with each other. If reference migration is
+   interrupted, Evolve shows a pending operation with a *Resume recovery*
+   button; review the reported state before retrying.
 
 API: `GET /api/evolve/overview`, `PUT /api/evolve/agents/{name}/level`,
 `POST /api/evolve/request`, `POST /api/evolve/fuse/preview`,
-`POST /api/evolve/fuse`, `POST /api/evolve/trash/restore`,
+`POST /api/evolve/fuse`, `POST /api/evolve/fuse/evaluate`, `POST /api/evolve/fuse/resume`,
+`POST /api/evolve/graveyard/revive`,
 `GET /api/evolve/files?q=`, `GET /api/evolve/functions?path=`,
 `POST /api/evolve/suggest`, `POST /api/evolve/agents/draft`,
 `POST /api/evolve/agents`; proposals use

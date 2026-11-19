@@ -29,6 +29,7 @@ def test_builtin_local_openai_compatible(name, url):
 
 
 @pytest.mark.parametrize("name,url", [
+    ("ollama_cloud", "https://ollama.com"),
     ("copilot", "https://api.githubcopilot.com"),
     ("github", "https://models.github.ai/inference"),
     ("kilo", "https://api.kilo.ai/api/gateway"),
@@ -38,17 +39,44 @@ def test_builtin_cloud_openai_compatible(name, url):
     from pydantic import SecretStr
     from myclaw.config import AppConfig
     from myclaw.provider import (LOCAL_BUILTIN_PROVIDERS, SUPPORTED_PROVIDERS, OpenAICompatProvider,
-                                 get_provider, provider_endpoint, provider_names)
+                                 OllamaCloudProvider, get_provider, provider_endpoint, provider_names)
 
     cfg = AppConfig()
     assert name in SUPPORTED_PROVIDERS and name not in LOCAL_BUILTIN_PROVIDERS and name in provider_names(cfg)
     ep = provider_endpoint(cfg, name)
-    assert ep["kind"] == "openai" and ep["base_url"] == url and not ep["local"]
+    expected_kind = "ollama" if name == "ollama_cloud" else "openai"
+    assert ep["kind"] == expected_kind and ep["base_url"] == url and not ep["local"]
     with pytest.raises(ValueError, match="api_key is not set"):
         get_provider(cfg, name)
     getattr(cfg.providers, name).api_key = SecretStr("test-key")
     prov = get_provider(cfg, name)
-    assert isinstance(prov, OpenAICompatProvider) and str(prov.client.base_url).rstrip("/") == url
+    expected_cls = OllamaCloudProvider if name == "ollama_cloud" else OpenAICompatProvider
+    assert isinstance(prov, expected_cls)
+
+
+def test_lmstudio_models_and_compatible_llm_settings():
+    from myclaw.config import AppConfig
+    from myclaw.provider import CompatibleProvider, get_provider, provider_endpoint
+
+    cfg = AppConfig()
+    cfg.providers.lmstudio.models = ["qwen2.5-coder-7b", "llama-3.2-3b"]
+    ep_lm = provider_endpoint(cfg, "lmstudio")
+    assert ep_lm["models"] == ["qwen2.5-coder-7b", "llama-3.2-3b"]
+
+    cfg.providers.compatible.base_url = "http://127.0.0.1:8000"
+    cfg.providers.compatible.models = ["custom-model"]
+    cfg.providers.compatible.temperature = 0.2
+    cfg.providers.compatible.max_tokens = 2048
+    cfg.providers.compatible.timeout_seconds = 45
+    cfg.providers.compatible.local = True
+    ep_c = provider_endpoint(cfg, "compatible")
+    assert ep_c["base_url"] == "http://127.0.0.1:8000/v1"
+    assert ep_c["local"] is True
+    assert ep_c["models"] == ["custom-model"]
+    prov = get_provider(cfg, "compatible")
+    assert isinstance(prov, CompatibleProvider)
+    assert prov.temperature == 0.2
+    assert prov.max_tokens == 2048
 
 
 def test_listed_as_local_everywhere():

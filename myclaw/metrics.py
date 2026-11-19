@@ -90,6 +90,8 @@ class PrometheusMetrics:
         "nvpair": {},
         "freetoken": {},
         "bionic": {},
+        "compatible": {},
+        "ollama_cloud": {},
         "openrouter": {},
         "copilot": {},
         "github": {},

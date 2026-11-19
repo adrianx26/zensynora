@@ -86,6 +86,16 @@ class ChatEngine:
         ch = await asyncio.to_thread(store.get_channel, channel_id)
         if ch is None:
             raise KeyError(channel_id)
+        if ch["kind"] == "retired_dm" or await asyncio.to_thread(store.is_legacy_fusion_dm, ch):
+            raise ValueError("This conversation was retired by fusion; open the fused agent's DM instead.")
+        from ..evolve import LifecycleError, fusion_pending_for
+
+        try:
+            blocked = await asyncio.to_thread(lambda: any(fusion_pending_for(name) for name in ch["members"]))
+        except LifecycleError:
+            blocked = True
+        if blocked:
+            raise ValueError("This channel contains an agent in a pending fusion; recover that fusion first.")
         if ch["kind"] == "dm" and ch["members"][0] not in self._registry():  # v0.7.5
             raise ValueError(f"@{ch['members'][0]} no longer exists (renamed or deleted in Settings). "
                              "Delete this conversation on the Channels page.")
@@ -96,8 +106,9 @@ class ChatEngine:
         text = text.strip()
         if not text:
             raise ValueError("Empty message")
-        await self._open_channel(channel_id)
-        msg = await asyncio.to_thread(store.add_message, channel_id, "user", sender, text)
+        channel = await self._open_channel(channel_id)
+        msg = await asyncio.to_thread(store.add_message, channel_id, "user", sender, text,
+                                      expected_channel=channel)
         events.publish(channel_id, {"type": "message", "message": msg})
         task = asyncio.create_task(self._run_turn(channel_id, text))
         self._tasks[channel_id] = task
@@ -117,15 +128,23 @@ class ChatEngine:
         task = asyncio.create_task(self._run_turn(channel_id, msg["text"], anchor=msg))
         self._tasks[channel_id] = task
 
-    async def regenerate(self, channel_id: str, message_id: int) -> dict[str, Any]:
+    async def regenerate(self, channel_id: str, message_id: int,
+                         expected: dict[str, Any] | None = None,
+                         expected_generation: str | None = None) -> dict[str, Any]:
         """Write one agent's answer again, in the same place (same message id).
 
-        Returns the message of yours that is answered again.
+        Returns the message of yours that is answered again. ``expected`` is the
+        answer validated before this call; a restore that reused its id is rejected
+        before any message is removed or rewritten.
         """
         await self._open_channel(channel_id)
         answer = await asyncio.to_thread(store.get_message, message_id)
         if answer is None or answer["channel_id"] != channel_id or answer["role"] != "agent":
             raise KeyError(message_id)
+        if expected is not None and answer != expected:
+            raise ValueError("This message changed or disappeared; reload the channel and retry.")
+        if expected_generation is not None and await asyncio.to_thread(store.restore_generation) != expected_generation:
+            raise ValueError("Chat history was restored; reload the channel and retry.")
         before = await asyncio.to_thread(store.all_messages, channel_id, message_id)
         question = next((m for m in reversed(before) if m["role"] == "user"), None)
         if question is None:
@@ -137,12 +156,14 @@ class ChatEngine:
                 break
             meta = m["meta"] or {}
             if answer["sender"] in (m["sender"], meta.get("agent"), meta.get("from")):
-                stale.append(m["id"])
+                stale.append(m)
         if stale:
-            gone = await asyncio.to_thread(store.delete_messages, channel_id, stale)
+            gone = await asyncio.to_thread(store.delete_messages, channel_id, [m["id"] for m in stale],
+                                           expected=stale, expected_generation=expected_generation)
             events.publish(channel_id, {"type": "messages_deleted", "ids": gone})
         task = asyncio.create_task(self._run_turn(channel_id, question["text"], anchor=question,
-                                                  only=answer["sender"], reuse=answer))
+                                                  only=answer["sender"], reuse=answer,
+                                                  expected_generation=expected_generation))
         self._tasks[channel_id] = task
         return question
 
@@ -213,7 +234,8 @@ class ChatEngine:
         return members
 
     async def _run_turn(self, channel_id: str, text: str, anchor: dict[str, Any] | None = None,
-                        only: str | None = None, reuse: dict[str, Any] | None = None) -> None:
+                        only: str | None = None, reuse: dict[str, Any] | None = None,
+                        expected_generation: str | None = None) -> None:
         """One turn. ``anchor`` = an existing message of yours answered again
         (edit and resend, regenerate); ``only`` = just this agent answers;
         ``reuse`` = the old answer whose bubble the new answer is written into."""
@@ -251,7 +273,8 @@ class ChatEngine:
                 else:
                     for agent in targets:
                         replies[agent] = await self._answer(ch, agent, text, replies, history,
-                                                            reuse if agent == only else None)
+                                                            reuse if agent == only else None,
+                                                            expected_generation)
             except asyncio.CancelledError:
                 note = await asyncio.to_thread(store.add_message, channel_id, "system", "", "Stopped.")
                 events.publish(channel_id, {"type": "message", "message": note})
@@ -294,10 +317,19 @@ class ChatEngine:
 
     async def _answer(self, ch: dict[str, Any], agent_name: str, text: str,
                       replies: dict[str, str], history: list[dict[str, Any]] | None = None,
-                      reuse: dict[str, Any] | None = None) -> str:
+                      reuse: dict[str, Any] | None = None,
+                      expected_generation: str | None = None) -> str:
         from ..agent import MEMORY_SCOPE
 
         channel_id = ch["id"]
+        from ..evolve import LifecycleError, fusion_pending_for
+
+        try:
+            blocked = await asyncio.to_thread(fusion_pending_for, agent_name)
+        except LifecycleError:
+            blocked = True
+        if blocked:
+            return ""
         agent = self._registry().get(agent_name)
         if agent is None:
             note = await asyncio.to_thread(store.add_message, channel_id, "system", "",
@@ -309,7 +341,12 @@ class ChatEngine:
         prompt = self._prompt(ch, agent_name, text, replies, history)
 
         if reuse is not None:  # regenerate: the new answer replaces the old one in place
-            await asyncio.to_thread(store.update_message, reuse["id"], "", {"streaming": True})
+            try:
+                await asyncio.to_thread(store.update_message, reuse["id"], "", {"streaming": True},
+                                        expected=reuse, expected_generation=expected_generation)
+            except ValueError as exc:
+                events.publish(channel_id, {"type": "error", "error": str(exc)})
+                return ""
             msg = {**reuse, "text": "", "meta": {"streaming": True}}
         else:
             msg = await asyncio.to_thread(store.add_message, channel_id, "agent", agent_name, "",
@@ -353,7 +390,13 @@ class ChatEngine:
             meta.update(token_speed(full, len(parts), started, first_at, last_at))
             if error:
                 meta["error"] = error
-            await asyncio.to_thread(store.update_message, msg["id"], full, meta)
+            try:
+                await asyncio.to_thread(store.update_message, msg["id"], full, meta,
+                                        expected_generation=expected_generation)
+            except ValueError as exc:
+                logger.warning("Did not save the answer because chat history changed: %s", exc)
+                events.publish(channel_id, {"type": "error", "error": str(exc)})
+                return full
             events.publish(channel_id, {"type": "stream_end", "id": msg["id"], "text": full, "meta": meta})
         return full
 

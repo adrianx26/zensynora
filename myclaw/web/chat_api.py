@@ -42,6 +42,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import PlainTextResponse
+from fastapi.routing import APIRoute
 from pydantic import BaseModel
 
 from myclaw import events
@@ -50,7 +51,22 @@ from myclaw.chat.engine import USER_ID, ChatEngine, memory_scope, to_json
 from myclaw.web.settings_api import guard
 
 logger = logging.getLogger(__name__)
-router = APIRouter()
+
+
+class _ChatRoute(APIRoute):
+    def get_route_handler(self):
+        handler = super().get_route_handler()
+
+        async def route(request):
+            try:
+                return await handler(request)
+            except store.ChatRecoveryError as exc:
+                raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+        return route
+
+
+router = APIRouter(route_class=_ChatRoute)
 
 _registry_getter: Callable[[], dict[str, Any]] | None = None
 _engine: ChatEngine | None = None
@@ -70,6 +86,15 @@ def set_registry_getter(fn: Callable[[], dict[str, Any]]) -> None:
 
 def sync_channels() -> list[dict[str, Any]]:
     """Drop agents that no longer exist from channels (after settings change)."""
+    from myclaw import evolve
+
+    try:
+        if evolve.pending_fusions():
+            logger.warning("Channel repair deferred until the pending fusion is recovered.")
+            return []
+    except evolve.LifecycleError as exc:
+        logger.warning("Channel repair deferred because the graveyard cannot be read: %s", exc)
+        return []
     changes = store.repair_channels(engine().agents())
     for c in changes:
         ch = store.get_channel(c["id"])
@@ -200,7 +225,13 @@ async def channel_messages(channel_id: str, before: int | None = None, limit: in
 
 @router.delete("/api/channels/{channel_id}/messages", dependencies=guard)
 async def clear_channel(channel_id: str):
-    n = await asyncio.to_thread(store.clear_messages, channel_id)
+    generation = await asyncio.to_thread(store.restore_generation)
+    existing = await asyncio.to_thread(store.all_messages, channel_id)
+    try:
+        n = await asyncio.to_thread(store.clear_messages, channel_id, expected=existing,
+                                    expected_generation=generation)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     events.publish(channel_id, {"type": "cleared"})
     return {"status": "cleared", "removed": n}
 
@@ -224,14 +255,15 @@ class EditIn(BaseModel):
     resend: bool = False
 
 
-async def _own_message(channel_id: str, message_id: int) -> dict[str, Any]:
+async def _own_message(channel_id: str, message_id: int) -> tuple[dict[str, Any], str]:
     """The message, if it belongs to the channel and nobody is answering there."""
+    generation = await asyncio.to_thread(store.restore_generation)
     msg = await asyncio.to_thread(store.get_message, message_id)
     if msg is None or msg["channel_id"] != channel_id:
         raise HTTPException(status_code=404, detail="No such message")
     if engine().busy(channel_id):
         raise HTTPException(status_code=409, detail=BUSY)
-    return msg
+    return msg, generation
 
 
 async def _forget(channel_id: str, extra: list[str] | None = None) -> None:
@@ -243,7 +275,7 @@ async def _forget(channel_id: str, extra: list[str] | None = None) -> None:
 
 @router.patch("/api/channels/{channel_id}/messages/{message_id}", dependencies=guard)
 async def edit_message(channel_id: str, message_id: int, body: EditIn):
-    msg = await _own_message(channel_id, message_id)
+    msg, generation = await _own_message(channel_id, message_id)
     text = body.text.strip()
     if not text:
         raise HTTPException(status_code=400, detail="The message is empty.")
@@ -256,12 +288,20 @@ async def edit_message(channel_id: str, message_id: int, body: EditIn):
             await engine()._open_channel(channel_id)
         except (KeyError, ValueError) as e:
             raise HTTPException(status_code=400, detail=str(e))
-    updated = await asyncio.to_thread(store.edit_message, message_id, text)
+    try:
+        updated = await asyncio.to_thread(store.edit_message, message_id, text, expected=msg,
+                                          expected_generation=generation)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     events.publish(channel_id, {"type": "message_updated", "message": updated})
     deleted: list[int] = []
     if body.resend:
         later = await asyncio.to_thread(store.messages_after, channel_id, message_id)
-        deleted = await asyncio.to_thread(store.delete_messages, channel_id, [m["id"] for m in later])
+        try:
+            deleted = await asyncio.to_thread(store.delete_messages, channel_id, [m["id"] for m in later],
+                                              expected=later, expected_generation=generation)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         if deleted:
             events.publish(channel_id, {"type": "messages_deleted", "ids": deleted})
         await engine().rerun(channel_id, message_id)  # rebuilds the agents' memory first
@@ -272,13 +312,17 @@ async def edit_message(channel_id: str, message_id: int, body: EditIn):
 
 @router.delete("/api/channels/{channel_id}/messages/{message_id}", dependencies=guard)
 async def delete_message(channel_id: str, message_id: int, with_replies: bool = False):
-    msg = await _own_message(channel_id, message_id)
+    msg, generation = await _own_message(channel_id, message_id)
     ids = [message_id]
     if with_replies and msg["role"] == "user":
         ids += await asyncio.to_thread(store.reply_ids, channel_id, message_id)
     gone_msgs = [msg] + [m for m in await asyncio.to_thread(store.messages_after, channel_id, message_id)
                          if m["id"] in ids]
-    deleted = await asyncio.to_thread(store.delete_messages, channel_id, ids)
+    try:
+        deleted = await asyncio.to_thread(store.delete_messages, channel_id, ids, expected=gone_msgs,
+                                          expected_generation=generation)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     events.publish(channel_id, {"type": "messages_deleted", "ids": deleted})
     await _forget(channel_id, [m["sender"] for m in gone_msgs if m["role"] == "agent"])
     return {"deleted": deleted}
@@ -286,9 +330,10 @@ async def delete_message(channel_id: str, message_id: int, with_replies: bool = 
 
 @router.post("/api/channels/{channel_id}/messages/{message_id}/regenerate", dependencies=guard)
 async def regenerate_message(channel_id: str, message_id: int):
-    await _own_message(channel_id, message_id)
+    msg, generation = await _own_message(channel_id, message_id)
     try:
-        question = await engine().regenerate(channel_id, message_id)
+        question = await engine().regenerate(channel_id, message_id, expected=msg,
+                                             expected_generation=generation)
     except KeyError:
         raise HTTPException(status_code=400, detail="Only an agent's answer can be regenerated.")
     except ValueError as e:
@@ -321,7 +366,12 @@ async def activity(limit: int = 100):
 @router.websocket("/ws/channels/{channel_id}")
 async def channel_socket(ws: WebSocket, channel_id: str):
     await ws.accept()
-    ch = await asyncio.to_thread(_get_channel, channel_id)
+    try:
+        ch = await asyncio.to_thread(_get_channel, channel_id)
+    except store.ChatRecoveryError as exc:
+        await ws.send_text(to_json({"type": "error", "error": str(exc)}))
+        await ws.close()
+        return
     if ch is None:
         await ws.send_text(to_json({"type": "error", "error": "No such channel"}))
         await ws.close()

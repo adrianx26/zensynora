@@ -7,7 +7,7 @@
 //    side-by-side install, checks, automatic rollback) or reject. Existing panel.
 // 3. Models (LLMs): health of every model, replace one in all agents (Models page).
 // 4. Agents: level 1-9, and fusion of two agents into one (the lower level; the
-//    originals go to the agent trash and can be restored).
+//    originals go to the Graveyard and can be revived by Medic).
 import React, { useCallback, useEffect, useState } from 'react';
 import { ago, api } from '../api';
 import ProposalsPanel from './ProposalsPanel';
@@ -17,15 +17,30 @@ import { useAutoClear } from '../notice';
 
 interface Agent { name: string; level: number; provider: string; model: string; description: string; skills: string[] }
 interface Req { id: string; name: string; agent: string; created: number; last_run: number | null; last_status: string }
-interface Trashed { agent: Agent & { system_prompt: string }; fused_into: string; at: string }
+interface Trashed { id: string; agent: { name: string; level: number }; fused_into: string; at: string }
+interface PendingFusion { id: string; sources: string[]; destination: string }
 interface Overview {
   agents: Agent[]; requests: Req[]; trash: Trashed[];
+  pending_fusions: PendingFusion[];
   self_update: { enabled?: boolean; run_tests?: boolean; auto_approve_low_risk?: boolean };
 }
 interface Preview {
   a: string; b: string; name: string; description: string; system_prompt: string; skills: string[];
   level: number; model_from: string; models: Record<string, string>; note: string;
 }
+interface FusionFinding { claim: string; evidence_ids: string[] }
+interface FusionSection { findings: FusionFinding[]; limitations: string[] }
+interface FusionEstimate { value: number; rationale: string; evidence_ids: string[] }
+interface FusionCandidate {
+  a: string; b: string;
+  status: 'assessed' | 'error'; error?: string; blocked_reason?: string;
+  assessment?: {
+    estimates: { compatibility: FusionEstimate; fusion_success_probability: FusionEstimate };
+    quality_assurance: FusionSection; performance_optimization: FusionSection; security: FusionSection;
+  };
+  progress: Record<string, { state: string; reason: string; runs_observed: number; successful_runs: number; failed_runs: number }>;
+}
+interface FusionCandidateResponse { candidates: FusionCandidate[]; checked_pairs: number; assessed_pairs: number; at: string }
 
 const ACTIONS = [
   { value: 'optimise', label: 'Optimise', help: 'faster, simpler or more reliable; same behaviour' },
@@ -51,6 +66,7 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void; o
   const [busy, setBusy] = useState('');
   const [pair, setPair] = useState({ a: '', b: '' });
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [fusionEval, setFusionEval] = useState<FusionCandidateResponse | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -208,10 +224,61 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void; o
           <CreateAgent onCreated={text => { setNotice({ ok: true, text }); load(); }} />
 
           <h4>Fuse two agents into one</h4>
+          {(ov?.pending_fusions || []).map(operation => (
+            <div className="notice error" key={operation.id}>
+              Fusion of {operation.sources.join(' and ')} into {operation.destination} needs recovery.{' '}
+              <button className="ghost-btn small-btn" disabled={!!busy}
+                onClick={() => act(`resume-${operation.id}`, async () => {
+                  const result = await api<{ state: string }>('/api/evolve/fuse/resume', {
+                    method: 'POST', body: JSON.stringify({ id: operation.id }),
+                  });
+                  return `Fusion recovery: ${result.state}.`;
+                })}>Resume recovery</button>
+            </div>
+          ))}
           <p className="muted small">
             The AI writes one prompt that keeps the duties and rules of both; you review and edit it first. Skills are combined, the model comes from the agent you pick,
-            and the level is the lower of the two. Channels, direct messages and jobs move to the new agent. Both originals go to the agent trash and can be restored.
+            and the level is the lower of the two. Channels, direct messages and jobs move to the new agent. Both originals go to the Graveyard (disabled, no LLM).
           </p>
+          <div className="save-actions">
+            <button className="ghost-btn" disabled={!!busy}
+              onClick={() => act('fuse-eval', async () => {
+                setFusionEval(await api<FusionCandidateResponse>('/api/evolve/fuse/evaluate', { method: 'POST', body: JSON.stringify({ limit: 10 }) }));
+              })}>
+              {busy === 'fuse-eval' ? 'Evaluating…' : '🤖 Evaluate fusion candidates'}</button>
+          </div>
+          <p className="muted small">Uses the local knowledge-decision model configured in Settings → Features. Review the estimates and their evidence; they do not authorize a fusion.</p>
+          {fusionEval && (
+            <div className="evolve-suggest">
+              <div className="muted small">Assessed {fusionEval.assessed_pairs} of {fusionEval.checked_pairs} candidate pairs at {fusionEval.at}.
+                Estimates are uncalibrated model opinions, not measured probabilities. No tests, benchmarks or security scans were performed.</div>
+              {fusionEval.candidates.map((c, i) => (
+                <div key={`${c.a}:${c.b}:${i}`} className="ai-item">
+                  <div><b>{c.a} + {c.b}</b></div>
+                  {c.error && <div className="notice error">{c.error}</div>}
+                  {c.blocked_reason && <div className="notice error">{c.blocked_reason}</div>}
+                  {c.assessment && <>
+                    <div className="muted small">Estimated compatibility: {(c.assessment.estimates.compatibility.value * 100).toFixed(0)}% — {c.assessment.estimates.compatibility.rationale}</div>
+                    <div className="muted small">Estimated fusion success: {(c.assessment.estimates.fusion_success_probability.value * 100).toFixed(0)}% — {c.assessment.estimates.fusion_success_probability.rationale}</div>
+                    {(['quality_assurance', 'performance_optimization', 'security'] as const).map(section => (
+                      <div key={section} className="muted small"><b>{section.replace(/_/g, ' ')}:</b>{' '}
+                        {c.assessment?.[section].findings.map(f => `${f.claim} (${f.evidence_ids.join(', ')})`).join(' ') || 'No findings.'}{' '}
+                        {c.assessment?.[section].limitations.join(' ')}
+                      </div>
+                    ))}
+                    {Object.entries(c.progress).map(([key, p]) => (
+                      <div key={key} className="muted small">{key === 'job_history.a' ? c.a : c.b} progress: {p.state === 'unknown'
+                        ? p.reason : `${p.runs_observed} runs observed, ${p.successful_runs} successful, ${p.failed_runs} failed. ${p.reason}`}</div>
+                    ))}
+                  </>}
+                  <div className="probe-row">
+                    <button className="ghost-btn small-btn" disabled={c.status !== 'assessed' || !!c.blocked_reason} onClick={() => { setPair({ a: c.a, b: c.b }); setPreview(null); }}>
+                      Use this pair</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="evolve-form">
             {(['a', 'b'] as const).map(k => (
               <label key={k} className="field"><span className="field-label">{k === 'a' ? 'First agent' : 'Second agent'}</span>
@@ -250,7 +317,8 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void; o
                       a: preview.a, b: preview.b, name: preview.name, description: preview.description,
                       system_prompt: preview.system_prompt, model_from: preview.model_from }) });
                     setPreview(null); setPair({ a: '', b: '' });
-                    return `${preview.a} and ${preview.b} are now ${r.agent.name} (level ${r.agent.level}). The originals are in the agent trash below.`;
+                    setFusionEval(null);
+                    return `${preview.a} and ${preview.b} are now ${r.agent.name} (level ${r.agent.level}). The originals are in the Graveyard below.`;
                   })}>{busy === 'fuse' ? 'Fusing…' : `Replace ${preview.a} and ${preview.b} by ${preview.name || '…'}`}</button>
               </div>
             </div>
@@ -258,16 +326,22 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void; o
 
           {ov && ov.trash.length > 0 && (
             <>
-              <h4>Agent trash</h4>
+              <h4>Graveyard (disabled agents)</h4>
+              <p className="muted small">Graveyard agents are removed from the active configuration. Revival is handled by the Medic service.</p>
               <ul className="plain-list">
-                {ov.trash.map((t, i) => (
-                  <li key={i}>
+                {ov.trash.map(t => (
+                  <li key={t.id}>
                     <b>{t.agent.name}</b> <span className="muted small">level {t.agent.level} · fused into {t.fused_into} · {t.at}</span>{' '}
                     <button className="ghost-btn small-btn" disabled={!!busy}
-                      onClick={() => act(`restore-${i}`, async () => {
-                        await api('/api/evolve/trash/restore', { method: 'POST', body: JSON.stringify({ name: t.agent.name }) });
-                        return `${t.agent.name} is back. Its channels and jobs stay with ${t.fused_into}.`;
-                      })}>Restore</button>
+                      onClick={() => act(`revive-active-${t.id}`, async () => {
+                        await api('/api/evolve/graveyard/revive', { method: 'POST', body: JSON.stringify({ name: t.agent.name, entry_id: t.id, mode: 'active' }) });
+                        return `Medic revived ${t.agent.name} to active agents.`;
+                      })}>Revive (Medic) to active</button>
+                    <button className="ghost-btn small-btn" disabled={!!busy}
+                      onClick={() => act(`revive-fusion-${t.id}`, async () => {
+                        await api('/api/evolve/graveyard/revive', { method: 'POST', body: JSON.stringify({ name: t.agent.name, entry_id: t.id, mode: 'fusion' }) });
+                        return `Medic revived ${t.agent.name} for fusion planning.`;
+                      })}>Revive (Medic) for fusion</button>
                   </li>
                 ))}
               </ul>

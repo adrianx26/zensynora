@@ -499,6 +499,12 @@ class MedicAgent:
     def diagnose_knowledge_merge(self, operation_id: str) -> str:
         return diagnose_knowledge_merge(operation_id)
 
+    async def revive_agent(self, name: str, mode: str = "active", entry_id: str | None = None) -> dict:
+        """Restore a graveyard snapshot on an authorized user's request."""
+        from ..evolve import _medic_revive_agent
+
+        return await _medic_revive_agent(name, mode, entry_id)
+
     def verify_integrity(self, file_path: str = "") -> str:
         return verify_file_integrity(file_path)
 

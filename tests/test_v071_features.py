@@ -54,6 +54,7 @@ def home(tmp_path, monkeypatch):
     from myclaw.web import settings_api
 
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     cfg_dir = tmp_path / ".myclaw"
     cfg_dir.mkdir()
     cfg_file = cfg_dir / "config.json"

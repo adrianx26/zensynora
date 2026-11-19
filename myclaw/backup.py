@@ -13,6 +13,7 @@ What goes in (``PARTS``)
                agent profiles
 
 Settings are always included; the other parts follow ``config.backup``.
+When lifecycle data exists, memory and jobs must also be included.
 SQLite databases are copied with SQLite's online-backup API, so a backup is
 consistent even while ZenSynora is running.
 
@@ -53,6 +54,7 @@ import sqlite3
 import tarfile
 import tempfile
 import time
+import uuid
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
@@ -66,7 +68,8 @@ PARTS = ("settings", "knowledge", "memory", "jobs")
 
 # Paths relative to ~/.myclaw (glob patterns allowed). Directories are copied whole.
 _PART_PATTERNS: dict[str, list[str]] = {
-    "settings": ["config.json", ".config_key", ".migrations.json", "config.json.bak"],
+    "settings": ["config.json", ".config_key", ".migrations.json", "config.json.bak",
+                 "agents-graveyard.json", "agents-trash.json"],
     "knowledge": ["knowledge", "knowledge_*.db", "vectors.db", "knowledge_gaps.jsonl", "knowledge_spaces*"],
     "memory": ["memory*.db", "chat.db", "semantic_memory*"],
     "jobs": ["jobs.db", "TOOLBOX", "skills", "rules", "profiles", "customize.json", "scheduler_jobs.jsonl", "prompts.jsonl", "hub"],
@@ -128,7 +131,13 @@ def _walk(path: Path) -> Iterable[Path]:
     if path.is_file():
         yield path
         return
-    for dirpath, dirnames, filenames in os.walk(path):
+    if not path.is_dir():
+        raise OSError(f"Cannot back up {path}; file disappeared or is inaccessible.")
+
+    def fail(error: OSError) -> None:
+        raise error
+
+    for dirpath, dirnames, filenames in os.walk(path, onerror=fail):
         dirnames[:] = [d for d in dirnames if d not in _SKIP]
         for name in filenames:
             if not name.endswith(_SKIP_SUFFIXES) and not name.endswith(".pyc"):
@@ -171,6 +180,17 @@ def default_parts(cfg: Any = None) -> list[str]:
 def create_backup(parts: list[str] | None = None, label: str = "manual", note: str = "",
                   dest: Path | None = None, cfg: Any = None) -> dict[str, Any]:
     """Write a backup archive; returns its info (as listed by ``list_backups``)."""
+    from .evolve import _lifecycle_guard, pending_fusions
+    from .executions import active_for
+
+    with _lifecycle_guard():
+        if pending_fusions() or active_for(None):
+            raise ValueError("Wait for agent work and recover pending fusions before making a backup.")
+        return _create_backup_locked(parts, label, note, dest, cfg)
+
+
+def _create_backup_locked(parts: list[str] | None = None, label: str = "manual", note: str = "",
+                          dest: Path | None = None, cfg: Any = None) -> dict[str, Any]:
     from . import __version__
 
     if cfg is None:
@@ -184,6 +204,9 @@ def create_backup(parts: list[str] | None = None, label: str = "manual", note: s
         parts.insert(0, "settings")
     label = "".join(ch for ch in (label or "manual") if ch.isalnum() or ch in "-_")[:40] or "manual"
     src_root = data_dir()
+    if (any((src_root / name).exists() for name in ("agents-graveyard.json", "agents-trash.json"))
+            and not {"memory", "jobs"} <= set(parts)):
+        raise ValueError("A backup containing a graveyard requires memory and jobs; include both parts.")
     dest = dest or backup_dir(cfg)
     stamp = time.strftime("%Y%m%d-%H%M%S")
     name = f"zensynora-backup-{stamp}-{label}.tar.gz"
@@ -209,8 +232,7 @@ def create_backup(parts: list[str] | None = None, label: str = "manual", note: s
                         else:
                             shutil.copy2(f, out)
                     except (OSError, sqlite3.Error) as e:
-                        logger.warning("backup: skipped %s (%s)", rel, e)
-                        continue
+                        raise OSError(f"Cannot back up {rel}; no backup was created: {e}") from e
                     files[f"data/{rel}"] = {"part": part, "bytes": out.stat().st_size, "sha256": _sha256(out)}
         env = install_root() / ".env"
         if "settings" in parts and env.is_file():
@@ -323,6 +345,29 @@ def import_backup(data: bytes, cfg: Any = None) -> dict[str, Any]:
     return _info(target)
 
 
+def _restore_destination(rel: str, root: Path) -> Path:
+    if rel == "install/.env":
+        return install_root() / ".env"
+    if not rel.startswith("data/") or "\\" in rel or ":" in rel:
+        raise ValueError(f"Invalid restore path: {rel}")
+    parts = rel.split("/")[1:]
+    if not parts or any(part in {"", ".", ".."} for part in parts):
+        raise ValueError(f"Invalid restore path: {rel}")
+    return root.joinpath(*parts)
+
+
+def _trash_restored_file(root: Path, rel: str, src: Path) -> None:
+    parts = rel.split("/")
+    if len(parts) >= 4 and parts[:2] == ["data", "knowledge"] and src.suffix.lower() == ".md":
+        trash = root / "knowledge" / parts[2] / ".trash" / ("restore-" + uuid.uuid4().hex)
+        dest = trash.joinpath(*parts[3:])
+    else:
+        trash = root / ".trash" / ("restore-" + uuid.uuid4().hex)
+        dest = trash / rel
+    dest.parent.mkdir(parents=True)
+    os.replace(src, dest)
+
+
 # ── restore ──────────────────────────────────────────────────────────────────
 def restore_backup(name: str, parts: list[str] | None = None, safety_copy: bool = True,
                    cfg: Any = None) -> dict[str, Any]:
@@ -331,6 +376,39 @@ def restore_backup(name: str, parts: list[str] | None = None, safety_copy: bool 
     A safety backup of the current state is taken first (label
     ``before-restore``), so a restore can itself be undone.
     """
+    from .chat.store import database_guard
+    from .evolve import _lifecycle_guard, pending_fusions
+    from .executions import active_for
+
+    with _lifecycle_guard(allow_restore=True), database_guard():
+        marker = data_dir() / ".lifecycle-restore-pending.json"
+        if active_for(None):
+            raise ValueError("Wait for all agent work to finish before restoring a backup.")
+        if marker.exists():
+            try:
+                recovery = json.loads(marker.read_text(encoding="utf-8"))["safety_backup"]
+            except (OSError, ValueError, KeyError) as exc:
+                raise ValueError("Restore recovery marker is invalid; preserve it and contact support.") from exc
+            if name != recovery:
+                raise ValueError(f"A restore was interrupted. Restore safety backup {recovery} first.")
+            safety_copy = False
+        elif pending_fusions():
+            raise ValueError("Recover the pending fusion before restoring a backup.")
+        try:
+            return _restore_backup_locked(name, parts, safety_copy, cfg, marker, marker.exists())
+        except (Exception, SystemExit) as exc:
+            if marker.exists():
+                try:
+                    recovery = json.loads(marker.read_text(encoding="utf-8"))["safety_backup"]
+                except Exception:
+                    recovery = "(see restore recovery marker)"
+                raise ValueError(f"Restore incomplete; agents are blocked. Restore safety backup {recovery}. "
+                                 f"Details: {exc}") from exc
+            raise
+
+
+def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool,
+                           cfg: Any, marker: Path, recovering: bool) -> dict[str, Any]:
     path = resolve(name, cfg)
     ok, problems = verify_backup(path)
     if not ok:
@@ -339,13 +417,53 @@ def restore_backup(name: str, parts: list[str] | None = None, safety_copy: bool 
     chosen = [p for p in (parts or m.get("parts", [])) if p in m.get("parts", [])]
     if not chosen:
         raise ValueError("Nothing to restore — pick at least one part that the backup contains.")
+    if not safety_copy and not recovering:
+        raise ValueError("A safety backup is required before restoring; enable it and retry.")
+    life_files = {"data/agents-graveyard.json", "data/agents-trash.json"}
+    archived_lifecycle = bool(life_files & set(m["files"]))
+    current_lifecycle = any((data_dir() / Path(p).name).exists() for p in life_files)
+    if {"settings", "memory", "jobs"} & set(chosen) and (archived_lifecycle or current_lifecycle):
+        if not archived_lifecycle and current_lifecycle and not recovering:
+            raise ValueError("This backup has no graveyard; restoring it would conflict with current lifecycle data.")
+        if not {"settings", "memory", "jobs"} <= set(chosen) and not recovering:
+            raise ValueError("Restore settings, memory and jobs together when a graveyard is present.")
+        for db in ("chat.db", "jobs.db"):
+            if not recovering and (data_dir() / db).exists() and f"data/{db}" not in m["files"]:
+                raise ValueError(f"Backup lacks {db}; restore cannot safely replace lifecycle data.")
+        if not safety_copy and not recovering:
+            raise ValueError("A safety backup is required when restoring lifecycle data.")
+    if recovering and set(chosen) != set(m.get("parts", [])):
+        raise ValueError("Restore every part of the safety backup to finish recovery.")
     safety = None
     if safety_copy:
-        safety = create_backup(parts=list(PARTS), label="before-restore", cfg=cfg)["name"]
-
+        safety = _create_backup_locked(parts=list(PARTS), label="before-restore", cfg=cfg)["name"]
     root = data_dir()
-    restored: list[str] = []
     wanted = {k for k, v in m["files"].items() if v.get("part") in chosen}
+    from .config_encryption import _atomic_write
+
+    _atomic_write(root / ".chat-restore-generation", uuid.uuid4().hex)
+    if not recovering and safety:
+        introduced = [{"path": rel, "sha256": m["files"][rel]["sha256"]} for rel in sorted(wanted)
+                      if not _restore_destination(rel, root).exists()]
+        introduced_dirs = set()
+        for entry in introduced:
+            rel = entry["path"]
+            if not rel.startswith("data/"):
+                continue
+            parent = _restore_destination(rel, root).parent
+            while parent != root and not parent.exists():
+                introduced_dirs.add(parent.relative_to(root).as_posix())
+                parent = parent.parent
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        _atomic_write(marker, json.dumps({"safety_backup": safety, "introduced": introduced,
+                                         "introduced_dirs": sorted(introduced_dirs)}))
+
+    if not recovering and "settings" in chosen and archived_lifecycle:
+        for rel in sorted(life_files - set(m["files"])):
+            old = _restore_destination(rel, root)
+            if old.exists():
+                _trash_restored_file(root, rel, old)
+    restored: list[str] = []
     with tempfile.TemporaryDirectory(prefix="zs-restore-") as tmp:
         with tarfile.open(path, "r:gz") as tar:
             members = [mb for mb in tar.getmembers() if mb.name in wanted and mb.isfile()]
@@ -360,19 +478,47 @@ def restore_backup(name: str, parts: list[str] | None = None, safety_copy: bool 
             src = Path(tmp) / rel
             if not src.is_file():
                 continue
-            if rel.startswith("data/"):
-                dst = root / rel[len("data/"):]
-            elif rel == "install/.env":
-                dst = install_root() / ".env"
-            else:
-                continue
+            dst = _restore_destination(rel, root)
             dst.parent.mkdir(parents=True, exist_ok=True)
+            if (rel.startswith("data/knowledge/") and dst.suffix.lower() == ".md"
+                    and dst.is_file() and _sha256(dst) != m["files"][rel]["sha256"]):
+                _trash_restored_file(root, rel, dst)
             for side in ("-wal", "-shm"):  # stale SQLite side files would corrupt the restored DB
                 Path(str(dst) + side).unlink(missing_ok=True)
             tmp_dst = dst.with_name(dst.name + ".restoring")
-            shutil.copy2(src, tmp_dst)
-            os.replace(tmp_dst, dst)
+            try:
+                shutil.copy2(src, tmp_dst)
+                os.replace(tmp_dst, dst)
+            finally:
+                tmp_dst.unlink(missing_ok=True)
             restored.append(rel)
+    if recovering:
+        recovery_state = json.loads(marker.read_text(encoding="utf-8"))
+        introduced = recovery_state.get("introduced", [])
+        old_allowed = {"config.json", ".config_key", "agents-graveyard.json", "agents-trash.json", "chat.db", "jobs.db"}
+        for entry in introduced:
+            if isinstance(entry, str) and entry in old_allowed:
+                rel, expected = "data/" + entry, None
+            elif isinstance(entry, dict) and isinstance(entry.get("path"), str) and isinstance(entry.get("sha256"), str):
+                rel, expected = entry["path"], entry["sha256"]
+            else:
+                raise ValueError("Invalid restore recovery marker.")
+            src = _restore_destination(rel, root)
+            if src.exists() and rel not in m["files"]:
+                if expected and _sha256(src) != expected:
+                    raise ValueError(f"Introduced file {rel} changed since restore; preserve it and resolve manually.")
+                _trash_restored_file(root, rel, src)
+        for name in sorted(recovery_state.get("introduced_dirs", []), key=lambda x: -len(x)):
+            if not isinstance(name, str):
+                raise ValueError("Invalid restore recovery marker.")
+            directory = _restore_destination("data/" + name, root)
+            try:
+                directory.rmdir()
+            except FileNotFoundError:
+                pass
+            except OSError:
+                if not directory.is_dir() or not any(directory.iterdir()):
+                    raise
     for secret in (root / "config.json", root / ".config_key", install_root() / ".env"):
         if secret.exists():
             try:
@@ -382,8 +528,10 @@ def restore_backup(name: str, parts: list[str] | None = None, safety_copy: bool 
     try:
         from .config import load_config
         load_config(force_reload=True)
-    except Exception as e:
-        logger.warning("Config reload after restore failed: %s", e)
+    except (Exception, SystemExit) as e:
+        raise ValueError(f"Config reload after restore failed: {e}") from e
+    _atomic_write(root / ".chat-restore-generation", uuid.uuid4().hex)
+    marker.unlink(missing_ok=True)
     logger.info("Restored %d files from %s (parts: %s)", len(restored), path.name, ", ".join(chosen))
     return {"restored": len(restored), "parts": chosen, "safety_backup": safety, "from": path.name}
 

@@ -112,8 +112,11 @@ class JobRunner:
                 run_id = await asyncio.to_thread(store.start_run, job_id, "run", trigger, "", "", attempt)
                 self._run_tasks[run_id] = asyncio.current_task()  # type: ignore[assignment]
                 status = await self._execute(job, run_id)
-                if status in ("ok", "cancelled"):
+                if status in ("ok", "cancelled", "blocked"):
                     break
+        if status == "blocked":
+            await asyncio.to_thread(store.mark_blocked, job_id, time.time(), trigger == "schedule")
+            return run_id
         await asyncio.to_thread(store.mark_ran, job_id, status, time.time())
         # v0.7.5: the medic looks at failed runs when the job asks for it.
         if run_id and status not in ("ok", "cancelled") and job.get("on_failure") and trigger != "medic":
@@ -151,10 +154,21 @@ class JobRunner:
 
     async def _execute(self, job: dict[str, Any], run_id: int, agent: Any = None,
                        kind: str = "run") -> str:
+        from ..evolve import LifecycleError
+        from ..executions import execution
+
+        try:
+            async with execution(job["agent"], "job"):
+                return await self._execute_tracked(job, run_id, agent, kind)
+        except LifecycleError as exc:
+            await asyncio.to_thread(store.finish_run, run_id, "blocked", "", f"{exc} Check the agent and retry.")
+            return "blocked"
+
+    async def _execute_tracked(self, job: dict[str, Any], run_id: int, agent: Any = None,
+                               kind: str = "run") -> str:
         from ..agent import MEMORY_SCOPE
         from ..agent_internals.tool_executor import MAX_ROUNDS
-
-        agent = agent or self._registry().get(job["agent"]) or self._registry().get("default")
+        agent = agent or self._registry().get(job["agent"])
         if agent is None:
             await asyncio.to_thread(store.finish_run, run_id, "error", "", f"Agent '{job['agent']}' not found")
             return "error"

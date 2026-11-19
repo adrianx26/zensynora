@@ -43,6 +43,7 @@ _PROVIDER_SDK = {
     "nvpair": ("openai", "openai"),
     "freetoken": ("openai", "openai"),
     "bionic": ("openai", "openai"),
+    "compatible": ("openai", "openai"),
     "openai": ("openai", "openai"),
     "groq": ("openai", "openai"),
     "openrouter": ("openai", "openai"),
@@ -415,6 +416,31 @@ def _security_warnings(cfg: AppConfig) -> List[str]:
 @router.put("/api/settings", dependencies=guard)
 @activity.recorded("setting", lambda update: "saved: " + ", ".join(sorted(update.changes))[:150])  # key names only
 async def update_settings(update: SettingsUpdate):
+    from myclaw import evolve
+
+    try:
+        with evolve._lifecycle_guard():
+            touches_named = any(path in {"agents", "agents.named"} for path in update.changes)
+            if touches_named and evolve.pending_fusions():
+                raise HTTPException(status_code=409, detail="Recover the pending fusion before editing agents.")
+            if touches_named:
+                graveyard = {t["agent"]["name"].casefold() for t in evolve.agent_trash()}
+                proposed = []
+                for path, value in update.changes.items():
+                    if path == "agents":
+                        proposed = value.get("named", []) if isinstance(value, dict) else []
+                    elif path == "agents.named":
+                        proposed = value
+                if isinstance(proposed, list) and any(
+                    isinstance(row, dict) and str(row.get("name", "")).casefold() in graveyard for row in proposed
+                ):
+                    raise HTTPException(status_code=409, detail="A proposed agent is in the graveyard; use Medic revival.")
+            return await _update_settings_unlocked(update)
+    except evolve.LifecycleError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+async def _update_settings_unlocked(update: SettingsUpdate):
     cfg = load_config()
     secret_paths = set(_secret_paths(cfg))
     raw = copy.deepcopy(_read_raw_config())
@@ -654,6 +680,8 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str],
     params: Dict[str, str] = {}
     if kind == "ollama":
         endpoint = f"{url}/api/tags"
+        if key:
+            headers["Authorization"] = f"Bearer {key}"
     elif kind == "anthropic":
         endpoint = f"{url}/models"
         headers = {"x-api-key": key or "", "anthropic-version": "2023-06-01"}
@@ -679,7 +707,7 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str],
 
     # Built-in cloud providers always need a key. Custom ones may not (local
     # servers); a cloud server without a key answers 401, reported below.
-    if provider in ("openai", "groq", "openrouter", "anthropic", "gemini",
+    if provider in ("ollama_cloud", "openai", "groq", "openrouter", "anthropic", "gemini",
                     "copilot", "github", "kilo", "opencode") and not key:
         return {"ok": False, "error": "API key is not set.", "models": [], "url": url}
 

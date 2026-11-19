@@ -282,6 +282,16 @@ def mark_ran(job_id: str, status: str, when: float) -> None:
                   (when, status, nxt, int(job["enabled"]), job_id))
 
 
+def mark_blocked(job_id: str, when: float, scheduled: bool) -> None:
+    """Keep blocked jobs enabled; defer scheduler retries without consuming a once job."""
+    with _conn() as c:
+        if scheduled:
+            c.execute("UPDATE jobs SET last_run = ?, last_status = 'blocked', next_run = ? WHERE id = ?",
+                      (when, when + 60, job_id))
+        else:
+            c.execute("UPDATE jobs SET last_run = ?, last_status = 'blocked' WHERE id = ?", (when, job_id))
+
+
 # ── Runs ─────────────────────────────────────────────────────────────────────
 def start_run(job_id: str, kind: str = "run", trigger: str = "manual", provider: str = "",
               model: str = "", attempt: int = 1) -> int:

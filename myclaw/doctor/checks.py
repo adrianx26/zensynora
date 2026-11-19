@@ -22,6 +22,7 @@ PROVIDER_SDK = {
     "nvpair": ("openai", "openai"),
     "freetoken": ("openai", "openai"),
     "bionic": ("openai", "openai"),
+    "compatible": ("openai", "openai"),
     "openai": ("openai", "openai"),
     "groq": ("openai", "openai"),
     "openrouter": ("openai", "openai"),

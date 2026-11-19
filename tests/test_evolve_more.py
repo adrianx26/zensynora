@@ -11,6 +11,14 @@ import pytest
 
 from tests.test_v071_features import home  # noqa: F401  (fixture)
 
+def _agents(**named):
+    from myclaw.config import NamedAgentConfig, load_config, save_config
+
+    cfg = load_config()
+    cfg.agents.named = [NamedAgentConfig(name=n, **kw) for n, kw in named.items()]
+    save_config(cfg)
+    return cfg
+
 
 def _fake(monkeypatch, answer, seen=None):
     async def fake(config, messages, provider=None, model=None):
@@ -35,6 +43,24 @@ def test_program_files_and_functions():
     assert evolve.functions("README.md") == []
     with pytest.raises(ValueError):
         evolve.functions("../../etc/passwd")
+
+
+def test_fusion_candidate_eval_and_medic_revive(home):  # noqa: F811
+    from myclaw import evolve
+    from myclaw.agents.medic_agent import MedicAgent
+    from myclaw.config import load_config
+
+    _agents(Coder={"model": "m1", "skills": ["git", "pytest"], "description": "Writes code", "system_prompt": "Write tests and code."},
+            Tester={"model": "m2", "skills": ["pytest"], "description": "Tests code", "system_prompt": "Run tests safely."})
+    out = evolve.evaluate_fusion_candidates(limit=5)
+    assert out["checked_pairs"] == 1 and out["candidates"][0]["a"] == "Coder" and out["candidates"][0]["b"] == "Tester"
+    assert {"quality_assurance", "performance_optimization", "security"} <= set(out["candidates"][0])
+    asyncio.run(evolve.fuse("Coder", "Tester", name="Builder", description="", system_prompt="both", model_from="Coder"))
+    with pytest.raises(ValueError):
+        asyncio.run(evolve.revive_agent("Coder", mode="active", by="user"))
+    asyncio.run(MedicAgent().revive_agent("Coder", mode="fusion"))
+    cfg = load_config(force_reload=True)
+    assert any(a.name == "Coder" and a.model == "m1" for a in cfg.agents.named)
 
 
 def test_suggestions_are_checked_and_facts_quoted(home, monkeypatch):  # noqa: F811
