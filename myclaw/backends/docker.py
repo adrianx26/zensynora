@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import subprocess
 from pathlib import Path
 from typing import Tuple
 
@@ -109,12 +110,7 @@ class DockerBackend(AbstractBackend):
     def _check_availability(self) -> bool:
         """Check if Docker is available."""
         try:
-            proc = asyncio.run(asyncio.create_subprocess_shell(
-                "docker --version",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            ))
-            asyncio.run(proc.communicate())
+            proc = subprocess.run(["docker", "--version"], capture_output=True, timeout=5)
             return proc.returncode == 0
         except Exception:
             return False
