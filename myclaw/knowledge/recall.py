@@ -174,10 +174,10 @@ def _temporal_search(query: str, user_id: str, limit: int) -> List[Any]:
         metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
         observations = getattr(note, "observations", None) or []
         captures = [
-            _date_timestamp(getattr(obs, "captured_at", None))
+            capture
             for obs in observations
+            if (capture := _date_timestamp(getattr(obs, "captured_at", None))) is not None
         ]
-        captures = [capture for capture in captures if capture is not None]
         metadata_capture = _date_timestamp(metadata.get("captured_at"))
         captured_at = max(
             captures + ([metadata_capture] if metadata_capture is not None else []),

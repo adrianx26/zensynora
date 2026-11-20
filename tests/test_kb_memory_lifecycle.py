@@ -325,6 +325,37 @@ def test_temporal_recall_accepts_legacy_note_shapes(knowledge_home, monkeypatch)
     assert recall._temporal_search("legacy", "default", 3) == [note]
 
 
+@pytest.mark.parametrize(
+    ("observation_dates", "metadata_date", "expected_date"),
+    [
+        ([None, "unknown", "invalid"], None, "2022-01-01"),
+        ([None, "2020-01-01", "2021-01-01"], "2019-01-01", "2021-01-01"),
+        (["invalid", "2020-01-01"], "2023-01-01", "2023-01-01"),
+        (["1970-01-01T00:00:00+00:00"], None, "1970-01-01T00:00:00+00:00"),
+    ],
+)
+def test_temporal_recall_uses_latest_valid_capture(
+        knowledge_home, monkeypatch, observation_dates, metadata_date, expected_date):
+    from myclaw.knowledge import decay, storage, write_note
+    from myclaw.knowledge.parser import Observation
+
+    write_note("Router", "Router settings.",
+               observations=[Observation("spec", "Router settings", captured_at="2022-01-01")])
+    note = SimpleNamespace(
+        permalink="router", title="Router", tags=[], metadata={"captured_at": metadata_date},
+        observations=[SimpleNamespace(content="Router settings", captured_at=date)
+                      for date in observation_dates],
+    )
+    captured = []
+    monkeypatch.setattr(storage, "_batch_read_notes", lambda *_: [note])
+    monkeypatch.setattr(
+        decay, "note_factor",
+        lambda _tags, captured_at, now: (captured.append(captured_at) or 0.5, 10, 5))
+
+    assert recall._temporal_search("router", "default", 3) == [note]
+    assert captured == [recall._date_timestamp(expected_date)]
+
+
 def test_temporal_recall_uses_matching_observation_capture_time(knowledge_home, monkeypatch):
     from myclaw.knowledge import decay, storage, write_note
     from myclaw.knowledge.parser import Observation
