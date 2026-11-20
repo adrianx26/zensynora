@@ -207,6 +207,7 @@ def test_health_skips_leftover_index_of_internal_ids(tmp_path, monkeypatch):
 
     from myclaw.knowledge import health
 
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
     monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".myclaw" / "knowledge" / "default").mkdir(parents=True)

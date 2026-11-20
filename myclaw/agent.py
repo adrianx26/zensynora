@@ -2126,11 +2126,10 @@ class Agent:
         """
         from .evolve import LifecycleError
         from .executions import execution
+        from .observability import span as _span
 
         try:
             async with execution(self.name, "turn"):
-                from .observability import span as _span
-
                 with _span("agent.think", agent=self.name, user=user_id, depth=_depth):
                     return await self._tracked_think(user_message, user_id, _depth)
         except LifecycleError as exc:
