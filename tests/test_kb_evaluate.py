@@ -12,7 +12,16 @@ import asyncio
 import json
 import time
 
+import pytest
+
 from tests.test_kb_phase2_quality import _kdir, _trash, home  # noqa: F401  (fixture)
+
+
+@pytest.fixture(autouse=True)
+def _disable_semantic_checks(monkeypatch):
+    from myclaw.knowledge import semantic
+
+    monkeypatch.setattr(semantic, "enabled", lambda: False)
 
 
 def _w(title, content="Some useful text about it.", tags=("ok",), links=()):

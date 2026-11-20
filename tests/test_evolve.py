@@ -966,6 +966,28 @@ def test_restore_refuses_directory_link_outside_data(home, monkeypatch):  # noqa
     assert note.read_text(encoding="utf-8") == "outside"
 
 
+def test_backup_refuses_symlinked_knowledge_root(home, monkeypatch):  # noqa: F811
+    import os
+
+    from myclaw import backup
+
+    monkeypatch.setenv("MYCLAW_BACKUP_DIR", str(home / "archives"))
+    root = home / ".myclaw"
+    knowledge = root / "knowledge"
+    outside = home / "knowledge"
+    knowledge.mkdir()
+    outside.mkdir()
+    knowledge.rename(root / "knowledge-saved")
+    if os.name == "nt":
+        import _winapi
+
+        _winapi.CreateJunction(str(outside), str(knowledge))
+    else:
+        knowledge.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="directory link"):
+        backup.create_backup(["knowledge"])
+
+
 def test_post_rejects_reused_dm_after_restore(home, monkeypatch):  # noqa: F811
     from fastapi import FastAPI
     from fastapi.testclient import TestClient

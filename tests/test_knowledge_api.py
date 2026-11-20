@@ -54,6 +54,8 @@ def client(tmp_path, monkeypatch):
     (kdir / "pip.md").write_text(NOTE_B)
     (kdir / "lonely.md").write_text(NOTE_C)
     (tmp_path / ".myclaw" / "knowledge" / "12345").mkdir()
+    from myclaw.knowledge.sync import sync_knowledge
+    sync_knowledge()
     from myclaw.web import knowledge_api
 
     app = FastAPI()

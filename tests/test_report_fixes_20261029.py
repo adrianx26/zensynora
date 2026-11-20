@@ -208,6 +208,7 @@ def test_health_skips_leftover_index_of_internal_ids(tmp_path, monkeypatch):
     from myclaw.knowledge import health
 
     monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
     (tmp_path / ".myclaw" / "knowledge" / "default").mkdir(parents=True)
     for name in ("default", "webui", "__delegate__", "alice"):
         sqlite3.connect(tmp_path / ".myclaw" / f"knowledge_{name}.db").close()

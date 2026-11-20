@@ -303,7 +303,7 @@ class TestSearchKnowledgeEnhancement:
 
     def test_search_knowledge_no_results(self):
         """Test that empty search returns actionable guidance."""
-        with patch("myclaw.tools.kb.search_notes", return_value=[]):
+        with patch("myclaw.knowledge.recall.parallel_recall", return_value=[]):
             result = myclaw.tools.search_knowledge("unknown query xyz", user_id="test")
 
             assert "No results found" in result
@@ -315,7 +315,7 @@ class TestSearchKnowledgeEnhancement:
 
     def test_search_knowledge_no_results_includes_broader_terms(self):
         """Test that empty search suggests broader terms."""
-        with patch("myclaw.tools.kb.search_notes", return_value=[]):
+        with patch("myclaw.knowledge.recall.parallel_recall", return_value=[]):
             result = myclaw.tools.search_knowledge("machine learning python", user_id="test")
 
             assert "No results found" in result
@@ -330,7 +330,7 @@ class TestSearchKnowledgeEnhancement:
         mock_note.observations = []
         mock_note.tags = ["test"]
 
-        with patch("myclaw.tools.kb.search_notes", return_value=[mock_note]):
+        with patch("myclaw.knowledge.recall.parallel_recall", return_value=[mock_note]):
             result = myclaw.tools.search_knowledge("test", user_id="test")
 
             assert "Search results" in result
@@ -349,7 +349,7 @@ class TestSearchKnowledgeEnhancement:
         mock_note.observations = [mock_obs]
         mock_note.tags = []
 
-        with patch("myclaw.tools.kb.search_notes", return_value=[mock_note]):
+        with patch("myclaw.knowledge.recall.parallel_recall", return_value=[mock_note]):
             result = myclaw.tools.search_knowledge("test", user_id="test")
 
             assert "Test Note" in result
@@ -357,7 +357,7 @@ class TestSearchKnowledgeEnhancement:
 
     def test_search_knowledge_error_handling(self):
         """Test that search handles errors gracefully."""
-        with patch("myclaw.tools.kb.search_notes", side_effect=Exception("DB Error")):
+        with patch("myclaw.knowledge.recall.parallel_recall", side_effect=Exception("DB Error")):
             result = myclaw.tools.search_knowledge("test", user_id="test")
 
             assert "Error" in result
@@ -373,7 +373,7 @@ class TestBackwardCompatibility:
 
     def test_search_knowledge_still_contains_original_phrase(self):
         """Test that empty results still contain 'No results found' phrase."""
-        with patch("myclaw.tools.kb.search_notes", return_value=[]):
+        with patch("myclaw.knowledge.recall.parallel_recall", return_value=[]):
             result = myclaw.tools.search_knowledge("test query", user_id="test")
 
             # Code checking for "No results found" should still work
