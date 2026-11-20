@@ -17,8 +17,12 @@ def knowledge_home(tmp_path, monkeypatch):
     monkeypatch.setattr(semantic, "_OPTIONS", dict(
         semantic._OPTIONS, semantic_search=False, kb_enabled=True))
     semantic._stop_worker()
-    yield tmp_path
-    semantic._stop_worker()
+    semantic._WORKER = semantic._Worker()
+    try:
+        yield tmp_path
+    finally:
+        semantic._stop_worker()
+        semantic._WORKER = semantic._Worker()
 
 
 def test_memory_decision_reports_novelty_relevance_and_evidence():
@@ -589,5 +593,4 @@ def test_access_tracking_and_merge_preserves_combined_use_count(knowledge_home):
         rebuilt = db.get_entity_by_permalink("alpha")
         assert rebuilt.use_count == 3
         assert rebuilt.last_accessed is not None
-
 
