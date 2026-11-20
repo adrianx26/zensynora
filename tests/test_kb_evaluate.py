@@ -12,7 +12,17 @@ import asyncio
 import json
 import time
 
-from tests.test_kb_phase2_quality import _kdir, _trash, home  # noqa: F401  (fixture)
+import pytest
+
+from tests.test_kb_phase2_quality import _kdir, _trash, home as base_home
+
+
+@pytest.fixture
+def home(base_home, monkeypatch):
+    from myclaw.knowledge import semantic
+
+    monkeypatch.setitem(semantic._OPTIONS, "semantic_search", False)
+    return base_home
 
 
 def _w(title, content="Some useful text about it.", tags=("ok",), links=()):

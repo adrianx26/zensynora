@@ -356,6 +356,18 @@ def _restore_destination(rel: str, root: Path) -> Path:
     return root.joinpath(*parts)
 
 
+def _reject_linked_destination(rel: str, root: Path) -> None:
+    if not rel.startswith("data/"):
+        return
+    destination = _restore_destination(rel, root)
+    current = root
+    for part in destination.relative_to(root).parts:
+        current /= part
+        is_junction = getattr(current, "is_junction", None)
+        if current.is_symlink() or (is_junction is not None and is_junction()):
+            raise ValueError(f"Restore path contains a symbolic link: {current}")
+
+
 def _trash_restored_file(root: Path, rel: str, src: Path) -> None:
     parts = rel.split("/")
     if len(parts) >= 4 and parts[:2] == ["data", "knowledge"] and src.suffix.lower() == ".md":
@@ -434,11 +446,13 @@ def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool
             raise ValueError("A safety backup is required when restoring lifecycle data.")
     if recovering and set(chosen) != set(m.get("parts", [])):
         raise ValueError("Restore every part of the safety backup to finish recovery.")
+    root = data_dir()
+    wanted = {k for k, v in m["files"].items() if v.get("part") in chosen}
+    for rel in wanted:
+        _reject_linked_destination(rel, root)
     safety = None
     if safety_copy:
         safety = _create_backup_locked(parts=list(PARTS), label="before-restore", cfg=cfg)["name"]
-    root = data_dir()
-    wanted = {k for k, v in m["files"].items() if v.get("part") in chosen}
     from .config_encryption import _atomic_write
 
     _atomic_write(root / ".chat-restore-generation", uuid.uuid4().hex)

@@ -1458,6 +1458,27 @@ def test_backup_restore_keeps_previous_note_version_in_trash(home, monkeypatch):
     assert any(p.read_text(encoding="utf-8") == "current note" for p in saved)
 
 
+def test_backup_restore_refuses_symlink_destination(home, monkeypatch):  # noqa: F811
+    from myclaw import backup
+
+    monkeypatch.setattr(backup, "install_root", lambda: home)
+    note = home / ".myclaw" / "knowledge" / "default" / "note.md"
+    note.parent.mkdir(parents=True)
+    note.write_text("archive note", encoding="utf-8")
+    archive = backup.create_backup(["settings", "knowledge", "memory", "jobs"])
+    note.parent.rename(note.parent.with_name("default-original"))
+    outside = home / "outside"
+    outside.mkdir()
+    try:
+        note.parent.symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"symlink creation unavailable: {exc}")
+
+    with pytest.raises(ValueError, match="symbolic link"):
+        backup.restore_backup(archive["name"])
+    assert not (outside / "note.md").exists()
+
+
 @pytest.mark.parametrize("part", ["settings", "memory", "jobs"])
 def test_backup_refuses_any_partial_lifecycle_restore(home, monkeypatch, part):  # noqa: F811
     from myclaw import backup, evolve
