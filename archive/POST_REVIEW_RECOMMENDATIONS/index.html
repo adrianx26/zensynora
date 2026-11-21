@@ -1204,15 +1204,15 @@
 </li>
       
         <li class="md-nav__item">
-  <a href="#5-knowledge-graph-graphify-out-regenerate" class="md-nav__link">
+  <a href="#5-knowledge-graph-graphify-out-historical-recommendation-resolved" class="md-nav__link">
     <span class="md-ellipsis">
       
-        5. Knowledge Graph (graphify-out/) — Regenerate
+        5. Knowledge Graph (graphify-out/) — Historical recommendation (resolved)
       
     </span>
   </a>
   
-    <nav class="md-nav" aria-label="5. Knowledge Graph (graphify-out/) — Regenerate">
+    <nav class="md-nav" aria-label="5. Knowledge Graph (graphify-out/) — Historical recommendation (resolved)">
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
@@ -1539,7 +1539,13 @@
 <div class="highlight"><pre><span></span><code>python<span class="w"> </span>diagrams/generate.py
 </code></pre></div>
 <hr />
-<h2 id="5-knowledge-graph-graphify-out-regenerate">5. Knowledge Graph (<code>graphify-out/</code>) — Regenerate<a class="headerlink" href="#5-knowledge-graph-graphify-out-regenerate" title="Permanent link">&para;</a></h2>
+<h2 id="5-knowledge-graph-graphify-out-historical-recommendation-resolved">5. Knowledge Graph (<code>graphify-out/</code>) — Historical recommendation (resolved)<a class="headerlink" href="#5-knowledge-graph-graphify-out-historical-recommendation-resolved" title="Permanent link">&para;</a></h2>
+<blockquote>
+<p><strong>Resolved 2026-11-21:</strong> Graphify is optional local developer tooling. The
+generated directory and historical snapshots were removed from version
+control and <code>graphify-out/</code> is ignored. The steps below remain as historical
+context and are not part of the current contribution workflow.</p>
+</blockquote>
 <h3 id="51-why-regenerate-now">5.1 Why regenerate now<a class="headerlink" href="#51-why-regenerate-now" title="Permanent link">&para;</a></h3>
 <ul>
 <li>Current graph is from <strong>2026-04-26</strong> (commit <code>63e14cc</code> is newer).</li>
@@ -1547,7 +1553,8 @@
 <li>931 isolated nodes in the current graph — many may now have connections.</li>
 </ul>
 <h3 id="52-how-to-regenerate">5.2 How to regenerate<a class="headerlink" href="#52-how-to-regenerate" title="Permanent link">&para;</a></h3>
-<div class="highlight"><pre><span></span><code>graphify<span class="w"> </span>update<span class="w"> </span>.
+<div class="highlight"><pre><span></span><code><span class="c1"># Historical command only; Graphify is now optional local tooling.</span>
+graphify<span class="w"> </span>update<span class="w"> </span>.
 </code></pre></div>
 <h3 id="53-post-regeneration-checklist">5.3 Post-regeneration checklist<a class="headerlink" href="#53-post-regeneration-checklist" title="Permanent link">&para;</a></h3>
 <ul>
@@ -1641,9 +1648,9 @@
 <td>Low</td>
 </tr>
 <tr>
-<td>P1</td>
-<td>5 Regenerate <code>graphify-out/</code></td>
-<td>15 min</td>
+<td>—</td>
+<td>5 Graphify output policy</td>
+<td>Resolved 2026-11-21</td>
 <td>Low</td>
 </tr>
 <tr>
@@ -1732,7 +1739,7 @@
 </tr>
 <tr>
 <td><code>graphify-out/</code></td>
-<td>Regenerate (5.2)</td>
+<td>Resolved: generated locally, ignored, not committed</td>
 </tr>
 </tbody>
 </table>

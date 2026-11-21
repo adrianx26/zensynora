@@ -1178,8 +1178,8 @@
 <tr>
 <td><code>graphify-out/</code></td>
 <td>Large cached JSON files are version-controlled.</td>
-<td>Add cache directory to <code>.gitignore</code> and generate on-demand (<code>graphify update .</code>).</td>
-<td>⚠️ Open</td>
+<td>Ignore generated output and keep Graphify optional.</td>
+<td>✅ Resolved — output removed and the whole directory ignored (2026-11-21)</td>
 </tr>
 </tbody>
 </table>
@@ -1275,7 +1275,7 @@
 <tr>
 <td><code>graphify-out/</code></td>
 <td>Cached AST JSON files tracked in git, inflating repo size.</td>
-<td>Add <code>graphify-out/cache/</code> to <code>.gitignore</code>; regenerate when needed (<code>graphify update .</code>).</td>
+<td>Resolved in 2026-11: the generated directory is ignored and remains local-only.</td>
 </tr>
 <tr>
 <td>Docs</td>
@@ -1325,7 +1325,7 @@
 <h2 id="prioritized-quickwin-action-plan">📍 Prioritized Quick‑Win Action Plan<a class="headerlink" href="#prioritized-quickwin-action-plan" title="Permanent link">&para;</a></h2>
 <ol>
 <li><strong>Run <code>autoflake</code></strong> to clean dead imports/functions and commit the changes.</li>
-<li><strong>Add <code>.gitignore</code> entry</strong> for <code>graphify-out/cache/</code> and purge existing cached JSON files.</li>
+<li><strong>Add <code>.gitignore</code> entry</strong> for <code>graphify-out/</code> and purge generated files. (Resolved 2026-11-21.)</li>
 <li>✅ <strong>Centralize logging</strong> – <code>logging_config.py</code> now canonical; <code>logging.py</code> deprecated (2026-05-18).</li>
 <li><strong>Refactor Dockerfile</strong> – split into builder and runtime stages (already present in current Dockerfile).</li>
 <li><strong>Introduce CI caching</strong> for pip and npm to reduce workflow runtime (~30%).</li>
