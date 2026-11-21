@@ -657,7 +657,7 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str],
     unsaved custom provider when ``kind`` + ``base_url`` come from the form.
     v0.7.5: ``key_id`` tests (and lists models with) one of the saved keys.
     """
-    from myclaw.provider import provider_endpoint
+    from myclaw.provider import normalize_provider_base_url, provider_endpoint
     from myclaw.provider_keys import UnknownKeyError
 
     cfg = load_config()
@@ -671,7 +671,7 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str],
         ep = {"kind": kind, "base_url": "", "api_key": "", "local": False}
 
     kind = kind or ep["kind"]
-    url = (base_url or ep["base_url"]).rstrip("/")
+    url = normalize_provider_base_url(provider, base_url or ep["base_url"])
     key = api_key or ep["api_key"]
     if not url:
         return {"ok": False, "error": "No server URL set.", "models": []}
@@ -717,6 +717,9 @@ async def _probe(provider: str, base_url: Optional[str], api_key: Optional[str],
         latency_ms = int((time.monotonic() - started) * 1000)
         if resp.status_code >= 400:
             hint = " (check the API key)" if resp.status_code in (401, 403) else ""
+            if provider == "freetoken" and resp.status_code == 404:
+                hint = (" (check the FreeToken API URL and port; the default is "
+                        "http://<server>:1919/v1)")
             return {
                 "ok": False,
                 "error": f"HTTP {resp.status_code} from {endpoint}{hint}",

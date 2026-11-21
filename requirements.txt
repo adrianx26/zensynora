@@ -2,6 +2,8 @@
 # Manual setup: create/activate a virtual environment, then run
 # `python -m pip install -r requirements.txt`. For development, use
 # `python -m pip install -e .` inside that environment.
+# Keep this file aligned with the core dependencies in pyproject.toml. Exact
+# known-good pins belong in requirements-lock.txt.
 
 # Packaging tool used by the installer
 pip>=24.0

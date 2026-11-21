@@ -1006,6 +1006,13 @@ def _with_v1(url: str) -> str:
     return url
 
 
+def normalize_provider_base_url(name: str, url: str) -> str:
+    """Apply the same built-in URL rules to saved and unsaved provider settings."""
+    if name in ("lmstudio", "llamacpp", "nvpair", "freetoken", "bionic", "compatible"):
+        return _with_v1(url)
+    return url.rstrip("/")
+
+
 class LMStudioProvider(OpenAICompatProvider):
     """LM Studio local server (OpenAI-compat, default http://localhost:1234/v1)."""
 
@@ -1680,8 +1687,7 @@ def provider_endpoint(config, name: str, key_id: Optional[str] = None) -> Option
             name if name in ("anthropic", "gemini") else "openai"
         )
         url = getattr(pcfg, "base_url", "") or _CLOUD_DEFAULT_URLS.get(name, "")
-        if name in ("lmstudio", "llamacpp", "nvpair", "freetoken", "bionic", "compatible"):
-            url = _with_v1(url)  # v0.7.3: same URL the provider really uses
+        url = normalize_provider_base_url(name, url)
         is_local = bool(getattr(pcfg, "local", False)) if name == "compatible" else (name in LOCAL_BUILTIN_PROVIDERS)
         return {"kind": kind, "base_url": url.rstrip("/"), "api_key": key,
                 "local": is_local, "label": name, "custom": False,

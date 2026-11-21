@@ -11,6 +11,7 @@ Thank you for your interest in contributing to ZenSynora (MyClaw)! This document
 - [How to Add a New Tool / Skill](#how-to-add-a-new-tool--skill)
 - [Testing](#testing)
 - [CI (GitHub Actions)](#ci-github-actions)
+- [Documentation and generated diagrams](#documentation-and-generated-diagrams)
 - [Submitting Changes](#submitting-changes)
 - [Commit Message Guidelines](#commit-message-guidelines)
 - [Getting Help](#getting-help)
@@ -57,6 +58,12 @@ On Windows PowerShell, use `py -m venv .venv`, activate with
 `.\.venv\Scripts\Activate.ps1`, then run `python -m pip install -e .`.
 Always install into this virtual environment; do not use system pip or
 `--break-system-packages` on Debian/Ubuntu.
+
+`pyproject.toml` is the source of truth for Python dependency metadata.
+`requirements.txt` mirrors the core dependencies for installers and Docker;
+`requirements-lock.txt` is the known-good pinned core set. When a core
+dependency changes, update all three files in the same pull request and test a
+fresh installation.
 
 The `install.sh` setup routine checks Python's venv support and offers to
 install `python3-venv` on Debian/Ubuntu when needed. It also validates an
@@ -281,7 +288,7 @@ be reproduced locally with the commands below (inside your `.venv`).
 | Job | What it checks | Run it locally |
 |-----|----------------|----------------|
 | `lint` | ruff, only rules for real bugs: syntax errors, undefined names (`E9,F63,F7,F82`, see `[tool.ruff.lint]`) | `pip install ruff` then `ruff check .` |
-| `typecheck` | mypy on `myclaw/`; noisy error codes are disabled in `[tool.mypy]`, so it catches undefined names and broken imports | `pip install mypy` then `mypy myclaw/` |
+| `typecheck` | mypy on `myclaw/` and `updater/`; noisy error codes are disabled in `[tool.mypy]`, so it catches undefined names and broken imports | `pip install mypy types-requests types-PyYAML types-paramiko` then `mypy myclaw/ updater/` |
 | `test (3.11)`, `test (3.12)` | the pytest suite with the core dependencies (`pip install -e ".[test]"`) | `python -m pytest -q -p no:cacheprovider` |
 | `webui` | `npm ci` and `npm run build` (`tsc -b && vite build`) with Node 22 | `cd webui && npm ci && npm run build` |
 | `docker` | builds the `runtime` image, runs `zensynora --help` and waits for `GET /health` | `docker build --target runtime -t zensynora:test .` then `docker run --rm -p 8000:8000 zensynora:test` |
@@ -298,11 +305,46 @@ ci.yml skips commits that only change `docs/**` or `*.md`. To make a check
 stricter (more ruff rules, fewer disabled mypy codes), clean up the code it
 would flag in the same PR, so CI stays green.
 
+## Documentation and generated diagrams
+
+Architecture and workflow diagrams are Mermaid blocks in Markdown. The checked
+HTML pages are generated from those blocks and verified by Docs CI:
+
+```mermaid
+flowchart LR
+    change["Code or documentation change"]
+    deps{"Core dependency changed?"}
+    manifests["Update pyproject.toml<br/>requirements.txt<br/>requirements-lock.txt"]
+    docs["Update active README / docs / changelog"]
+    mermaid{"Mermaid block changed?"}
+    generate["Run python diagrams/generate.py"]
+    checks["Run focused tests, lint, type checks, and Web UI build as applicable"]
+    diagrams["Commit updated diagrams/*.html"]
+    pr["Open pull request"]
+
+    change --> deps
+    deps -- yes --> manifests --> docs
+    deps -- no --> docs
+    docs --> mermaid
+    mermaid -- yes --> generate --> diagrams --> checks
+    mermaid -- no --> checks
+    checks --> pr
+```
+
+Run `python diagrams/generate.py` after changing any Mermaid block and include
+the resulting changes in `diagrams/`. Build the docs with `mkdocs build`.
+Historical material under `docs/archive/` and `docs/dev/` is retained as
+background and may describe superseded workflows.
+
+Graphify is optional local code-navigation tooling. It is not installed by the
+app, CI, Docker, deploy, or updater workflows. If a contributor chooses to run
+it, `graphify-out/` is generated, ignored, and must not be committed.
+
 ## Submitting Changes
 
 1. **Ensure the CI checks pass locally**:
    ```bash
-   ruff check . && mypy myclaw/ && python -m pytest -q -p no:cacheprovider
+   ruff check . && mypy myclaw/ updater/ && python -m pytest -q -p no:cacheprovider
    ```
 
 2. **Update documentation** if your change affects user-facing behavior

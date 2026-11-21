@@ -16,7 +16,7 @@
 | `deploy.py` | `subprocess.run` with `shell=True` for simple commands. | Use `subprocess.run([...], check=True)` to avoid shell injection risk. | ⚠️ Open |
 | `eval/` | Re-computes large embeddings on every test run. | Cache computed embeddings in a temp directory and reuse when unchanged. | ⚠️ Open |
 | `docs/` | Duplicated markdown sections across several guides. | Consolidate common parts into `_includes/` and use a pre-processor. | ⚠️ Open |
-| `graphify-out/` | Large cached JSON files are version-controlled. | Add cache directory to `.gitignore` and generate on-demand (`graphify update .`). | ⚠️ Open |
+| `graphify-out/` | Large cached JSON files are version-controlled. | Ignore generated output and keep Graphify optional. | ✅ Resolved — output removed and the whole directory ignored (2026-11-21) |
 
 ## 2️⃣ Frontend (React / TypeScript)
 
@@ -43,7 +43,7 @@
 
 | Area | Issue | Suggested Fix |
 |------|-------|---------------|
-| `graphify-out/` | Cached AST JSON files tracked in git, inflating repo size. | Add `graphify-out/cache/` to `.gitignore`; regenerate when needed (`graphify update .`). |
+| `graphify-out/` | Cached AST JSON files tracked in git, inflating repo size. | Resolved in 2026-11: the generated directory is ignored and remains local-only. |
 | Docs | Overlapping sections across several markdown files (`MEDIC_CHANGE_MGMT.md`, `future_implementation_plan.md`). | Create a single “Change Management” hub and reference it via markdown includes. |
 | README | Missing quick‑start badges. | Add shields.io badges for Docker Hub, GitHub Actions, and PyPI. |
 
@@ -64,7 +64,7 @@
 ## 📍 Prioritized Quick‑Win Action Plan
 
 1. **Run `autoflake`** to clean dead imports/functions and commit the changes.
-2. **Add `.gitignore` entry** for `graphify-out/cache/` and purge existing cached JSON files.
+2. **Add `.gitignore` entry** for `graphify-out/` and purge generated files. (Resolved 2026-11-21.)
 3. ✅ **Centralize logging** – `logging_config.py` now canonical; `logging.py` deprecated (2026-05-18).
 4. **Refactor Dockerfile** – split into builder and runtime stages (already present in current Dockerfile).
 5. **Introduce CI caching** for pip and npm to reduce workflow runtime (~30%).

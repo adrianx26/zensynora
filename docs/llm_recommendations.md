@@ -29,7 +29,10 @@
 >   `127.0.0.1` only. On the computer that runs it start `ft serve --host 0.0.0.0`
 >   (`--api-key …` if you want a key), allow port 1919 in its firewall, and set
 >   ZenSynora's FreeToken URL to `http://<that computer's address>:1919/v1`. The
->   connection test waits up to 15 s and retries once; if it still fails, its
+>   connection test also accepts a bare host URL and adds `/v1`, just as chat
+>   does. Specify the actual port: without `:1919`, HTTP uses port 80. A 404
+>   can mean that the URL or port points to a different service.
+>   The connection test waits up to 15 s and retries once; if it still fails, its
 >   message says which case it is (no answer: off, asleep or firewalled; refused:
 >   not running or wrong port). Official project:
 >   <https://github.com/FlashML-org/FreeToken>.

@@ -135,6 +135,42 @@ async def test_probe_retry_succeeds_when_the_server_was_slow(monkeypatch):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("provider", "url", "expected"), [
+    ("freetoken", "http://192.168.8.102", "http://192.168.8.102/v1"),
+    ("freetoken", "http://192.168.8.102:1919/", "http://192.168.8.102:1919/v1"),
+    ("freetoken", "http://192.168.8.102:1919/v1/", "http://192.168.8.102:1919/v1"),
+    ("freetoken", "http://192.168.8.102:1919/proxy", "http://192.168.8.102:1919/proxy"),
+    ("llamacpp", "http://localhost:8080", "http://localhost:8080/v1"),
+    ("openrouter", "https://example.test", "https://example.test"),
+])
+async def test_probe_uses_same_base_url_as_provider(monkeypatch, provider, url, expected):
+    from myclaw.web import settings_api
+
+    calls = _fake_get(monkeypatch, [None])
+    res = await settings_api._probe(provider, url, "test-key")
+    assert res["ok"] is True and res["models"] == ["glm"]
+    assert res["url"] == expected
+    assert calls == [expected + "/models"]
+
+
+@pytest.mark.asyncio
+async def test_freetoken_probe_404_suggests_checking_api_url(monkeypatch):
+    import httpx
+
+    from myclaw.web import settings_api
+
+    async def get(endpoint, headers, params):
+        return httpx.Response(404, request=httpx.Request("GET", endpoint))
+
+    monkeypatch.setattr(settings_api, "_get_with_retry", get)
+    monkeypatch.setattr(settings_api, "_missing_sdk", lambda provider: "")
+    res = await settings_api._probe("freetoken", "http://192.168.8.102", None)
+    assert not res["ok"]
+    assert "HTTP 404 from http://192.168.8.102/v1/models" in res["error"]
+    assert ":1919/v1" in res["error"]
+
+
+@pytest.mark.asyncio
 async def test_probe_refused_port_is_not_retried_and_says_so(monkeypatch):
     import httpx
 

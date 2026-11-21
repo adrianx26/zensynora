@@ -1,5 +1,5 @@
-# Known-good pins for the core dependencies, verified with Python 3.14 on Linux
-# (fresh venv, install.sh --no-docker, full test suite green). Use
+# Direct core dependency pins for a reproducible ZenSynora install. The existing
+# lock was refreshed to include every direct dependency in pyproject.toml. Use
 #   python -m pip install -r requirements-lock.txt
 # for a reproducible install; requirements.txt keeps the compatible ranges.
 python-telegram-bot[job-queue]==21.11.1
@@ -19,3 +19,7 @@ watchdog==4.0.2
 requests==2.34.2
 paramiko==3.5.1
 openai==2.54.0
+pypdf==6.7.3
+python-docx==1.2.0
+openpyxl==3.1.5
+fastembed==0.8.0; platform_machine in 'x86_64 AMD64 aarch64 arm64'

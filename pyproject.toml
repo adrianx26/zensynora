@@ -181,9 +181,8 @@ dev = [
     "mypy>=1.9,<2.0",
     "bandit>=1.7,<2.0",
     "safety>=2.3,<3.0",
-    # Graphify (the code-graph tool used in AGENTS.md) is not on PyPI under a
-    # stable name; install it separately. Listing a non-existent package here
-    # made `pip install -e ".[dev]"` fail (and with it every CI job).
+    # Graphify is optional local code-navigation tooling. Install it separately
+    # if desired; generated graphify-out/ data is never an app dependency.
 ]
 
 [project.scripts]

@@ -281,9 +281,14 @@ module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 git clone https://github.com/adrianx26/zensynora.git && cd zensynora
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest -q -o addopts=""        # 1128 tests
+pytest -q -o addopts=""
 ruff check .
 ```
+
+Core dependency metadata is maintained in `pyproject.toml`, mirrored in
+`requirements.txt`, and pinned in `requirements-lock.txt`. Graphify is optional
+local developer tooling; its generated `graphify-out/` directory is ignored and
+is not required by the app, installer, CI, updater, or Docker image.
 
 Where to add a tool, a health check, a data migration or a web page:
 [CONTRIBUTING.md](CONTRIBUTING.md). Release notes: [CHANGELOG.md](CHANGELOG.md).

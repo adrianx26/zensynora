@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Dependency manifests now cover every direct core Python dependency in the
+  application; the contributor workflow documents how to keep `pyproject.toml`,
+  `requirements.txt`, and `requirements-lock.txt` synchronized.
+- Graphify is now optional local code-navigation tooling. Generated
+  `graphify-out/` data and historical graph snapshots are ignored instead of
+  committed, and the OpenCode reminder plugin was removed; runtime, installer,
+  updater, Docker, and CI workflows do not depend on Graphify.
+
 ## [0.8.4] - 2026-11-19
 
 ### Added

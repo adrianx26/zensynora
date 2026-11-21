@@ -57,6 +57,8 @@ webui/node_modules/
 
 # Kilo / local dev tools
 .kilo/
+.opencode/
+graphify-out/
 
 # Logs
 *.log

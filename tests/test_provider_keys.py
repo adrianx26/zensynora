@@ -225,6 +225,31 @@ def test_probe_and_model_list_use_the_chosen_key(home, client, monkeypatch):
     assert not r["ok"] and "gone" in r["error"]
 
 
+def test_freetoken_probe_form_and_saved_model_list_match_chat_url(home, client, monkeypatch):
+    import httpx
+
+    from myclaw.config import load_config
+    from myclaw.provider import get_provider
+    from myclaw.web import settings_api
+
+    base = "http://192.168.8.102:1919"
+    _write(home, {"providers": {"freetoken": {"base_url": base}}})
+    seen = []
+
+    async def get(endpoint, headers, params):
+        seen.append(endpoint)
+        return httpx.Response(200, json={"data": [{"id": "model-a"}]},
+                              request=httpx.Request("GET", endpoint))
+
+    monkeypatch.setattr(settings_api, "_get_with_retry", get)
+    monkeypatch.setattr(settings_api, "_missing_sdk", lambda provider: "")
+    form = client.post("/api/settings/probe", json={"provider": "freetoken", "base_url": base})
+    saved = client.get("/api/models/freetoken")
+    assert form.json()["models"] == saved.json()["models"] == ["model-a"]
+    assert seen == [base + "/v1/models"] * 2
+    assert str(get_provider(load_config(), "freetoken").client.base_url).rstrip("/") == base + "/v1"
+
+
 def test_default_model_with_a_key(home, client):
     _write(home, BASE)
     r = client.post("/api/models/default", json={"provider": "openrouter", "model": "m2", "key": "work"})

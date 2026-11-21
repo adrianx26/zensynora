@@ -36,8 +36,11 @@
 
 ## Contributing
 
-* [CONTRIBUTING.md](../CONTRIBUTING.md) — setup, where to add things, tests, commit style
+* [CONTRIBUTING.md](../CONTRIBUTING.md) — setup, dependency updates, generated diagrams, tests and commit style
 * [CHANGELOG.md](../CHANGELOG.md) — every release, newest first
+
+Graphify output is optional generated developer tooling and is not part of the
+application, install, CI, update, or deployment workflows.
 
 ## History
 

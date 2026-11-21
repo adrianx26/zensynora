@@ -213,7 +213,12 @@ python diagrams/generate.py
 
 ---
 
-## 5. Knowledge Graph (`graphify-out/`) — Regenerate
+## 5. Knowledge Graph (`graphify-out/`) — Historical recommendation (resolved)
+
+> **Resolved 2026-11-21:** Graphify is optional local developer tooling. The
+> generated directory and historical snapshots were removed from version
+> control and `graphify-out/` is ignored. The steps below remain as historical
+> context and are not part of the current contribution workflow.
 
 ### 5.1 Why regenerate now
 
@@ -224,6 +229,7 @@ python diagrams/generate.py
 ### 5.2 How to regenerate
 
 ```bash
+# Historical command only; Graphify is now optional local tooling.
 graphify update .
 ```
 
@@ -300,7 +306,7 @@ CREATE INDEX idx_entities_meta_type ON entities(meta_type);
 | P0 | 2.1 Add `db_path` to `search_by_metadata()` | 2 min | Low |
 | P0 | 2.2 Audit all `KnowledgeDB()` calls for `db_path` | 30 min | Low |
 | P1 | 3.1–3.4 Add missing tests | 2–3 hrs | Low |
-| P1 | 5 Regenerate `graphify-out/` | 15 min | Low |
+| — | 5 Graphify output policy | Resolved 2026-11-21 | Low |
 | P2 | 4.1 Expand architecture diagram | 1 hr | Low |
 | P2 | 6.3 Document `db_path` convention | 30 min | Low |
 | P2 | 6.5 Fix cache inconsistency | 15 min | Low |
@@ -323,4 +329,4 @@ CREATE INDEX idx_entities_meta_type ON entities(meta_type);
 | `tests/test_knowledge.py` | Add 4 new test methods (3.1–3.4) |
 | `diagrams/assets/readme-architecture.mmd` | Expand Storage subgraph (4.1) |
 | `diagrams/generate.py` | Re-run after `.mmd` changes (4.2) |
-| `graphify-out/` | Regenerate (5.2) |
+| `graphify-out/` | Resolved: generated locally, ignored, not committed |
