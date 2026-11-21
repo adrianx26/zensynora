@@ -118,6 +118,7 @@ def test_create_edit_and_trash_note(client):
 
 def test_search_and_bad_base(client):
     c, _ = client
+    assert c.post("/api/knowledge/sync").json()["ok"] is True
     assert "python" in c.get("/api/knowledge/search", params={"q": "Guido"}).json()["results"]
     assert c.get("/api/knowledge/search", params={"q": ""}).json()["results"] == []
     assert c.get("/api/knowledge/graph", params={"base": "../x"}).status_code == 400

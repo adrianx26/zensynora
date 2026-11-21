@@ -16,9 +16,11 @@ def knowledge_home(tmp_path, monkeypatch):
     storage.set_knowledge_root(None)
     monkeypatch.setattr(semantic, "_OPTIONS", dict(
         semantic._OPTIONS, semantic_search=False, kb_enabled=True))
-    semantic._stop_worker()
-    yield tmp_path
-    semantic._stop_worker()
+    monkeypatch.setattr(semantic, "_WORKER", semantic._Worker())
+    try:
+        yield tmp_path
+    finally:
+        semantic._stop_worker()
 
 
 def test_memory_decision_reports_novelty_relevance_and_evidence():
@@ -325,6 +327,37 @@ def test_temporal_recall_accepts_legacy_note_shapes(knowledge_home, monkeypatch)
     assert recall._temporal_search("legacy", "default", 3) == [note]
 
 
+@pytest.mark.parametrize(
+    ("observation_dates", "metadata_date", "expected_date"),
+    [
+        ([None, "unknown", "invalid"], None, "2022-01-01"),
+        ([None, "2020-01-01", "2021-01-01"], "2019-01-01", "2021-01-01"),
+        (["invalid", "2020-01-01"], "2023-01-01", "2023-01-01"),
+        (["1970-01-01T00:00:00+00:00"], None, "1970-01-01T00:00:00+00:00"),
+    ],
+)
+def test_temporal_recall_uses_latest_valid_capture(
+        knowledge_home, monkeypatch, observation_dates, metadata_date, expected_date):
+    from myclaw.knowledge import decay, storage, write_note
+    from myclaw.knowledge.parser import Observation
+
+    write_note("Router", "Router settings.",
+               observations=[Observation("spec", "Router settings", captured_at="2022-01-01")])
+    note = SimpleNamespace(
+        permalink="router", title="Router", tags=[], metadata={"captured_at": metadata_date},
+        observations=[SimpleNamespace(content="Router settings", captured_at=date)
+                      for date in observation_dates],
+    )
+    captured = []
+    monkeypatch.setattr(storage, "_batch_read_notes", lambda *_: [note])
+    monkeypatch.setattr(
+        decay, "note_factor",
+        lambda _tags, captured_at, now: (captured.append(captured_at) or 0.5, 10, 5))
+
+    assert recall._temporal_search("router", "default", 3) == [note]
+    assert captured == [recall._date_timestamp(expected_date)]
+
+
 def test_temporal_recall_uses_matching_observation_capture_time(knowledge_home, monkeypatch):
     from myclaw.knowledge import decay, storage, write_note
     from myclaw.knowledge.parser import Observation
@@ -516,17 +549,21 @@ def test_live_writes_and_extraction_stamp_captured_at(knowledge_home):
 
 
 def test_windowed_temporal_search_falls_back_to_updated_at_and_ranks_captured_first(knowledge_home):
+    from datetime import datetime
+
     from myclaw.knowledge import write_note
     from myclaw.knowledge.parser import Observation
 
+    captured_date = datetime.now().astimezone().date().isoformat()
     write_note("Router Captured", "Router WireGuard setup.",
-               observations=[Observation("spec", "WireGuard port 51820", captured_at="2026-11-14T10:00:00+00:00")])
+               observations=[Observation("spec", "WireGuard port 51820",
+                                         captured_at=f"{captured_date}T10:00:00+00:00")])
     write_note("Router Updated Only", "Router WireGuard fallback.",
                observations=[Observation("spec", "WireGuard fallback port")])
     write_note("May Activity", "Hiked Bucegi mountains and configured NAS.",
                observations=[Observation("fact", "Hiked Bucegi", captured_at="2026-05-12")])
 
-    hits = recall._temporal_search("WireGuard 2026-11-14", "default", 5)
+    hits = recall._temporal_search(f"WireGuard {captured_date}", "default", 5)
     permalinks = [note.permalink for note in hits]
     assert "router-captured" in permalinks
     assert "router-updated-only" in permalinks
@@ -589,5 +626,3 @@ def test_access_tracking_and_merge_preserves_combined_use_count(knowledge_home):
         rebuilt = db.get_entity_by_permalink("alpha")
         assert rebuilt.use_count == 3
         assert rebuilt.last_accessed is not None
-
-

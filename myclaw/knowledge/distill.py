@@ -2054,17 +2054,23 @@ def consolidation_proposals(base: str = "default", limit: int = 100) -> Dict[str
         retrievals = sum(usage.note_usage(base, permalink).get("count", 0)
                          for permalink in source_links if permalink)
         if conn is not None and source_links:
+            db_counts = 0
+            count_conn = _open(base)
             try:
-                ph = ",".join("?" * len(source_links))
-                db_counts = sum(
-                    int(r[0] or 0) for r in conn.execute(
-                        f"SELECT COALESCE(use_count, 0) FROM entities WHERE permalink IN ({ph})",
-                        list(source_links),
-                    ).fetchall()
-                )
-                retrievals = max(retrievals, db_counts)
+                if count_conn is not None:
+                    ph = ",".join("?" * len(source_links))
+                    db_counts = sum(
+                        int(r[0] or 0) for r in count_conn.execute(
+                            f"SELECT COALESCE(use_count, 0) FROM entities WHERE permalink IN ({ph})",
+                            list(source_links),
+                        ).fetchall()
+                    )
             except sqlite3.OperationalError:
                 pass
+            finally:
+                if count_conn is not None:
+                    count_conn.close()
+            retrievals = max(retrievals, db_counts)
         evidence_total = len(shared) + len(distinct)
         verification_ratio = verified / max(1, len(shared))
         shared_ratio = len(shared) / max(1, evidence_total)

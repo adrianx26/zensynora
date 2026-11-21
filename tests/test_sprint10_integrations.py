@@ -190,7 +190,7 @@ def test_agent_think_uses_observability_span():
 
     from myclaw.agent import Agent
 
-    src = inspect.getsource(Agent.think)
+    src = inspect.getsource(Agent._tracked_think)
     assert "_span(" in src and "agent.think" in src, (
         "Agent.think is missing the agent.think tracing span"
     )

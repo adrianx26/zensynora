@@ -78,7 +78,7 @@ def test_auto_context_is_recorded_with_agent_channel_and_reason(home, agent):
     assert r["channel"] == "chan-1"                       # the executor runs in a copy of the context
     assert r["notes"][0] == "home-server" and r["results"] >= 1
     assert r["reason"] == "What does my home server run?" and r["source"] == "chat"
-    assert r["latency_ms"] is not None and r["mode"].startswith("fts")
+    assert r["latency_ms"] is not None and r["mode"] == "parallel-hybrid"
 
 
 def test_greeting_without_search_words_is_not_recorded(home, agent):
@@ -110,7 +110,7 @@ def test_tool_calls_hits_misses_reads_and_writes(home):
     _kb(home)
     tok = usage.begin_turn("ops", "check the server")
     try:
-        search_knowledge("zzzz nothing here")
+        search_knowledge("qzxv blorfic")
         read_knowledge("home-server")
         read_knowledge("does-not-exist")
         write_to_knowledge("New note", "some text", tags="x")
@@ -118,7 +118,7 @@ def test_tool_calls_hits_misses_reads_and_writes(home):
     finally:
         usage.end_turn(tok)
     rows = {(r["action"], r["query"]): r for r in _rows()}
-    miss = rows[("search_knowledge", "zzzz nothing here")]
+    miss = rows[("search_knowledge", "qzxv blorfic")]
     assert miss["results"] == 0 and miss["ok"] and miss["mode"] == "fts"
     assert rows[("read_knowledge", "home-server")]["notes"] == ["home-server"]
     bad = rows[("read_knowledge", "does-not-exist")]
@@ -469,18 +469,16 @@ def test_group_chat_reason_is_the_users_text(home, agent):
 
 
 def test_auto_context_query_is_what_was_searched(home, agent, monkeypatch):
-    import myclaw.agent as agent_mod
-
     calls = []
 
-    def fake(query, user_id, limit=10, boolean=False, **kw):
+    def fake(query, user_id, limit=10, info=None, boolean=False):
         calls.append(query)
         return []
 
-    monkeypatch.setattr(agent_mod, "search_notes", fake)
+    monkeypatch.setattr("myclaw.knowledge.recall.parallel_recall", fake)
     agent._search_knowledge_context_sync("tell me about zebrafish embryos", "default")
     (r,) = _rows()
-    assert len(calls) == 2 and r["query"] == calls[-1] and " OR " in r["query"]   # strategy 2's query
+    assert calls == ["tell me about zebrafish embryos"] and r["query"] == calls[0]
 
 
 def test_switched_off_no_thread_and_no_file(tmp_path):
