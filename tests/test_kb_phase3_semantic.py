@@ -545,7 +545,7 @@ def test_agent_context_includes_relevant_hits_from_each_strategy(home, sem, agen
         "router details", "default", max_results=4, return_structured=True)
 
     assert all(note.title in result.context for note in notes.values())
-    assert "fifth-source: result limit" in result.context
+    assert "Router details beyond the result limit (fifth-source: result limit)" in result.context
     assert result.metadata["omitted_evidence"] == {"fifth-source": "result limit"}
     assert len(result.context) <= KB_CONTEXT_BUDGET + 10
     assert set(result.metadata["retrieval"]["strategies"]) == {"fts", "semantic", "graph", "temporal"}
