@@ -36,11 +36,10 @@ def sem(home, monkeypatch):
 
     monkeypatch.setattr(semantic, "DEBOUNCE_SECONDS", 0)
     semantic.wait_idle(20)
-    w = semantic._WORKER
-    with w.cv:      # a clean worker per test (no bases / backoff of earlier tests)
-        for part in (w.known, w.first_seen, w.deferred, w.backoff, w.retry_load, w.last_prune):
-            part.clear()
-        w.periodic = False
+    semantic._WORKER.stop(5)
+    semantic._WORKER = semantic._Worker()
+    semantic._LAST.clear()
+    semantic._LOGGED.clear()
     monkeypatch.setattr(semantic, "_APPLIED", False)
     monkeypatch.setattr(semantic, "_OPTIONS", dict(semantic._OPTIONS, semantic_search=True,
                                                    embedding_model="test/hash", kb_enabled=True,
@@ -49,6 +48,16 @@ def sem(home, monkeypatch):
     semantic.made = made
     yield semantic
     semantic.wait_idle(20)
+    with semantic._WORKER.cv:
+        semantic._WORKER.pending.clear()
+        semantic._WORKER.known.clear()
+        semantic._WORKER.first_seen.clear()
+        semantic._WORKER.deferred.clear()
+        semantic._WORKER.backoff.clear()
+        semantic._WORKER.retry_load.clear()
+        semantic._WORKER.last_prune.clear()
+        semantic._WORKER.periodic = False
+    semantic._LAST.clear()
     semantic.set_embedder_factory(None)
 
 

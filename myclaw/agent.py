@@ -1653,12 +1653,15 @@ class Agent:
                         _add(shorten_text(full_context, min(500, room), collapse=False))
 
             if omitted:
-                entries = [
-                    f"{candidate_titles.get(permalink, next(
-                        (note.title for note in notes if note.permalink == permalink), permalink))}"
-                    f" ({permalink}: {reason})"
-                    for permalink, reason in omitted.items()
-                ]
+                entries = []
+                for permalink, reason in omitted.items():
+                    title = candidate_titles.get(permalink)
+                    if title is None:
+                        title = next(
+                            (note.title for note in notes if note.permalink == permalink),
+                            permalink,
+                        )
+                    entries.append(f"{title} ({permalink}: {reason})")
                 summary = "Relevant KB evidence not included: "
                 included = []
                 for entry in entries:
@@ -2123,10 +2126,12 @@ class Agent:
         """
         from .evolve import LifecycleError
         from .executions import execution
+        from .observability import span as _span
 
         try:
             async with execution(self.name, "turn"):
-                return await self._tracked_think(user_message, user_id, _depth)
+                with _span("agent.think", agent=self.name, user=user_id, depth=_depth):
+                    return await self._tracked_think(user_message, user_id, _depth)
         except LifecycleError as exc:
             return f"Cannot run agent: {exc}"
 
@@ -2134,7 +2139,6 @@ class Agent:
         from . import activity as _activity
         from .knowledge import usage as _kb_usage
         from .knowledge.scope import KB_USER, for_turn
-        from .observability import span as _span
 
         kb_token = KB_USER.set(for_turn(user_id))  # v0.7.5: tools use this turn's knowledge base
         # 2026-10-27: the knowledge usage log records this agent and message as "for what"
@@ -2142,10 +2146,9 @@ class Agent:
         _activity.turn_started()  # 2026-11-03: idle-time work waits while agents work
         _t0, _status = time.time(), "error"
         try:
-            with _span("agent.think", agent=self.name, user=user_id, depth=_depth):
-                _answer = await self._think_impl(user_message, user_id, _depth)
-                _status = "error" if is_failed_answer(_answer) else "ok"
-                return _answer
+            _answer = await self._think_impl(user_message, user_id, _depth)
+            _status = "error" if is_failed_answer(_answer) else "ok"
+            return _answer
         finally:
             _activity.turn_ended()
             # 2026-11-05: Doctor → Logs

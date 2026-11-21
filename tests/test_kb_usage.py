@@ -78,7 +78,7 @@ def test_auto_context_is_recorded_with_agent_channel_and_reason(home, agent):
     assert r["channel"] == "chan-1"                       # the executor runs in a copy of the context
     assert r["notes"][0] == "home-server" and r["results"] >= 1
     assert r["reason"] == "What does my home server run?" and r["source"] == "chat"
-    assert r["latency_ms"] is not None and r["mode"].startswith("fts")
+    assert r["latency_ms"] is not None and r["mode"] == "parallel-hybrid"
 
 
 def test_greeting_without_search_words_is_not_recorded(home, agent):
@@ -110,7 +110,7 @@ def test_tool_calls_hits_misses_reads_and_writes(home):
     _kb(home)
     tok = usage.begin_turn("ops", "check the server")
     try:
-        search_knowledge("zzzz nothing here")
+        search_knowledge("qzxw vbnm")
         read_knowledge("home-server")
         read_knowledge("does-not-exist")
         write_to_knowledge("New note", "some text", tags="x")
@@ -118,8 +118,8 @@ def test_tool_calls_hits_misses_reads_and_writes(home):
     finally:
         usage.end_turn(tok)
     rows = {(r["action"], r["query"]): r for r in _rows()}
-    miss = rows[("search_knowledge", "zzzz nothing here")]
-    assert miss["results"] == 0 and miss["ok"] and miss["mode"] == "fts"
+    miss = rows[("search_knowledge", "qzxw vbnm")]
+    assert miss["results"] == 0 and miss["ok"] and miss["mode"] == "parallel-hybrid"
     assert rows[("read_knowledge", "home-server")]["notes"] == ["home-server"]
     bad = rows[("read_knowledge", "does-not-exist")]
     assert bad["ok"] is False and bad["results"] == 0 and bad["notes"] == []
@@ -469,18 +469,21 @@ def test_group_chat_reason_is_the_users_text(home, agent):
 
 
 def test_auto_context_query_is_what_was_searched(home, agent, monkeypatch):
-    import myclaw.agent as agent_mod
+    from myclaw.knowledge import recall
 
     calls = []
 
-    def fake(query, user_id, limit=10, boolean=False, **kw):
+    def fake(query, user_id, limit=10, info=None, **kw):
         calls.append(query)
+        if info is not None:
+            info.update(strategies={name: "ok" for name in ("fts", "semantic", "graph", "temporal")},
+                        partial=False, search_mode="parallel-hybrid")
         return []
 
-    monkeypatch.setattr(agent_mod, "search_notes", fake)
+    monkeypatch.setattr(recall, "parallel_recall", fake)
     agent._search_knowledge_context_sync("tell me about zebrafish embryos", "default")
     (r,) = _rows()
-    assert len(calls) == 2 and r["query"] == calls[-1] and " OR " in r["query"]   # strategy 2's query
+    assert calls == ["tell me about zebrafish embryos"] and r["query"] == calls[0]
 
 
 def test_switched_off_no_thread_and_no_file(tmp_path):
@@ -501,7 +504,8 @@ def test_switched_off_no_thread_and_no_file(tmp_path):
         "t = usage.begin_turn('r', 'q'); usage.record('tool', 'x'); usage.end_turn(t)\n"
         "print(usage.enabled(), [x.name for x in threading.enumerate() if 'usage' in x.name], "
         "usage.db_path().exists())\n")
-    env = {**os.environ, "HOME": str(tmp_path), "PYTHONPATH": os.getcwd()}
+    pythonpath = os.pathsep.join(filter(None, (os.getcwd(), os.environ.get("PYTHONPATH", ""))))
+    env = {**os.environ, "HOME": str(tmp_path), "PYTHONPATH": pythonpath}
     out = subprocess.run([sys.executable, "-c", code], env=env, capture_output=True, text=True, timeout=120)
     assert out.stdout.strip().splitlines()[-1] == "False [] False", out.stderr[-2000:]
 

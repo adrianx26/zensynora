@@ -966,6 +966,28 @@ def test_restore_refuses_directory_link_outside_data(home, monkeypatch):  # noqa
     assert note.read_text(encoding="utf-8") == "outside"
 
 
+def test_backup_refuses_symlinked_knowledge_root(home, monkeypatch):  # noqa: F811
+    import os
+
+    from myclaw import backup
+
+    monkeypatch.setenv("MYCLAW_BACKUP_DIR", str(home / "archives"))
+    root = home / ".myclaw"
+    knowledge = root / "knowledge"
+    outside = home / "knowledge"
+    knowledge.mkdir()
+    outside.mkdir()
+    knowledge.rename(root / "knowledge-saved")
+    if os.name == "nt":
+        import _winapi
+
+        _winapi.CreateJunction(str(outside), str(knowledge))
+    else:
+        knowledge.symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="directory link"):
+        backup.create_backup(["knowledge"])
+
+
 def test_post_rejects_reused_dm_after_restore(home, monkeypatch):  # noqa: F811
     from fastapi import FastAPI
     from fastapi.testclient import TestClient
@@ -1456,6 +1478,27 @@ def test_backup_restore_keeps_previous_note_version_in_trash(home, monkeypatch):
     assert note.read_text(encoding="utf-8") == "archive note"
     saved = list((note.parent / ".trash").glob("restore-*/note.md"))
     assert any(p.read_text(encoding="utf-8") == "current note" for p in saved)
+
+
+def test_backup_restore_refuses_symlink_destination(home, monkeypatch):  # noqa: F811
+    from myclaw import backup
+
+    monkeypatch.setattr(backup, "install_root", lambda: home)
+    note = home / ".myclaw" / "knowledge" / "default" / "note.md"
+    note.parent.mkdir(parents=True)
+    note.write_text("archive note", encoding="utf-8")
+    archive = backup.create_backup(["settings", "knowledge", "memory", "jobs"])
+    note.parent.rename(note.parent.with_name("default-original"))
+    outside = home / "outside"
+    outside.mkdir()
+    try:
+        note.parent.symlink_to(outside, target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"symlink creation unavailable: {exc}")
+
+    with pytest.raises(ValueError, match="link"):
+        backup.restore_backup(archive["name"])
+    assert not (outside / "note.md").exists()
 
 
 @pytest.mark.parametrize("part", ["settings", "memory", "jobs"])

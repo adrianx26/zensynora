@@ -144,6 +144,11 @@ def _walk(path: Path) -> Iterable[Path]:
                 yield Path(dirpath) / name
 
 
+def _is_directory_link(path: Path) -> bool:
+    is_junction = getattr(os.path, "isjunction", None)
+    return path.is_symlink() or bool(is_junction and is_junction(path))
+
+
 def _is_sqlite(path: Path) -> bool:
     try:
         with open(path, "rb") as f:
@@ -222,6 +227,11 @@ def _create_backup_locked(parts: list[str] | None = None, label: str = "manual",
         stage.mkdir()
         for part in parts:
             for entry in _matches(src_root, _PART_PATTERNS[part]):
+                if entry.is_dir() and _is_directory_link(entry):
+                    raise ValueError(
+                        f"Cannot create a restorable backup from directory link: {entry}; "
+                        "replace it with a regular directory first."
+                    )
                 for f in _walk(entry):
                     rel = f.relative_to(src_root).as_posix()
                     out = stage / rel
@@ -356,6 +366,18 @@ def _restore_destination(rel: str, root: Path) -> Path:
     return root.joinpath(*parts)
 
 
+def _checked_restore_destination(rel: str, root: Path, include_leaf: bool = False) -> Path:
+    dest = _restore_destination(rel, root)
+    base = install_root() if rel == "install/.env" else root
+    parts = dest.relative_to(base).parts
+    parent = base
+    for part in parts[:len(parts) if include_leaf else -1]:
+        parent = parent / part
+        if _is_directory_link(parent):
+            raise ValueError(f"Refusing to restore through directory link: {parent}")
+    return dest
+
+
 def _trash_restored_file(root: Path, rel: str, src: Path) -> None:
     parts = rel.split("/")
     if len(parts) >= 4 and parts[:2] == ["data", "knowledge"] and src.suffix.lower() == ".md":
@@ -434,23 +456,25 @@ def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool
             raise ValueError("A safety backup is required when restoring lifecycle data.")
     if recovering and set(chosen) != set(m.get("parts", [])):
         raise ValueError("Restore every part of the safety backup to finish recovery.")
+    root = data_dir()
+    wanted = {k for k, v in m["files"].items() if v.get("part") in chosen}
+    for rel in wanted:
+        _checked_restore_destination(rel, root)
     safety = None
     if safety_copy:
         safety = _create_backup_locked(parts=list(PARTS), label="before-restore", cfg=cfg)["name"]
-    root = data_dir()
-    wanted = {k for k, v in m["files"].items() if v.get("part") in chosen}
     from .config_encryption import _atomic_write
 
     _atomic_write(root / ".chat-restore-generation", uuid.uuid4().hex)
     if not recovering and safety:
         introduced = [{"path": rel, "sha256": m["files"][rel]["sha256"]} for rel in sorted(wanted)
-                      if not _restore_destination(rel, root).exists()]
+                      if not _checked_restore_destination(rel, root).exists()]
         introduced_dirs = set()
         for entry in introduced:
             rel = entry["path"]
             if not rel.startswith("data/"):
                 continue
-            parent = _restore_destination(rel, root).parent
+            parent = _checked_restore_destination(rel, root).parent
             while parent != root and not parent.exists():
                 introduced_dirs.add(parent.relative_to(root).as_posix())
                 parent = parent.parent
@@ -460,7 +484,7 @@ def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool
 
     if not recovering and "settings" in chosen and archived_lifecycle:
         for rel in sorted(life_files - set(m["files"])):
-            old = _restore_destination(rel, root)
+            old = _checked_restore_destination(rel, root)
             if old.exists():
                 _trash_restored_file(root, rel, old)
     restored: list[str] = []
@@ -478,8 +502,9 @@ def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool
             src = Path(tmp) / rel
             if not src.is_file():
                 continue
-            dst = _restore_destination(rel, root)
+            dst = _checked_restore_destination(rel, root)
             dst.parent.mkdir(parents=True, exist_ok=True)
+            _checked_restore_destination(rel, root)
             if (rel.startswith("data/knowledge/") and dst.suffix.lower() == ".md"
                     and dst.is_file() and _sha256(dst) != m["files"][rel]["sha256"]):
                 _trash_restored_file(root, rel, dst)
@@ -503,7 +528,7 @@ def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool
                 rel, expected = entry["path"], entry["sha256"]
             else:
                 raise ValueError("Invalid restore recovery marker.")
-            src = _restore_destination(rel, root)
+            src = _checked_restore_destination(rel, root)
             if src.exists() and rel not in m["files"]:
                 if expected and _sha256(src) != expected:
                     raise ValueError(f"Introduced file {rel} changed since restore; preserve it and resolve manually.")
@@ -511,7 +536,7 @@ def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool
         for name in sorted(recovery_state.get("introduced_dirs", []), key=lambda x: -len(x)):
             if not isinstance(name, str):
                 raise ValueError("Invalid restore recovery marker.")
-            directory = _restore_destination("data/" + name, root)
+            directory = _checked_restore_destination("data/" + name, root, include_leaf=True)
             try:
                 directory.rmdir()
             except FileNotFoundError:

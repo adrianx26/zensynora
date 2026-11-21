@@ -550,7 +550,8 @@ def summarise_tool(tool: str, args: Dict[str, Any], out: Any) -> Dict[str, Any]:
         else:
             notes = _out_permalinks(text)
             results = len(re.findall(r"^\d+\. \*\*", text, re.MULTILINE)) or len(notes)
-        mode = ("semantic" if "(search: meaning)" in text else
+        mode = ("parallel-hybrid" if "four strateg" in text.lower() or "four searches" in text.lower()
+                else "semantic" if "(search: meaning)" in text else
                 "hybrid" if "(search: words + meaning)" in text else "fts")
     elif tool == "read_knowledge":
         m = re.search(r"^Permalink: (\S+)", text, re.MULTILINE)
@@ -869,4 +870,3 @@ def snapshots(base: str, limit: int = 400) -> List[Dict[str, Any]]:
         return []
     finally:
         con.close()
-

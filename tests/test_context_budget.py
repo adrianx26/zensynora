@@ -109,7 +109,7 @@ def test_ollama_gets_num_ctx(monkeypatch):
             return {"message": {"content": "hi"}}
 
     class C:
-        async def post(self, url, json):
+        async def post(self, url, json, headers=None):
             sent.update(json)
             return R()
 
@@ -117,6 +117,7 @@ def test_ollama_gets_num_ctx(monkeypatch):
     monkeypatch.setattr(prov_mod, "_get_configured_semantic_cache", lambda: None)
     p = prov_mod.OllamaProvider.__new__(prov_mod.OllamaProvider)
     p.base_url, p.timeout = "http://x", 5
+    p.keep_alive, p.temperature, p.max_tokens, p.api_key = "", None, 0, ""
 
     async def run(n):
         token = CONTEXT_LENGTH.set(n)

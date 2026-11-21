@@ -2009,17 +2009,14 @@ def consolidation_proposals(base: str = "default", limit: int = 100) -> Dict[str
     page_sources: Dict[str, int] = defaultdict(int)
     conn = _open(base)
     if conn is not None:
-        try:
-            if conn.execute(
-                    "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_pages'").fetchone():
-                for row in conn.execute("SELECT source_permalinks FROM memory_pages"):
-                    try:
-                        for permalink in json.loads(row[0] or "[]"):
-                            page_sources[str(permalink)] += 1
-                    except (TypeError, ValueError):
-                        continue
-        finally:
-            conn.close()
+        if conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_pages'").fetchone():
+            for row in conn.execute("SELECT source_permalinks FROM memory_pages"):
+                try:
+                    for permalink in json.loads(row[0] or "[]"):
+                        page_sources[str(permalink)] += 1
+                except (TypeError, ValueError):
+                    continue
 
     merge_proposals = []
     from . import usage
@@ -2118,6 +2115,8 @@ def consolidation_proposals(base: str = "default", limit: int = 100) -> Dict[str
             "reason": "The incremental distiller already has current checksums; source retention, "
                       "failed retries, and index repair are never skipped.",
         })
+    if conn is not None:
+        conn.close()
     return {
         "base": base,
         "merge_proposals": merge_proposals,
