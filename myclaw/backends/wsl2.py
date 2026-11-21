@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import subprocess
 from pathlib import Path, PureWindowsPath
 from typing import Tuple
 
@@ -114,12 +115,7 @@ class WSL2Backend(AbstractBackend):
     def _check_availability(self) -> bool:
         """Check if WSL2 is available."""
         try:
-            proc = asyncio.run(asyncio.create_subprocess_shell(
-                "wsl --list",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            ))
-            stdout, _ = asyncio.run(proc.communicate())
-            return proc.returncode == 0 and self.distro.lower() in stdout.decode().lower()
+            proc = subprocess.run(["wsl", "--list"], capture_output=True, timeout=5)
+            return proc.returncode == 0 and self.distro.lower() in proc.stdout.decode().lower()
         except Exception:
             return False
