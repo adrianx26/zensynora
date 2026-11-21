@@ -16,9 +16,11 @@ def knowledge_home(tmp_path, monkeypatch):
     storage.set_knowledge_root(None)
     monkeypatch.setattr(semantic, "_OPTIONS", dict(
         semantic._OPTIONS, semantic_search=False, kb_enabled=True))
-    semantic.wait_idle(20)
-    yield tmp_path
-    semantic.wait_idle(20)
+    monkeypatch.setattr(semantic, "_WORKER", semantic._Worker())
+    try:
+        yield tmp_path
+    finally:
+        semantic._stop_worker()
 
 
 def test_memory_decision_reports_novelty_relevance_and_evidence():
