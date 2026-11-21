@@ -30,9 +30,16 @@ def _run(base="default", count=10, mode="rules", config=None):
     return asyncio.run(evaluate_batch(config or AppConfig(), base, count, mode))
 
 
-def test_rules_find_problems_with_fixes(home):  # noqa: F811
+def _disable_embedding_issues(monkeypatch):
+    from myclaw.knowledge import semantic
+
+    monkeypatch.setattr(semantic, "enabled", lambda: False)
+
+
+def test_rules_find_problems_with_fixes(home, monkeypatch):  # noqa: F811
     from myclaw.knowledge.evaluate import results
 
+    _disable_embedding_issues(monkeypatch)
     _w("Good", links=["Other"])
     _w("Other")
     _w("Empty", content="", tags=())
@@ -66,10 +73,11 @@ def test_batches_pick_unchecked_then_changed_first(home):  # noqa: F811
     assert r["evaluated"] == 1 and r["notes"] == ["n0"]
 
 
-def test_apply_fixes_then_note_is_valid(home):  # noqa: F811
+def test_apply_fixes_then_note_is_valid(home, monkeypatch):  # noqa: F811
     from myclaw.knowledge import read_note
     from myclaw.knowledge.evaluate import apply_fixes, results
 
+    _disable_embedding_issues(monkeypatch)
     _w("Dangling", links=["Nowhere note"])
     _w("Messy tags", tags=("ok", "OK", "bad tag!"))
     _w("Empty", content="", tags=())
@@ -97,6 +105,7 @@ def test_apply_rejects_unknown_fixes(home):  # noqa: F811
 def test_ai_mode_adds_model_issues_and_quotes_the_note(home, monkeypatch):  # noqa: F811
     from myclaw.knowledge.evaluate import results
 
+    _disable_embedding_issues(monkeypatch)
     _w("Python", content="Python is a snake.", tags=("programming", "ok"))
     seen = []
 

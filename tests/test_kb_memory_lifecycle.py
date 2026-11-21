@@ -16,9 +16,9 @@ def knowledge_home(tmp_path, monkeypatch):
     storage.set_knowledge_root(None)
     monkeypatch.setattr(semantic, "_OPTIONS", dict(
         semantic._OPTIONS, semantic_search=False, kb_enabled=True))
-    semantic._stop_worker()
+    semantic.wait_idle(20)
     yield tmp_path
-    semantic._stop_worker()
+    semantic.wait_idle(20)
 
 
 def test_memory_decision_reports_novelty_relevance_and_evidence():
@@ -547,17 +547,21 @@ def test_live_writes_and_extraction_stamp_captured_at(knowledge_home):
 
 
 def test_windowed_temporal_search_falls_back_to_updated_at_and_ranks_captured_first(knowledge_home):
+    from datetime import datetime
+
     from myclaw.knowledge import write_note
     from myclaw.knowledge.parser import Observation
 
+    captured_date = datetime.now().astimezone().date().isoformat()
     write_note("Router Captured", "Router WireGuard setup.",
-               observations=[Observation("spec", "WireGuard port 51820", captured_at="2026-11-14T10:00:00+00:00")])
+               observations=[Observation("spec", "WireGuard port 51820",
+                                         captured_at=f"{captured_date}T10:00:00+00:00")])
     write_note("Router Updated Only", "Router WireGuard fallback.",
                observations=[Observation("spec", "WireGuard fallback port")])
     write_note("May Activity", "Hiked Bucegi mountains and configured NAS.",
                observations=[Observation("fact", "Hiked Bucegi", captured_at="2026-05-12")])
 
-    hits = recall._temporal_search("WireGuard 2026-11-14", "default", 5)
+    hits = recall._temporal_search(f"WireGuard {captured_date}", "default", 5)
     permalinks = [note.permalink for note in hits]
     assert "router-captured" in permalinks
     assert "router-updated-only" in permalinks
@@ -620,5 +624,3 @@ def test_access_tracking_and_merge_preserves_combined_use_count(knowledge_home):
         rebuilt = db.get_entity_by_permalink("alpha")
         assert rebuilt.use_count == 3
         assert rebuilt.last_accessed is not None
-
-

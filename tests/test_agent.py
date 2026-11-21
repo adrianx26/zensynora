@@ -208,7 +208,7 @@ class TestSearchKnowledgeContext:
     @pytest.mark.asyncio
     async def test_empty_result_backward_compatible(self, mock_agent_with_clean_gaps):
         """Test that empty search results return empty string by default (backward compatibility)."""
-        with patch("myclaw.agent.search_notes", return_value=[]):
+        with patch("myclaw.knowledge.recall.parallel_recall", return_value=[]):
             result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "unknown topic about quantum computing",
                 "test_user"
@@ -219,7 +219,7 @@ class TestSearchKnowledgeContext:
     @pytest.mark.asyncio
     async def test_empty_result_structured(self, mock_agent_with_clean_gaps):
         """Test that empty search results return structured result when requested."""
-        with patch("myclaw.agent.search_notes", return_value=[]):
+        with patch("myclaw.knowledge.recall.parallel_recall", return_value=[]):
             result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "unknown topic about quantum computing",
                 "test_user",
@@ -236,7 +236,7 @@ class TestSearchKnowledgeContext:
     @pytest.mark.asyncio
     async def test_empty_result_includes_guidance(self, mock_agent_with_clean_gaps):
         """Test that empty results include actionable guidance."""
-        with patch("myclaw.agent.search_notes", return_value=[]):
+        with patch("myclaw.knowledge.recall.parallel_recall", return_value=[]):
             result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "unknown topic",
                 "test_user",
@@ -254,7 +254,7 @@ class TestSearchKnowledgeContext:
         mock_note.permalink = "test-note"
         mock_note.observations = []
 
-        with patch("myclaw.agent.search_notes", return_value=[mock_note]):
+        with patch("myclaw.knowledge.recall.parallel_recall", return_value=[mock_note]):
             result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "test query",
                 "test_user",
@@ -273,7 +273,7 @@ class TestSearchKnowledgeContext:
         mock_note.permalink = "test-note"
         mock_note.observations = []
 
-        with patch("myclaw.agent.search_notes", return_value=[mock_note]):
+        with patch("myclaw.knowledge.recall.parallel_recall", return_value=[mock_note]):
             result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "test query",
                 "test_user"
@@ -284,7 +284,7 @@ class TestSearchKnowledgeContext:
     @pytest.mark.asyncio
     async def test_suggested_topics_extraction(self, mock_agent_with_clean_gaps):
         """Test that suggested topics are extracted from query."""
-        with patch("myclaw.agent.search_notes", return_value=[]):
+        with patch("myclaw.knowledge.recall.parallel_recall", return_value=[]):
             result = await mock_agent_with_clean_gaps._search_knowledge_context(
                 "machine learning models and artificial intelligence",
                 "test_user",

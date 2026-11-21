@@ -347,13 +347,27 @@ def import_backup(data: bytes, cfg: Any = None) -> dict[str, Any]:
 
 def _restore_destination(rel: str, root: Path) -> Path:
     if rel == "install/.env":
-        return install_root() / ".env"
-    if not rel.startswith("data/") or "\\" in rel or ":" in rel:
+        destination = install_root() / ".env"
+        root = install_root()
+    elif not rel.startswith("data/") or "\\" in rel or ":" in rel:
         raise ValueError(f"Invalid restore path: {rel}")
-    parts = rel.split("/")[1:]
-    if not parts or any(part in {"", ".", ".."} for part in parts):
-        raise ValueError(f"Invalid restore path: {rel}")
-    return root.joinpath(*parts)
+    else:
+        parts = rel.split("/")[1:]
+        if not parts or any(part in {"", ".", ".."} for part in parts):
+            raise ValueError(f"Invalid restore path: {rel}")
+        destination = root.joinpath(*parts)
+    root = root.resolve()
+    current = destination.absolute()
+    while current != root and root in current.parents:
+        is_junction = getattr(current, "is_junction", lambda: False)
+        if current.is_symlink() or is_junction():
+            raise ValueError(f"Restore path contains a link: {rel}")
+        current = current.parent
+    try:
+        destination.resolve().relative_to(root)
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"Restore path escapes through a link: {rel}") from exc
+    return destination
 
 
 def _trash_restored_file(root: Path, rel: str, src: Path) -> None:
