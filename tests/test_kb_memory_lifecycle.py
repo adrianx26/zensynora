@@ -325,6 +325,39 @@ def test_temporal_recall_accepts_legacy_note_shapes(knowledge_home, monkeypatch)
     assert recall._temporal_search("legacy", "default", 3) == [note]
 
 
+@pytest.mark.parametrize(
+    ("captures", "metadata_capture", "expected"),
+    [
+        ([None, "unknown", "2020-01-01", "2022-01-01"], "2021-01-01", "2022-01-01"),
+        ([None, "unknown"], "2021-01-01", "2021-01-01"),
+        ([None, "unknown"], None, "2023-01-01"),
+        (["1970-01-01T00:00:00+00:00"], None, "1970-01-01T00:00:00+00:00"),
+    ],
+)
+def test_temporal_recall_filters_capture_dates(knowledge_home, monkeypatch, captures,
+                                               metadata_capture, expected):
+    from myclaw.knowledge import decay, storage, write_note
+    from myclaw.knowledge.parser import Observation
+
+    write_note("Router", "Router settings.",
+               observations=[Observation("spec", "Router settings", captured_at="2023-01-01")])
+    note = SimpleNamespace(
+        permalink="router", title="Router", tags=[], metadata={"captured_at": metadata_capture},
+        observations=[SimpleNamespace(content="Router settings", captured_at=capture)
+                      for capture in captures])
+    monkeypatch.setattr(storage, "_batch_read_notes", lambda *_: [note])
+    seen = []
+
+    def note_factor(_tags, captured_at, now):
+        seen.append(captured_at)
+        return 0.5, 10, 5
+
+    monkeypatch.setattr(decay, "note_factor", note_factor)
+
+    assert recall._temporal_search("router", "default", 3) == [note]
+    assert seen == [recall._date_timestamp(expected)]
+
+
 def test_temporal_recall_uses_matching_observation_capture_time(knowledge_home, monkeypatch):
     from myclaw.knowledge import decay, storage, write_note
     from myclaw.knowledge.parser import Observation
@@ -589,5 +622,4 @@ def test_access_tracking_and_merge_preserves_combined_use_count(knowledge_home):
         rebuilt = db.get_entity_by_permalink("alpha")
         assert rebuilt.use_count == 3
         assert rebuilt.last_accessed is not None
-
 
