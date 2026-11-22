@@ -8,6 +8,18 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { ago, api, type Proposal } from '../api';
 import { useAutoClear } from '../notice';
 
+type WorkflowReview = {
+  id: number;
+  run_id: number;
+  job_id: string;
+  severity: 'info' | 'warning' | 'error';
+  summary: string;
+  evidence: string[] | { summary?: string; message?: string; detail?: string }[];
+  recommendations: string[];
+  status: 'pending' | 'acknowledged' | 'dismissed';
+  created: number;
+};
+
 const STATUS_LABEL: Record<Proposal['status'], string> = {
   pending: 'waiting for you', approved: 'approved', applying: 'installing…', applied: 'installed',
   failed: 'failed (rolled back)', rejected: 'rejected',
@@ -29,6 +41,7 @@ const ProposalsPanel: React.FC = () => {
   const [items, setItems] = useState<Proposal[]>([]);
   const [open, setOpen] = useState<Proposal | null>(null);
   const [lessons, setLessons] = useState<string[]>([]);
+  const [reviews, setReviews] = useState<WorkflowReview[]>([]);
   const [problems, setProblems] = useState<{
     errors: { message: string; count: number; level?: string }[];
     job_problems: { job: string; status: string }[];
@@ -42,14 +55,16 @@ const ProposalsPanel: React.FC = () => {
 
   const load = useCallback(async () => {
     try {
-      const [p, l, pr] = await Promise.all([
+      const [p, l, pr, wr] = await Promise.all([
         api<{ proposals: Proposal[] }>('/api/medic/proposals'),
         api<{ lessons: string[] }>('/api/medic/lessons'),
         api<typeof problems>('/api/medic/problems'),
+        api<{ reviews: WorkflowReview[] }>('/api/medic/workflow-reviews'),
       ]);
       setItems(p.proposals);
       setLessons(l.lessons);
       setProblems(pr);
+      setReviews(wr.reviews);
     } catch (e) {
       setNotice({ kind: 'error', text: (e as Error).message });
     }
@@ -94,6 +109,37 @@ const ProposalsPanel: React.FC = () => {
 
   return (
     <>
+      <div className="settings-card">
+        <div className="card-head">
+          <h3>Workflow review proposals {reviews.filter(r => r.status === 'pending').length > 0 && <span className="badge doctor-badge warn">{reviews.filter(r => r.status === 'pending').length} new</span>}</h3>
+        </div>
+        <p className="muted">Medic's evidence-based recommendations are proposal-only: acknowledging or dismissing a review records your decision but never changes a job, tool, or configuration.</p>
+        {reviews.length === 0 && <div className="muted">No workflow reviews yet.</div>}
+        {reviews.map(review => (
+          <div className="settings-card" key={review.id}>
+            <div className="card-head">
+              <div>
+                <span className={`badge proposal-${review.status}`}>{review.status}</span>{' '}
+                <span className="badge">{review.severity}</span>{' '}
+                <b>{review.summary}</b>
+              </div>
+              {review.status === 'pending' && <div className="row-actions">
+                <button className="ghost-btn" onClick={() => act(() => api(`/api/medic/workflow-reviews/${review.id}/status`, { method: 'POST', body: JSON.stringify({ status: 'acknowledged' }) }), 'Review acknowledged.')}>Acknowledge</button>
+                <button className="ghost-btn" onClick={() => act(() => api(`/api/medic/workflow-reviews/${review.id}/status`, { method: 'POST', body: JSON.stringify({ status: 'dismissed' }) }), 'Review dismissed.')}>Dismiss</button>
+              </div>}
+            </div>
+            <div className="muted small">Run #{review.run_id} · job {review.job_id} · {ago(review.created)}</div>
+            <details>
+              <summary>Evidence ({review.evidence.length}) and recommendations ({review.recommendations.length})</summary>
+              <b>Evidence</b>
+              <ul>{review.evidence.map((item, i) => <li key={i}>{typeof item === 'string' ? item : item.summary || item.message || item.detail || JSON.stringify(item)}</li>)}</ul>
+              <b>Recommended next steps (not applied)</b>
+              <ul>{review.recommendations.map((item, i) => <li key={i}>{item}</li>)}</ul>
+            </details>
+          </div>
+        ))}
+      </div>
+
       <div className="settings-card">
         <div className="card-head">
           <h3>Change proposals {items.filter(p => p.status === 'pending').length > 0 && <span className="badge doctor-badge warn">{items.filter(p => p.status === 'pending').length} waiting</span>}</h3>

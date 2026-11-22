@@ -6,10 +6,12 @@ Handles reading/writing Markdown files to the knowledge directory.
 
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import re
 import shutil
+import sqlite3
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -25,6 +27,10 @@ from .db import KnowledgeDB
 from .. import activity
 
 logger = logging.getLogger(__name__)
+
+
+class BatchFileWriteError(Exception):
+    """A Markdown write failed before a shared index transaction committed."""
 
 
 def compute_file_checksum(file_path: Path) -> str:
@@ -127,6 +133,149 @@ def _write_atomic(file_path: Path, text: str) -> None:
         raise
 
 
+def _pending_index_dir(knowledge_dir: Path) -> Path:
+    return knowledge_dir / ".pending-index"
+
+
+def _pending_index_path(knowledge_dir: Path, file_path: Path) -> Path:
+    key = hashlib.sha256(str(file_path.resolve()).encode("utf-8")).hexdigest()
+    token = f"{time.time_ns()}-{os.getpid()}-{threading.get_ident()}"
+    return _pending_index_dir(knowledge_dir) / f"{key}-{token}.json"
+
+
+def _mark_pending_index(file_path: Path, knowledge_dir: Path, user_id: str,
+                        expected_text: Optional[str] = None) -> Path:
+    marker = _pending_index_path(knowledge_dir, file_path)
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    temp = marker.with_name(f".{marker.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    data = json.dumps(
+        {
+            "file_path": str(file_path),
+            "user_id": user_id,
+            "expected_checksum": (
+                hashlib.md5(expected_text.encode("utf-8")).hexdigest()
+                if expected_text is not None else None
+            ),
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    ).encode("utf-8")
+    try:
+        with temp.open("wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp, marker)
+    except BaseException:
+        try:
+            temp.unlink()
+        except OSError:
+            pass
+        raise
+    return marker
+
+
+def _clear_pending_marker(marker: Optional[Path]) -> None:
+    if marker is None:
+        return
+    try:
+        marker.unlink()
+    except FileNotFoundError:
+        pass
+    except OSError as exc:
+        logger.warning(
+            "Knowledge: indexed write succeeded but pending marker %s remains: %s",
+            marker, exc,
+        )
+
+
+def _batch_pending_path(knowledge_dir: Path, file_paths: List[Path]) -> Path:
+    payload = (
+        "\0".join(str(path.resolve()) for path in file_paths)
+        + f"\0{time.time_ns()}\0{os.getpid()}\0{threading.get_ident()}"
+    )
+    key = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    return _pending_index_dir(knowledge_dir) / f"batch-{key}.json"
+
+
+def _mark_pending_batch(file_paths: List[Path], knowledge_dir: Path,
+                        user_id: str) -> Path:
+    marker = _batch_pending_path(knowledge_dir, file_paths)
+    _write_atomic(marker, json.dumps({
+        "file_paths": [str(path) for path in file_paths],
+        "user_id": user_id,
+        "owner_pid": os.getpid(),
+        "complete": False,
+    }, sort_keys=True, ensure_ascii=False))
+    return marker
+
+
+def _mark_pending_batch_complete(marker: Path) -> None:
+    try:
+        data = json.loads(marker.read_text(encoding="utf-8"))
+        data["complete"] = True
+        data["completed_at"] = time.time()
+        _write_atomic(marker, json.dumps(data, sort_keys=True, ensure_ascii=False))
+    except (OSError, TypeError, ValueError) as exc:
+        logger.warning("Knowledge: could not finalize pending batch marker %s: %s", marker, exc)
+
+
+def _pid_alive(pid: int) -> bool:
+    if pid <= 0:
+        return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+def reconcile_pending_indices(user_id: str = "default", db_path: Optional[Path] = None) -> int:
+    """Retry writes that landed in Markdown but did not finish indexing."""
+    knowledge_dir = get_knowledge_dir(user_id)
+    pending = _pending_index_dir(knowledge_dir)
+    if not pending.exists():
+        return 0
+    repaired = 0
+    for marker in sorted(pending.glob("*.json")):
+        try:
+            data = json.loads(marker.read_text(encoding="utf-8"))
+            if data.get("file_paths") and data.get("complete") is False:
+                owner_pid = int(data.get("owner_pid") or 0)
+                age = max(0.0, time.time() - marker.stat().st_mtime)
+                if _pid_alive(owner_pid) and age < 120.0:
+                    continue
+            raw_paths = data.get("file_paths")
+            paths = [Path(str(value)) for value in raw_paths] if isinstance(
+                raw_paths, list) else [Path(str(data["file_path"]))]
+            valid = []
+            deferred = False
+            for path in paths:
+                try:
+                    path.resolve().relative_to(knowledge_dir.resolve())
+                except (OSError, ValueError):
+                    continue
+                if path.is_file():
+                    expected = data.get("expected_checksum")
+                    if expected and compute_file_checksum(path) != expected:
+                        deferred = True
+                        continue
+                    valid.append(path)
+            if not valid:
+                if not deferred:
+                    marker.unlink()
+                continue
+            with KnowledgeDB(user_id, db_path=db_path) as db, db.batch():
+                for path in valid:
+                    _index_file(path, user_id, db_path, db=db)
+            marker.unlink()
+            repaired += len(valid)
+            continue
+        except (KeyError, OSError, sqlite3.Error, ValueError, TypeError) as exc:
+            logger.warning("Knowledge: pending index repair deferred for %s: %s", marker, exc)
+    return repaired
+
+
 def _inside(path: Path, folder: Path) -> bool:
     """True if ``path`` is inside ``folder`` and not in a dot-folder (.trash…)."""
     try:
@@ -164,7 +313,8 @@ def _indexed_path(file_path: Optional[str], knowledge_dir: Path) -> Optional[Pat
 
 
 def _resolve_notes(permalinks: List[str], user_id: str, db_path: Optional[Path],
-                   knowledge_dir: Path, parallel: bool = False) -> Dict[str, Tuple[Path, Note]]:
+                   knowledge_dir: Path, parallel: bool = False,
+                   db: Optional[KnowledgeDB] = None) -> Dict[str, Tuple[Path, Note]]:
     """``permalink -> (file, parsed note)`` for the notes that exist.
 
     2026-10-23 (KB phase 0): a file counts only if its own permalink (the
@@ -199,7 +349,10 @@ def _resolve_notes(permalinks: List[str], user_id: str, db_path: Optional[Path],
     if not misses:
         return found
     try:
-        with KnowledgeDB(user_id, db_path=db_path) as db:
+        if db is None:
+            with KnowledgeDB(user_id, db_path=db_path) as active_db:
+                entities = active_db.get_entities_by_permalinks(misses)
+        else:
             entities = db.get_entities_by_permalinks(misses)
     except Exception as e:  # a broken index must not break reading notes
         logger.info("Knowledge: could not look up notes in the index: %s", e)
@@ -216,11 +369,14 @@ def _resolve_notes(permalinks: List[str], user_id: str, db_path: Optional[Path],
 
 
 def _resolve_note(permalink: str, user_id: str, db_path: Optional[Path] = None,
-                  knowledge_dir: Optional[Path] = None) -> Optional[Tuple[Path, Note]]:
+                  knowledge_dir: Optional[Path] = None,
+                  db: Optional[KnowledgeDB] = None) -> Optional[Tuple[Path, Note]]:
     """``(file, note)`` of one note, or None (see :func:`_resolve_notes`)."""
     try:
         knowledge_dir = knowledge_dir or get_knowledge_dir(user_id)
-        return _resolve_notes([permalink], user_id, db_path, knowledge_dir).get(permalink)
+        return _resolve_notes(
+            [permalink], user_id, db_path, knowledge_dir, db=db,
+        ).get(permalink)
     except Exception as e:
         logger.info("Knowledge: could not look up note %r: %s", permalink, e)
         return None
@@ -243,7 +399,8 @@ def _free_path(knowledge_dir: Path, permalink: str) -> Path:
     return path
 
 
-def _index_file(file_path: Path, user_id: str, db_path: Optional[Path] = None) -> None:
+def _index_file(file_path: Path, user_id: str, db_path: Optional[Path] = None,
+                db: Optional[KnowledgeDB] = None) -> None:
     """Re-index one note file with its checksum / mtime / size.
 
     2026-10-23 (KB phase 0): ``sync_entity_from_note`` stores the file data
@@ -252,16 +409,21 @@ def _index_file(file_path: Path, user_id: str, db_path: Optional[Path] = None) -
     file data are refreshed here too.
     """
     file_meta = get_file_metadata(file_path)
-    with KnowledgeDB(user_id, db_path=db_path) as db:
-        entity_id = db.sync_entity_from_note(
+    owns_db = db is None
+    active_db = db or KnowledgeDB(user_id, db_path=db_path)
+    try:
+        entity_id = active_db.sync_entity_from_note(
             parse_note(file_path),
             checksum=file_meta["checksum"],
             mtime=file_meta["mtime"],
             size=file_meta["size"],
         )
         if entity_id:
-            db.update_entity_path(entity_id, str(file_path), file_meta["checksum"],
-                                  file_meta["mtime"], file_meta["size"])
+            active_db.update_entity_path(entity_id, str(file_path), file_meta["checksum"],
+                                         file_meta["mtime"], file_meta["size"])
+    finally:
+        if owns_db:
+            active_db.close()
 
 
 def validate_permalink(permalink: str) -> str:
@@ -390,6 +552,8 @@ def write_note(
     aliases: Optional[List[str]] = None,
     metadata: Optional[Dict[str, Any]] = None,
     origin: Optional[str] = None,
+    _db: Optional[KnowledgeDB] = None,
+    _skip_pending_marker: bool = False,
 ) -> str:
     """
     Write a new note to the knowledge base.
@@ -425,7 +589,7 @@ def write_note(
     # 2026-10-23 (KB phase 0): the existing note with this permalink (also in a
     # sub-folder) is updated in place; a file of the same name that belongs to
     # another note is left alone.
-    hit = _resolve_note(permalink, user_id, db_path, knowledge_dir)
+    hit = _resolve_note(permalink, user_id, db_path, knowledge_dir, db=_db)
     old: Optional[Note] = hit[1] if hit else None
     file_path = hit[0] if hit else _free_path(knowledge_dir, permalink)
 
@@ -509,13 +673,85 @@ def write_note(
 
     # Write file (2026-10-23, KB phase 0: atomically; a lossy replace keeps
     # the previous version in .trash)
-    _replace_note_file(file_path, old, markdown_content, knowledge_dir)
+    pending_marker = None if _skip_pending_marker else _mark_pending_index(
+        file_path, knowledge_dir, user_id, markdown_content
+    )
+    try:
+        _replace_note_file(file_path, old, markdown_content, knowledge_dir)
+    except BaseException as exc:
+        if _db is not None:
+            raise BatchFileWriteError(
+                f"could not write batch note {permalink}: {exc}"
+            ) from exc
+        raise
     logger.info(f"Created note: {file_path}")
 
     # Sync to database, with file metadata for change detection (Phase 1)
-    _index_file(file_path, user_id, db_path)
+    if _db is None:
+        _index_file(file_path, user_id, db_path)
+    else:
+        _index_file(file_path, user_id, db_path, db=_db)
+    if _db is None and pending_marker is not None:
+        _clear_pending_marker(pending_marker)
 
     return permalink
+
+
+def write_notes_batch(writes: List[Dict[str, Any]], user_id: str = "default",
+                      db_path: Optional[Path] = None,
+                      cancel_event: Optional[threading.Event] = None) -> List[str]:
+    """Write and index a prevalidated import batch in one SQLite transaction.
+
+    Files remain the source of truth.  Every file is marked for reconciliation
+    before replacement, and those markers are cleared only after the shared
+    database transaction commits.  Thus an index/commit failure leaves a fully
+    durable Markdown batch that reconciliation can repair, rather than a
+    partially indexed batch.
+    """
+    planned: List[Dict[str, Any]] = []
+    seen: set = set()
+    knowledge_dir = get_knowledge_dir(user_id)
+    for raw in writes:
+        if cancel_event is not None and cancel_event.is_set():
+            raise InterruptedError("batch cancelled")
+        if not isinstance(raw, dict) or "name" not in raw:
+            raise ValueError("each batch item needs a name and note fields")
+        item = dict(raw)
+        permalink = validate_permalink(str(item["name"]))
+        if permalink in seen:
+            raise ValueError(f"duplicate permalink in batch: {permalink}")
+        seen.add(permalink)
+        if not str(item.get("title") or item["name"]).strip():
+            raise ValueError(f"title is empty for batch note {permalink}")
+        if not str(item.get("content") or "").strip():
+            raise ValueError(f"content is empty for batch note {permalink}")
+        path = _direct_path(knowledge_dir, permalink)
+        if path is None:
+            raise ValueError(f"invalid destination for batch note {permalink}")
+        hit = _resolve_note(permalink, user_id, db_path, knowledge_dir)
+        target = hit[0] if hit is not None else _free_path(knowledge_dir, permalink)
+        item["_target_path"] = target
+        planned.append(item)
+
+    written: List[str] = []
+    batch_marker = _mark_pending_batch(
+        [item["_target_path"] for item in planned], knowledge_dir, user_id,
+    )
+    try:
+        with KnowledgeDB(user_id, db_path=db_path) as db:
+            with db.batch():
+                for item in planned:
+                    if cancel_event is not None and cancel_event.is_set():
+                        raise InterruptedError("batch cancelled")
+                    written.append(write_note(
+                        **{k: v for k, v in item.items() if k != "_target_path"},
+                        user_id=user_id, db_path=db_path, _db=db,
+                        _skip_pending_marker=True,
+                    ))
+    finally:
+        _mark_pending_batch_complete(batch_marker)
+    _clear_pending_marker(batch_marker)
+    return written
 
 
 def read_note(permalink: str, user_id: str = "default", db_path: Optional[Path] = None) -> Optional[Note]:
@@ -664,11 +900,16 @@ def update_note(permalink: str, user_id: str = "default", db_path: Optional[Path
 
     # Regenerate content (2026-10-23, KB phase 0: written atomically; a lossy
     # update keeps the previous version in .trash)
-    _replace_note_file(file_path, old, generate_markdown(note), knowledge_dir)
+    markdown_content = generate_markdown(note)
+    pending_marker = _mark_pending_index(
+        file_path, knowledge_dir, user_id, markdown_content
+    )
+    _replace_note_file(file_path, old, markdown_content, knowledge_dir)
 
     # Resync to database with checksum/mtime/size (2026-10-23, KB phase 0:
     # before, none was stored, so the next sync re-indexed the note)
     _index_file(file_path, user_id, db_path)
+    _clear_pending_marker(pending_marker)
 
     logger.info(f"Updated note: {permalink}")
     return True

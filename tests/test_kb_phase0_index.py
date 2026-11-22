@@ -265,8 +265,8 @@ def test_existing_entity_fields_updated(kb):
                  file_path=Path("/x/new.md")), checksum="c2", mtime=2.0, size=20)
         assert again == eid
         e = db.get_entity_by_id(eid)
-        assert (e.name, e.title, e.file_path, e.checksum, e.mtime, e.size) == \
-            ("New", "New title", "/x/new.md", "c2", 2.0, 20)
+        assert (e.name, e.title, Path(e.file_path), e.checksum, e.mtime, e.size) == \
+            ("New", "New title", Path("/x/new.md"), "c2", 2.0, 20)
         # name is UNIQUE: a name used by another note keeps the old one, no crash
         db.sync_entity_from_note(Note(name="Taken", permalink="p", title="X", content=""))
         e = db.get_entity_by_id(eid)
@@ -371,6 +371,51 @@ def test_incremental_sync_sees_moved_file_with_old_mtime(kb):
     assert stats["deleted"] == 0
     with kb.db() as db:
         assert db.get_entity_by_permalink("x").file_path == str(new)
+
+
+def test_incremental_sync_skips_unchanged_checksums_until_periodic_verify(kb, monkeypatch):
+    from myclaw.knowledge import sync as sync_mod
+
+    p = kb.write("steady.md", note_md("Steady", permalink="steady"))
+    kb.sync(force=True)
+    real_metadata = sync_mod._storage_module.get_file_metadata
+    calls = []
+
+    def counted(path):
+        calls.append(path)
+        return real_metadata(path)
+
+    monkeypatch.setattr(sync_mod._storage_module, "get_file_metadata", counted)
+    assert kb.sync()["updated"] == 0
+    assert calls == []
+
+    with kb.db() as db:
+        conn = db._get_connection()
+        conn.execute(
+            "INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)",
+            (sync_mod._CHECKSUM_VERIFY_KEY, "0"),
+        )
+        conn.commit()
+    assert kb.sync()["updated"] == 0
+    assert calls == [p]
+
+
+def test_periodic_checksum_verification_finds_same_stat_edit(kb):
+    from myclaw.knowledge import sync as sync_mod
+
+    p = kb.write("same.md", note_md("Same", permalink="same", body="old"))
+    kb.sync(force=True)
+    before = p.stat()
+    p.write_text(note_md("Same", permalink="same", body="new"), encoding="utf-8")
+    os.utime(p, ns=(before.st_atime_ns, before.st_mtime_ns))
+    with kb.db() as db:
+        conn = db._get_connection()
+        conn.execute(
+            "INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)",
+            (sync_mod._CHECKSUM_VERIFY_KEY, "0"),
+        )
+        conn.commit()
+    assert kb.sync()["updated"] == 1
 
 
 # ── 9 broken files are skipped and keep their entry ─────────────────────────
@@ -675,7 +720,7 @@ def test_review3_non_ascii_targets_use_indexes_and_scale(kb):
     t = time.time()
     stats = kb.sync(force=True)
     assert stats["added"] == n and stats["errors"] == 0
-    assert time.time() - t < 5
+    assert time.time() - t < (12 if os.name == "nt" else 5)
     with kb.db() as db:
         assert db.resolve_target("ÑOTA 7").title == "Ñota 7"
 

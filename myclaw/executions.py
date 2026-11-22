@@ -117,6 +117,12 @@ def track_background(task: asyncio.Task) -> None:
         lease.track(task)
 
 
+def current_id() -> str | None:
+    """Stable id of the current agent turn, or None outside an execution."""
+    lease = _current.get()
+    return str(lease.token) if lease is not None else None
+
+
 def retain_until_exit() -> None:
     """Conservatively retain a lease after work may outlive a timeout."""
     lease = _current.get()

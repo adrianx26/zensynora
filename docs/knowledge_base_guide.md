@@ -136,6 +136,14 @@ words. Tag search matches whole tags (`py` does not find `python`).
 * `knowledge.enabled: false` in the config turns off everything automatic
   (context search, auto-extraction, saving tool results, session summaries,
   knowledge-gap hints); the tools above still work when an agent calls them.
+* Conversation extraction and file watching are separate. Set
+  `knowledge.extract_from_conversations` to let agents save useful conversation
+  and tool-result knowledge. Set `knowledge.watch_files` to re-index Markdown
+  files edited outside ZenSynora. Old `knowledge.auto_extract` configs remain a
+  compatibility fallback for conversation extraction.
+* Automatic knowledge-gap web research is off by default. It runs only when
+  `intelligence.research_enabled` is explicitly enabled; pending research and
+  failed retries are kept durably until they succeed or are removed.
 
 ## Retain, Recall, Reflect
 

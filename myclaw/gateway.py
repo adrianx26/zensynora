@@ -153,23 +153,19 @@ def start(config, webhook_url: str | None = None, port: int = 8443, force_telegr
             scheduler.start()
             logger.info(f"Knowledge Researcher scheduled every {interval} hours")
 
-        # ── Start Background Knowledge File-Sync Extraction ───────────────────────
-        # Triggered when config.knowledge.auto_extract = true (default: false).
-        # Runs sync_knowledge() every 60 s so any Markdown notes written to disk
-        # are automatically picked up and indexed in the SQLite knowledge graph.
-        # 2026-10-18: started on the bot's running event loop (see on_start below);
-        # it used to fail with NameError and would have run on a dead loop.
+        # One file-sync mechanism is shared by the Web UI, gateway and console.
+        # ``auto_extract`` is conversation extraction, not file watching.
         startup_hooks = []
         if mcp_manager is not None:
             startup_hooks.append(mcp_manager.start_all)
-        if getattr(config.knowledge, 'auto_extract', False):
-            def _start_kb_sync():
-                from .knowledge.sync import start_background_extraction
+        if config.knowledge.watch_files_enabled():
+            def _start_kb_watch():
+                from .knowledge.watch import start_background
                 try:
-                    start_background_extraction(user_id="default", interval_seconds=60)
+                    start_background()
                 except Exception as _ke:
-                    logger.warning(f"Could not start background knowledge extraction: {_ke}")
-            startup_hooks.append(_start_kb_sync)
+                    logger.warning(f"Could not start knowledge file watcher: {_ke}")
+            startup_hooks.append(_start_kb_watch)
 
         # ── Start channel ─────────────────────────────────────────────────────────
         tg_cfg = config.channels.telegram

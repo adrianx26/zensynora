@@ -17,10 +17,10 @@ def test_subfolder_notes_and_link_forms_in_graph(tmp_path, monkeypatch):
     d = tmp_path / ".myclaw" / "knowledge" / "default"
     (d / "imported" / "vault").mkdir(parents=True)
     (d / ".trash").mkdir()
-    (d / "imported" / "vault" / "pi.md").write_text('---\ntitle: "Pi"\npermalink: pi\n---\n\n# Pi\n\nSmall.\n')
-    (d / ".trash" / "gone.md").write_text('---\ntitle: "Gone"\npermalink: gone\n---\n\n# Gone\n')
+    (d / "imported" / "vault" / "pi.md").write_text('---\ntitle: "Pi"\npermalink: pi\n---\n\n# Pi\n\nSmall.\n', encoding="utf-8")
+    (d / ".trash" / "gone.md").write_text('---\ntitle: "Gone"\npermalink: gone\n---\n\n# Gone\n', encoding="utf-8")
     (d / "home.md").write_text('---\ntitle: "Home"\npermalink: home\n---\n\n# Home\n\n## Relations\n\n'
-                               "- has [[Pi|the pi]]\n- see [[pi#Specs]]\n- about [[C# tips]]\n")
+                               "- has [[Pi|the pi]]\n- see [[pi#Specs]]\n- about [[C# tips]]\n", encoding="utf-8")
     g = c.get("/api/knowledge/graph").json()
     ids = {n["id"] for n in g["nodes"]}
     assert {"home", "pi"} <= ids and "gone" not in ids

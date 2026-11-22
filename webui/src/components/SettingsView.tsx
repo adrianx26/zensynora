@@ -96,6 +96,10 @@ const CHANNEL_FIELDS: FieldDef[] = [
   { path: 'channels.whatsapp.business_account_id', label: 'WhatsApp business account ID', kind: 'text' },
   { path: 'channels.whatsapp.access_token', label: 'WhatsApp access token', kind: 'password' },
   { path: 'channels.whatsapp.verify_token', label: 'WhatsApp verify token', kind: 'password' },
+  {
+    path: 'channels.whatsapp.app_secret', label: 'WhatsApp app secret', kind: 'password',
+    help: 'Required to verify Meta webhook signatures. Copy it from the WhatsApp app settings.',
+  },
 ];
 
 const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
@@ -103,7 +107,10 @@ const FEATURE_FIELDS: { title: string; fields: FieldDef[] }[] = [
     title: 'Knowledge & research',
     fields: [
       { path: 'knowledge.enabled', label: 'Knowledge base', kind: 'bool' },
-      { path: 'knowledge.auto_extract', label: 'Auto-index notes written to disk', kind: 'bool' },
+      {
+        path: 'knowledge.extract_from_conversations', label: 'Extract knowledge from conversations',
+        kind: 'bool', help: 'After opt-in, agents may save useful facts from chats and tool results. File watching is configured separately below.',
+      },
       { path: 'knowledge.detect_conflicts', label: 'Flag facts that contradict each other', kind: 'bool', help: 'E.g. "32 GB RAM" and "64 GB RAM" on the same note. Only flags them (⚠ on the Knowledge page); nothing is changed until you choose.' },
       { path: 'knowledge.hub_penalty', label: 'Rank very linked notes lower in the agent’s context', kind: 'bool', help: 'Notes with many links (hubs) match many questions but say little about each; they are kept, just ranked lower, and not walked through.' },
       { path: 'knowledge.hub_degree', label: 'A note is a hub above this many links', kind: 'number', help: 'Default 25.' },

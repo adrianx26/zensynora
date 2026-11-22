@@ -123,7 +123,16 @@ def index_drift(base: str = "default", sample: int = SAMPLE_CHECKSUMS) -> Dict[s
     kdir = base_dir(base)
     out: Dict[str, Any] = {"base": base, "files": 0, "indexed": 0, "missing": 0, "extra": 0,
                            "changed": 0, "checked": 0, "unchecked": 0, "db": False, "fts": None,
+                           "pending_repairs": 0,
                            "examples": {"missing": [], "extra": [], "changed": []}, "error": None}
+    try:
+        pending = kdir / ".pending-index"
+        out["pending_repairs"] = sum(
+            1 for item in pending.iterdir()
+            if item.is_file() and item.suffix == ".json"
+        ) if pending.is_dir() else 0
+    except OSError as exc:
+        out["error"] = f"cannot inspect pending index repairs: {exc}"
     try:
         files = _list_markdown_files(kdir, _load_bmignore_patterns(kdir)) if kdir.is_dir() else set()
     except OSError as e:
@@ -264,7 +273,11 @@ def embeddings(base: str = "default") -> Dict[str, Any]:
     out: Dict[str, Any] = {"enabled": semantic.enabled(), "installed": semantic.library_installed(),
                            "notes": 0, "embedded": 0, "waiting": 0, "stale": 0, "queued": 0,
                            "model": semantic.model_name(), "embedder": None, "last_error": None,
-                           "retry_in": None, "error": None}
+                           "retry_in": None, "covered": 0, "total": 0, "covered_chunks": 0,
+                           "total_chunks": 0, "covered_vectors": 0, "total_vectors": 0,
+                           "truncated": False, "coverage_percent": 100.0, "percent": 100.0,
+                           "warning": None,
+                           "error": None}
     path = db_path(base)
     if not out["enabled"] or not path.is_file():
         return out
@@ -276,6 +289,7 @@ def embeddings(base: str = "default") -> Dict[str, Any]:
                 out["stale"] = len(semantic._stale_ids(con, out["model"]))
             else:
                 out["stale"] = out["notes"]
+            out.update(semantic.vector_coverage(con, out["model"]))
         finally:
             con.close()
         out["waiting"] = out["stale"]
@@ -423,6 +437,13 @@ def warnings_for(h: Dict[str, Any]) -> List[Dict[str, str]]:
     d = h.get("index") or {}
     if d.get("error"):
         _warn(w, "index", f"Index could not be checked: {d['error']}", "zensynora knowledge sync --force")
+    elif d.get("pending_repairs"):
+        _warn(
+            w,
+            "pending-index",
+            f"{d['pending_repairs']} note write(s) are waiting for index repair",
+            "Run zensynora knowledge sync; Markdown is safe and remains the source of truth.",
+        )
     elif drift_total(d) or (d.get("fts") is False and d.get("indexed")):
         _warn(w, "index", "Index out of date: " + drift_text(d),
               "Run zensynora knowledge sync (or ↻ Re-index on this page); "
@@ -449,6 +470,11 @@ def warnings_for(h: Dict[str, Any]) -> List[Dict[str, str]]:
         elif e.get("waiting"):
             _warn(w, "embeddings", f"{e['waiting']} of {e['notes']} note(s) waiting to be embedded",
                   "Knowledge page → Semantic search → Backfill, or zensynora knowledge embed.")
+        if e.get("truncated"):
+            _warn(w, "semantic-coverage",
+                  e.get("warning") or (f"Semantic search covers only "
+                                       f"{e.get('coverage_percent', 0):.1f}% of vector chunks"),
+                  "Reduce the number of embedded chunks, or re-index after the semantic scan cap is raised.")
     ds = h.get("distill") or {}
     if ds.get("enabled"):
         if ds.get("last_error"):
@@ -464,6 +490,11 @@ def warnings_for(h: Dict[str, Any]) -> List[Dict[str, str]]:
     elif wt.get("enabled") and wt.get("last_error"):
         _warn(w, "watcher", f"The file watcher reported: {wt['last_error']}",
               "Run zensynora knowledge sync; see the log for details.")
+    elif wt.get("enabled") and wt.get("truncated"):
+        _warn(w, "watcher-coverage",
+              wt.get("warning") or (f"The file watcher covers only "
+                                    f"{wt.get('coverage_percent', 0):.1f}% of note files"),
+              "Install watchfiles for complete file-event coverage, then restart the Web UI.")
     ig = h.get("ingest") or {}
     if ig.get("failed"):
         last = ig["recent"][-1] if ig.get("recent") else {}

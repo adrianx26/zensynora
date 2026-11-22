@@ -1,4 +1,5 @@
 import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -252,7 +253,7 @@ def test_parallel_recall_keeps_other_streams_when_one_fails(monkeypatch):
     assert info["strategies"]["semantic"] == "error"
 
 
-def test_parallel_recall_timeout_does_not_leave_a_process_blocking_worker(monkeypatch):
+def test_parallel_recall_timeout_does_not_create_a_worker_per_request(monkeypatch):
     release = threading.Event()
     monkeypatch.setattr(recall, "_streams", lambda *_: {
         "fts": lambda: [],
@@ -266,11 +267,76 @@ def test_parallel_recall_timeout_does_not_leave_a_process_blocking_worker(monkey
     assert recall.parallel_recall("query", limit=1, info=info) == []
 
     worker = next(thread for thread in threading.enumerate()
-                  if thread.name == "kb-recall-semantic")
+                  if thread.name.startswith("kb-recall-worker-"))
     assert info["strategies"]["semantic"] == "timeout"
     assert worker.daemon
     release.set()
-    worker.join(timeout=1)
+    assert info["executor"]["max_workers"] == recall._MAX_WORKERS
+
+
+def test_parallel_recall_bounds_active_and_queued_streams(monkeypatch):
+    executor = recall._RecallExecutor(workers=2, queue_limit=4)
+    release = threading.Event()
+    started = threading.Event()
+    monkeypatch.setattr(recall, "_EXECUTOR", executor)
+    monkeypatch.setitem(recall._OPTIONS, "timeout_seconds", 2.0)
+
+    def slow() -> list:
+        started.set()
+        release.wait(2)
+        return []
+
+    monkeypatch.setattr(recall, "_streams", lambda *_: {"fts": slow})
+    callers = [
+        threading.Thread(target=recall.parallel_recall, args=(f"query {number}",))
+        for number in range(4)
+    ]
+    for caller in callers:
+        caller.start()
+    assert started.wait(1)
+    time.sleep(0.05)
+
+    status = executor.diagnostics()
+    assert status["active"] == 1
+    assert status["queued"] == 3
+    assert status["queued"] <= status["max_queued"]
+    assert status["active_by_strategy"] == {"fts": 1}
+
+    release.set()
+    for caller in callers:
+        caller.join(2)
+    assert executor.diagnostics()["active"] == 0
+    assert executor.diagnostics()["threads"] <= 2
+
+
+def test_parallel_recall_repeated_timeout_bursts_keep_worker_count_bounded(monkeypatch):
+    executor = recall._RecallExecutor(workers=2, queue_limit=3)
+    release = threading.Event()
+    started = threading.Event()
+    monkeypatch.setattr(recall, "_EXECUTOR", executor)
+    monkeypatch.setitem(recall._OPTIONS, "timeout_seconds", 0.02)
+
+    def slow() -> list:
+        started.set()
+        release.wait(2)
+        return []
+
+    monkeypatch.setattr(recall, "_streams", lambda *_: {"semantic": slow})
+    for number in range(20):
+        info = {}
+        recall.parallel_recall(f"query {number}", info=info)
+        assert info["strategies"]["semantic"] == "timeout"
+        status = info["executor"]
+        assert status["active"] <= 1
+        assert status["queued"] <= status["max_queued"]
+
+    assert started.is_set()
+    assert executor.diagnostics()["threads"] <= 2
+    release.set()
+    end = time.monotonic() + 2
+    while executor.diagnostics()["active"] and time.monotonic() < end:
+        time.sleep(0.01)
+    assert executor.diagnostics()["active"] == 0
 
 
 def test_recall_decisions_detect_duplicate_claims_across_notes():
@@ -525,6 +591,15 @@ def test_windowed_temporal_search_falls_back_to_updated_at_and_ranks_captured_fi
                observations=[Observation("spec", "WireGuard fallback port")])
     write_note("May Activity", "Hiked Bucegi mountains and configured NAS.",
                observations=[Observation("fact", "Hiked Bucegi", captured_at="2026-05-12")])
+    # This test isolates fallback-to-updated_at. Keep the synthetic fallback
+    # timestamp inside the window so its result is stable years later.
+    from myclaw.knowledge.db import KnowledgeDB
+    with KnowledgeDB("default") as db:
+        with db._write_txn() as conn:
+            conn.execute(
+                "UPDATE entities SET updated_at = ? WHERE permalink = ?",
+                ("2026-11-14T11:00:00+00:00", "router-updated-only"),
+            )
 
     hits = recall._temporal_search("WireGuard 2026-11-14", "default", 5)
     permalinks = [note.permalink for note in hits]

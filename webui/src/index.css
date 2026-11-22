@@ -883,6 +883,43 @@ textarea.chat-input { resize: none; line-height: 1.4; min-height: 52px; padding:
 .run-head .row-actions { margin-left: auto; }
 .run-body { padding: 0 12px 12px; display: flex; flex-direction: column; gap: 8px; }
 
+.settings-card:has(.jobs-grid) { max-width: 1100px; }
+.view-toggle {
+  display: inline-flex; border: 1px solid var(--panel-border); border-radius: 7px;
+  padding: 2px; background: rgba(128, 128, 128, 0.05);
+}
+.view-toggle button {
+  border: 0; border-radius: 5px; padding: 4px 8px; color: var(--text-secondary);
+  background: transparent; font: inherit; font-size: 0.78rem; cursor: pointer;
+}
+.view-toggle button.active { color: var(--text-primary); background: var(--chat-user-bg); }
+.jobs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin-top: 12px; }
+.job-tile {
+  min-width: 0; border: 1px solid var(--panel-border); border-radius: 9px;
+  padding: 10px; display: flex; flex-direction: column; gap: 8px; cursor: pointer;
+  background: rgba(128, 128, 128, 0.025);
+}
+.job-tile:hover, .job-tile.selected { border-color: var(--accent-color); background: var(--accent-glow); }
+.job-tile-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.job-tile-head > div { min-width: 0; }
+.job-tile-head b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-tile-sub { font-size: 0.75rem; color: var(--text-secondary); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-tile-status { flex: 0 0 auto; }
+.job-tile-meta { min-height: 20px; display: flex; align-items: center; gap: 7px; font-size: 0.75rem; color: var(--text-secondary); }
+.job-tile-meta .score { margin-left: auto; }
+.job-tile-actions { margin-top: auto; }
+.job-tile-actions .icon-btn { width: 28px; height: 28px; }
+.icon-btn.ai { color: var(--accent-color); }
+.icon-btn.danger { color: var(--danger-color); }
+.icon-btn:disabled { opacity: .45; cursor: not-allowed; }
+.job-tile-actions .inline-confirm { width: 100%; }
+.job-ai-panel { border-color: color-mix(in srgb, var(--accent-color) 45%, var(--panel-border)); }
+.job-ai-answer { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.job-ai-answer > p { margin: 0; }
+.job-ai-recommendation { display: flex; flex-direction: column; gap: 3px; padding: 9px 11px; border-left: 3px solid var(--accent-color); background: rgba(128, 128, 128, 0.05); }
+.job-ai-changes { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
+.job-ai-changes > div { display: grid; grid-template-columns: minmax(100px, 160px) 1fr; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--panel-border); }
+
 /* models */
 .rotation-list { padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
 .rotation-list li { display: list-item; }

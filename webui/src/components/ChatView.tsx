@@ -13,7 +13,7 @@ import TypewriterText from './TypewriterText';
 import AgentModelMenu from './AgentModelMenu';
 import { MessageActions, MessageBody, MessageEditor } from './MessageActions';
 import { copyText } from '../clipboard';
-import { api, getApiBase, getWsBase, type AgentInfo, type Channel, type ChatMsg } from '../api';
+import { api, authHeaders, getApiBase, websocketUrl, type AgentInfo, type Channel, type ChatMsg } from '../api';
 import { agentColor } from '../colors';
 import { ACTIVITY_MODES, groupMessages, loadActivityMode, saveActivityMode, summarizeEvents, type ActivityMode } from '../chatEvents';
 
@@ -144,9 +144,18 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
     setWorking([]);
     loadHistory();
 
-    const connect = () => {
+    const connect = async () => {
       setStatus('connecting');
-      ws = new WebSocket(`${getWsBase()}/ws/channels/${encodeURIComponent(channelId)}`);
+      let url: string;
+      try {
+        url = await websocketUrl(`/ws/channels/${encodeURIComponent(channelId)}`);
+      } catch (e) {
+        setError((e as Error).message);
+        setStatus('closed');
+        return;
+      }
+      if (closed) return;
+      ws = new WebSocket(url);
       wsRef.current = ws;
       ws.onopen = () => {
         retry.current = 0;
@@ -253,7 +262,7 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
       }
     };
 
-    connect();
+    void connect();
     return () => {
       closed = true;
       clearInterval(ping);
@@ -379,7 +388,10 @@ const ChatView: React.FC<Props> = ({ channelId, agents, onChannelChanged, onOpen
   const exportMarkdown = async (how: 'copy' | 'download') => {
     setExportMenu(false);
     try {
-      const res = await fetch(`${getApiBase()}/api/channels/${encodeURIComponent(channelId)}/export.md`);
+      const res = await fetch(
+        `${getApiBase()}/api/channels/${encodeURIComponent(channelId)}/export.md`,
+        { headers: authHeaders() },
+      );
       if (!res.ok) throw new Error(`Export failed (HTTP ${res.status})`);
       const md = await res.text();
       if (how === 'copy') {

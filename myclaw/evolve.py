@@ -492,10 +492,12 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return (len(a & b) / len(u)) if u else 0.0
 
 
-def evaluate_fusion_candidates(limit: int = 8) -> Dict[str, Any]:
-    from .config import load_config
-
-    cfg = load_config(force_reload=True)
+def evaluate_fusion_candidates(limit: int = 8, config: Any = None) -> Dict[str, Any]:
+    if config is None:
+        from .config import load_config
+        cfg = load_config(force_reload=True)
+    else:
+        cfg = config
     agents = cfg.agents.named
     items = _read_trash()
     out: list[dict[str, Any]] = []

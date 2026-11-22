@@ -402,19 +402,20 @@ def _owned(old, meta: Dict[str, object]) -> bool:
 
 
 def claim_permalink(perm: str, base: str, meta: Dict[str, object],
-                    taken: Optional[set] = None) -> str:
+                    taken: Optional[set] = None, db=None) -> str:
     """``perm`` if it is free or ours (same source/kind), else ``perm-imported[-n]``.
 
     2026-10-24 (KB phase 5, review): an import never replaces a note the user
     wrote (or another source's note) that happens to have the same permalink.
     """
-    from myclaw.knowledge.storage import read_note
+    from myclaw.knowledge.storage import _resolve_note, read_note
 
     taken = taken if taken is not None else set()
     cand, n = perm, 1
     while True:
         if cand not in taken:
-            old = read_note(cand, base)
+            hit = _resolve_note(cand, base, db=db) if db is not None else None
+            old = hit[1] if hit is not None else (None if db is not None else read_note(cand, base))
             if old is None or _owned(old, meta):
                 return cand
         n += 1
@@ -434,7 +435,7 @@ def may_write(budget: Optional[Budget]) -> bool:
 
 
 def _write(plan: _Plan, base: str, metadata: Dict[str, object],
-           budget: Optional[Budget] = None) -> str:
+           budget: Optional[Budget] = None, db=None) -> str:
     """Write one planned note; returns created / updated / unchanged / kept.
 
     "kept": the note was changed by hand since the ingester wrote it, so it is
@@ -442,9 +443,11 @@ def _write(plan: _Plan, base: str, metadata: Dict[str, object],
     user's edits). Nothing is written once the budget is cancelled.
     """
     from myclaw.knowledge.parser import Relation, extract_body, parse_observations
-    from myclaw.knowledge.storage import read_note, write_note
+    from myclaw.knowledge.storage import _resolve_note, read_note, write_note
+    from myclaw.knowledge.validation import MAX_IMPORT_FACTS, normalize_note_input
 
-    old = read_note(plan.permalink, base)
+    hit = _resolve_note(plan.permalink, base, db=db) if db is not None else None
+    old = hit[1] if hit is not None else (None if db is not None else read_note(plan.permalink, base))
     # facts go through the parser, exactly as they will be read back (a
     # trailing "(source: …)" becomes the fact's provenance once KB phase 2 is in)
     facts = parse_observations("\n".join(f"- [{c}] {t}" for c, t in plan.facts if t and c))
@@ -474,17 +477,25 @@ def _write(plan: _Plan, base: str, metadata: Dict[str, object],
             return "unchanged"
     if not may_write(budget):
         raise Cancelled()
+    normalized = normalize_note_input(
+        title=plan.title, content=plan.body, tags=tags,
+        observations=facts, relations=rels, strict=False, max_facts=MAX_IMPORT_FACTS,
+    )
     # 2026-10-25 (KB phase 6): an import is a background writer — one note at a
     # time under the base's slot of the shared write budget
     from myclaw.knowledge import budget as write_budget
 
     ingest_ts = str(meta.get("ingested") or "").strip() or datetime.now(timezone.utc).isoformat(timespec="seconds")
+    facts = normalized.observations
+    rels = normalized.relations
+    tags = normalized.tags
     for fact in facts:
         if getattr(fact, "captured_at", None) is None:
             fact.captured_at = ingest_ts
     with write_budget.background(base, "import", write_budget.PRIO_INGEST, timeout=60):
-        write_note(name=plan.permalink, title=plan.title, content=plan.body, observations=facts,
-                   relations=rels, tags=tags, user_id=base, metadata=meta)
+        write_note(name=plan.permalink, title=normalized.title, content=normalized.content,
+                   observations=facts, relations=rels, tags=tags, user_id=base,
+                   metadata=meta, _db=db, _skip_pending_marker=db is not None)
     return "created" if old is None else "updated"
 
 
@@ -578,11 +589,14 @@ def write_document_notes(doc: Document, base: str = "default", max_notes: int = 
     # names: a permalink that belongs to someone else's note gets "-imported"
     renamed: Dict[str, str] = {}
     taken: set = set()
-    for plan in [overview, *parts]:
-        new = claim_permalink(plan.permalink, base, meta_base, taken)
-        taken.add(new)
-        if new != plan.permalink:
-            renamed[plan.permalink] = new
+    from myclaw.knowledge.db import KnowledgeDB
+
+    with KnowledgeDB(base) as claim_db:
+        for plan in [overview, *parts]:
+            new = claim_permalink(plan.permalink, base, meta_base, taken, claim_db)
+            taken.add(new)
+            if new != plan.permalink:
+                renamed[plan.permalink] = new
     if renamed:
         for plan in [overview, *parts]:
             plan.permalink = renamed.get(plan.permalink, plan.permalink)
@@ -596,29 +610,52 @@ def write_document_notes(doc: Document, base: str = "default", max_notes: int = 
     written_parts: List[_Plan] = []
     done: Dict[str, Dict[str, object]] = dict(earlier)
     kept = 0
-    for i, plan in enumerate(parts):
-        if not may_write(budget) or budget.out_of_time(margin=3.0):
-            result.stopped = budget.stop_reason() or "time limit reached"
-            result.skipped.append(f"{len(parts) - i} part note(s) not written ({result.stopped})")
-            break
-        try:
-            action = _write(plan, base, {**meta_base, "part_of": overview.permalink}, budget)
-        except Cancelled:
-            result.stopped = "cancelled"
-            break
-        except Exception as e:  # one bad note must not stop the others
-            logger.warning("Ingest: could not write note %s: %s", plan.permalink, e)
-            result.errors.append(f"could not write {plan.title}: {e}")
-            continue
-        if action == "kept":
-            kept += 1
-        budget.notes_written += 1
-        written_parts.append(plan)
-        result.notes.append(NoteRef(plan.permalink, plan.title, action))
-        info = done.setdefault(plan.key, {"perm": plan.permalink, "heading": plan.heading,
-                                          "parts": 0})
-        info["parts"] = int(info.get("parts") or 0) + 1  # type: ignore[call-overload]
-        budget.report(f"{len(written_parts)}/{len(parts)} notes written")
+    # One connection and one SQLite transaction for the planned parts.  File
+    # markers survive an index failure and reconciliation can repair them.
+    from myclaw.knowledge import budget as write_budget
+    from myclaw.knowledge.storage import (
+        _clear_pending_marker, _mark_pending_batch, _mark_pending_batch_complete,
+        _resolve_note, get_knowledge_dir,
+    )
+
+    knowledge_dir = get_knowledge_dir(base)
+    batch_paths = []
+    for plan in parts:
+        hit = _resolve_note(plan.permalink, base, knowledge_dir=knowledge_dir)
+        batch_paths.append(hit[0] if hit else knowledge_dir / f"{plan.permalink}.md")
+    batch_marker = _mark_pending_batch(batch_paths, knowledge_dir, base)
+    batch_index_failed = False
+    with write_budget.background(
+        base, "import-batch", write_budget.PRIO_INGEST, timeout=60,
+    ), KnowledgeDB(base) as shared_db, shared_db.batch():
+        for i, plan in enumerate(parts):
+            if not may_write(budget) or budget.out_of_time(margin=3.0):
+                result.stopped = budget.stop_reason() or "time limit reached"
+                result.skipped.append(f"{len(parts) - i} part note(s) not written ({result.stopped})")
+                break
+            try:
+                action = _write(plan, base, {**meta_base, "part_of": overview.permalink},
+                                budget, shared_db)
+            except Cancelled:
+                result.stopped = "cancelled"
+                break
+            except Exception as e:  # one bad note must not stop the others
+                batch_index_failed = True
+                logger.warning("Ingest: could not write note %s: %s", plan.permalink, e)
+                result.errors.append(f"could not write {plan.title}: {e}")
+                continue
+            if action == "kept":
+                kept += 1
+            budget.notes_written += 1
+            written_parts.append(plan)
+            result.notes.append(NoteRef(plan.permalink, plan.title, action))
+            info = done.setdefault(plan.key, {"perm": plan.permalink, "heading": plan.heading,
+                                              "parts": 0})
+            info["parts"] = int(info.get("parts") or 0) + 1  # type: ignore[call-overload]
+            budget.report(f"{len(written_parts)}/{len(parts)} notes written")
+    _mark_pending_batch_complete(batch_marker)
+    if not batch_index_failed:
+        _clear_pending_marker(batch_marker)
     if kept:
         result.skipped.append(f"kept your edits: {kept} notes were changed by hand and were not "
                               "updated (move or delete them to get the new version)")

@@ -81,6 +81,7 @@ def test_two_identical_results_are_still_allowed(cfg, monkeypatch):
 
 def test_job_create_does_not_duplicate(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     from myclaw.jobs import store
     from myclaw.tools import jobs as jt
 
@@ -93,3 +94,81 @@ def test_job_create_does_not_duplicate(tmp_path, monkeypatch):
     assert len(store.list_jobs()) == 1
     c = jt.job_create("Research n8n", "Research another repository")
     assert c.startswith("Created job") and len(store.list_jobs()) == 2
+
+
+def test_job_tool_attempts_are_persisted(monkeypatch):
+    from myclaw.agent_internals import tool_executor
+    from myclaw.jobs import store
+    from myclaw.tools import TOOLS
+
+    calls = [
+        {"id": "ok", "type": "function", "function": {"name": "probe_tool", "arguments": {},
+                                                   "arguments_str": "{}"}},
+        {"id": "unknown", "type": "function", "function": {"name": "missing_tool", "arguments": {},
+                                                       "arguments_str": "{}"}},
+        {"id": "off", "type": "function", "function": {"name": "disabled_tool", "arguments": {},
+                                                   "arguments_str": "{}"}},
+        {"id": "repeat", "type": "function", "function": {"name": "repeat_tool", "arguments": {},
+                                                      "arguments_str": "{}"}},
+    ]
+    events = []
+    repeats = {tool_executor._signature(calls[-1]): ("same", 2)}
+    monkeypatch.setitem(TOOLS, "probe_tool", {"func": lambda: "worked", "desc": "probe"})
+    monkeypatch.setattr("myclaw.customize.hidden_tools", lambda name: {"disabled_tool"})
+    monkeypatch.setattr(store, "record_tool_event", lambda **event: events.append(event) or len(events))
+
+    run_token = store.CURRENT_RUN_ID.set(42)
+    job_token = store.CURRENT_JOB_ID.set("job-42")
+    try:
+        asyncio.run(tool_executor.execute_tools(
+            _agent(iter([("done", None)]), []), calls, [{"role": "user", "content": "x"}],
+            "x", "u", _Mem(), 0, True, _repeats=repeats,
+        ))
+    finally:
+        store.CURRENT_JOB_ID.reset(job_token)
+        store.CURRENT_RUN_ID.reset(run_token)
+
+    assert {(e["tool"], e["ok"]) for e in events} == {
+        ("probe_tool", True), ("missing_tool", False),
+        ("disabled_tool", False), ("repeat_tool", False),
+    }
+    assert all(e["run_id"] == 42 and e["job_id"] == "job-42" for e in events)
+
+
+def test_non_job_tool_attempts_are_persisted_and_anomalies_reviewed(monkeypatch):
+    from myclaw.agent_internals import tool_executor
+    from myclaw.jobs import medic, store
+    from myclaw.tools import TOOLS
+
+    calls = [
+        {"id": "chat", "type": "function", "function": {
+            "name": "probe_tool", "arguments": {}, "arguments_str": "{}",
+        }},
+    ]
+    recorded = []
+    saved_reviews = []
+    monkeypatch.setitem(
+        TOOLS, "probe_tool", {"func": lambda: (_ for _ in ()).throw(RuntimeError("broken")), "desc": "probe"}
+    )
+    monkeypatch.setattr(
+        store, "record_tool_event",
+        lambda **event: recorded.append(event) or 7,
+    )
+
+    async def review(event_id):
+        assert event_id == 7
+        return {"event_id": 7, "severity": "error", "findings": ["failed"], "proposal_only": True}
+
+    monkeypatch.setattr(medic, "review_tool_event", review)
+    monkeypatch.setattr(
+        store, "save_medic_review",
+        lambda *args: saved_reviews.append(args) or {"id": 1},
+    )
+
+    asyncio.run(tool_executor.execute_tools(
+        _agent(iter([("done", None)]), []), calls, [{"role": "user", "content": "x"}],
+        "x", "u", _Mem(), 0, True,
+    ))
+
+    assert len(recorded) == 1 and recorded[0]["run_id"] is None
+    assert saved_reviews and saved_reviews[0][0] is None

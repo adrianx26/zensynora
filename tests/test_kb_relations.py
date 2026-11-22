@@ -135,7 +135,7 @@ def test_ai_proposes_explicit_links_to_existing_notes(home, monkeypatch):  # noq
     assert relations.apply("default", out["proposals"])["applied"] == 1 and len(read_note(app).relations) == 1  # no twin
 
 
-# ── 2026-11-12 (independent review): link edits change only the link line ────
+# ?? 2026-11-12 (independent review): link edits change only the link line ????
 RAW = """---
 title: Win path
 name: custom-name

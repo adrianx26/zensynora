@@ -11,11 +11,18 @@ interface Health {
   ok: boolean;
   warnings: Warning[];
   index: { files: number; indexed: number; missing: number; extra: number; changed: number };
-  embeddings: { enabled: boolean; waiting: number; notes: number };
+  embeddings: {
+    enabled: boolean; waiting: number; notes: number; truncated?: boolean;
+    covered?: number; total?: number; coverage_percent?: number;
+  };
   distill: { enabled: boolean; pending: number; running: boolean };
   conflicts: { open: number };
   links: { pending: number };
-  watcher: { enabled: boolean; running: boolean; mode: string | null; last_reindex: number | null; watchfiles_installed: boolean; poll_seconds: number };
+  watcher: {
+    enabled: boolean; running: boolean; mode: string | null;
+    last_reindex: number | null; watchfiles_installed: boolean; poll_seconds: number;
+    truncated?: boolean; covered?: number; total?: number; coverage_percent?: number;
+  };
 }
 
 const POLL_MS = 15000;
@@ -65,6 +72,16 @@ const KnowledgeHealth: React.FC<{ base: string; reloadKey: unknown; onReindexed:
     ? <span key="i" style={{ color: '#d29922' }} title="Files and search index differ — press ↻ Re-index">⚠ index: {drift} note(s) out of date</span>
     : <span key="i" className="muted" title={`${h.index?.files ?? 0} files, ${h.index?.indexed ?? 0} indexed`}>index in sync</span>);
   if (h.embeddings?.enabled && h.embeddings.waiting) parts.push(<span key="e">{h.embeddings.waiting} waiting for embeddings</span>);
+  if (w.truncated) parts.push(
+    <span key="wc" style={{ color: '#d29922' }}>
+      live sync covers {w.covered ?? 0}/{w.total ?? 0} files
+    </span>
+  );
+  if (h.embeddings?.truncated) parts.push(
+    <span key="ec" style={{ color: '#d29922' }}>
+      semantic search covers {h.embeddings.covered ?? 0}/{h.embeddings.total ?? 0} chunks
+    </span>
+  );
   if (h.distill?.enabled && h.distill.pending) parts.push(<span key="d">{h.distill.pending} to distil{h.distill.running ? ' (running)' : ''}</span>);
 
   return (

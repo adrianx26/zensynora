@@ -845,6 +845,7 @@ Type=simple
 User=$USER
 WorkingDirectory=$SERVICE_DIR
 Environment="PATH=$SERVICE_VENV/bin:/usr/local/bin:/usr/bin:/bin"
+EnvironmentFile=-$SCRIPT_DIR/.env
 ExecStart=$CLI_PATH gateway
 Restart=on-failure
 RestartSec=5

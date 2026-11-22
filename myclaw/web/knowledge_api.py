@@ -388,6 +388,76 @@ class NewNote(BaseModel):
     content: str = ""
 
 
+def _validate_note_content(
+    content: str,
+    *,
+    fallback_title: str,
+    fallback_file: Path,
+    tags: list[str] | None = None,
+    title: str | None = None,
+):
+    """Validate API note input while leaving valid raw Markdown untouched."""
+    from myclaw.knowledge.parser import FRONTMATTER_PATTERN, parse_note_text
+    from myclaw.knowledge.validation import (
+        MAX_CONTENT_BYTES,
+        NoteValidationError,
+        normalize_note_input,
+    )
+
+    if len(content.encode("utf-8")) > MAX_CONTENT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"content is too large ({len(content.encode('utf-8'))} UTF-8 bytes); "
+                f"the maximum is {MAX_CONTENT_BYTES}. Shorten content and try again."
+            ),
+        )
+
+    text = content.lstrip()
+    raw_note = bool(re.match(r"^---[ \t]*(?:\r?\n|\Z)", text))
+    if raw_note and not FRONTMATTER_PATTERN.match(text):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "The raw note has malformed frontmatter. Start it with '---', "
+                "then put a closing '---' on its own line."
+            ),
+        )
+    if raw_note:
+        import yaml
+
+        try:
+            frontmatter = yaml.safe_load(FRONTMATTER_PATTERN.match(text).group(1))
+        except yaml.YAMLError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "The raw note has malformed YAML frontmatter. Check quoted values, "
+                    "lists, and indentation, then try again."
+                ),
+            ) from exc
+        if frontmatter is not None and not isinstance(frontmatter, dict):
+            raise HTTPException(
+                status_code=400,
+                detail="The raw note's frontmatter must be a mapping of field names to values.",
+            )
+
+    parsed = parse_note_text(content, fallback_file)
+    combined_tags = list(parsed.tags if raw_note else [])
+    combined_tags.extend(tags or [])
+    try:
+        return normalize_note_input(
+            title=title if title is not None else (parsed.title if raw_note else fallback_title),
+            content=content,
+            tags=combined_tags,
+            observations=parsed.observations,
+            relations=parsed.relations,
+            strict=True,
+        ), raw_note
+    except NoteValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.post("/api/knowledge/note", dependencies=guard)
 async def create_note(req: NewNote, base: str | None = None):
     from myclaw.knowledge.storage import write_note
@@ -398,14 +468,28 @@ async def create_note(req: NewNote, base: str | None = None):
         raise HTTPException(status_code=400, detail="Give the note a name (letters or digits).")
     if (_dir(b) / f"{slug}.md").exists():
         raise HTTPException(status_code=409, detail=f"A note called '{slug}' already exists.")
-    tags = [t.strip().lstrip("#") for t in req.tags if t.strip()]
-    content = req.content.strip()
-    if content and not content.startswith("---"):
-        title = req.title.strip() or req.name.strip()
-        tag_line = f"tags: [{', '.join(json.dumps(t) for t in tags)}]\n" if tags else ""
+    validated, raw_note = _validate_note_content(
+        req.content,
+        fallback_title=req.name.strip(),
+        fallback_file=_dir(b) / f"{slug}.md",
+        tags=req.tags,
+        title=req.title.strip() or None,
+    )
+    content = req.content if raw_note else validated.content
+    if not raw_note:
+        title = validated.title
+        tag_line = f"tags: [{', '.join(json.dumps(t) for t in validated.tags)}]\n" if validated.tags else ""
         content = f"---\ntitle: {json.dumps(title)}\npermalink: {slug}\n{tag_line}---\n\n# {title}\n\n{content}\n"
-    permalink = await asyncio.to_thread(write_note, slug, req.title.strip() or req.name.strip(),
-                                        None, None, tags, b, content or None)
+    permalink = await asyncio.to_thread(
+        write_note,
+        slug,
+        validated.title if req.title.strip() else (None if raw_note else validated.title),
+        None,
+        None,
+        validated.tags if (req.tags and raw_note) else (None if raw_note else validated.tags),
+        b,
+        content,
+    )
     return await asyncio.to_thread(_note_detail, b, permalink)
 
 
@@ -417,18 +501,22 @@ class NoteContent(BaseModel):
 async def save_note(permalink: str, req: NoteContent, base: str | None = None):
     b = _base(base)
     f = _note_file(b, permalink)
-    if not req.content.strip():
-        raise HTTPException(status_code=400, detail="The note is empty — use Delete to remove it.")
-    if len(req.content) > 1_000_000:
-        raise HTTPException(status_code=413, detail="The note is too large (1 MB max).")
+    _validate_note_content(
+        req.content,
+        fallback_title=f.stem,
+        fallback_file=f,
+    )
+    from myclaw.knowledge.storage import _clear_pending_marker, _mark_pending_index
     from myclaw.knowledge.watch import remember_self_write
 
     # 2026-10-25 (KB phase 6): not a change by hand; 2026-10-27 (review): the
     # exact bytes written (binary — no newline translation on Windows)
     data = req.content.encode("utf-8")
     remember_self_write(f, data)
+    pending_marker = _mark_pending_index(f, _dir(b), b, req.content)
     f.write_bytes(data)
     await asyncio.to_thread(_resync, b, f)
+    _clear_pending_marker(pending_marker)
     return await asyncio.to_thread(_note_detail, b, permalink)
 
 
@@ -467,6 +555,11 @@ async def search(q: str, base: str | None = None, limit: int = 30, mode: str = "
     if not q:
         return {"results": [], "mode": "parallel-hybrid", "note": None, "partial": False,
                 "strategies": {}, "strategies_by_note": {}}
+    from myclaw.knowledge.health import db_path
+    if not db_path(b).exists():
+        from myclaw.knowledge.sync import sync_knowledge
+
+        await asyncio.to_thread(sync_knowledge, b)
     info: dict[str, Any] = {}
     try:
         notes = await asyncio.to_thread(

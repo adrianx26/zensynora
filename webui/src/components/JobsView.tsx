@@ -4,7 +4,7 @@
 // is a run with output, duration and model; a run can be scored 0-10 by the
 // main LLM against the job's success criteria, and a benchmark runs the same
 // prompt on several models side by side.
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAutoClear } from '../notice';
 import {
   ago, api, fmtTime, type AgentInfo, type Channel, type Diagnosis, type Job, type JobRun, type ModelChoice, type ModelsOverview,
@@ -16,6 +16,16 @@ interface Props {
 }
 
 type Draft = Partial<Job> & { name: string; prompt: string };
+type JobsLayout = 'compact' | 'table';
+interface JobAIAnswer {
+  answer: string;
+  suggested_agent: string;
+  reason: string;
+  confidence: number;
+  proposed_job_changes?: Partial<Job>;
+  by?: string;
+}
+interface AITarget { jobId: string; runId?: number }
 
 const EMPTY: Draft = {
   name: '', prompt: '', agent: 'default', schedule: 'manual', every_minutes: 60, at_time: '09:00', days: 'mon,tue,wed,thu,fri',
@@ -121,6 +131,12 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
   const [tab, setTab] = useState<'runs' | 'bench'>('runs');
   const [medicBusy, setMedicBusy] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null); // job id waiting for “Delete?” (2026-10-27)
+  const [layout, setLayout] = useState<JobsLayout>('compact');
+  const [aiTarget, setAITarget] = useState<AITarget | null>(null);
+  const [aiQuestion, setAIQuestion] = useState('');
+  const [aiAnswer, setAIAnswer] = useState<JobAIAnswer | null>(null);
+  const [aiBusy, setAIBusy] = useState(false);
+  const aiRequest = useRef(0);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -204,6 +220,33 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
     <button className="ghost-btn danger" disabled={j.running} onClick={() => setConfirmDelete(j.id)}
       title={j.running ? 'The job is running — wait for it to finish (or cancel the run) before deleting it' : 'Delete this job and its run history'}>🗑 Delete</button>
   );
+  const askAI = async (jobId: string, runId?: number, question = '') => {
+    const request = ++aiRequest.current;
+    setAITarget({ jobId, runId });
+    setSelected(jobId);
+    setAIQuestion(question);
+    setAIAnswer(null);
+    setAIBusy(true);
+    setNotice(null);
+    try {
+      const answer = await api<JobAIAnswer>(`/api/jobs/${jobId}/ai-ask`, {
+        method: 'POST',
+        body: JSON.stringify({ ...(runId ? { run_id: runId } : {}), question }),
+      });
+      if (request === aiRequest.current) setAIAnswer(answer);
+    } catch (e) {
+      if (request === aiRequest.current) {
+        setNotice({ kind: 'error', text: (e as Error).message });
+      }
+    } finally {
+      if (request === aiRequest.current) setAIBusy(false);
+    }
+  };
+  const applySuggestedAgent = () => aiTarget && aiAnswer && agents.some(a => a.name === aiAnswer.suggested_agent) &&
+    act(() => api(`/api/jobs/${aiTarget.jobId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ agent: aiAnswer.suggested_agent }),
+    }), `Job now uses @${aiAnswer.suggested_agent}.`);
   const evaluate = (r: JobRun) => act(() => api(`/api/jobs/runs/${r.id}/evaluate`, { method: 'POST', body: '{}' }), 'Evaluated with the main model.');
   const askMedic = async (r: JobRun) => {
     setOpenRun(r.id);
@@ -328,11 +371,62 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
         <div className="settings-card">
           <div className="card-head">
             <h3>Jobs</h3>
-            <button className="primary-btn" onClick={() => { setDraft({ ...EMPTY }); setEditingId(null); }}>+ New job</button>
+            <div className="row-actions">
+              <div className="view-toggle" role="group" aria-label="Jobs layout">
+                <button className={layout === 'compact' ? 'active' : ''} aria-pressed={layout === 'compact'}
+                  onClick={() => setLayout('compact')} title="Compact grid">▦ <span>Compact</span></button>
+                <button className={layout === 'table' ? 'active' : ''} aria-pressed={layout === 'table'}
+                  onClick={() => setLayout('table')} title="Table view">☷ <span>Table</span></button>
+              </div>
+              <button className="primary-btn" onClick={() => { setDraft({ ...EMPTY }); setEditingId(null); }}>+ New job</button>
+            </div>
           </div>
           <p className="muted">Tasks your agents run on a schedule or when you click Run. Scheduled jobs run while <code>zensynora webui</code> is running.</p>
           {jobs.length === 0 && <div className="muted">No jobs yet — create one or start from a template.</div>}
-          {jobs.length > 0 && (
+          {jobs.length > 0 && layout === 'compact' && (
+            <div className="jobs-grid" data-view="compact">
+              {jobs.map(j => (
+                <article key={j.id} className={`job-tile ${selected === j.id ? 'selected' : ''}`}
+                  onClick={() => setSelected(j.id)}>
+                  <div className="job-tile-head">
+                    <div>
+                      <b title={j.name}>{j.name}</b>
+                      <div className="job-tile-sub">@{j.agent} · {scheduleText(j)}</div>
+                    </div>
+                    <span className="job-tile-status" title={j.running ? 'Running' : j.last_status || 'Not run'}>
+                      {j.running ? '⏳' : STATUS_ICON[j.last_status] || '○'}
+                    </span>
+                  </div>
+                  <div className="job-tile-meta">
+                    {!j.enabled && <span className="badge">paused</span>}
+                    {j.stats?.success_rate != null && <span>{Math.round(j.stats.success_rate * 100)}% success</span>}
+                    <ScoreBadge score={j.stats?.avg_score} />
+                  </div>
+                  <div className="job-tile-actions row-actions" onClick={e => e.stopPropagation()}>
+                    <button className="icon-btn" disabled={j.running} onClick={() => runNow(j.id)}
+                      aria-label={`Run ${j.name}`} title="Run now">▶</button>
+                    <button className="icon-btn" onClick={() => toggle(j)}
+                      aria-label={`${j.enabled ? 'Pause' : 'Resume'} ${j.name}`} title={j.enabled ? 'Pause' : 'Resume'}>
+                      {j.enabled ? '⏸' : '▶'}
+                    </button>
+                    <button className="icon-btn" onClick={() => { setDraft({ ...j }); setEditingId(j.id); }}
+                      aria-label={`Edit ${j.name}`} title="Edit">✎</button>
+                    <button className="icon-btn danger" disabled={j.running} onClick={() => setConfirmDelete(j.id)}
+                      aria-label={`Delete ${j.name}`} title="Delete">🗑</button>
+                    <button className="icon-btn ai" onClick={() => void askAI(j.id)}
+                      aria-label={`AI Ask about ${j.name}`} title="AI Ask">✦</button>
+                    {confirmDelete === j.id && (
+                      <span className="inline-confirm" role="alertdialog" aria-label={`Delete job ${j.name}`}>
+                        <button className="ghost-btn danger" onClick={() => remove(j)}>Delete?</button>
+                        <button className="ghost-btn" onClick={() => setConfirmDelete(null)}>Cancel</button>
+                      </span>
+                    )}
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+          {jobs.length > 0 && layout === 'table' && (
             <table className="data-table">
               <thead><tr><th>Job</th><th>Agent</th><th>Schedule</th><th>Last run</th><th>Next run</th><th>Success</th><th>Score</th><th /></tr></thead>
               <tbody>
@@ -349,6 +443,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                       <button className="ghost-btn" disabled={j.running} onClick={() => runNow(j.id)}>▶ Run</button>
                       <button className="ghost-btn" onClick={() => toggle(j)}>{j.enabled ? 'Pause' : 'Resume'}</button>
                       <button className="ghost-btn" onClick={() => { setDraft({ ...j }); setEditingId(j.id); }}>Edit</button>
+                      <button className="ghost-btn" onClick={() => void askAI(j.id)} title="Ask AI about this job">✦ AI Ask</button>
                       {deleteButtons(j)}
                     </td>
                   </tr>
@@ -357,6 +452,58 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
             </table>
           )}
         </div>
+
+        {aiTarget && (
+          <div className="settings-card job-ai-panel">
+            <div className="card-head">
+              <h3>✦ AI Ask{aiTarget.runId ? ` · run #${aiTarget.runId}` : ` · ${jobs.find(j => j.id === aiTarget.jobId)?.name || 'job'}`}</h3>
+              <button className="icon-btn" onClick={() => {
+                aiRequest.current += 1;
+                setAITarget(null); setAIAnswer(null); setAIBusy(false);
+              }}
+                aria-label="Close AI answer" title="Close">×</button>
+            </div>
+            <div className="field-row">
+              <input className="field-input" value={aiQuestion} maxLength={2000}
+                placeholder="Optional: ask about the job, latest run, or agent choice…"
+                onChange={e => setAIQuestion(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && aiTarget) void askAI(aiTarget.jobId, aiTarget.runId, aiQuestion);
+                }} />
+              <button className="primary-btn" disabled={aiBusy}
+                onClick={() => void askAI(aiTarget.jobId, aiTarget.runId, aiQuestion)}>
+                {aiBusy ? 'Asking…' : 'Ask AI'}
+              </button>
+            </div>
+            {aiAnswer && (
+              <div className="job-ai-answer">
+                <p>{aiAnswer.answer}</p>
+                <div className="job-ai-recommendation">
+                  <strong>@{aiAnswer.suggested_agent}</strong>
+                  <span>{aiAnswer.reason}</span>
+                  <span className="muted small">{Math.round(aiAnswer.confidence * 100)}% confidence
+                    {aiAnswer.by ? ` · ${aiAnswer.by}` : ''}</span>
+                </div>
+                {Object.entries(aiAnswer.proposed_job_changes || {}).length > 0 && (
+                  <div className="job-ai-changes">
+                    <b>Suggested job changes (not applied)</b>
+                    {Object.entries(aiAnswer.proposed_job_changes || {}).map(([key, value]) => (
+                      <div key={key}><span>{FIELD_LABEL[key] || key}</span><span className="pre">{fmtVal(value)}</span></div>
+                    ))}
+                  </div>
+                )}
+                <div className="row-actions">
+                  <button className="primary-btn"
+                    disabled={!agents.some(a => a.name === aiAnswer.suggested_agent)}
+                    onClick={() => void applySuggestedAgent()}>
+                    Use @{aiAnswer.suggested_agent}
+                  </button>
+                  <span className="muted small">Nothing is changed until you click this button.</span>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {editor}
 
@@ -393,6 +540,8 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                         {r.status === 'running'
                           ? <button className="ghost-btn" onClick={() => cancel(r)}>Stop</button>
                           : <button className="ghost-btn" onClick={() => evaluate(r)}>{r.score == null ? 'Evaluate' : 'Re-evaluate'}</button>}
+                        <button className="icon-btn ai" onClick={() => void askAI(job.id, r.id)}
+                          aria-label={`AI Ask about run ${r.id}`} title="AI Ask about this run">✦</button>
                         {['error', 'timeout', 'interrupted'].includes(r.status) && (
                           <button className="ghost-btn" disabled={medicBusy === r.id} onClick={() => askMedic(r)}
                             title="The medic finds why this run failed and suggests a fix">
@@ -444,7 +593,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                 )}
                 {benchRuns.length > 0 && (
                   <table className="data-table">
-                    <thead><tr><th>When</th><th>Model</th><th>Status</th><th>Time</th><th>Score</th><th>Answer</th></tr></thead>
+                    <thead><tr><th>When</th><th>Model</th><th>Status</th><th>Time</th><th>Score</th><th>Answer</th><th>AI</th></tr></thead>
                     <tbody>
                       {benchRuns.map(r => (
                         <tr key={r.id} onClick={() => setOpenRun(openRun === r.id ? null : r.id)}>
@@ -454,6 +603,10 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                           <td>{r.ms != null ? `${(r.ms / 1000).toFixed(1)} s` : '…'}</td>
                           <td><ScoreBadge score={r.score} /></td>
                           <td className="clip">{openRun === r.id ? <pre>{r.output || r.error}</pre> : (r.output || r.error).slice(0, 90)}</td>
+                          <td onClick={e => e.stopPropagation()}>
+                            <button className="icon-btn ai" onClick={() => void askAI(job.id, r.id)}
+                              aria-label={`AI Ask about benchmark run ${r.id}`} title="AI Ask about this run">✦</button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

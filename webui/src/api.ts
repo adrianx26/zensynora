@@ -27,6 +27,20 @@ export function setAdminKey(key: string) {
   } catch { /* ignore */ }
 }
 
+export function authHeaders(contentType = false): Record<string, string> {
+  const headers: Record<string, string> = { 'X-ZenSynora-UI': '1' };
+  if (contentType) headers['Content-Type'] = 'application/json';
+  const key = getAdminKey();
+  if (key) headers['X-API-Key'] = key;
+  return headers;
+}
+
+export async function websocketUrl(path: string): Promise<string> {
+  const { ticket } = await api<{ ticket: string }>('/api/ws-ticket', { method: 'POST' });
+  const separator = path.includes('?') ? '&' : '?';
+  return `${getWsBase()}${path}${separator}ticket=${encodeURIComponent(ticket)}`;
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -37,9 +51,7 @@ export class ApiError extends Error {
 
 export async function api<T = unknown>(path: string, init: RequestInit = {}): Promise<T> {
   // 2026-10-27: marks requests from this UI; rule and code approvals need it.
-  const headers: Record<string, string> = { 'Content-Type': 'application/json', 'X-ZenSynora-UI': '1' };
-  const key = getAdminKey();
-  if (key) headers['X-API-Key'] = key;
+  const headers = authHeaders(true);
   const res = await fetch(`${getApiBase()}${path}`, {
     ...init,
     headers: { ...headers, ...(init.headers as Record<string, string> | undefined) },

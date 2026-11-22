@@ -28,6 +28,7 @@ from ..knowledge import (
 # 2026-10-23 (KB phase 0): note text, backlinks and tag search for the tools.
 from ..knowledge.graph import get_backlinks, note_snippet, note_text, shorten_text
 from ..knowledge.storage import get_note_by_tag
+from ..knowledge.validation import NoteValidationError, normalize_note_input
 
 # 2026-10-23 (KB phase 0): how much text the tools show.
 READ_TEXT_CHARS = 6000
@@ -69,54 +70,80 @@ def write_to_knowledge(
         # Parse observations
         obs_list = []
         if observations:
-            for line in observations.strip().split("\n"):
-                if "|" in line:
-                    category, obs_content = line.split("|", 1)
-                    # 2026-10-24 (KB phase 2): optional third field = source, only
-                    # when marked ("source: …", a URL, "tool …", "chat …") — a fact
-                    # may contain pipes ("ps aux | grep python").
-                    source = None
-                    if "|" in obs_content:
-                        head, tail = obs_content.rsplit("|", 1)
-                        mark = " ".join(tail.split())
-                        if mark.lower().startswith("source:"):
-                            source = mark[len("source:"):].strip() or None
-                        elif mark.lower().startswith(("http://", "https://", "tool ", "chat ")):
-                            source = mark
-                        if source:
-                            obs_content = head
-                    obs_list.append(Observation(
-                        category=category.strip(),
-                        content=obs_content.strip(),
-                        tags=[],
-                        provenance_path=source,
-                        captured_at=obs_captured,
-                    ))
+            for line_number, raw_line in enumerate(observations.strip().split("\n"), 1):
+                line = raw_line.strip()
+                if not line:
+                    continue
+                if "|" not in line:
+                    raise NoteValidationError(
+                        f"observation line {line_number} is missing ' | '. "
+                        "Use 'category | fact text' for every fact."
+                    )
+                category, obs_content = line.split("|", 1)
+                # 2026-10-24 (KB phase 2): optional third field = source, only
+                # when marked ("source: …", a URL, "tool …", "chat …") — a fact
+                # may contain pipes ("ps aux | grep python").
+                source = None
+                if "|" in obs_content:
+                    head, tail = obs_content.rsplit("|", 1)
+                    mark = " ".join(tail.split())
+                    if mark.lower().startswith("source:"):
+                        source = mark[len("source:"):].strip() or None
+                    elif mark.lower().startswith(("http://", "https://", "tool ", "chat ")):
+                        source = mark
+                    if source:
+                        obs_content = head
+                obs_list.append(Observation(
+                    category=category.strip(),
+                    content=obs_content.strip(),
+                    tags=[],
+                    provenance_path=source,
+                    captured_at=obs_captured,
+                ))
 
         # Parse relations
         rel_list = []
         if relations:
-            for line in relations.strip().split("\n"):
-                if "|" in line:
-                    rel_type, target = line.split("|", 1)
-                    rel_list.append(Relation(
-                        relation_type=rel_type.strip(),
-                        target=target.strip()
-                    ))
+            for line_number, raw_line in enumerate(relations.strip().split("\n"), 1):
+                line = raw_line.strip()
+                if not line:
+                    continue
+                if "|" not in line:
+                    raise NoteValidationError(
+                        f"relation line {line_number} is missing ' | '. "
+                        "Use 'relation | Other note title' for every relation."
+                    )
+                rel_type, target = line.split("|", 1)
+                rel_list.append(Relation(
+                    relation_type=rel_type.strip(),
+                    target=target.strip()
+                ))
+
+        note = normalize_note_input(
+            title=title,
+            content=content,
+            tags=tag_list,
+            observations=obs_list,
+            relations=rel_list,
+            strict=True,
+        )
 
         # Create note
         permalink = write_note(
-            name=title,
-            title=title,
-            content=content,
-            observations=obs_list,
-            relations=rel_list,
-            tags=tag_list,
+            name=note.title,
+            title=note.title,
+            content=note.content,
+            observations=note.observations,
+            relations=note.relations,
+            tags=note.tags,
             user_id=user_id,
             origin="agent",  # 2026-10-24 (KB phase 4 review): "I …" here is the agent
         )
 
-        return f"✅ Knowledge note created: [{title}](memory://{permalink})"
+        return f"✅ Knowledge note created: [{note.title}](memory://{permalink})"
+    except NoteValidationError as e:
+        logger.info("Rejected invalid knowledge input: %s", e)
+        return f"Error writing knowledge: {e}"
     except Exception as e:
         logger.error(f"Failed to write knowledge: {e}")
         return f"Error writing knowledge: {e}"

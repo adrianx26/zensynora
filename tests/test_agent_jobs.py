@@ -116,6 +116,112 @@ def test_agent_runs_a_job_and_reads_the_result(env):
     assert store.get_job(job["id"])["last_status"] == "ok"
 
 
+def test_job_execution_sets_run_context_and_reviews_once(env, monkeypatch):
+    from myclaw.jobs import medic, store
+
+    agents, _, runner = env
+    job = store.create_job({"name": "Context", "prompt": "check"})
+    observed = []
+    reviews = []
+
+    async def think(prompt, user_id="default"):
+        observed.append((store.CURRENT_RUN_ID.get(), store.CURRENT_JOB_ID.get()))
+        return "done"
+
+    async def review(run_id):
+        reviews.append(run_id)
+
+    monkeypatch.setattr(agents["default"], "think", think)
+    monkeypatch.setattr(medic, "review_run", review)
+
+    async def scenario():
+        first = await runner.run_job(job["id"])
+        assert first is not None
+        await asyncio.sleep(0)
+        runner._defer_medic_review(job, first)
+        await asyncio.sleep(0)
+        return first
+
+    run_id = asyncio.run(scenario())
+    assert observed == [(run_id, job["id"])]
+    assert reviews == [run_id]
+    assert store.CURRENT_RUN_ID.get() is None
+    assert store.CURRENT_JOB_ID.get() is None
+
+
+def test_every_retry_run_is_reviewed_without_waiting(env, monkeypatch):
+    from myclaw.jobs import medic, store
+
+    _, _, runner = env
+    job = store.create_job({"name": "Retry", "prompt": "try", "retries": 1})
+    statuses = iter(("error", "ok"))
+    reviews = []
+    waiting = asyncio.Event()
+
+    async def execute(_job, run_id, agent=None, kind="run"):
+        await asyncio.to_thread(store.finish_run, run_id, next(statuses))
+        return (await asyncio.to_thread(store.get_run, run_id))["status"]
+
+    async def review(run_id):
+        reviews.append(run_id)
+        await waiting.wait()
+
+    monkeypatch.setattr(runner, "_execute", execute)
+    monkeypatch.setattr(medic, "review_run", review)
+
+    async def scenario():
+        returned = await runner.run_job(job["id"])
+        assert returned is not None
+        await asyncio.sleep(0)
+        return returned
+
+    last = asyncio.run(scenario())
+    runs = store.list_runs(job["id"])
+    assert [r["status"] for r in reversed(runs)] == ["error", "ok"]
+    assert set(reviews) == {r["id"] for r in runs}
+    assert last == runs[0]["id"]
+
+
+def test_running_job_ids_include_benchmarks(env, monkeypatch):
+    import myclaw.agent as agent_mod
+    from myclaw.jobs import store
+
+    agents, _, runner = env
+    job = store.create_job({"name": "Bench active", "prompt": "check"})
+    gate = asyncio.Event()
+
+    class FakeAgent:
+        model = "m"
+        _provider_name = "p"
+        _custom_system_prompt = None
+
+        def __init__(self, *args, **kwargs):
+            self.name = kwargs.get("name", "bench")
+
+        async def close(self):
+            pass
+
+    async def execute(_job, run_id, agent=None, kind="run"):
+        await gate.wait()
+        store.finish_run(run_id, "ok", "done")
+        return "ok"
+
+    monkeypatch.setattr(agent_mod, "Agent", FakeAgent)
+    monkeypatch.setattr(runner, "_execute", execute)
+
+    async def scenario():
+        task = asyncio.create_task(runner.benchmark(
+            job["id"], [{"provider": "p", "model": "m"}], evaluate=False
+        ))
+        await asyncio.sleep(0)
+        assert job["id"] in runner.running_job_ids()
+        gate.set()
+        await task
+        assert job["id"] not in runner.running_job_ids()
+
+    asyncio.run(scenario())
+
+
 def test_job_run_tool_starts_in_background(env, monkeypatch):
     from myclaw.tools.jobs import job_create, job_run
 

@@ -243,7 +243,7 @@ def test_background_sync_and_embeddings_hold_the_slot(home, monkeypatch):
         return real(key, who, prio, timeout)
 
     monkeypatch.setattr(budget, "acquire", spy)
-    (_kdir(home) / "hand.md").write_text(_note("Hand", "by hand"))
+    (_kdir(home) / "hand.md").write_text(_note("Hand", "by hand"), encoding="utf-8")
     assert background_sync("default")["added"] == 1
     assert seen == ["background sync"]
 
@@ -286,14 +286,14 @@ def test_watcher_reindexes_create_edit_move_delete(home, watcher):
     from myclaw.knowledge.db import KnowledgeDB
 
     k = _kdir(home)
-    (k / "car.md").write_text(_note("Car", "red automobile", links=["Hub", "Garage"]))
+    (k / "car.md").write_text(_note("Car", "red automobile", links=["Hub", "Garage"]), encoding="utf-8")
     assert watcher.scan() == 1
     st = watcher.flush(force=True)["default"]
     assert st["added"] == 1 and _entity("car") is not None
     # only that file was handed over (plus unknown paths found by the sync itself)
     assert watcher.calls[-1] == ("default", [os.path.normpath(str(k / "car.md"))])
 
-    (k / "car.md").write_text(_note("Car", "blue automobile now", links=["Hub", "Garage"]))
+    (k / "car.md").write_text(_note("Car", "blue automobile now", links=["Hub", "Garage"]), encoding="utf-8")
     _bump(k / "car.md")
     assert watcher.scan() == 1 and watcher.flush(force=True)["default"]["updated"] == 1
     with KnowledgeDB("default") as db:
@@ -307,7 +307,7 @@ def test_watcher_reindexes_create_edit_move_delete(home, watcher):
     e = _entity("car")
     assert e.id == eid and e.file_path.endswith(os.path.join("cars", "car.md"))
 
-    (k / "garage.md").write_text(_note("Garage", "where the car sleeps"))
+    (k / "garage.md").write_text(_note("Garage", "where the car sleeps"), encoding="utf-8")
     watcher.scan()
     watcher.flush(force=True)
     with KnowledgeDB("default") as db:
@@ -328,18 +328,18 @@ def test_watcher_ignores_own_writes_trash_and_temp_files(home, watcher):
     delete_note("hub")                              # → .trash (own delete)
     k = _kdir(home)
     (k / ".trash").mkdir(exist_ok=True)
-    (k / ".trash" / "old-20260101.md").write_text(_note("Old"))
+    (k / ".trash" / "old-20260101.md").write_text(_note("Old"), encoding="utf-8")
     for name in ("draft.md.tmp", ".#draft.md", "draft.md~", ".draft.md.swp", "notes.txt", "image.png"):
-        (k / name).write_text("x")
+        (k / name).write_text("x", encoding="utf-8")
     (k / ".obsidian").mkdir()
-    (k / ".obsidian" / "workspace.md").write_text("x")
-    (home / ".myclaw" / "knowledge" / "status.md").write_text("root-level file, not a base")
+    (k / ".obsidian" / "workspace.md").write_text("x", encoding="utf-8")
+    (home / ".myclaw" / "knowledge" / "status.md").write_text("root-level file, not a base", encoding="utf-8")
     assert watcher.scan() == 0
     assert watcher.stats["ignored_self"] >= 2
     assert watcher.flush(force=True) == {} and watcher.calls == []
     # a hand edit of a file ZenSynora wrote is not "own" any more
     f = k / "written-by-zensynora.md"
-    f.write_text(f.read_text() + "\nadded by hand\n")
+    f.write_text(f.read_text(encoding="utf-8") + "\nadded by hand\n", encoding="utf-8")
     _bump(f)
     assert watcher.scan() == 1 and watcher.flush(force=True)["default"]["updated"] == 1
 
@@ -369,11 +369,11 @@ def test_watcher_debounce_and_batching(home, watcher):
 
     k = _kdir(home)
     clock = watcher.fake_clock
-    (k / "a.md").write_text(_note("A"))
+    (k / "a.md").write_text(_note("A"), encoding="utf-8")
     watcher.scan()
     assert not watcher.due()                                   # just changed
     clock.t += watch.DEBOUNCE_SECONDS / 2
-    (k / "b.md").write_text(_note("B"))
+    (k / "b.md").write_text(_note("B"), encoding="utf-8")
     watcher.scan()
     clock.t += watch.DEBOUNCE_SECONDS / 2
     assert not watcher.due()                                   # quiet time restarted
@@ -383,7 +383,7 @@ def test_watcher_debounce_and_batching(home, watcher):
     assert len(watcher.calls) == 1 and len(watcher.calls[0][1]) == 2      # one batch
     # a steady stream of changes is still flushed after MAX_DELAY_SECONDS
     for i in range(10):
-        (k / f"s{i}.md").write_text(_note(f"S{i}"))
+        (k / f"s{i}.md").write_text(_note(f"S{i}"), encoding="utf-8")
         watcher.scan()
         if watcher.due():
             break
@@ -396,7 +396,7 @@ def test_watcher_skips_bases_without_index_and_never_raises(home, watcher):
 
     other = home / ".myclaw" / "knowledge" / "new-base"
     other.mkdir()
-    (other / "a.md").write_text(_note("A"))
+    (other / "a.md").write_text(_note("A"), encoding="utf-8")
     assert watcher.scan() == 1
     assert watcher.flush(force=True) == {}                    # no index database yet
 
@@ -406,6 +406,28 @@ def test_watcher_skips_bases_without_index_and_never_raises(home, watcher):
     w = watch.Watcher(clock=_Clock(), reindex=boom, use_watchfiles=False)
     w.push([_kdir(home) / "x.md"])
     assert w.flush(force=True) == {} and w.stats["errors"] == 1 and "disk on fire" in w.stats["last_error"]
+
+
+def test_watcher_reports_partial_polling_coverage(home, watcher, monkeypatch):
+    from myclaw.knowledge import health, watch
+
+    k = _kdir(home)
+    (k / "a.md").write_text(_note("A"), encoding="utf-8")
+    (k / "b.md").write_text(_note("B"), encoding="utf-8")
+    monkeypatch.setattr(watch, "MAX_FILES", 2)
+    watcher.scan()
+    st = watcher.status()
+    assert (st["covered"], st["total"], st["covered_files"], st["total_files"]) == (2, 3, 2, 3)
+    assert st["truncated"] is True and st["coverage_percent"] == 66.7 and st["warning"]
+
+    warnings = health.warnings_for({"watcher": dict(
+        st, enabled=True, wanted=True, running=True, last_error=None)})
+    assert "watcher-coverage" in {w["id"] for w in warnings}
+
+    watcher.mode = "watchfiles"
+    event_st = watcher.status()
+    assert event_st["covered"] == event_st["total"] == 3
+    assert event_st["truncated"] is False and event_st["warning"] is None
 
 
 def test_no_watcher_thread_while_off(home, monkeypatch):
@@ -466,7 +488,7 @@ def test_live_polling_thread_end_to_end(home, monkeypatch):
     watch.set_options(watch_files=True)
     watch.start_background()
     assert _wait_for(lambda: watch._W.snapshot is not None)
-    (_kdir(home) / "live.md").write_text(_note("Live", "edited in an editor"))
+    (_kdir(home) / "live.md").write_text(_note("Live", "edited in an editor"), encoding="utf-8")
     assert _wait_for(lambda: _entity("live") is not None)
     assert watch.status()["last_reindex"] and watch.status()["running"]
 
@@ -482,7 +504,7 @@ def test_live_watchfiles_end_to_end(home, monkeypatch):
     assert watch.status()["mode"] == "watchfiles"
     time.sleep(0.5)                                         # the watch is set up
     t0 = time.time()
-    (_kdir(home) / "evented.md").write_text(_note("Evented", "saved by Obsidian"))
+    (_kdir(home) / "evented.md").write_text(_note("Evented", "saved by Obsidian"), encoding="utf-8")
     assert _wait_for(lambda: _entity("evented") is not None, 10)
     assert time.time() - t0 < 5
     os.remove(_kdir(home) / "evented.md")
@@ -496,8 +518,8 @@ def test_paths_limited_sync_is_the_normal_sync(home):
 
     write_note("A", content="alpha")
     k = _kdir(home)
-    (k / "b.md").write_text(_note("B", "beta", links=["A"]))
-    (k / "a.md").write_text(_note("A", "alpha changed by hand"))
+    (k / "b.md").write_text(_note("B", "beta", links=["A"]), encoding="utf-8")
+    (k / "a.md").write_text(_note("A", "alpha changed by hand"), encoding="utf-8")
     _bump(k / "a.md")
     st = sync_knowledge("default", paths=[k / "b.md"])     # a.md not listed: not re-read
     assert st["added"] == 1 and st["updated"] == 0
@@ -555,10 +577,10 @@ def test_doctor_index_drift_and_fix(home):
     for t in ("A", "B", "C"):
         write_note(t, content=f"note {t}")
     k = _kdir(home)
-    (k / "a.md").write_text(_note("A", "changed by hand"))
+    (k / "a.md").write_text(_note("A", "changed by hand"), encoding="utf-8")
     _bump(k / "a.md")
     os.remove(k / "b.md")
-    (k / "loose.md").write_text(_note("Loose"))
+    (k / "loose.md").write_text(_note("Loose"), encoding="utf-8")
     r = _check("knowledge_index")
     assert r.status == "warn"
     for part in ("1 not indexed", "1 index entry without a file", "1 changed since indexing"):
@@ -655,10 +677,10 @@ def test_doctor_ingest_errors_and_trash(home, monkeypatch):
     lines = [{"time": old, "base": "default", "source": "https://old.example", "errors": ["old failure"]},
              {"time": now, "base": "default", "source": "https://ok.example", "errors": []},
              "not json"]
-    log.write_text("\n".join(json.dumps(x) if isinstance(x, dict) else x for x in lines) + "\n")
+    log.write_text("\n".join(json.dumps(x) if isinstance(x, dict) else x for x in lines) + "\n", encoding="utf-8")
     r = _check("kb_ingest")
     assert r.status == "ok" and "1 import(s)" in r.detail
-    with open(log, "a") as f:
+    with open(log, "a", encoding="utf-8") as f:
         f.write(json.dumps({"time": now, "base": "default", "source": "https://bad.example",
                             "errors": ["HTTP 404"]}) + "\n")
     r = _check("kb_ingest")
@@ -668,7 +690,7 @@ def test_doctor_ingest_errors_and_trash(home, monkeypatch):
     trash = _kdir(home) / ".trash"
     trash.mkdir()
     for i in range(3):
-        (trash / f"n{i}.md").write_text("x" * 100)
+        (trash / f"n{i}.md").write_text("x" * 100, encoding="utf-8")
     r = _check("kb_trash")
     assert r.status == "ok" and "3 earlier version" in r.detail
     monkeypatch.setattr(health, "TRASH_WARN_FILES", 3)
@@ -681,7 +703,7 @@ def test_doctor_knowledge_off_and_other_bases(home):
 
     write_note("A", content="x")
     write_note("B", content="y", user_id="work")
-    (home / ".myclaw" / "knowledge" / "work" / "loose.md").write_text(_note("Loose"))
+    (home / ".myclaw" / "knowledge" / "work" / "loose.md").write_text(_note("Loose"), encoding="utf-8")
     r = _check("knowledge_index")
     assert r.status == "warn" and "work: " in r.detail and "1 not indexed" in r.detail
 
@@ -709,7 +731,7 @@ def test_doctor_knowledge_checks_are_fast(home):
 
     k = _kdir(home)
     for i in range(2000):
-        (k / f"n{i:04d}.md").write_text(_note(f"N{i}", f"note number {i}", links=[f"N{(i + 1) % 2000}"]))
+        (k / f"n{i:04d}.md").write_text(_note(f"N{i}", f"note number {i}", links=[f"N{(i + 1) % 2000}"]), encoding="utf-8")
     sync_knowledge("default", force=True)
     for i in range(0, 2000, 7):
         _bump(k / f"n{i:04d}.md")                     # time changed, content not: checksums sampled
@@ -740,7 +762,7 @@ def test_health_route(home):
     assert h["ok"] and h["warnings"] == [] and h["index"]["files"] == 1 and h["index"]["indexed"] == 1
     for part in ("links", "conflicts", "embeddings", "distill", "watcher", "ingest", "trash", "writers"):
         assert part in h
-    (_kdir(home) / "loose.md").write_text(_note("Loose"))
+    (_kdir(home) / "loose.md").write_text(_note("Loose"), encoding="utf-8")
     h = c.get("/api/knowledge/health?base=default").json()
     assert not h["ok"] and h["warnings"][0]["id"] == "index" and "sync" in h["warnings"][0]["fix"]
     assert c.get("/api/knowledge/health?base=../etc").status_code == 400
@@ -754,8 +776,20 @@ def test_settings_switch_and_config(home):
     from myclaw.config import KnowledgeConfig
 
     assert KnowledgeConfig().watch_files is False
-    src = (Path(__file__).resolve().parent.parent / "webui" / "src" / "components" / "SettingsView.tsx").read_text()
+    src = (Path(__file__).resolve().parent.parent / "webui" / "src" / "components" / "SettingsView.tsx").read_text(encoding="utf-8")
     assert "knowledge.watch_files" in src
+
+
+def test_legacy_auto_extract_keeps_file_sync_unless_explicitly_disabled():
+    from myclaw.config import KnowledgeConfig
+
+    legacy = KnowledgeConfig.model_validate({"auto_extract": True})
+    assert legacy.watch_files is True
+    assert legacy.watch_files_enabled() is True
+    explicit = KnowledgeConfig.model_validate(
+        {"auto_extract": True, "watch_files": False}
+    )
+    assert explicit.watch_files_enabled() is False
 
 
 # ── review fixes (2026-10-27) ───────────────────────────────────────────────
@@ -767,7 +801,7 @@ def test_review_dotted_folder_moved_or_deleted_rescans(home, watcher):
     k = _kdir(home)
     for i, name in enumerate(("f.v1", "2024.10", "notes.old")):
         (k / name).mkdir()
-        (k / name / f"inside{i}.md").write_text(_note(f"Inside{i}", "x"))
+        (k / name / f"inside{i}.md").write_text(_note(f"Inside{i}", "x"), encoding="utf-8")
     watcher.scan()
     assert watcher.flush(force=True)["default"]["added"] == 3
     eids = {e.permalink: e.id for e in __import__("myclaw.knowledge.db", fromlist=["x"]).KnowledgeDB("default").list_all_entities()}
@@ -799,11 +833,11 @@ def test_review_hash_tilde_backup_named_notes_and_folders_are_watched(home, watc
     k = _kdir(home)
     root = home / ".myclaw" / "knowledge"
     (k / "#inbox").mkdir()
-    (k / "#inbox" / "idea.md").write_text(_note("Idea", "from the inbox"))
-    (k / "~old.md").write_text(_note("Old tilde", "x"))
+    (k / "#inbox" / "idea.md").write_text(_note("Idea", "from the inbox"), encoding="utf-8")
+    (k / "~old.md").write_text(_note("Old tilde", "x"), encoding="utf-8")
     (k / "archive.bak").mkdir()
-    (k / "archive.bak" / "kept.md").write_text(_note("Kept", "x"))
-    (k / "draft.orig.md").write_text(_note("Orig", "x"))
+    (k / "archive.bak" / "kept.md").write_text(_note("Kept", "x"), encoding="utf-8")
+    (k / "draft.orig.md").write_text(_note("Orig", "x"), encoding="utf-8")
     for f in ("#inbox/idea.md", "~old.md", "archive.bak/kept.md", "draft.orig.md"):
         assert classify(k / f, root) == ("default", "note"), f
     indexed = {p.name for p in scan_markdown_files("default")}
@@ -821,7 +855,7 @@ def test_review_deleted_probe_file_does_not_rescan(home, watcher):
 
     k = _kdir(home)
     w = watch.Watcher(clock=_Clock(), use_watchfiles=False)
-    (k / "4913").write_text("")
+    (k / "4913").write_text("", encoding="utf-8")
     assert w.push([k / "4913"]) == 0          # existing non-note file
     os.remove(k / "4913")
     assert w.push([k / "4913"]) == 0 and w.pending == {}
@@ -841,7 +875,7 @@ def test_review_symlinked_root(home, tmp_path):
     try:
         write_note("Hub", content="x")
         f_real = real / "default" / "fresh.md"
-        f_real.write_text(_note("Fresh", "x"))
+        f_real.write_text(_note("Fresh", "x"), encoding="utf-8")
         assert watch.classify(f_real, link) == ("default", "note")
         assert watch.canonical(f_real, link) == str(link / "default" / "fresh.md")
         assert sync_knowledge("default", paths=[f_real])["added"] == 1      # sync maps it too
@@ -868,7 +902,7 @@ def test_review_failed_reindex_is_retried(home, watcher):
         return watch._default_reindex(base, paths)
 
     w = watch.Watcher(clock=clock, reindex=flaky, use_watchfiles=False)
-    (_kdir(home) / "r.md").write_text(_note("R", "x"))
+    (_kdir(home) / "r.md").write_text(_note("R", "x"), encoding="utf-8")
     w.push([_kdir(home) / "r.md"])
     assert w.flush(force=True) == {} and w.pending and w.retries == {"default": 1}
     clock.t += watch.DEBOUNCE_SECONDS + 0.1
@@ -962,7 +996,7 @@ def test_review_doctor_links_ratio_kb_off_fix_message(home, monkeypatch):
     log = home / ".myclaw" / "logs" / "knowledge_ingest.jsonl"
     log.parent.mkdir(parents=True, exist_ok=True)   # writing notes now also writes the activity log
     log.write_text(json.dumps({"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "base": "default",
-                               "source": "x", "errors": ["boom"]}) + "\n")
+                               "source": "x", "errors": ["boom"]}) + "\n", encoding="utf-8")
     assert _check("kb_ingest").status == "warn"
 
     class Cfg:
@@ -989,7 +1023,7 @@ def test_review_import_sync_keeps_its_time_budget(home, tmp_path):
 
     src = tmp_path / "vault"
     src.mkdir()
-    (src / "one.md").write_text("# One\n\nimported note\n")
+    (src / "one.md").write_text("# One\n\nimported note\n", encoding="utf-8")
     r = import_file(str(src), base="default", kind="markdown")
     assert not r.errors, r.errors
     assert _entity("one") is not None

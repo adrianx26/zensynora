@@ -15,7 +15,9 @@ import fnmatch
 import hashlib
 import logging
 import os
+import pickle
 import sqlite3
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Set, Tuple, Optional
@@ -34,6 +36,9 @@ _note_cache: dict[str, tuple] = {}
 
 MAX_CONSECUTIVE_FAILURES = 3
 _MAX_TRACKED_FAILURES = 100
+_CHECKSUM_VERIFY_KEY = "checksum_verify_at"
+_CHECKSUM_VERIFY_SECONDS = 300.0
+_FULL_REBUILD_BATCH = 250
 
 # Task handle for start/stop_background_extraction(); must exist before the
 # first call or those functions raise NameError.
@@ -342,38 +347,63 @@ class SyncEngine:
         """Rebuild the index from the files (``force=True``)."""
         logger.info("Performing full re-sync...")
         self.clear_cache()
-        # 2026-10-23 (KB phase 0): read every file BEFORE clearing the index,
-        # in a stable order, so the result does not depend on the file system.
-        parsed = []
+        # Parse before clearing so readers keep the old index. Bounded batches
+        # are staged on disk instead of holding the complete corpus in memory.
         unreadable: List[str] = []
-        for file_path in sorted(self._scan_markdown_files()):  # `since` is ignored
-            try:
-                file_meta = _storage_module.get_file_metadata(file_path)
-                note = self._get_cached_note(file_path)
-                parsed.append((file_path, note, file_meta))
-            except Exception as e:
-                stats["errors"] += 1
-                unreadable.append(str(file_path))
-                logger.warning(f"Failed to sync {file_path}: {e}")
-        # 2026-10-24 (KB phase 0 review): clear + re-add in ONE transaction
-        # (readers keep the old index until it is done, never an empty one),
-        # and a file that cannot be read keeps its entry, as in an incremental
-        # sync. Each note is a savepoint: one failing note is only skipped.
-        with db.batch():
-            db.clear_all_data(keep_file_paths=unreadable)
-            from .db import REPARSE_ALL_KEY  # 2026-10-24: a full rebuild re-reads everything
-            db._get_connection().execute(
-                "INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, '0')", (REPARSE_ALL_KEY,))
-            stats["deleted"] = -1  # Indicate a full clear, not individual deletes.
-            for file_path, note, file_meta in parsed:
+        with tempfile.TemporaryDirectory(prefix="zensynora-kb-rebuild-") as staging:
+            staged: List[Path] = []
+            batch = []
+
+            def flush_batch() -> None:
+                if not batch:
+                    return
+                target = Path(staging) / f"{len(staged):08d}.pickle"
+                with target.open("wb") as out:
+                    pickle.dump(batch, out, protocol=pickle.HIGHEST_PROTOCOL)
+                staged.append(target)
+                batch.clear()
+                self.clear_cache()
+
+            for file_path in sorted(self._scan_markdown_files()):  # `since` is ignored
                 try:
-                    self._index_file(db, file_path, note, file_meta)
-                    stats["added"] += 1
-                    self._clear_failure(str(file_path))
-                    logger.debug(f"Synced: {note.permalink}")
+                    file_meta = _storage_module.get_file_metadata(file_path)
+                    note = self._get_cached_note(file_path)
+                    batch.append((file_path, note, file_meta))
+                    if len(batch) >= _FULL_REBUILD_BATCH:
+                        flush_batch()
                 except Exception as e:
                     stats["errors"] += 1
+                    unreadable.append(str(file_path))
                     logger.warning(f"Failed to sync {file_path}: {e}")
+            flush_batch()
+
+            # Clear + re-add in one transaction. Each note has a savepoint-like
+            # error boundary, while staged batches bound in-memory use.
+            with db.batch():
+                db.clear_all_data(keep_file_paths=unreadable)
+                from .db import REPARSE_ALL_KEY
+                db._get_connection().execute(
+                    "INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, '0')",
+                    (REPARSE_ALL_KEY,),
+                )
+                stats["deleted"] = -1
+                for staged_file in staged:
+                    with staged_file.open("rb") as inp:
+                        items = pickle.load(inp)
+                    for file_path, note, file_meta in items:
+                        try:
+                            self._index_file(db, file_path, note, file_meta)
+                            stats["added"] += 1
+                            self._clear_failure(str(file_path))
+                            logger.debug(f"Synced: {note.permalink}")
+                        except Exception as e:
+                            stats["errors"] += 1
+                            logger.warning(f"Failed to sync {file_path}: {e}")
+            with db._write_txn() as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)",
+                    (_CHECKSUM_VERIFY_KEY, str(time.time())),
+                )
 
     def _sync_incremental(self, db: KnowledgeDB, stats: Dict[str, int],
                           since: Optional[float], paths: Optional[Iterable[Any]] = None) -> None:
@@ -401,6 +431,14 @@ class SyncEngine:
         # every note is re-read once (fact sources, categories, conflicts)
         from .db import REPARSE_ALL_KEY
         reparse_all = db.get_sync_meta(REPARSE_ALL_KEY) == "1"
+        try:
+            last_checksum_verify = float(db.get_sync_meta(_CHECKSUM_VERIFY_KEY) or "0")
+        except (TypeError, ValueError):
+            last_checksum_verify = 0.0
+        verify_checksums = (
+            paths is not None or reparse_all
+            or time.time() - last_checksum_verify >= _CHECKSUM_VERIFY_SECONDS
+        )
 
         if paths is not None and not reparse_all:
             wanted = _wanted_paths(paths, knowledge_dir)
@@ -416,6 +454,20 @@ class SyncEngine:
         parsed: List[Tuple[Path, Any, Dict, Any]] = []  # file, note, meta, entity at path
         for file_path in candidates:
             path_str = str(file_path)
+            known = by_path.get(path_str)
+            if known is not None and known.title is not None and not verify_checksums:
+                try:
+                    stat = file_path.stat()
+                except OSError as e:
+                    stats["errors"] += 1
+                    self._record_failure(path_str, f"cannot stat the file: {e}")
+                    continue
+                if (
+                    known.mtime is not None
+                    and abs(float(known.mtime) - stat.st_mtime) < 1e-6
+                    and known.size == stat.st_size
+                ):
+                    continue
             try:
                 file_meta = _storage_module.get_file_metadata(file_path)
             except Exception as e:
@@ -423,7 +475,6 @@ class SyncEngine:
                 self._record_failure(path_str, f"cannot read the file: {e}")
                 continue
             checksum = file_meta["checksum"]
-            known = by_path.get(path_str)
             if (known is not None and known.checksum == checksum and known.title is not None
                     and not reparse_all):
                 continue  # unchanged
@@ -439,6 +490,13 @@ class SyncEngine:
                 self._record_failure(path_str, f"cannot parse the note: {e}", checksum)
                 continue
             parsed.append((file_path, note, file_meta, known))
+
+        if verify_checksums:
+            with db._write_txn() as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO sync_meta (key, value) VALUES (?, ?)",
+                    (_CHECKSUM_VERIFY_KEY, str(time.time())),
+                )
 
         # Which file holds each permalink. Files not (re)read in this run —
         # unchanged, broken or skipped — keep the permalink of their entry.
@@ -898,6 +956,9 @@ def sync_knowledge(user_id: str = "default", force: bool = False, db_path: Optio
     Returns:
         Stats dict with counts of added, updated, deleted, errors
     """
+    repaired = _storage_module.reconcile_pending_indices(user_id, db_path)
+    if repaired:
+        logger.info("Knowledge: repaired %d pending index write(s)", repaired)
     engine = SyncEngine(user_id=user_id, db_path=db_path)
     return engine.sync(force=force, since=since, paths=paths)
 

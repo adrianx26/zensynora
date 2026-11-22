@@ -466,6 +466,7 @@ async def metering_set_quota(user_id: str, quota_name: str, limit_value: int):
 
 @app.websocket("/ws/chat/{agent_name}")
 async def chat_websocket(websocket: WebSocket, agent_name: str):
+    await _settings_api.require_websocket(websocket)
     await websocket.accept()
     session_id = str(uuid.uuid4())
     register_websocket_session(session_id)

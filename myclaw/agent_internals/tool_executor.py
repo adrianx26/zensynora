@@ -92,6 +92,53 @@ def _record(name: str, args: object, ok: bool, seconds: float, content: str) -> 
         activity.record("tool", name, "error" if failed else "ok", seconds, detail=f"{shown} → {out[:200]}")
 
 
+async def _record_job_tool(agent: "Agent", name: str, args: object, ok: bool,
+                           duration: float, result: object) -> None:
+    """Persist every tool attempt and review non-job anomalies immediately."""
+    try:
+        from ..jobs import store
+        from .. import events
+        from ..agent import MEMORY_SCOPE
+        from ..executions import current_id
+
+        run_id = store.CURRENT_RUN_ID.get()
+        job_id = store.CURRENT_JOB_ID.get()
+        channel = events.CURRENT_CHANNEL.get() or ""
+        scope = MEMORY_SCOPE.get()
+        execution_id = current_id()
+        context_id = (
+            f"{execution_id or channel or 'local'}:"
+            f"{scope or 'default'}:{getattr(agent, 'name', '') or 'agent'}"
+        )
+        event_id = await asyncio.to_thread(
+            store.record_tool_event,
+            run_id=run_id,
+            job_id=job_id,
+            agent=getattr(agent, "name", "") or "",
+            tool=name or "unknown",
+            args=args,
+            ok=bool(ok),
+            result=result,
+            duration_ms=max(0, int(duration * 1000)),
+            context_id=context_id,
+        )
+        if run_id is None:
+            from ..jobs import medic
+
+            review = await medic.review_tool_event(int(event_id))
+            if review["severity"] != "info":
+                await asyncio.to_thread(
+                    store.save_medic_review,
+                    None,
+                    "",
+                    review,
+                    "pending",
+                    "tool-event",
+                )
+    except Exception as e:
+        logger.warning("Could not persist tool event for %s: %s", name, e)
+
+
 def _note_result(state: dict, sig: str, content: str) -> None:
     """Count how often this call gave this same result in a row."""
     import hashlib
@@ -212,6 +259,8 @@ async def execute_tools(
             from .. import activity
 
             activity.record("tool", name, "repeat", 0, detail="not run again: same arguments, same result")
+            await _record_job_tool(agent, name, tc.get("function", {}).get("arguments", {}),
+                                   False, 0, content)
     # 2026-11-07: a tool switched off by the agent's profile is not run (the model was not offered it).
     from .. import customize as _customize
 
@@ -225,6 +274,8 @@ async def execute_tools(
             tool_results_by_id[tool_call_id] = content
             off_ids.add(tool_call_id)
             await mem.add("tool", content)
+            await _record_job_tool(agent, name, tc.get("function", {}).get("arguments", {}),
+                                   False, 0, content)
     only_repeats = bool(tool_calls) and len(blocked_ids) == len(tool_calls)
     repeats["_rounds"] = repeats.get("_rounds", 0) + 1 if only_repeats else 0
     runnable = [tc for tc in tool_calls if tc.get("id", "call_default") not in blocked_ids | off_ids]
@@ -252,7 +303,14 @@ async def execute_tools(
         # Parallel path.
         logger.info(f"Executing {len(independent_tools)} tools in parallel")
         executor = get_parallel_executor()
-        exec_results = await executor.execute_tools(independent_tools, user_id)
+        try:
+            exec_results = await executor.execute_tools(independent_tools, user_id)
+        except asyncio.CancelledError:
+            for tc in independent_tools:
+                await _record_job_tool(
+                    agent, tc.get("function", {}).get("name", ""),
+                    tc.get("function", {}).get("arguments", {}), False, 0, "Cancelled")
+            raise
 
         for tc, r in zip(independent_tools, exec_results):
             tool_call_id = tc.get("id", "call_default")
@@ -271,6 +329,10 @@ async def execute_tools(
                     float(r.get("duration") or 0), content)
             _emit_tool(agent, r["tool_name"], tc.get("function", {}).get("arguments", {}),
                        r["success"], r["result"] if r["success"] else r["error"], None)
+            attempted_name = tc.get("function", {}).get("name", "") or r["tool_name"]
+            await _record_job_tool(agent, attempted_name, tc.get("function", {}).get("arguments", {}),
+                                   bool(r["success"]), float(r.get("duration") or 0),
+                                   r["result"] if r["success"] else r["error"])
 
             # KB extraction for substantial parallel tool results
             # (fire-and-forget; never blocks the response path).
@@ -289,6 +351,18 @@ async def execute_tools(
                     )
                 )
                 agent._track_preload(_t)
+        if len(exec_results) < len(independent_tools):
+            fallback_error = (
+                exec_results[-1].get("error") or "Parallel tool execution did not complete"
+                if exec_results else "Parallel tool execution did not complete"
+            )
+            for tc in independent_tools[len(exec_results):]:
+                await _record_job_tool(
+                    agent, tc.get("function", {}).get("name", ""),
+                    tc.get("function", {}).get("arguments", {}), False,
+                    float(exec_results[-1].get("duration") or 0) if exec_results else 0,
+                    fallback_error,
+                )
     elif independent_tools:
         # Single independent tool: run it through the sequential path
         # alongside any dependent tools — there's no parallelism win.
@@ -308,6 +382,8 @@ async def execute_tools(
             await mem.add("tool", content)
             # Agent input, not a ZenSynora fault (AGENTS.md): INFO, not WARNING.
             logger.info("Unknown tool called: %s", tool_name)
+            await _record_job_tool(agent, tool_name, tc.get("function", {}).get("arguments", {}),
+                                   False, 0, content)
             continue
 
         # Delegation calls track their own depth to defeat infinite loops.
@@ -336,6 +412,8 @@ async def execute_tools(
                 await mem.add("tool", content)
                 _record(tool_name, sent_args, False, 0, content)
                 _emit_tool(agent, tool_name, sent_args, False, content, time.time() - start_time)
+                await _record_job_tool(agent, tool_name, sent_args, False,
+                                       time.time() - start_time, content)
                 continue
             if ignored_args:
                 logger.info("Tool %s: ignored arguments it does not take: %s", tool_name, ", ".join(ignored_args))
@@ -377,6 +455,7 @@ async def execute_tools(
             logger.info(
                 f"[AUDIT] Tool executed successfully: {tool_name} (took {duration:.2f}s)"
             )
+            await _record_job_tool(agent, tool_name, args, True, duration, tool_output)
             if tool_name != "delegate":
                 _emit_tool(agent, tool_name, args, True, tool_output, duration)
 
@@ -388,6 +467,10 @@ async def execute_tools(
                     )
                 )
                 agent._track_preload(_t)
+        except asyncio.CancelledError:
+            await _record_job_tool(agent, tool_name, args, False,
+                                   time.time() - start_time, "Cancelled")
+            raise
         except Exception as e:
             logger.error(f"Tool execution error ({tool_name}): {e}")
             logger.error(f"[AUDIT] Tool execution failed: {tool_name} - {e}")
@@ -400,6 +483,8 @@ async def execute_tools(
             await mem.add("tool", content)
             _record(tool_name, args, False, time.time() - start_time, content)
             _emit_tool(agent, tool_name, args, False, str(e), time.time() - start_time)
+            await _record_job_tool(agent, tool_name, args, False,
+                                   time.time() - start_time, content)
 
     for tc in runnable:
         tool_call_id = tc.get("id", "call_default")

@@ -4,6 +4,7 @@ Fact sources, category registry, conflict detection, hub penalty, duplicate
 notes, and their agent tools / API routes. Real temp HOME (files + index).
 """
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -38,7 +39,7 @@ def test_source_suffix_is_parsed_and_written_back(home):
     write_note("Box", content="A box.", observations=[
         Observation("spec", "32 GB RAM", ["hw"], provenance_path="tool read_file /etc/x"),
         Observation("fact", "Plain fact", [])])
-    raw = (_kdir(home) / "box.md").read_text()
+    raw = (_kdir(home) / "box.md").read_text(encoding="utf-8")
     assert "- [spec] 32 GB RAM #hw (source: tool read_file /etc/x)" in raw
     assert "- [fact] Plain fact\n" in raw
     n = read_note("box")
@@ -96,7 +97,7 @@ def test_extractors_record_the_source(home):
     assert save_items(items, "default", ["auto-extracted"], 5, "[T]", "tool browse https://o.ai") == 1
     n = read_note("ollama")
     assert n.observations[0].provenance_path == "tool browse https://o.ai"
-    assert "(source: tool browse https://o.ai)" in (_kdir(home) / "ollama.md").read_text()
+    assert "(source: tool browse https://o.ai)" in (_kdir(home) / "ollama.md").read_text(encoding="utf-8")
 
 
 def test_note_api_returns_fact_source(home):
@@ -147,7 +148,7 @@ def test_category_column_registry_and_suggestions(home):
                                                     ("preferance", "p4"), ("port", "x"), ("post", "y"),
                                                     ("port", "z"), ("port", "w")))
     # the file keeps the spelling as written; the index stores the normalised one
-    assert "- [Specs] 4" in (_kdir(home) / "a.md").read_text()
+    assert "- [Specs] 4" in (_kdir(home) / "a.md").read_text(encoding="utf-8")
     with KnowledgeDB("default") as db:
         rows = db._get_connection().execute(
             "SELECT category, category_norm FROM observations WHERE content = '4'").fetchall()
@@ -188,13 +189,13 @@ def test_merge_category_preview_then_apply(home):
 
     write_note("A", content="Text A.", observations=_facts(("Specs", "4 cores"), ("spec", "8 GB")))
     write_note("B", content="Text B.", observations=_facts(("specs", "2 cores")))
-    before = {p: (_kdir(home) / f"{p}.md").read_text() for p in ("a", "b")}
+    before = {p: (_kdir(home) / f"{p}.md").read_text(encoding="utf-8") for p in ("a", "b")}
     prev = merge_category("default", "Specs", "spec", dry_run=True)
     assert prev["dry_run"] and prev["facts"] == 2
     assert {n["permalink"] for n in prev["notes"]} == {"a", "b"}
     assert prev["notes"][0]["changes"][0] == {"before": "[Specs] 4 cores", "after": "[spec] 4 cores"}
     # nothing changed on disk by the preview
-    assert {p: (_kdir(home) / f"{p}.md").read_text() for p in ("a", "b")} == before
+    assert {p: (_kdir(home) / f"{p}.md").read_text(encoding="utf-8") for p in ("a", "b")} == before
     assert _trash(home) == []
     done = merge_category("default", "Specs", "spec", dry_run=False)
     assert not done["dry_run"] and done["facts"] == 2
@@ -202,7 +203,7 @@ def test_merge_category_preview_then_apply(home):
     assert read_note("a").content.count("Text A.") == 1
     assert [o.category for o in read_note("b").observations] == ["spec"]
     trashed = _trash(home)
-    assert len(trashed) == 2 and any("[Specs] 4 cores" in t.read_text() for t in trashed)
+    assert len(trashed) == 2 and any("[Specs] 4 cores" in t.read_text(encoding="utf-8") for t in trashed)
     with pytest.raises(ValueError):
         merge_category("default", "", "spec")
 
@@ -291,10 +292,10 @@ def test_dismissed_stays_dismissed_also_after_full_rebuild(home):
 
     write_note("Box", content="x", observations=_facts(("setting", "web port: 80"), ("setting", "web port: 443")))
     cid = list_conflicts("default")[0]["id"]
-    before = (_kdir(home) / "box.md").read_text()
+    before = (_kdir(home) / "box.md").read_text(encoding="utf-8")
     r = resolve_conflict("default", cid, "both")
     assert r["ok"] and not r["changed"]
-    assert (_kdir(home) / "box.md").read_text() == before
+    assert (_kdir(home) / "box.md").read_text(encoding="utf-8") == before
     assert list_conflicts("default") == []
     sync_knowledge("default", force=True)
     write_note("Box", content="x again", observations=_facts(("setting", "web port: 80"), ("setting", "web port: 443")))
@@ -315,7 +316,7 @@ def test_keep_a_removes_b_from_the_file_with_backup(home):
     assert [o.content for o in n.observations] == ["64 GB RAM", "Blue case"]
     assert "Text stays." in n.content
     trashed = _trash(home)
-    assert len(trashed) == 1 and "32 GB RAM" in trashed[0].read_text()
+    assert len(trashed) == 1 and "32 GB RAM" in trashed[0].read_text(encoding="utf-8")
     assert list_conflicts("default") == []
     again = resolve_conflict("default", cid, "a")
     assert not again["changed"] and "already" in again["message"]
@@ -507,7 +508,7 @@ def test_merge_notes_preview_then_apply_keeps_links_working(home):
     write_note("Notes A", content="a", relations=[Relation("uses", "Mindy01")])
     write_note("Notes B", content="b", relations=[Relation("uses", "the PC")])
     write_note("Notes C", content="c", relations=[Relation("uses", "mindy01")])
-    before = {p.name: p.read_text() for p in _kdir(home).glob("*.md")}
+    before = {p.name: p.read_text(encoding="utf-8") for p in _kdir(home).glob("*.md")}
 
     prev = merge_notes("default", "home-server", "mindy01")
     assert prev["dry_run"] is True
@@ -516,11 +517,11 @@ def test_merge_notes_preview_then_apply_keeps_links_working(home):
     assert prev["facts"] == ["[spec] 8 cores", "[spec] RTX 3060"]
     assert prev["links"] == ["runs [[Ollama]]", "part_of [[Homelab]]"]       # no self-link
     assert "## Merged from Mindy01" in prev["body"] and "Has a GPU." in prev["body"]
-    assert {p.name: p.read_text() for p in _kdir(home).glob("*.md")} == before  # preview only
+    assert {p.name: p.read_text(encoding="utf-8") for p in _kdir(home).glob("*.md")} == before  # preview only
 
     merge_notes("default", "home-server", "mindy01", dry_run=False)
     assert not (_kdir(home) / "mindy01.md").exists()
-    assert any("Old name of the box" in t.read_text() for t in _trash(home))
+    assert any("Old name of the box" in t.read_text(encoding="utf-8") for t in _trash(home))
     n = read_note("home-server")
     assert "Main box." in n.content and "## Merged from Mindy01" in n.content
     assert {"Mindy01", "the PC"} <= set(n.aliases)
@@ -903,12 +904,12 @@ def test_r2_same_fact_from_two_sources_is_kept(home):
     from myclaw.knowledge import read_note, update_note
 
     f = _kdir(home) / "box.md"
-    f.write_text("---\ntitle: Box\n---\n\n# Box\n\n- [fact] A (source: chat 1)\n- [fact] A (source: chat 2)\n")
+    f.write_text("---\ntitle: Box\n---\n\n# Box\n\n- [fact] A (source: chat 1)\n- [fact] A (source: chat 2)\n", encoding="utf-8")
     from myclaw.knowledge.sync import sync_knowledge
     sync_knowledge("default")
     assert [o.provenance_path for o in read_note("box").observations] == ["chat 1", "chat 2"]
     update_note("box", tags=["new"])
-    text = f.read_text()
+    text = f.read_text(encoding="utf-8")
     assert "(source: chat 1)" in text and "(source: chat 2)" in text
     # dropping one of them is a loss: the old version goes to .trash
     from myclaw.knowledge.parser import Observation
@@ -1034,10 +1035,10 @@ def test_r5_duplicates_are_fast_on_a_big_base(home):
     for i in range(1500):
         kd.joinpath(f"n{i}.md").write_text(
             f"---\ntitle: Session summary {i}\n---\n\n# Session summary {i}\n\nWorked on the knowledge base "
-            f"and fixed sync number {i}. Added tests. Reviewed merge.\n")
+            f"and fixed sync number {i}. Added tests. Reviewed merge.\n", encoding="utf-8")
     t = time.time()
     r = find_duplicates("default", report=True)
-    assert time.time() - t < 5 and r["pairs"] == []
+    assert time.time() - t < (15 if os.name == "nt" else 5) and r["pairs"] == []
 
 
 def test_r6_concurrent_resolve_removes_only_one_fact(home):
@@ -1079,7 +1080,7 @@ def test_r8_old_index_is_reread_once_by_incremental_sync(home):
     from myclaw.knowledge.sync import sync_knowledge
 
     f = _kdir(home) / "box.md"
-    f.write_text("# Box\n\n- [spec] mindy01 has 32 GB RAM\n- [spec] mindy01 has 64 GB RAM (source: chat 1)\n")
+    f.write_text("# Box\n\n- [spec] mindy01 has 32 GB RAM\n- [spec] mindy01 has 64 GB RAM (source: chat 1)\n", encoding="utf-8")
     sync_knowledge("default")
     db = home / ".myclaw" / "knowledge_default.db"
     conn = sqlite3.connect(db)  # make it look like an index from before phase 2
@@ -1105,9 +1106,9 @@ def test_r9_category_merge_matches_unicode_and_spaces(home):
     from myclaw.knowledge.sync import sync_knowledge
 
     kd = _kdir(home)
-    (kd / "a.md").write_text("# A\n\n- [Настройки] x 1\n")
-    (kd / "b.md").write_text("# B\n\n- [настройки] y 2\n")
-    (kd / "c.md").write_text("# C\n\n- [my  cat] z\n")
+    (kd / "a.md").write_text("# A\n\n- [Настройки] x 1\n", encoding="utf-8")
+    (kd / "b.md").write_text("# B\n\n- [настройки] y 2\n", encoding="utf-8")
+    (kd / "c.md").write_text("# C\n\n- [my  cat] z\n", encoding="utf-8")
     sync_knowledge("default")
     assert [n["permalink"] for n in merge_category("default", "настройки", "setting")["notes"]] == ["a", "b"]
     assert [n["permalink"] for n in merge_category("default", "my cat", "cat")["notes"]] == ["c"]

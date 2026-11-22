@@ -325,10 +325,10 @@ def test_a_damaged_state_file_is_set_aside_and_odd_entries_are_skipped(tuned):
 
     tuning.set_values({"decay_floor": 0.5})
     path = tuning._path()
-    path.write_text(path.read_text()[:40])                       # truncated
+    path.write_text(path.read_text(encoding="utf-8")[:40], encoding="utf-8")                       # truncated
     assert tuning.state()["history"] == []
     assert len(list(path.parent.glob("knowledge-tuning.json.bad-*"))) == 1     # kept, not overwritten
-    path.write_text('{"history": "x", "proposals": [{"id": 3}, {"id": 4, "key": "decay_floor", "value": 0.6}], "seq": "7"}')
+    path.write_text('{"history": "x", "proposals": [{"id": 3}, {"id": 4, "key": "decay_floor", "value": 0.6}], "seq": "7"}', encoding="utf-8")
     st = tuning.state()
     assert st["history"] == [] and [p["id"] for p in st["proposals"]] == [4] and st["seq"] == 4
     assert tuning.set_values({"decay_floor": 0.4})["applied"] and tuning.describe()["history"][0]["id"] == 5

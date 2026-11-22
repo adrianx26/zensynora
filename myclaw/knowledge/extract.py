@@ -18,6 +18,7 @@ import re
 from typing import Any, Dict, Iterable, List, Optional
 
 from .quality import normalize_category  # 2026-10-24 (KB phase 2)
+from .validation import normalize_note_input
 
 logger = logging.getLogger(__name__)
 
@@ -130,13 +131,25 @@ def save_items(items: List[Any], user_id: str, extra_tags: List[str], cap: int, 
             target = " ".join(str(link.get("target", "")).replace("[", "").replace("]", "").split())[:120]
             if target and target.lower() != title.lower():
                 rels.append(Relation(relation_type=rtype, target=target))
+        normalized = normalize_note_input(
+            title=title,
+            content=content,
+            tags=tag_list,
+            observations=obs[:8],
+            relations=rels[:8],
+            strict=False,
+        )
         try:
-            permalink = write_note(name=title, title=title, content=content, tags=tag_list,
-                                   observations=obs[:8], relations=rels[:8], user_id=user_id,
+            permalink = write_note(name=normalized.title, title=normalized.title,
+                                   content=normalized.content, tags=normalized.tags,
+                                   observations=normalized.observations,
+                                   relations=normalized.relations, user_id=user_id,
                                    origin="extract")  # 2026-10-24 (KB phase 4 review)
             saved += 1
             written.append(str(permalink))
-            logger.info(f"{log_prefix} Saved: '{title}' ({len(obs)} facts, {len(rels)} links)")
+            logger.info(f"{log_prefix} Saved: '{normalized.title}' "
+                        f"({len(normalized.observations)} facts, "
+                        f"{len(normalized.relations)} links)")
         except Exception as e:
             logger.debug(f"{log_prefix} Could not save '{title}': {e}")
     if saved:
@@ -209,7 +222,19 @@ async def enrich_note(config: Any, base: str, permalink: str) -> dict:
                 rels.append(Relation(relation_type=rtype, target=target))
     if not (tag_list or len(obs) > len(note.observations) or len(rels) > len(note.relations)):
         return {"permalink": permalink, "ok": False, "error": "the model returned nothing usable"}
-    await asyncio.to_thread(write_note, permalink, note.title, obs[:10], rels[:8],
-                            list(dict.fromkeys(list(note.tags) + tag_list)), base, body or None)
+    generated = normalize_note_input(
+        title=note.title,
+        content=body or note.title,
+        tags=tag_list,
+        observations=obs[len(note.observations):],
+        relations=rels[len(note.relations):],
+        strict=False,
+    )
+    await asyncio.to_thread(
+        write_note, permalink, note.title,
+        (list(note.observations) + generated.observations)[:10],
+        (list(note.relations) + generated.relations)[:8],
+        list(dict.fromkeys(list(note.tags) + generated.tags)), base, body or None,
+    )
     return {"permalink": permalink, "ok": True, "tags": len(tag_list),
             "facts": len(obs) - len(note.observations), "links": len(rels) - len(note.relations)}

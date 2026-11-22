@@ -233,7 +233,7 @@ def test_embed_on_write_through_the_worker_for_every_write_path(home, sem):
 
     write_note("Tool note", content="Written by an agent.")
     (home / ".myclaw" / "knowledge" / "default" / "hand.md").write_text(
-        "---\ntitle: Hand\n---\n\n# Hand\n\nWritten by hand in an editor.\n")
+        "---\ntitle: Hand\n---\n\n# Hand\n\nWritten by hand in an editor.\n", encoding="utf-8")
     sync_knowledge()
     app = FastAPI()
     app.include_router(knowledge_api.router)
@@ -311,6 +311,22 @@ def test_backfill_and_status(home, sem, monkeypatch):
     assert r["ok"] and r["checked"] == 3 and r["embedded"] == 0 and _calls(sem) == n
     st = sem.embedding_status()
     assert (st["embedded"], st["stale"], st["chunks"]) == (3, 0, 3)
+
+
+def test_status_reports_vector_scan_coverage_and_health_warning(home, sem, monkeypatch):
+    from myclaw.knowledge import health
+
+    _three_notes()
+    assert sem.wait_idle(10)
+    monkeypatch.setattr(sem, "MAX_SCAN_CHUNKS", 2)
+    st = sem.embedding_status()
+    assert (st["covered"], st["total"], st["covered_vectors"], st["total_vectors"]) == (2, 3, 2, 3)
+    assert st["truncated"] is True and st["coverage_percent"] == 66.7 and st["warning"]
+
+    watched = health.embeddings()
+    assert watched["covered_chunks"] == 2 and watched["total_chunks"] == 3
+    warnings = health.warnings_for({"embeddings": watched})
+    assert "semantic-coverage" in {w["id"] for w in warnings}
 
 
 def test_backfill_without_the_library_says_how_to_install(home, monkeypatch):
@@ -690,7 +706,7 @@ def test_api_install_runs_pip_with_pins_and_refuses_when_installed(api, home, mo
     cmd = seen["cmd"]
     assert cmd[:4] == [sys.executable, "-m", "pip", "install"] and seen["timeout"] == mod.INSTALL_TIMEOUT
     assert any(c.startswith("fastembed") for c in cmd)
-    pins = Path(cmd[cmd.index("-c") + 1]).read_text().split()
+    pins = Path(cmd[cmd.index("-c") + 1]).read_text(encoding="utf-8").split()
     assert pins == ["numpy==2.2.6", "requests==2.32.3"]       # no editable / URL / zensynora
     assert api.post("/api/knowledge/semantic/install").status_code == 409
 
@@ -1069,7 +1085,7 @@ def test_review11_updater_reinstalls_extras_with_declared_range(tmp_path, monkey
     new.mkdir()
     (new / "pyproject.toml").write_text(
         '[project]\nname = "x"\n[project.optional-dependencies]\n'
-        'semantic = ["fastembed>=0.5,<1.0"]\ningest = ["python-docx>=1.1,<2.0"]\n')
+        'semantic = ["fastembed>=0.5,<1.0"]\ningest = ["python-docx>=1.1,<2.0"]\n', encoding="utf-8")
     old = tmp_path / "old"
     calls = []
 

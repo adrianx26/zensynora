@@ -38,7 +38,7 @@ LONG = ("Zebrafish are small freshwater fish used in research because their embr
         "transparent and develop quickly outside the mother. ") * 20
 
 
-# ── 1. automatic context ──────────────────────────────────────────────────
+# ?? 1. automatic context ??????????????????????????????????????????????????
 
 def test_context_contains_note_text_and_respects_the_budget(agent):
     from myclaw.agent import KB_CONTEXT_BUDGET
@@ -51,7 +51,7 @@ def test_context_contains_note_text_and_respects_the_budget(agent):
     ctx = agent._search_knowledge_context_sync("tell me about zebrafish embryos", "default")
     assert ctx.startswith("## Relevant Knowledge")
     assert "transparent and develop quickly" in ctx      # the text, not only the title
-    assert "…" in ctx                                    # shortened at a word boundary
+    assert "note text shortened by context budget" in ctx
     assert len(ctx) <= KB_CONTEXT_BUDGET + 10            # the whole block stays small
     first = ctx.split("**Zebrafish note")[1]
     assert first.count("- [fact]") <= 3
@@ -101,14 +101,14 @@ def test_gap_hint_uses_newest_gap_and_writes_gap_file(agent, home, monkeypatch):
     agent._search_knowledge_context_sync("brand new unknown topic", "default")
     hint = agent._kb_gap_hint("default", had_kb_results=False)
     assert "brand new unknown topic" in hint
-    lines = gap_file.read_text().splitlines()
+    lines = gap_file.read_text(encoding="utf-8").splitlines()
     assert len(lines) == 1 and json.loads(lines[0])["query"] == "brand new unknown topic"
     agent._kb_gap_hint("default", had_kb_results=False)          # same topic again: logged once
-    assert len(gap_file.read_text().splitlines()) == 1
+    assert len(gap_file.read_text(encoding="utf-8").splitlines()) == 1
     assert agent._kb_gap_hint("default", had_kb_results=True) == ""
 
 
-# ── 2./3. tools ───────────────────────────────────────────────────────────
+# ?? 2./3. tools ???????????????????????????????????????????????????????????
 
 def _graph(home):
     from myclaw.knowledge import write_note
@@ -220,7 +220,7 @@ def test_split_tag_terms():
     assert _split_tag_terms('"exact phrase" OR x') == ('"exact phrase" OR x', [])
 
 
-# ── 4. build_context ──────────────────────────────────────────────────────
+# ?? 4. build_context ??????????????????????????????????????????????????????
 
 def test_build_context_has_text_snippets_and_backlinks(home):
     from myclaw.knowledge.graph import build_context
@@ -234,7 +234,7 @@ def test_build_context_has_text_snippets_and_backlinks(home):
     assert "## Linked from" in back and "(pi)" in back.split("## Linked from")[1]
 
 
-# ── 5. session summaries ──────────────────────────────────────────────────
+# ?? 5. session summaries ??????????????????????????????????????????????????
 
 def test_two_summaries_on_one_day_make_one_note(agent, home):
     from myclaw.agent import Agent
@@ -278,10 +278,10 @@ def test_background_summary_writes_the_day_note(agent, home, monkeypatch):
     asyncio.run(agent._background_summarize_context(history, "default", None))
     files = list(_kdir(home).glob("session-summary-*.md"))
     assert len(files) == 1
-    assert files[0].read_text().count("User asked about zebrafish.") == 2
+    assert files[0].read_text(encoding="utf-8").count("User asked about zebrafish.") == 2
 
 
-# ── 6. knowledge.enabled = false ──────────────────────────────────────────
+# ?? 6. knowledge.enabled = false ??????????????????????????????????????????
 
 def test_knowledge_disabled_skips_automatic_parts(agent, home, monkeypatch):
     import myclaw.provider as prov_mod
@@ -310,6 +310,15 @@ def test_knowledge_disabled_skips_automatic_parts(agent, home, monkeypatch):
     assert "Zebrafish" in search_knowledge("zebrafish")          # explicit tools still work
 
 
+def test_conversation_extraction_setting_overrides_legacy_alias(agent):
+    agent.config.knowledge.auto_extract = True
+    agent.config.knowledge.extract_from_conversations = None
+    assert agent._kb_auto_extract is True
+
+    agent.config.knowledge.extract_from_conversations = False
+    assert agent._kb_auto_extract is False
+
+
 def test_kb_enabled_reads_config_defensively():
     from types import SimpleNamespace
 
@@ -321,7 +330,7 @@ def test_kb_enabled_reads_config_defensively():
     assert Agent._kb_enabled.fget(off) is False
 
 
-# ── 7. system prompt ──────────────────────────────────────────────────────
+# ?? 7. system prompt ??????????????????????????????????????????????????????
 
 def test_system_prompt_never_asks_to_save_secrets():
     from myclaw.agent import SYSTEM_PROMPT

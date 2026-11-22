@@ -17,7 +17,7 @@ import time
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketException
 from pydantic import BaseModel, Field, SecretStr, ValidationError
 
 from myclaw import activity
@@ -34,6 +34,8 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 _LOOPBACK = {"127.0.0.1", "::1", "localhost", "testclient"}
+_WS_TICKET_TTL_SECONDS = 60.0
+_ws_tickets: Dict[str, float] = {}
 
 # Python SDK each provider needs at chat time (the probe below uses plain
 # HTTP, so without this check "Test connection" could pass while chat fails).
@@ -181,6 +183,50 @@ async def require_local_or_admin(request: Request) -> None:
         status_code=403,
         detail="Settings are only available from this computer (localhost) "
         "or with the admin API key (X-API-Key).",
+    )
+
+
+def _consume_ws_ticket(ticket: str) -> bool:
+    now = time.monotonic()
+    _ws_tickets.update({key: expires for key, expires in _ws_tickets.items() if expires > now})
+    expires = _ws_tickets.pop(ticket, 0.0)
+    return bool(ticket) and expires > now
+
+
+@router.post("/api/ws-ticket", dependencies=[Depends(require_local_or_admin)])
+async def websocket_ticket():
+    """Short-lived, one-use credential so browsers can authenticate a WebSocket."""
+    now = time.monotonic()
+    _ws_tickets.update({key: expires for key, expires in _ws_tickets.items() if expires > now})
+    ticket = secrets.token_urlsafe(32)
+    _ws_tickets[ticket] = now + _WS_TICKET_TTL_SECONDS
+    return {"ticket": ticket, "expires_in": int(_WS_TICKET_TTL_SECONDS)}
+
+
+async def require_websocket(ws: WebSocket) -> None:
+    """Authenticate before accepting a WebSocket.
+
+    Loopback browser connections and same-origin requests are accepted as the
+    REST endpoints are. Remote clients need a one-use ticket or the admin key.
+    """
+    origin = _foreign_origin(ws)  # Starlette WebSocket and Request share headers/url.
+    if origin:
+        logger.warning("Refused WebSocket from another site (Origin: %s)", origin[:100])
+        raise WebSocketException(code=1008, reason="WebSocket origin is not allowed.")
+
+    host = ws.client.host if ws.client else ""
+    if host in _LOOPBACK:
+        return
+    ticket = ws.query_params.get("ticket", "")
+    if _consume_ws_ticket(ticket):
+        return
+    supplied = ws.headers.get("x-api-key", "")
+    expected = load_config().security.admin_api_key.get_secret_value()
+    if expected and supplied and secrets.compare_digest(supplied, expected):
+        return
+    raise WebSocketException(
+        code=1008,
+        reason="WebSocket access is restricted; get a ticket with the admin API key.",
     )
 
 

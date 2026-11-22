@@ -17,10 +17,13 @@ Schedules
 from __future__ import annotations
 
 import json
+import re
 import secrets
 import sqlite3
+import threading
 import time
 from collections.abc import Iterator
+from contextvars import ContextVar
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -72,6 +75,36 @@ CREATE TABLE IF NOT EXISTS runs (
     attempt INTEGER NOT NULL DEFAULT 1
 );
 CREATE INDEX IF NOT EXISTS ix_runs_job ON runs(job_id, id);
+CREATE TABLE IF NOT EXISTS tool_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER,
+    job_id TEXT NOT NULL DEFAULT '',
+    context_id TEXT NOT NULL DEFAULT '',
+    agent TEXT NOT NULL DEFAULT '',
+    tool TEXT NOT NULL DEFAULT '',
+    args_json TEXT NOT NULL DEFAULT '{}',
+    ok INTEGER NOT NULL DEFAULT 1,
+    result_json TEXT NOT NULL DEFAULT 'null',
+    duration_ms INTEGER NOT NULL DEFAULT 0,
+    created REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_tool_events_run ON tool_events(run_id, id);
+CREATE INDEX IF NOT EXISTS ix_tool_events_job_created ON tool_events(job_id, created);
+CREATE INDEX IF NOT EXISTS ix_tool_events_created ON tool_events(created);
+CREATE TABLE IF NOT EXISTS medic_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id INTEGER,
+    job_id TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'pending',
+    source TEXT NOT NULL DEFAULT '',
+    review_json TEXT NOT NULL DEFAULT '{}',
+    note TEXT NOT NULL DEFAULT '',
+    created REAL NOT NULL,
+    updated REAL NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_medic_reviews_run ON medic_reviews(run_id, id);
+CREATE INDEX IF NOT EXISTS ix_medic_reviews_job_created ON medic_reviews(job_id, created);
+CREATE INDEX IF NOT EXISTS ix_medic_reviews_status_created ON medic_reviews(status, created);
 """
 
 EDITABLE = ("name", "prompt", "agent", "schedule", "every_minutes", "at_time", "days", "run_at",
@@ -79,10 +112,47 @@ EDITABLE = ("name", "prompt", "agent", "schedule", "every_minutes", "at_time", "
             "timeout_s", "retries", "on_failure", "max_steps")
 ON_FAILURE = ("", "diagnose", "fix")  # v0.7.5: what the medic does when a run fails
 
+# Set by the runner/tool layer while a job is active.  The values deliberately
+# live in ContextVars so concurrent jobs cannot leak their identifiers into one
+# another's tool-event records.
+CURRENT_RUN_ID: ContextVar[int | None] = ContextVar("jobs_current_run_id", default=None)
+CURRENT_JOB_ID: ContextVar[str | None] = ContextVar("jobs_current_job_id", default=None)
+CURRENT_RUN = CURRENT_RUN_ID
+CURRENT_JOB = CURRENT_JOB_ID
+current_run_id = CURRENT_RUN_ID
+current_job_id = CURRENT_JOB_ID
+
+TOOL_EVENT_RETENTION_DAYS = 30
+TOOL_EVENT_MAX_ROWS = 20_000
+MEDIC_REVIEW_RETENTION_DAYS = 90
+MEDIC_REVIEW_MAX_ROWS = 10_000
+_JSON_MAX_CHARS = 16_000
+_TEXT_MAX_CHARS = 8_000
+_DB_LOCK = threading.RLock()
+_SECRET_KEY = re.compile(
+    r"(?:api[_-]?key|access[_-]?key|authorization|credential|cookie|"
+    r"passwd|password|private[_-]?key|secret|token)",
+    re.I,
+)
+
 # Columns added after 0.7.1 (older jobs.db files get them on first use).
 _ADDED_COLUMNS = {
     "jobs": [("on_failure", "TEXT NOT NULL DEFAULT ''"), ("max_steps", "INTEGER NOT NULL DEFAULT 8")],
     "runs": [("diagnosis", "TEXT NOT NULL DEFAULT ''")],
+    "tool_events": [
+        ("run_id", "INTEGER"), ("job_id", "TEXT NOT NULL DEFAULT ''"),
+        ("context_id", "TEXT NOT NULL DEFAULT ''"),
+        ("agent", "TEXT NOT NULL DEFAULT ''"), ("tool", "TEXT NOT NULL DEFAULT ''"),
+        ("args_json", "TEXT NOT NULL DEFAULT '{}'"), ("ok", "INTEGER NOT NULL DEFAULT 1"),
+        ("result_json", "TEXT NOT NULL DEFAULT 'null'"),
+        ("duration_ms", "INTEGER NOT NULL DEFAULT 0"), ("created", "REAL NOT NULL DEFAULT 0"),
+    ],
+    "medic_reviews": [
+        ("run_id", "INTEGER"), ("job_id", "TEXT NOT NULL DEFAULT ''"),
+        ("status", "TEXT NOT NULL DEFAULT 'pending'"), ("source", "TEXT NOT NULL DEFAULT ''"),
+        ("review_json", "TEXT NOT NULL DEFAULT '{}'"), ("note", "TEXT NOT NULL DEFAULT ''"),
+        ("created", "REAL NOT NULL DEFAULT 0"), ("updated", "REAL NOT NULL DEFAULT 0"),
+    ],
 }
 _migrated: set[str] = set()
 
@@ -105,17 +175,21 @@ def db_path() -> Path:
 
 @contextmanager
 def _conn() -> Iterator[sqlite3.Connection]:
-    path = db_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, timeout=10)
-    conn.row_factory = sqlite3.Row
-    try:
-        conn.executescript(_SCHEMA)
-        _migrate(conn)
-        yield conn
-        conn.commit()
-    finally:
-        conn.close()
+    with _DB_LOCK:
+        path = db_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(path, timeout=10)
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.executescript(_SCHEMA)
+            _migrate(conn)
+            yield conn
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
 
 
 def _job(row: sqlite3.Row) -> dict[str, Any]:
@@ -123,6 +197,250 @@ def _job(row: sqlite3.Row) -> dict[str, Any]:
     for k in ("enabled", "auto_evaluate", "fresh_context"):
         d[k] = bool(d[k])
     return d
+
+
+def _bounded_text(value: Any, limit: int = _TEXT_MAX_CHARS) -> str:
+    from ..doctor.logscan import redact
+    from ..logging_config import scrub_pii
+
+    if not isinstance(value, str):
+        value = repr(value)
+    clean = scrub_pii(redact(value))
+    if len(clean) <= limit:
+        return clean
+    return clean[:limit] + f"…[truncated {len(clean) - limit} chars]"
+
+
+def _safe_value(value: Any, *, depth: int = 0, seen: set[int] | None = None) -> Any:
+    """Return JSON-compatible data with secrets/PII hidden and nesting bounded."""
+    if value is None or isinstance(value, (bool, int, float)):
+        return value
+    if isinstance(value, str):
+        return _bounded_text(value)
+    if isinstance(value, bytes):
+        return _bounded_text(value.decode("utf-8", errors="replace"))
+    if depth >= 6:
+        return "[nested data truncated]"
+    seen = seen or set()
+    identity = id(value)
+    if identity in seen:
+        return "[circular reference omitted]"
+    if isinstance(value, dict):
+        seen.add(identity)
+        out: dict[str, Any] = {}
+        for index, (raw_key, item) in enumerate(value.items()):
+            if index >= 200:
+                out["[truncated]"] = f"{len(value) - index} entries omitted"
+                break
+            key = str(raw_key)[:200]
+            out[key] = "[redacted]" if _SECRET_KEY.search(key) else _safe_value(
+                item, depth=depth + 1, seen=seen)
+        seen.discard(identity)
+        return out
+    if isinstance(value, (list, tuple, set, frozenset)):
+        seen.add(identity)
+        values = list(value)
+        out = [_safe_value(item, depth=depth + 1, seen=seen) for item in values[:200]]
+        if len(values) > 200:
+            out.append(f"[{len(values) - 200} items truncated]")
+        seen.discard(identity)
+        return out
+    if hasattr(value, "__dict__"):
+        return _safe_value(vars(value), depth=depth + 1, seen=seen)
+    return _bounded_text(value)
+
+
+def _json_payload(value: Any) -> str:
+    encoded = json.dumps(_safe_value(value), ensure_ascii=False, default=str)
+    if len(encoded) <= _JSON_MAX_CHARS:
+        return encoded
+    return json.dumps({
+        "truncated": True,
+        "length": len(encoded),
+        "preview": _bounded_text(encoded, _JSON_MAX_CHARS - 100),
+    }, ensure_ascii=False)
+
+
+def _retain(conn: sqlite3.Connection, table: str, days: int, max_rows: int) -> None:
+    cutoff = time.time() - max(1, days) * 86_400
+    conn.execute(f"DELETE FROM {table} WHERE created < ?", (cutoff,))
+    conn.execute(
+        f"DELETE FROM {table} WHERE id NOT IN "
+        f"(SELECT id FROM {table} ORDER BY created DESC, id DESC LIMIT ?)",
+        (max(1, max_rows),),
+    )
+
+
+def record_tool_event(
+    run_id: int | None = None,
+    job_id: str | None = None,
+    agent: str = "",
+    tool: str = "",
+    args: Any = None,
+    ok: bool = True,
+    result: Any = None,
+    duration_ms: int | float = 0,
+    context_id: str = "",
+) -> int:
+    """Persist one bounded, secret/PII-scrubbed tool event."""
+    if run_id is None:
+        run_id = CURRENT_RUN_ID.get()
+    if job_id is None:
+        job_id = CURRENT_JOB_ID.get()
+    try:
+        duration = max(0, int(duration_ms or 0))
+    except (TypeError, ValueError):
+        duration = 0
+    with _conn() as c:
+        cur = c.execute(
+            "INSERT INTO tool_events "
+            "(run_id, job_id, context_id, agent, tool, args_json, ok, result_json, duration_ms, created) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                run_id, str(job_id or ""), _bounded_text(context_id, 500), _bounded_text(agent, 200),
+                _bounded_text(tool, 200), _json_payload(args), int(bool(ok)),
+                _json_payload(result), duration, time.time(),
+            ),
+        )
+        event_id = int(cur.lastrowid)
+        _retain(c, "tool_events", TOOL_EVENT_RETENTION_DAYS, TOOL_EVENT_MAX_ROWS)
+        return event_id
+
+
+def _tool_event(row: sqlite3.Row) -> dict[str, Any]:
+    event = dict(row)
+    for source, target in (("args_json", "args"), ("result_json", "result")):
+        try:
+            event[target] = json.loads(event.pop(source))
+        except (TypeError, ValueError):
+            event[target] = None
+    event["ok"] = bool(event["ok"])
+    event["status"] = "ok" if event["ok"] else "error"
+    return event
+
+
+def get_tool_event(event_id: int) -> dict[str, Any] | None:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM tool_events WHERE id = ?", (int(event_id),)
+        ).fetchone()
+    return _tool_event(row) if row else None
+
+
+def list_tool_events(
+    run_id: int | None = None,
+    job_id: str | None = None,
+    tool: str | None = None,
+    agent: str | None = None,
+    context_id: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """List events, newest first, with optional run/job/tool/agent filters."""
+    clauses: list[str] = []
+    args: list[Any] = []
+    for column, value in (("run_id", run_id), ("job_id", job_id),
+                          ("context_id", context_id), ("tool", tool), ("agent", agent)):
+        if value is not None:
+            clauses.append(f"{column} = ?")
+            args.append(value)
+    where = " WHERE " + " AND ".join(clauses) if clauses else ""
+    args.append(max(1, min(int(limit), 1000)))
+    with _conn() as c:
+        rows = c.execute(
+            f"SELECT * FROM tool_events{where} ORDER BY id DESC LIMIT ?", args
+        ).fetchall()
+    return [_tool_event(row) for row in rows]
+
+
+def save_medic_review(
+    run_id: int | None,
+    job_id: str | None,
+    review: dict[str, Any],
+    status: str = "pending",
+    source: str = "",
+) -> dict[str, Any]:
+    """Create a medic review and return its decoded database representation."""
+    now = time.time()
+    with _conn() as c:
+        cur = c.execute(
+            "INSERT INTO medic_reviews "
+            "(run_id, job_id, status, source, review_json, note, created, updated) "
+            "VALUES (?, ?, ?, ?, ?, '', ?, ?)",
+            (
+                run_id if run_id is not None else CURRENT_RUN_ID.get(),
+                str(job_id or CURRENT_JOB_ID.get() or ""),
+                str(status or "pending")[:50],
+                str(source or "")[:200],
+                _json_payload(review or {}),
+                now,
+                now,
+            ),
+        )
+        review_id = int(cur.lastrowid)
+        _retain(c, "medic_reviews", MEDIC_REVIEW_RETENTION_DAYS, MEDIC_REVIEW_MAX_ROWS)
+        row = c.execute("SELECT * FROM medic_reviews WHERE id = ?", (review_id,)).fetchone()
+    return _medic_review(row)  # type: ignore[arg-type]
+
+
+def _medic_review(row: sqlite3.Row) -> dict[str, Any]:
+    item = dict(row)
+    try:
+        item["review"] = json.loads(item.pop("review_json"))
+    except (TypeError, ValueError):
+        item["review"] = {}
+    return item
+
+
+def get_medic_review(review_id: int) -> dict[str, Any] | None:
+    with _conn() as c:
+        row = c.execute(
+            "SELECT * FROM medic_reviews WHERE id = ?", (int(review_id),)
+        ).fetchone()
+    return _medic_review(row) if row else None
+
+
+def list_medic_reviews(
+    run_id: int | None = None,
+    job_id: str | None = None,
+    status: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    clauses: list[str] = []
+    args: list[Any] = []
+    for column, value in (("run_id", run_id), ("job_id", job_id), ("status", status)):
+        if value is not None:
+            clauses.append(f"{column} = ?")
+            args.append(value)
+    where = " WHERE " + " AND ".join(clauses) if clauses else ""
+    args.append(max(1, min(int(limit), 1000)))
+    with _conn() as c:
+        rows = c.execute(
+            f"SELECT * FROM medic_reviews{where} ORDER BY id DESC LIMIT ?", args
+        ).fetchall()
+    return [_medic_review(row) for row in rows]
+
+
+def set_medic_review_status(
+    review_id: int,
+    status: str,
+    note: str = "",
+) -> dict[str, Any] | None:
+    with _conn() as c:
+        row = c.execute(
+            "UPDATE medic_reviews SET status = ?, note = ?, updated = ? WHERE id = ?",
+            (str(status)[:50], _bounded_text(note, 2000), time.time(), int(review_id)),
+        )
+        if not row.rowcount:
+            return None
+        saved = c.execute("SELECT * FROM medic_reviews WHERE id = ?", (review_id,)).fetchone()
+    return _medic_review(saved)  # type: ignore[arg-type]
+
+
+def delete_medic_review(review_id: int) -> bool:
+    with _conn() as c:
+        return c.execute(
+            "DELETE FROM medic_reviews WHERE id = ?", (int(review_id),)
+        ).rowcount > 0
 
 
 # ── Scheduling ───────────────────────────────────────────────────────────────
@@ -257,7 +575,26 @@ def rename_agent(old: str, new: str) -> int:
 def delete_job(job_id: str) -> bool:
     with _conn() as c:
         c.execute("DELETE FROM runs WHERE job_id = ?", (job_id,))
+        c.execute("DELETE FROM tool_events WHERE job_id = ?", (job_id,))
+        c.execute("DELETE FROM medic_reviews WHERE job_id = ?", (job_id,))
         return c.execute("DELETE FROM jobs WHERE id = ?", (job_id,)).rowcount > 0
+
+
+def delete_job_if_idle(job_id: str) -> str:
+    """Delete atomically unless at least one persisted run is still active."""
+    with _conn() as c:
+        if c.execute("SELECT 1 FROM jobs WHERE id = ?", (job_id,)).fetchone() is None:
+            return "missing"
+        if c.execute(
+            "SELECT 1 FROM runs WHERE job_id = ? AND status = 'running' LIMIT 1",
+            (job_id,),
+        ).fetchone() is not None:
+            return "running"
+        c.execute("DELETE FROM runs WHERE job_id = ?", (job_id,))
+        c.execute("DELETE FROM tool_events WHERE job_id = ?", (job_id,))
+        c.execute("DELETE FROM medic_reviews WHERE job_id = ?", (job_id,))
+        c.execute("DELETE FROM jobs WHERE id = ?", (job_id,))
+    return "deleted"
 
 
 def due_jobs(now: float | None = None) -> list[dict[str, Any]]:

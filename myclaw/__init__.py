@@ -24,10 +24,62 @@ Configuration:
 __version__ = "0.8.4"
 
 import logging
+import os
 import sys
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+
+def load_env_file(path=None) -> int:
+    """Load the release-local .env without overwriting the process environment.
+
+    Docker Compose already supplies these variables. Traditional installs and
+    direct CLI use need the same behaviour, and loading here happens before
+    configuration is imported.
+    """
+    from pathlib import Path
+
+    if path is None:
+        configured = os.environ.get("MYCLAW_ENV_FILE")
+        path = Path(configured) if configured else Path(__file__).resolve().parent.parent / ".env"
+    path = Path(path)
+    if not path.is_file():
+        return 0
+
+    loaded = 0
+    for raw in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line[7:].lstrip()
+        if "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key, value = key.strip(), value.strip()
+        if not key or key in os.environ:
+            continue
+        quote = value[0] if value[:1] in ("'", '"') else ""
+        if quote:
+            end = value.find(quote, 1)
+            if end < 0:
+                continue
+            trailing = value[end + 1:].strip()
+            if trailing and not trailing.startswith("#"):
+                continue
+            value = value[1:end]
+        else:
+            value = value.split(" #", 1)[0].rstrip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        os.environ[key] = value
+        loaded += 1
+    return loaded
+
+
+load_env_file()
+
 
 # ── Centralised application bootstrapper ───────────────────────────────────
 #

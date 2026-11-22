@@ -5,7 +5,7 @@ PUT  /api/evolve/agents/{name}/level    {"level": 1-9}
 POST /api/evolve/request                {action, target_kind, target, goal, agent} → a one-off job
 POST /api/evolve/fuse/preview           {a, b} → the merged agent to review (changes nothing)
 POST /api/evolve/fuse                   {a, b, name, description, system_prompt, model_from}
-POST /api/evolve/fuse/evaluate          {"limit": 8} → local model assessments
+POST /api/evolve/fuse/evaluate          {"limit": 8} → local model candidate selection
 POST /api/evolve/fuse/resume            {"id": "..."} → resume interrupted fusion
 POST /api/evolve/graveyard/revive       {name, mode} (Medic-controlled revive)
 GET  /api/evolve/files?q=                program files (picker for "Where")       2026-11-04
@@ -143,6 +143,11 @@ async def fuse_evaluate(body: FuseEvalIn = FuseEvalIn()):
     try:
         result = await evaluate_fusion_candidates(limit=body.limit)
         for candidate in result["candidates"]:
+            try:
+                evolve._pair(candidate["a"], candidate["b"])
+            except ValueError as exc:
+                candidate["blocked_reason"] = str(exc)
+        for candidate in result.get("heuristic_pool", []):
             try:
                 evolve._pair(candidate["a"], candidate["b"])
             except ValueError as exc:

@@ -141,6 +141,7 @@ def onboard():
     config["knowledge"] = {
         "enabled": kb_enabled,
         "auto_extract": False,
+        "extract_from_conversations": False,
         "knowledge_dir": "~/.myclaw/knowledge"
     }
 

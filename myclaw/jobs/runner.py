@@ -44,6 +44,9 @@ class JobRunner:
         self._task: asyncio.Task | None = None
         self._running: dict[str, asyncio.Task] = {}  # job_id -> task
         self._run_tasks: dict[int, asyncio.Task] = {}  # run_id -> task
+        self._review_runs: set[int] = set()
+        self._review_tasks: set[asyncio.Task] = set()
+        self._benchmark_runs: dict[str, int] = {}
         self._sem = asyncio.Semaphore(MAX_CONCURRENT)
         self.on_tick: list[Callable[[], Any]] = []  # extra periodic work (auto backups)
 
@@ -65,9 +68,16 @@ class JobRunner:
                 pass
         for t in list(self._running.values()):
             t.cancel()
+        reviews = list(self._review_tasks)
+        for task in reviews:
+            task.cancel()
+        if reviews:
+            await asyncio.gather(*reviews, return_exceptions=True)
 
     def running_job_ids(self) -> list[str]:
-        return [j for j, t in self._running.items() if not t.done()]
+        running = {j for j, t in self._running.items() if not t.done()}
+        running.update(job_id for job_id, count in self._benchmark_runs.items() if count > 0)
+        return list(running)
 
     async def _loop(self) -> None:
         while True:
@@ -112,6 +122,7 @@ class JobRunner:
                 run_id = await asyncio.to_thread(store.start_run, job_id, "run", trigger, "", "", attempt)
                 self._run_tasks[run_id] = asyncio.current_task()  # type: ignore[assignment]
                 status = await self._execute(job, run_id)
+                self._defer_medic_review(job, run_id)
                 if status in ("ok", "cancelled", "blocked"):
                     break
         if status == "blocked":
@@ -157,12 +168,40 @@ class JobRunner:
         from ..evolve import LifecycleError
         from ..executions import execution
 
+        run_token = store.CURRENT_RUN_ID.set(run_id)
+        job_token = store.CURRENT_JOB_ID.set(job["id"])
         try:
             async with execution(job["agent"], "job"):
                 return await self._execute_tracked(job, run_id, agent, kind)
         except LifecycleError as exc:
             await asyncio.to_thread(store.finish_run, run_id, "blocked", "", f"{exc} Check the agent and retry.")
             return "blocked"
+        except asyncio.CancelledError:
+            await asyncio.to_thread(store.finish_run, run_id, "cancelled", "", "Cancelled")
+            return "cancelled"
+        finally:
+            store.CURRENT_JOB_ID.reset(job_token)
+            store.CURRENT_RUN_ID.reset(run_token)
+
+    def _defer_medic_review(self, job: dict[str, Any], run_id: int) -> None:
+        """Queue one non-blocking post-run Medic review for each run."""
+        if run_id in self._review_runs or job.get("created_by") == "medic":
+            return
+        self._review_runs.add(run_id)
+        if len(self._review_runs) > 20_000:
+            self._review_runs.discard(min(self._review_runs))
+
+        async def review() -> None:
+            from . import medic
+
+            try:
+                await medic.review_run(run_id)
+            except Exception as e:
+                logger.warning("medic could not review run %s: %s", run_id, e)
+
+        task = asyncio.create_task(review(), name=f"medic-review-{run_id}")
+        self._review_tasks.add(task)
+        task.add_done_callback(self._review_tasks.discard)
 
     async def _execute_tracked(self, job: dict[str, Any], run_id: int, agent: Any = None,
                                kind: str = "run") -> str:
@@ -271,7 +310,41 @@ class JobRunner:
         return result
 
     # ── benchmark ────────────────────────────────────────────────────────────
-    async def benchmark(self, job_id: str, models: list[dict[str, str]], evaluate: bool = True) -> list[int]:
+    def _reserve_benchmark(self, job_id: str) -> None:
+        self._benchmark_runs[job_id] = self._benchmark_runs.get(job_id, 0) + 1
+
+    def _release_benchmark(self, job_id: str) -> None:
+        remaining = self._benchmark_runs.get(job_id, 0) - 1
+        if remaining > 0:
+            self._benchmark_runs[job_id] = remaining
+        else:
+            self._benchmark_runs.pop(job_id, None)
+
+    async def benchmark(self, job_id: str, models: list[dict[str, str]],
+                        evaluate: bool = True) -> list[int]:
+        """Run a benchmark and keep the job reserved for its whole lifetime."""
+        self._reserve_benchmark(job_id)
+        try:
+            return await self._benchmark_impl(job_id, models, evaluate)
+        finally:
+            self._release_benchmark(job_id)
+
+    def benchmark_in_background(self, job_id: str, models: list[dict[str, str]],
+                                evaluate: bool = True) -> asyncio.Task:
+        """Reserve synchronously before scheduling the benchmark task."""
+        self._reserve_benchmark(job_id)
+
+        async def run() -> list[int]:
+            try:
+                return await self._benchmark_impl(job_id, models, evaluate)
+            finally:
+                self._release_benchmark(job_id)
+
+        task = asyncio.create_task(run(), name=f"benchmark-{job_id}")
+        return task
+
+    async def _benchmark_impl(self, job_id: str, models: list[dict[str, str]],
+                              evaluate: bool = True) -> list[int]:
         """Run the job's prompt once per provider/model; returns the run ids."""
         from ..agent import Agent
         from ..config import load_config
@@ -295,6 +368,7 @@ class JobRunner:
             try:
                 async with self._sem:
                     status = await self._execute(job, run_id, agent=agent, kind="bench")
+                self._defer_medic_review(job, run_id)
                 if evaluate and status == "ok":
                     try:
                         await self.evaluate_run(run_id)

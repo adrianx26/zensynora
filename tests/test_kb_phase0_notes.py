@@ -34,6 +34,170 @@ def _note(home, name, text):
     return f
 
 
+def test_failed_index_is_reconciled_from_durable_marker(home, monkeypatch):
+    from myclaw.knowledge import storage
+
+    real_index = storage._index_file
+    calls = 0
+
+    def fail_once(path, user_id, db_path=None, db=None):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("injected index failure")
+        return real_index(path, user_id, db_path, db=db)
+
+    monkeypatch.setattr(storage, "_index_file", fail_once)
+    with pytest.raises(OSError, match="injected"):
+        storage.write_note("pending", title="Pending", content="canonical markdown")
+    pending = list((_kdir(home) / ".pending-index").glob("*.json"))
+    assert len(pending) == 1
+
+    assert storage.reconcile_pending_indices() == 1
+    assert not pending[0].exists()
+    assert "canonical markdown" in storage.read_note("pending").content
+
+
+def test_pending_marker_clear_only_removes_its_write(home):
+    from myclaw.knowledge import storage
+
+    path = _kdir(home) / "raced.md"
+    first = storage._mark_pending_index(path, _kdir(home), "default")
+    second = storage._mark_pending_index(path, _kdir(home), "default")
+    assert first != second and first.is_file() and second.is_file()
+
+    storage._clear_pending_marker(first)
+    assert not first.exists() and second.exists()
+    storage._clear_pending_marker(second)
+    assert not second.exists()
+
+
+def test_reconcile_does_not_consume_marker_before_new_bytes_land(home):
+    from myclaw.knowledge import storage
+
+    path = _kdir(home) / "generation.md"
+    path.write_text("old bytes", encoding="utf-8")
+    marker = storage._mark_pending_index(
+        path, _kdir(home), "default", "new bytes"
+    )
+
+    assert storage.reconcile_pending_indices() == 0
+    assert marker.exists()
+    path.write_text("new bytes", encoding="utf-8")
+    assert storage.reconcile_pending_indices() == 1
+    assert not marker.exists()
+
+
+def test_batch_round_trip_uses_one_index_transaction(home, monkeypatch):
+    from myclaw.knowledge import storage
+    from myclaw.knowledge.db import KnowledgeDB
+    from myclaw.knowledge.parser import Observation, Relation
+
+    storage.write_note("old", title="Old", content="replace all of this")
+    calls = []
+    real = storage.write_note
+
+    def counted(*args, **kwargs):
+        calls.append(kwargs.get("_db"))
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(storage, "write_note", counted)
+    permalink = storage.write_notes_batch([
+        {"name": "new", "title": "New", "content": "new body", "tags": ["one"],
+         "observations": [Observation(category="fact", content="kept")],
+         "relations": [Relation(relation_type="part_of", target="old")]},
+        {"name": "old", "title": "Old updated", "content": "new old body"},
+        {"name": "new", "title": "ignored duplicate"}
+    ][:2])
+    assert permalink == ["new", "old"]
+    assert calls and all(isinstance(db, KnowledgeDB) for db in calls)
+    assert len({id(db) for db in calls}) == 1
+    assert storage.read_note("new").observations[0].content == "kept"
+    assert (storage.read_note("new"), storage.read_note("old"))[0].relations[0].target == "old"
+    assert "replace all" not in storage.read_note("old").content
+    assert list((storage.knowledge_root() / "default" / ".trash").glob("*.md"))
+    assert not list((storage.knowledge_root() / "default" / ".pending-index").glob("*.json"))
+
+
+def test_batch_file_failure_preserves_durable_batch_marker(home, monkeypatch):
+    import json
+
+    from myclaw.knowledge import storage
+
+    real = storage._replace_note_file
+    writes = 0
+
+    def fail_second(*args, **kwargs):
+        nonlocal writes
+        writes += 1
+        if writes == 2:
+            raise OSError("injected file failure")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(storage, "_replace_note_file", fail_second)
+    with pytest.raises(storage.BatchFileWriteError, match="injected"):
+        storage.write_notes_batch([
+            {"name": "a", "title": "A", "content": "a body"},
+            {"name": "b", "title": "B", "content": "b body"},
+        ])
+    assert storage.read_note("a") is not None
+    markers = list((_kdir(home) / ".pending-index").glob("*.json"))
+    assert len(markers) == 1 and len(json.loads(markers[0].read_text(encoding="utf-8"))["file_paths"]) == 2
+    monkeypatch.setattr(storage, "_replace_note_file", real)
+    assert storage.reconcile_pending_indices() == 1
+    assert not list((_kdir(home) / ".pending-index").glob("*.json"))
+
+
+def test_batch_index_failure_is_durable_and_reconcilable(home, monkeypatch):
+    from myclaw.knowledge import storage
+
+    real = storage._index_file
+    calls = 0
+
+    def fail_second(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected index failure")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(storage, "_index_file", fail_second)
+    with pytest.raises(OSError, match="injected"):
+        storage.write_notes_batch([
+            {"name": "a", "title": "A", "content": "a canonical body"},
+            {"name": "b", "title": "B", "content": "b canonical body"},
+        ])
+    markers = list((_kdir(home) / ".pending-index").glob("*.json"))
+    assert len(markers) == 1
+    assert "canonical" in storage.read_note("a").content
+
+    monkeypatch.setattr(storage, "_index_file", real)
+    assert storage.reconcile_pending_indices() == 2
+    assert not list((_kdir(home) / ".pending-index").glob("*.json"))
+
+
+def test_batch_write_is_faster_than_per_note_writes(home):
+    import time
+
+    from myclaw.knowledge import storage
+
+    count = 30
+    started = time.perf_counter()
+    for i in range(count):
+        storage.write_note(f"single-{i}", title=f"Single {i}", content=f"body {i}")
+    single = time.perf_counter() - started
+
+    started = time.perf_counter()
+    storage.write_notes_batch([
+        {"name": f"batch-{i}", "title": f"Batch {i}", "content": f"body {i}"}
+        for i in range(count)
+    ])
+    batched = time.perf_counter() - started
+    assert batched < single * 0.85, (
+        f"batch {batched:.3f}s should beat individual writes {single:.3f}s"
+    )
+
+
 # ── 1. frontmatter ───────────────────────────────────────────────────────────
 
 def test_scalar_tag_is_a_list_not_characters():
@@ -189,7 +353,7 @@ def test_write_note_keeps_checkbox_lines(home):
     from myclaw.knowledge import read_note, write_note
 
     write_note("Tasks", content="My list\n- [ ] buy milk\n- [x] call Bob")
-    raw = (_kdir(home) / "tasks.md").read_text()
+    raw = (_kdir(home) / "tasks.md").read_text(encoding="utf-8")
     assert "- [ ] buy milk" in raw and "- [x] call Bob" in raw
     assert read_note("tasks").observations == []
 
@@ -206,7 +370,7 @@ def test_write_note_stores_and_keeps_aliases_and_metadata(home):
     write_note("Server", content="New text.", tags=["b"])  # no aliases/metadata given
     n = read_note("server")
     assert n.aliases == ["Srv"] and n.metadata == {"type": "machine"} and n.created_at == created
-    assert "New text." in (_kdir(home) / "server.md").read_text()
+    assert "New text." in (_kdir(home) / "server.md").read_text(encoding="utf-8")
     write_note("Server", content="New text.", aliases=[], metadata={"status": "old"})
     n = read_note("server")
     assert n.aliases == [] and n.metadata == {"status": "old"}
@@ -232,8 +396,9 @@ def test_write_note_is_atomic_and_leaves_no_temp_file(home, monkeypatch):
     real = os.replace
     monkeypatch.setattr(storage.os, "replace", lambda a, b: (calls.append((a, b)), real(a, b)))
     write_note("Atom", content="second")
-    assert calls and Path(calls[0][1]) == _kdir(home) / "atom.md"
-    assert "second" in (_kdir(home) / "atom.md").read_text()
+    note_replaces = [(a, b) for a, b in calls if Path(b).name == "atom.md"]
+    assert note_replaces
+    assert "second" in (_kdir(home) / "atom.md").read_text(encoding="utf-8")
     assert not [p for p in _kdir(home).iterdir() if p.name.endswith(".tmp")]
 
 
@@ -268,7 +433,7 @@ def test_update_note_stores_checksum_and_keeps_text(home):
     assert e.checksum == hashlib.md5(f.read_bytes()).hexdigest()
     assert e.size == f.stat().st_size
     n = read_note("box")
-    assert "Important text." in f.read_text() and n.tags == ["a", "b"]
+    assert "Important text." in f.read_text(encoding="utf-8") and n.tags == ["a", "b"]
     assert n.aliases == ["B"] and n.metadata == {"type": "x"}
     assert [o.content for o in n.observations] == ["4 cores"]
 
@@ -281,7 +446,7 @@ def test_update_note_new_content_keeps_facts_and_links(home):
     assert update_note("box", content="New text.\n- [os] Debian\n- runs [[Pihole]]",
                        aliases=["Bx"], metadata={"status": "live"})
     n = read_note("box")
-    raw = (_kdir(home) / "box.md").read_text()
+    raw = (_kdir(home) / "box.md").read_text(encoding="utf-8")
     assert "New text." in raw and "Old text." not in raw
     assert [(o.category, o.content) for o in n.observations] == [("spec", "4 cores"), ("os", "Debian")]
     assert [r.target for r in n.relations] == ["Pihole"]
@@ -318,7 +483,7 @@ def test_read_note_ignores_index_paths_outside_the_knowledge_dir(home):
     from myclaw.knowledge.db import KnowledgeDB
 
     outside = home / "secret.md"
-    outside.write_text("---\ntitle: S\n---\nsecret\n")
+    outside.write_text("---\ntitle: S\n---\nsecret\n", encoding="utf-8")
     with KnowledgeDB("default") as db:
         db.create_entity(name="S", permalink="s", file_path=str(outside))
     assert read_note("s") is None
@@ -367,7 +532,7 @@ def test_knowledge_root_and_scope_migration_use_the_configured_folder(home, tmp_
     assert storage.knowledge_root() == home / ".myclaw" / "knowledge"
     other = tmp_path / "elsewhere"
     (other / "webui").mkdir(parents=True)
-    (other / "webui" / "n.md").write_text("---\ntitle: N\n---\n\nsome text here\n")
+    (other / "webui" / "n.md").write_text("---\ntitle: N\n---\n\nsome text here\n", encoding="utf-8")
     try:
         storage.set_knowledge_root(other)
         assert storage.knowledge_root() == other
@@ -422,10 +587,10 @@ def test_r1_lossy_rewrite_keeps_the_old_file_in_trash(home, caplog):
     with caplog.at_level(logging.INFO, logger="myclaw.knowledge.storage"):
         write_note(name="Home Server", title="Home Server",
                    content="The home server runs Debian.", tags=["linux"])
-    assert "runs Debian" in f.read_text()  # same note, replaced in place
+    assert "runs Debian" in f.read_text(encoding="utf-8")  # same note, replaced in place
     assert not (_kdir(home) / "home-server.md").exists()
     kept = _trash(home)
-    assert len(kept) == 1 and kept[0].read_text() == HAND
+    assert len(kept) == 1 and kept[0].read_text(encoding="utf-8") == HAND
     assert kept[0].name.startswith("Home Server-")
     assert "previous version kept in .trash/" in caplog.text
 
@@ -441,7 +606,7 @@ def test_r1_no_trash_copy_when_nothing_is_lost(home):
     update_note("diary", tags=["a"])  # drops tags b, c
     assert len(_trash(home)) == 1
     update_note("diary", content="Completely new.")
-    assert len(_trash(home)) == 2 and "Day two." in _trash(home)[-1].read_text()
+    assert len(_trash(home)) == 2 and "Day two." in _trash(home)[-1].read_text(encoding="utf-8")
     assert read_note("diary").tags == ["a"]
 
 
@@ -454,7 +619,7 @@ def test_r2_a_file_named_like_the_note_but_holding_another_permalink(home):
     assert delete_note("x") is False and update_note("x", tags=["t"]) is False
     assert other.exists() and read_note("y").title == "Y"
     write_note("x", content="I am note x.")
-    assert "I am note y." in other.read_text()
+    assert "I am note y." in other.read_text(encoding="utf-8")
     n = read_note("x")
     assert n is not None and "I am note x." in n.content and n.file_path.name == "x-2.md"
     assert read_note("y").file_path == other
@@ -471,7 +636,7 @@ def test_r3_pasted_permalink_cannot_take_over_another_note(home):
         assert Path(db.get_entity_by_permalink("attacker").file_path).name == "attacker.md"
     assert "victim body" in read_note("victim").content
     assert read_note("attacker").permalink == "attacker"
-    assert "permalink: attacker" in (_kdir(home) / "attacker.md").read_text()
+    assert "permalink: attacker" in (_kdir(home) / "attacker.md").read_text(encoding="utf-8")
 
 
 def test_r4_whole_file_content_merges_the_other_arguments(home):
@@ -541,7 +706,7 @@ def test_r5_facts_and_links_from_every_section(home):
     assert [(r.relation_type, r.target) for r in n.relations] == [
         ("uses", "Other"), ("see", "Elsewhere"), ("related", "Third")]
     update_note("sections")
-    raw = f.read_text()
+    raw = f.read_text(encoding="utf-8")
     for text in ("# A Different Heading", "Intro text.", "Some general notes paragraph.",
                  "- [ ] buy milk", "- [code] not a fact", "- uses [[NotALink]]",
                  "- [fact] Earth is round #geo", "- see [[Elsewhere]]", "- related [[Third]]"):
@@ -605,7 +770,7 @@ def test_r6_gnarly_frontmatter_survives_a_no_op_update(home):
     assert before["source"] == {"url": "http://x", "urls": ["a", "b"]}
     assert before["deep"] == {"a": {"b": "c"}}
     update_note("nested")
-    raw = f.read_text()
+    raw = f.read_text(encoding="utf-8")
     after = parse_frontmatter(raw)
     for key, value in before.items():
         assert after[key] == value, key
@@ -619,7 +784,7 @@ def test_r6_gnarly_frontmatter_survives_a_no_op_update(home):
     assert n.name == "Custom Name" and n.created_at is None and "Some body." in n.content
     assert _trash(home) == []
     update_note("nested")
-    assert f.read_text().split("updated:")[0] == raw.split("updated:")[0]
+    assert f.read_text(encoding="utf-8").split("updated:")[0] == raw.split("updated:")[0]
 
 
 def test_r6_changed_values_are_written_and_read_back(home):

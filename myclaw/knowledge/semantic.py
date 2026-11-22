@@ -1422,6 +1422,9 @@ def embedding_status(base: str = "default", db_path: Optional[Path] = None) -> D
         "models": {k: asdict(v) for k, v in MODELS.items()},
         "install_command": f'python -m pip install "{INSTALL_SPEC}"',
         "notes": 0, "embedded": 0, "stale": 0, "chunks": 0, "other_model_chunks": 0,
+        "covered": 0, "total": 0, "covered_chunks": 0, "total_chunks": 0,
+        "covered_vectors": 0, "total_vectors": 0, "truncated": False,
+        "coverage_percent": 100.0, "percent": 100.0, "warning": None,
         "queued": _WORKER.queued(str(path)),
         "embedder": embedder_state()[0],
         "last_error": None, "last_run": None, "ready": False, "reason": None,
@@ -1435,6 +1438,8 @@ def embedding_status(base: str = "default", db_path: Optional[Path] = None) -> D
                                          (model,)).fetchone()[0]
             out["other_model_chunks"] = conn.execute(
                 "SELECT COUNT(*) FROM note_vectors WHERE model != ?", (model,)).fetchone()[0]
+            coverage = vector_coverage(conn, model)
+            out.update(coverage)
         else:
             out["stale"] = out["notes"]
     finally:
@@ -1468,6 +1473,26 @@ def embedding_status(base: str = "default", db_path: Optional[Path] = None) -> D
 
 _MATS: "OrderedDict[Tuple[str, str, int], Tuple[Any, np.ndarray, np.ndarray]]" = OrderedDict()
 _MLOCK = threading.Lock()
+
+
+def vector_coverage(conn: sqlite3.Connection, model: Optional[str] = None) -> Dict[str, Any]:
+    """Coverage of the bounded vector matrix used by semantic search."""
+    model = model or model_name()
+    if not _has_tables(conn):
+        total = 0
+    else:
+        total = int(conn.execute("SELECT COUNT(*) FROM note_vectors WHERE model = ?",
+                                 (model,)).fetchone()[0])
+    covered = min(total, MAX_SCAN_CHUNKS)
+    truncated = covered < total
+    percent = 100.0 if not total else round(100.0 * covered / total, 1)
+    warning = None
+    if truncated:
+        warning = (f"Semantic search scans {covered:,} of {total:,} vector chunks "
+                   f"({percent:.1f}%); older chunks may be omitted.")
+    return {"covered": covered, "total": total, "covered_chunks": covered, "total_chunks": total,
+            "covered_vectors": covered, "total_vectors": total, "truncated": truncated,
+            "coverage_percent": percent, "percent": percent, "warning": warning}
 
 
 def _reset_caches() -> None:

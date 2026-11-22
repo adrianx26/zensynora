@@ -50,9 +50,9 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv("HOME", str(tmp_path))
     kdir = tmp_path / ".myclaw" / "knowledge" / "default"
     kdir.mkdir(parents=True)
-    (kdir / "python.md").write_text(NOTE_A)
-    (kdir / "pip.md").write_text(NOTE_B)
-    (kdir / "lonely.md").write_text(NOTE_C)
+    (kdir / "python.md").write_text(NOTE_A, encoding="utf-8")
+    (kdir / "pip.md").write_text(NOTE_B, encoding="utf-8")
+    (kdir / "lonely.md").write_text(NOTE_C, encoding="utf-8")
     (tmp_path / ".myclaw" / "knowledge" / "12345").mkdir()
     from myclaw.web import knowledge_api
 
@@ -114,6 +114,89 @@ def test_create_edit_and_trash_note(client):
     assert r.status_code == 200
     assert not (kdir / "lonely.md").exists()
     assert len(list((kdir / ".trash").glob("lonely-*.md"))) == 1
+
+
+def test_create_preserves_valid_raw_markdown_and_utf8(client):
+    c, kdir = client
+    raw = (
+        "---\n"
+        'title: "Caf? ?"\n'
+        "permalink: cafe\n"
+        'tags: ["unicode"]\n'
+        "---\n\n"
+        "# Caf? ?\n\n"
+        "Cr?me br?l?e, æ—¥æœ¬èªž, and ðŸ˜€ are preserved.\n"
+    )
+
+    response = c.post("/api/knowledge/note", json={"name": "Cafe", "content": raw})
+
+    assert response.status_code == 200, response.text
+    assert (kdir / "cafe.md").read_bytes() == raw.encode("utf-8")
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("tags", [f"tag-{n}" for n in range(7)], "maximum is 6"),
+        (
+            "content",
+            "\n".join(f"- [fact] observation {n}" for n in range(11)),
+            "maximum is 10",
+        ),
+        (
+            "content",
+            "\n".join(f"- relates_to [[Target {n}]]" for n in range(9)),
+            "maximum is 8",
+        ),
+    ],
+)
+def test_create_rejects_excess_structured_note_fields(client, field, value, message):
+    c, _ = client
+    payload = {"name": "Invalid Note", "content": "A valid body."}
+    payload[field] = value
+
+    response = c.post("/api/knowledge/note", json=payload)
+
+    assert response.status_code == 400
+    assert message in response.json()["detail"]
+
+
+def test_raw_update_validation_reports_malformed_and_oversized_content(client):
+    c, kdir = client
+
+    malformed = c.put(
+        "/api/knowledge/note/lonely",
+        json={"content": "---\ntitle: Broken\ntags: [oops\n---\n\n# Broken"},
+    )
+    assert malformed.status_code == 400
+    assert "malformed YAML frontmatter" in malformed.json()["detail"]
+
+    too_large = c.put(
+        "/api/knowledge/note/lonely",
+        json={"content": "€" * 70_000},
+    )
+    assert too_large.status_code == 413
+    assert "UTF-8 bytes" in too_large.json()["detail"]
+    assert b"Broken" not in (kdir / "lonely.md").read_bytes()
+
+
+def test_raw_update_preserves_valid_markdown_exactly(client):
+    c, kdir = client
+    raw = (
+        "---\n"
+        'title: "Lonely Updated"\n'
+        "permalink: lonely\n"
+        'tags: ["caf?"]\n'
+        "---\n\n"
+        "# Lonely Updated\n\n"
+        "- [fact] æ—¥æœ¬èªž is retained\n"
+        "- related_to [[Python]]\n"
+    )
+
+    response = c.put("/api/knowledge/note/lonely", json={"content": raw})
+
+    assert response.status_code == 200, response.text
+    assert (kdir / "lonely.md").read_bytes() == raw.encode("utf-8")
 
 
 def test_search_and_bad_base(client):

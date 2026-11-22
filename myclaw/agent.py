@@ -338,7 +338,11 @@ class Agent:
         if not self._kb_enabled:  # 2026-10-23 (KB phase 0)
             return False
         try:
-            return bool(self.config.knowledge.auto_extract)
+            configured = self.config.knowledge.extract_from_conversations
+            return bool(
+                self.config.knowledge.auto_extract
+                if configured is None else configured
+            )
         except Exception as e:
             # Defaults to False on any config-read failure. We log only
             # once per agent to avoid spamming the logs on repeated reads.
@@ -595,9 +599,9 @@ class Agent:
         }
         kb_gap_logger.info(gap_data)
         try:
-            GAP_FILE.parent.mkdir(parents=True, exist_ok=True)
-            with open(GAP_FILE, "a", encoding="utf-8") as f:
-                f.write(json.dumps(gap_data) + "\n")
+            from .knowledge.researcher import GapResearcher
+
+            GapResearcher.append_gap(gap_data, GAP_FILE)
         except Exception as e:
             logger.warning(f"Failed to record gap to file: {e}")
         return True

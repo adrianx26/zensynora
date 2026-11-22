@@ -865,7 +865,7 @@ def test_review_origin_marks_agent_extract_session_notes(home):
     assert read_note("agent-note").metadata["origin"] == "agent"
     assert read_note("extracted").metadata["origin"] == "extract"
     summary = [p for p in (home / ".myclaw" / "knowledge" / "default").glob("session-summary-*.md")]
-    assert summary and "origin: session" in summary[0].read_text()
+    assert summary and "origin: session" in summary[0].read_text(encoding="utf-8")
     assert "origin" not in (read_note("mine").metadata or {})
     distill.distill()
     s = distill.get_persona()["summary"]

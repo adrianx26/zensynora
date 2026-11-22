@@ -284,6 +284,9 @@ class Watcher:
         self.stats: Dict[str, Any] = {"events": 0, "ignored_self": 0, "ignored": 0, "reindexed": 0,
                                       "runs": 0, "errors": 0, "last_reindex": None, "last_base": None,
                                       "last_stats": None, "last_error": None, "truncated": False,
+                                      "covered": 0, "total": 0, "covered_files": 0,
+                                      "total_files": 0, "coverage_percent": 100.0, "percent": 100.0,
+                                      "warning": None,
                                       "started": None}
 
     # -- feeding ---------------------------------------------------------
@@ -334,6 +337,7 @@ class Watcher:
         out: Dict[str, Tuple[int, int]] = {}
         dirs_seen: Set[str] = set()
         truncated = False
+        total = 0
         try:
             bases = sorted(e.name for e in os.scandir(root) if e.is_dir(follow_symlinks=False)
                            and not e.name.startswith("."))
@@ -347,23 +351,27 @@ class Watcher:
                 for name in names:
                     if not name.endswith(".md") or _ignored_name(name):
                         continue
+                    total += 1
+                    if len(out) >= MAX_FILES:
+                        truncated = True
+                        continue
                     full = os.path.join(dirpath, name)
                     try:
                         st = os.stat(full)
                     except OSError:
                         continue
                     out[_norm(full)] = (st.st_mtime_ns, st.st_size)
-                    if len(out) >= MAX_FILES:
-                        truncated = True
-                        break
-                if truncated:
-                    break
-            if truncated:
-                break
         if truncated and not self.stats["truncated"]:
             logger.info("Knowledge watcher: more than %d note files; only the first are polled "
                         "(install watchfiles for events: %s)", MAX_FILES, INSTALL_HINT)
         self.stats["truncated"] = truncated
+        covered = len(out)
+        percent = 100.0 if not total else round(100.0 * covered / total, 1)
+        self.stats.update(covered=covered, covered_files=covered, total=total, total_files=total,
+                          coverage_percent=percent, percent=percent, warning=(
+                              f"Polling covers {covered:,} of {total:,} note files; "
+                              f"{total - covered:,} cannot be detected by polling."
+                              if truncated else None))
         self.known_dirs = dirs_seen | {d for d in self.known_dirs if os.path.isdir(d)}
         if len(self.known_dirs) > MAX_FILES:
             self.known_dirs = dirs_seen
@@ -563,10 +571,17 @@ class Watcher:
     def status(self) -> Dict[str, Any]:
         with self.cv:
             pending = sum(len(v) if v is not None else 1 for v in self.pending.values())
+            stats = dict(self.stats)
+            # watchfiles watches the complete tree. The bounded listing is only
+            # used there for directory bookkeeping, not as the event coverage.
+            if self.mode == "watchfiles":
+                total = stats.get("total", stats.get("total_files", 0))
+                stats.update(covered=total, covered_files=total, truncated=False,
+                             coverage_percent=100.0, percent=100.0, warning=None)
             return {"enabled": enabled(), "wanted": self.wanted, "running": self.running(), "mode": self.mode,
                     "watching": self.watching, "pending": pending,
                     "watchfiles_installed": watchfiles_installed(), "install_hint": INSTALL_HINT,
-                    "poll_seconds": POLL_SECONDS, **dict(self.stats)}
+                    "poll_seconds": POLL_SECONDS, **stats}
 
 
 _W = Watcher()

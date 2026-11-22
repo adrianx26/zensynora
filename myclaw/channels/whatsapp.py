@@ -107,9 +107,7 @@ class WhatsAppChannel:
         self.business_account_id = config.channels.whatsapp.business_account_id
         self.access_token = config.channels.whatsapp.access_token.get_secret_value()
         self.verify_token = config.channels.whatsapp.verify_token.get_secret_value()
-        self.app_secret = getattr(config.channels.whatsapp, 'app_secret', None)
-        if self.app_secret and hasattr(self.app_secret, 'get_secret_value'):
-            self.app_secret = self.app_secret.get_secret_value()
+        self.app_secret = config.channels.whatsapp.app_secret.get_secret_value()
         self.allow_from = config.channels.whatsapp.allowFrom
         self.registry = registry
         self._dedup = _MessageDeduplicator()
@@ -128,11 +126,11 @@ class WhatsAppChannel:
     def _verify_signature(self, payload: bytes, signature_header: str | None) -> bool:
         """Validate X-Hub-Signature-256 from Meta webhook.
 
-        Returns True if signature is valid or if app_secret is not configured
-        (opt-in security).
+        Webhook events are rejected when the app secret is not configured.
         """
         if not self.app_secret:
-            return True  # Signature verification not configured — allow
+            logger.warning("WhatsApp app secret is not configured")
+            return False
         if not signature_header:
             logger.warning("Missing X-Hub-Signature-256 header")
             return False

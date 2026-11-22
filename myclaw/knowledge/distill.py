@@ -2053,11 +2053,12 @@ def consolidation_proposals(base: str = "default", limit: int = 100) -> Dict[str
         derived_pages = sum(page_sources.get(permalink, 0) for permalink in source_links)
         retrievals = sum(usage.note_usage(base, permalink).get("count", 0)
                          for permalink in source_links if permalink)
-        if conn is not None and source_links:
+        count_conn = _open(base)
+        if count_conn is not None and source_links:
             try:
                 ph = ",".join("?" * len(source_links))
                 db_counts = sum(
-                    int(r[0] or 0) for r in conn.execute(
+                    int(r[0] or 0) for r in count_conn.execute(
                         f"SELECT COALESCE(use_count, 0) FROM entities WHERE permalink IN ({ph})",
                         list(source_links),
                     ).fetchall()
@@ -2065,6 +2066,8 @@ def consolidation_proposals(base: str = "default", limit: int = 100) -> Dict[str
                 retrievals = max(retrievals, db_counts)
             except sqlite3.OperationalError:
                 pass
+            finally:
+                count_conn.close()
         evidence_total = len(shared) + len(distinct)
         verification_ratio = verified / max(1, len(shared))
         shared_ratio = len(shared) / max(1, evidence_total)

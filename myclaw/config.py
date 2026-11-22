@@ -138,6 +138,7 @@ ENV_OVERRIDES = {
     "channels.whatsapp.business_account_id": "MYCLAW_WHATSAPP_BUSINESS_ACCOUNT_ID",
     "channels.whatsapp.access_token": "MYCLAW_WHATSAPP_ACCESS_TOKEN",
     "channels.whatsapp.verify_token": "MYCLAW_WHATSAPP_VERIFY_TOKEN",
+    "channels.whatsapp.app_secret": "MYCLAW_WHATSAPP_APP_SECRET",
     # Defaults
     "agents.defaults.provider": "MYCLAW_DEFAULT_PROVIDER",
     "agents.defaults.model": "MYCLAW_DEFAULT_MODEL",
@@ -155,6 +156,7 @@ ENV_OVERRIDES = {
     "agents.summarization_threshold": "MYCLAW_AGENTS_SUMMARIZATION_THRESHOLD",
     # Knowledge
     "knowledge.auto_extract": "MYCLAW_KNOWLEDGE_AUTO_EXTRACT",
+    "knowledge.extract_from_conversations": "MYCLAW_KNOWLEDGE_EXTRACT_CONVERSATIONS",
     # New Tech
     "newtech.github_token": "MYCLAW_GITHUB_TOKEN",
     "newtech.github_repo_owner": "MYCLAW_GITHUB_REPO_OWNER",
@@ -276,6 +278,7 @@ class WhatsAppConfig(BaseModel):
     business_account_id: str = ""
     access_token: SecretStr = SecretStr("")
     verify_token: SecretStr = SecretStr("")
+    app_secret: SecretStr = SecretStr("")
     allowFrom: list[str] = []
 
 
@@ -583,7 +586,10 @@ class ChannelsConfig(BaseModel):
 
 class KnowledgeConfig(BaseModel):
     enabled: bool = True
-    auto_extract: bool = False  # Auto-extract knowledge from conversations
+    # Compatibility alias for pre-0.8.5 config. New configuration keeps
+    # conversation extraction separate from file watching.
+    auto_extract: bool = False
+    extract_from_conversations: Optional[bool] = None
     knowledge_dir: str = "~/.myclaw/knowledge"
     # 2026-10-24 (KB phase 2): quality layer. Conflict detection only flags
     # contradicting facts (never changes a note); notes with more than
@@ -644,6 +650,24 @@ class KnowledgeConfig(BaseModel):
     # 2026-11-11: what the AI and agents may do with these values: "suggest" (only
     # propose; you approve) or "safe" (change inside each value's safe limits; logged, undoable)
     tuning_ai: Literal["suggest", "safe"] = "suggest"
+
+    def model_post_init(self, __context) -> None:
+        """Materialize legacy auto_extract values before the next config save."""
+        if "watch_files" not in self.model_fields_set and self.auto_extract:
+            self.watch_files = True
+            self.__pydantic_fields_set__.add("watch_files")
+        if (
+            "extract_from_conversations" not in self.model_fields_set
+            and "auto_extract" in self.model_fields_set
+        ):
+            self.extract_from_conversations = self.auto_extract
+            self.__pydantic_fields_set__.add("extract_from_conversations")
+
+    def watch_files_enabled(self) -> bool:
+        """Retain legacy file sync when old configs omit ``watch_files``."""
+        if "watch_files" in self.model_fields_set:
+            return bool(self.watch_files)
+        return bool(self.auto_extract)
 
 
 class SwarmConfig(BaseModel):
@@ -876,7 +900,7 @@ class RoutingConfig(BaseModel):
 class IntelligenceConfig(BaseModel):
     """Configuration for AI intelligence features (Research, Routing, Benchmarking)."""
 
-    research_enabled: bool = True
+    research_enabled: bool = False
     research_interval_hours: int = 6
     research_idle_minutes: int = 15
     routing: RoutingConfig = RoutingConfig()
@@ -1194,7 +1218,7 @@ def _apply_knowledge_watch(config: AppConfig) -> None:
         kc = getattr(config, "knowledge", None)
         from .knowledge.watch import set_options
 
-        set_options(watch_files=getattr(kc, "watch_files", False),
+        set_options(watch_files=kc.watch_files_enabled(),
                     kb_enabled=getattr(kc, "enabled", True))
     except Exception as e:
         logger.warning("file watcher settings could not be applied (%s); it stays off", e)

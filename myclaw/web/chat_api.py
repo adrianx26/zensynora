@@ -27,9 +27,8 @@ Server → client: JSON events — message, stream_start, chunk, stream_end,
 turn_start, turn_end, tool_start, tool_end, delegation_start, delegation_end,
 job_run, channel, message_updated, messages_deleted, cleared, error.
 
-Reading and chatting follow the same rule as the original chat socket (open
-to whoever can reach the Web UI, with the two-factor code when MFA is on);
-posting over REST, deleting and clearing need the settings guard.
+Reading and chatting follow the same local/admin access guard as Settings.
+Remote clients authenticate the WebSocket with a short-lived ticket.
 """
 
 from __future__ import annotations
@@ -48,7 +47,7 @@ from pydantic import BaseModel
 from myclaw import events
 from myclaw.chat import store
 from myclaw.chat.engine import USER_ID, ChatEngine, memory_scope, to_json
-from myclaw.web.settings_api import guard
+from myclaw.web.settings_api import guard, require_websocket
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +146,7 @@ class PostIn(BaseModel):
     text: str
 
 
-@router.get("/api/channels")
+@router.get("/api/channels", dependencies=guard)
 async def list_channels():
     await asyncio.to_thread(store.ensure_default_channel)
     await asyncio.to_thread(sync_channels)
@@ -159,7 +158,7 @@ async def list_channels():
     return {"channels": chans, "agents": engine().agents(), "reply_modes": list(store.REPLY_MODES)}
 
 
-@router.post("/api/channels")
+@router.post("/api/channels", dependencies=guard)
 async def create_channel(body: ChannelIn):
     members = _check_agents(body.members)
     try:
@@ -168,12 +167,12 @@ async def create_channel(body: ChannelIn):
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/api/channels/dm/{agent}")
+@router.get("/api/channels/dm/{agent}", dependencies=guard)
 async def dm_channel(agent: str):
     return await asyncio.to_thread(store.dm_channel, _check_agents([agent])[0])
 
 
-@router.patch("/api/channels/{channel_id}")
+@router.patch("/api/channels/{channel_id}", dependencies=guard)
 async def update_channel(channel_id: str, body: ChannelPatch):
     fields = body.model_dump()
     if body.members is not None:
@@ -214,7 +213,7 @@ async def delete_channel(channel_id: str):
     return {"status": "deleted"}
 
 
-@router.get("/api/channels/{channel_id}/messages")
+@router.get("/api/channels/{channel_id}/messages", dependencies=guard)
 async def channel_messages(channel_id: str, before: int | None = None, limit: int = 100):
     ch = await asyncio.to_thread(_get_channel, channel_id)
     if ch is None:
@@ -341,7 +340,7 @@ async def regenerate_message(channel_id: str, message_id: int):
     return {"status": "regenerating", "answers": question["id"]}
 
 
-@router.get("/api/channels/{channel_id}/export.md")
+@router.get("/api/channels/{channel_id}/export.md", dependencies=guard)
 async def export_channel(channel_id: str):
     ch = await asyncio.to_thread(_get_channel, channel_id)
     if ch is None:
@@ -353,18 +352,19 @@ async def export_channel(channel_id: str):
                              headers={"Content-Disposition": f'attachment; filename="{name}.md"'})
 
 
-@router.post("/api/channels/{channel_id}/stop")
+@router.post("/api/channels/{channel_id}/stop", dependencies=guard)
 async def stop_channel(channel_id: str):
     return {"stopped": await engine().stop(channel_id)}
 
 
-@router.get("/api/activity")
+@router.get("/api/activity", dependencies=guard)
 async def activity(limit: int = 100):
     return {"events": await asyncio.to_thread(store.recent_activity, limit)}
 
 
 @router.websocket("/ws/channels/{channel_id}")
 async def channel_socket(ws: WebSocket, channel_id: str):
+    await require_websocket(ws)
     await ws.accept()
     try:
         ch = await asyncio.to_thread(_get_channel, channel_id)

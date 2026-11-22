@@ -1083,7 +1083,8 @@ class KnowledgeDB:
             """,
             (str(new_path), checksum, mtime, size, now, entity_id),
         )
-        conn.commit()
+        if self._batch_depth == 0:
+            conn.commit()
 
     def delete_entity(self, permalink: str) -> bool:
         """Delete entity and all related data (cascades).

@@ -12,6 +12,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from myclaw import events
+UI_HEADERS = {"X-ZenSynora-UI": "1"}
 
 
 class RecordingMemory:
@@ -111,6 +112,53 @@ def _recv_until(ws, kind, limit=200):
         if ev.get("type") == kind:
             return ev
     raise AssertionError(f"no {kind} event")
+
+
+def test_remote_chat_routes_require_admin_access(home, monkeypatch):
+    from pydantic import SecretStr
+
+    import myclaw.config as cfg_mod
+    from myclaw.web import chat_api, settings_api
+
+    cfg = cfg_mod.AppConfig()
+    cfg.security.admin_api_key = SecretStr("admin-secret")
+    monkeypatch.setattr(settings_api, "load_config", lambda: cfg)
+    chat_api.set_registry_getter(lambda: {"default": FakeAgent("default")})
+    app = FastAPI()
+    app.include_router(settings_api.router)
+    app.include_router(chat_api.router)
+
+    with TestClient(app, client=("203.0.113.5", 50000), headers={}) as remote:
+        assert remote.get("/api/channels").status_code == 403
+        headers = {"X-API-Key": "admin-secret"}
+        assert remote.get("/api/channels", headers=headers).status_code == 200
+        assert remote.get("/api/channels/general/export.md", headers=headers).status_code == 200
+        assert remote.post("/api/ws-ticket").status_code == 403
+
+
+def test_websocket_requires_auth_for_remote_clients(home, monkeypatch):
+    from pydantic import SecretStr
+
+    import myclaw.config as cfg_mod
+    from myclaw.web import chat_api, settings_api
+
+    cfg = cfg_mod.AppConfig()
+    cfg.security.admin_api_key = SecretStr("admin-secret")
+    monkeypatch.setattr(settings_api, "load_config", lambda: cfg)
+    chat_api.set_registry_getter(lambda: {"default": FakeAgent("default")})
+    app = FastAPI()
+    app.include_router(settings_api.router)
+    app.include_router(chat_api.router)
+
+    with TestClient(app, client=("203.0.113.5", 50000), headers=UI_HEADERS) as remote:
+        with pytest.raises(Exception) as exc:
+            with remote.websocket_connect("/ws/channels/general"):
+                pass
+        assert exc.value.code == 1008
+
+        ticket = remote.post("/api/ws-ticket", headers={"X-API-Key": "admin-secret"}).json()["ticket"]
+        with remote.websocket_connect(f"/ws/channels/general?ticket={ticket}") as ws:
+            assert json.loads(ws.receive_text())["type"] == "hello"
 
 
 def _channel(c, members=("default",), mode="lead"):

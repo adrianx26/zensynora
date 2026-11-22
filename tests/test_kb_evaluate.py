@@ -12,7 +12,15 @@ import asyncio
 import json
 import time
 
+import pytest
+
 from tests.test_kb_phase2_quality import _kdir, _trash, home  # noqa: F401  (fixture)
+
+
+@pytest.fixture(autouse=True)
+def _without_optional_embeddings(monkeypatch):
+    """Evaluate rule/AI assertions are independent of the optional model install."""
+    monkeypatch.setattr("myclaw.knowledge.semantic.enabled", lambda: False)
 
 
 def _w(title, content="Some useful text about it.", tags=("ok",), links=()):

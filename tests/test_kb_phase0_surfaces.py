@@ -9,7 +9,7 @@ from typing import Dict, List, Optional
 import pytest
 
 
-# ── MCP server: typed schema + argument coercion ─────────────────────────────
+# ?? MCP server: typed schema + argument coercion ?????????????????????????????
 
 
 def _sample_tool(query: str, limit: int = 5, ratio: float = 0.5, exact: bool = False,
@@ -116,7 +116,7 @@ def test_mcp_search_knowledge_with_string_limit(tmp_path, monkeypatch):
     assert "Zebra" in text
 
 
-# ── CLI: --base, read shows the text, sync --force, boolean search ───────────
+# ?? CLI: --base, read shows the text, sync --force, boolean search ???????????
 
 
 @pytest.fixture
@@ -199,7 +199,7 @@ def test_cli_rejects_path_as_base(cli_home):
     assert r.exit_code != 0 and "not a knowledge base name" in r.output
 
 
-# ── Web UI API ───────────────────────────────────────────────────────────────
+# ?? Web UI API ???????????????????????????????????????????????????????????????
 
 K8S = """---
 title: "Kubernetes"
@@ -236,8 +236,8 @@ def web(tmp_path, monkeypatch):
 
     kdir = tmp_path / ".myclaw" / "knowledge" / "default"
     kdir.mkdir(parents=True)
-    (kdir / "kubernetes.md").write_text(K8S)
-    (kdir / "deploy.md").write_text(DEPLOY)
+    (kdir / "kubernetes.md").write_text(K8S, encoding="utf-8")
+    (kdir / "deploy.md").write_text(DEPLOY, encoding="utf-8")
     app = FastAPI()
     app.include_router(knowledge_api.router)
     return TestClient(app), kdir
@@ -311,7 +311,7 @@ def test_web_root_follows_knowledge_root(tmp_path, monkeypatch):
     assert _root() == tmp_path / ".myclaw" / "knowledge"
 
 
-# ── knowledge.knowledge_dir from the config ──────────────────────────────────
+# ?? knowledge.knowledge_dir from the config ??????????????????????????????????
 
 
 @pytest.fixture
@@ -328,7 +328,7 @@ def cfg_env(tmp_path, monkeypatch):
 
     def write(knowledge_dir):
         (tmp_path / ".myclaw").mkdir(exist_ok=True)
-        cfg_mod.CONFIG_FILE.write_text(json.dumps({"knowledge": {"knowledge_dir": knowledge_dir}}))
+        cfg_mod.CONFIG_FILE.write_text(json.dumps({"knowledge": {"knowledge_dir": knowledge_dir}}), encoding="utf-8")
         return cfg_mod.load_config(force_reload=True)
 
     try:

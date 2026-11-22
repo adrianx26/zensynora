@@ -6,6 +6,7 @@ GET    /api/jobs/{id}                  one job + recent runs
 PATCH  /api/jobs/{id}                  modify (also enable/disable)
 DELETE /api/jobs/{id}                  delete job and its history
 POST   /api/jobs/{id}/run              run now (in the background)
+POST   /api/jobs/{id}/ai-ask           ask for an agent/run recommendation
 GET    /api/jobs/{id}/runs             run history (?kind=run|bench&limit=50)
 POST   /api/jobs/{id}/benchmark        {models: [{provider, model}], evaluate}
 POST   /api/jobs/runs/{run_id}/evaluate  score a run with the main (or given) LLM
@@ -22,7 +23,7 @@ from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from myclaw.jobs import store
 from myclaw.jobs.runner import JobRunner
@@ -85,6 +86,11 @@ class EvalIn(BaseModel):
     model: str | None = None
 
 
+class AIAskIn(BaseModel):
+    run_id: int | None = None
+    question: str = Field("", max_length=2000)
+
+
 def _with_state(job: dict[str, Any]) -> dict[str, Any]:
     job["running"] = job["id"] in runner().running_job_ids()
     return job
@@ -135,7 +141,12 @@ async def update_job(job_id: str, body: JobIn):
 
 @router.delete("/api/jobs/{job_id}", dependencies=guard)
 async def delete_job(job_id: str):
-    if not await asyncio.to_thread(store.delete_job, job_id):
+    if job_id in runner().running_job_ids():
+        raise HTTPException(status_code=409, detail="Stop the active run before deleting this job.")
+    result = await asyncio.to_thread(store.delete_job_if_idle, job_id)
+    if result == "running":
+        raise HTTPException(status_code=409, detail="Stop the active run before deleting this job.")
+    if result == "missing":
         raise HTTPException(status_code=404, detail="No such job")
     return {"status": "deleted"}
 
@@ -148,6 +159,24 @@ async def run_job(job_id: str):
         raise HTTPException(status_code=409, detail="This job is already running.")
     runner().run_in_background(job_id, trigger="manual")
     return {"status": "started"}
+
+
+@router.post("/api/jobs/{job_id}/ai-ask", dependencies=guard)
+async def ai_ask(job_id: str, body: AIAskIn = AIAskIn()):
+    """Analyze a job and run, recommending an available agent without applying it."""
+    from myclaw.jobs import medic
+
+    try:
+        return await medic.ai_ask(
+            job_id,
+            run_id=body.run_id,
+            question=body.question,
+            registry=runner()._registry(),
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="No such job or run")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.get("/api/jobs/{job_id}/runs", dependencies=guard)
@@ -164,7 +193,7 @@ async def benchmark(job_id: str, body: BenchIn):
         raise HTTPException(status_code=400, detail="Pick at least one provider + model.")
     if len(models) > 8:
         raise HTTPException(status_code=400, detail="Benchmark at most 8 models at a time.")
-    asyncio.create_task(runner().benchmark(job_id, models, body.evaluate))
+    runner().benchmark_in_background(job_id, models, body.evaluate)
     return {"status": "started", "models": models}
 
 

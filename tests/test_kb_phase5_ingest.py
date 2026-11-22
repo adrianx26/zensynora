@@ -92,6 +92,74 @@ def test_document_becomes_overview_and_linked_parts(home):
     assert note(birds).metadata.get("source") == "/data/field-guide.pdf"
 
 
+def test_import_keeps_batch_marker_when_one_index_write_fails(home, monkeypatch):
+    from myclaw.knowledge import storage
+
+    real = storage._index_file
+    calls = 0
+
+    def fail_second(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            raise OSError("injected index failure")
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(storage, "_index_file", fail_second)
+    result = write_document_notes(sample_doc(), "default")
+    assert any("injected index failure" in error for error in result.errors)
+    pending = home / ".myclaw" / "knowledge" / "default" / ".pending-index"
+    markers = list(pending.glob("*.json"))
+    assert len(markers) == 1
+    assert len(json.loads(markers[0].read_text(encoding="utf-8"))["file_paths"]) >= 1
+
+    monkeypatch.setattr(storage, "_index_file", real)
+    assert storage.reconcile_pending_indices() >= 1
+    assert not list(pending.glob("*.json"))
+
+
+def test_import_normalizes_all_planned_note_fields(home):
+    from myclaw.knowledge.validation import MAX_FACTS, MAX_TAGS
+
+    doc = Document(
+        title="Normalized", source="normalized.txt", kind="text",
+        sections=[Section(
+            "Part", "Part body " * 100, key="part",
+            facts=[("category" * 20, "fact " * 100) for _ in range(MAX_FACTS + 4)],
+            tags=[f"Tag {i}" for i in range(MAX_TAGS + 4)],
+        )],
+        tags=[f"Doc {i}" for i in range(MAX_TAGS + 4)], split_all=True,
+    )
+    result = write_document_notes(doc, "default")
+    part = next(ref for ref in result.notes if ref.permalink != result.overview.permalink)
+    imported = note(part.permalink)
+    assert len(imported.tags) <= MAX_TAGS
+    assert len(imported.observations) <= MAX_FACTS
+    assert all(len(obs.category) <= 30 and len(obs.content) <= 400
+               for obs in imported.observations)
+
+
+def test_import_parts_share_one_database_transaction(home, monkeypatch):
+    from myclaw.knowledge.db import KnowledgeDB
+
+    batch_calls = 0
+    real_batch = KnowledgeDB.batch
+
+    def counted_batch(self):
+        nonlocal batch_calls
+        batch_calls += 1
+        return real_batch(self)
+
+    monkeypatch.setattr(KnowledgeDB, "batch", counted_batch)
+    doc = Document(
+        title="Batch", source="batch.txt", kind="text",
+        sections=[Section(f"S{i}", f"text {i} " * 60, key=f"s{i}") for i in range(20)],
+    )
+    result = write_document_notes(doc, "default", max_notes=21)
+    assert len(result.notes) == 21
+    assert batch_calls == 1
+
+
 def test_reingest_updates_instead_of_duplicating(home):
     first = write_document_notes(sample_doc(), "default")
     files = sorted(p.name for p in kdir(home).glob("*.md"))
@@ -167,14 +235,14 @@ def test_secrets_are_skipped_and_redacted(home):
 
     proj = home / "proj"
     proj.mkdir()
-    (proj / ".env").write_text("OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz123456\n")
-    (proj / "id_rsa").write_text("-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----\n")
-    (proj / "credentials.json").write_text('{"token": "abc"}')
+    (proj / ".env").write_text("OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz123456\n", encoding="utf-8")
+    (proj / "id_rsa").write_text("-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----\n", encoding="utf-8")
+    (proj / "credentials.json").write_text('{"token": "abc"}', encoding="utf-8")
     (proj / "README.md").write_text("# Proj\n\nThe token is ghp_abcdefghijklmnopqrstuvwxyz0123 here.\n"
-                                    "password = hunter2secret\n" + "More text. " * 40)
-    (proj / "app.py").write_text("API_KEY = 'sk-zyxwvutsrqponmlkjihgfedcba987654'\nprint('hi')\n" * 3)
+                                    "password = hunter2secret\n" + "More text. " * 40, encoding="utf-8")
+    (proj / "app.py").write_text("API_KEY = 'sk-zyxwvutsrqponmlkjihgfedcba987654'\nprint('hi')\n" * 3, encoding="utf-8")
     r = assimilate(str(proj), max_notes=10)
-    texts = "\n".join(p.read_text() for p in kdir(home).glob("*.md"))
+    texts = "\n".join(p.read_text(encoding="utf-8") for p in kdir(home).glob("*.md"))
     for secret in ("sk-abcdefghij", "ghp_abcdefghij", "hunter2secret", "sk-zyxwvuts", "OPENSSH"):
         assert secret not in texts
     assert "[redacted]" in texts
@@ -189,15 +257,15 @@ def test_local_paths_outside_the_allowed_roots_are_refused(home, tmp_path_factor
         check_local_path("/etc")
     ssh = home / ".ssh"
     ssh.mkdir()
-    (ssh / "notes.txt").write_text("x")
+    (ssh / "notes.txt").write_text("x", encoding="utf-8")
     with pytest.raises(IngestError, match="hidden folder"):
         check_local_path(str(ssh / "notes.txt"))
     with pytest.raises(IngestError, match="hidden folder"):
         check_local_path("~/.myclaw/config.json")
-    (home / "doc.txt").write_text("fine")
+    (home / "doc.txt").write_text("fine", encoding="utf-8")
     assert check_local_path("~/doc.txt") == (home / "doc.txt").resolve()
     ws_file = home / ".myclaw" / "workspace" / "w.txt"
-    ws_file.write_text("workspace file")
+    ws_file.write_text("workspace file", encoding="utf-8")
     assert check_local_path("w.txt") == ws_file.resolve()  # relative = workspace
     msg = tool("/etc/hostname")
     assert msg.startswith("Could not assimilate") and "home folder" in msg
@@ -208,9 +276,9 @@ def test_folder_walk_honours_gitignore_and_skips_tool_folders(home):
     (root / "build").mkdir(parents=True)
     (root / "node_modules" / "x").mkdir(parents=True)
     (root / "logs").mkdir()
-    (root / ".gitignore").write_text("logs/\n*.tmp\n/secret_dir\n")
+    (root / ".gitignore").write_text("logs/\n*.tmp\n/secret_dir\n", encoding="utf-8")
     for rel in ("main.py", "build/out.py", "node_modules/x/i.js", "logs/a.log", "a.tmp", "keep.md"):
-        (root / rel).write_text("x")
+        (root / rel).write_text("x", encoding="utf-8")
     entries, _ = sources.walk_folder(root, Budget())
     assert sorted(e.path for e in entries) == ["keep.md", "main.py"]
 
@@ -310,7 +378,7 @@ def test_url_page_becomes_notes(home, monkeypatch):
     r = assimilate("https://garden.example.com/notes", max_notes=10)
     over = note(r.overview.permalink)
     assert over.title == "Garden notes" and r.kind == "web"
-    text = "\n".join(p.read_text() for p in kdir(home).glob("*.md"))
+    text = "\n".join(p.read_text(encoding="utf-8") for p in kdir(home).glob("*.md"))
     assert "Soil needs compost." in text and "water(daily)" in text
     assert "evil()" not in text and "Footer text" not in text and "Menu" not in text
     assert "https://example.org/compost" in over.content
@@ -332,16 +400,16 @@ def test_text_markdown_csv_json_readers(home):
     from myclaw.knowledge.ingest.documents import read_document
 
     md = home / "guide.md"
-    md.write_text("---\ntags: x\n---\n# The Guide\n\nIntro.\n\n## One\n\nFirst part.\n\n## Two\n\nSecond.\n")
+    md.write_text("---\ntags: x\n---\n# The Guide\n\nIntro.\n\n## One\n\nFirst part.\n\n## Two\n\nSecond.\n", encoding="utf-8")
     d = read_document(md)
     assert d.title == "The Guide" and [s.heading for s in d.norm_sections()] == ["One", "Two"]
     csvf = home / "people.csv"
-    csvf.write_text("name,age\nAda,36\nBob,40\n")
+    csvf.write_text("name,age\nAda,36\nBob,40\n", encoding="utf-8")
     d = read_document(csvf)
     sec = d.norm_sections()[0]
     assert "| name | age |" in sec.text and ("columns", "people: name, age") in sec.facts
     js = home / "data.json"
-    js.write_text(json.dumps({"a": 1, "b": [1, 2]}))
+    js.write_text(json.dumps({"a": 1, "b": [1, 2]}), encoding="utf-8")
     assert ("keys", "a, b") in read_document(js).facts
     with pytest.raises(IngestError, match="cannot be imported"):
         (home / "x.bin").write_bytes(b"\x00\x01")
@@ -490,7 +558,7 @@ def test_chatgpt_export_json_and_zip(home):
     from myclaw.knowledge.ingest import import_file
 
     f = home / "conversations.json"
-    f.write_text(json.dumps(CHATGPT))
+    f.write_text(json.dumps(CHATGPT), encoding="utf-8")
     r = import_file(str(f))
     assert r.kind == "chatgpt" and r.extra["conversations"] == 2
     rome = next(n for n in r.notes if "Trip to Rome" in n.title)
@@ -535,7 +603,7 @@ def test_mcp_memory_jsonl_and_json(home):
              {"type": "entity", "name": "Analytical Engine", "entityType": "machine", "observations": []},
              {"type": "relation", "from": "Ada Lovelace", "to": "Analytical Engine", "relationType": "worked on"}]
     f = home / "memory.jsonl"
-    f.write_text("\n".join(json.dumps(x) for x in lines))
+    f.write_text("\n".join(json.dumps(x) for x in lines), encoding="utf-8")
     r = import_file(str(f))
     assert r.kind == "mcp_memory" and r.extra["entities"] == 2
     ada = next(n for n in r.notes if n.title == "Ada Lovelace")
@@ -545,20 +613,20 @@ def test_mcp_memory_jsonl_and_json(home):
     assert n.metadata["type"] == "person" and "person" in n.tags
     assert (ada.permalink, "worked_on", engine.permalink) in index_links()
     g = home / "memory.json"
-    g.write_text(json.dumps({"entities": lines[:2], "relations": lines[2:]}))
+    g.write_text(json.dumps({"entities": lines[:2], "relations": lines[2:]}), encoding="utf-8")
     assert import_file(str(g), kind="mcp").count("created") == 0
     with pytest.raises(IngestError, match="No entities"):
         bad = home / "empty.json"
-        bad.write_text(json.dumps({"entities": []}))
+        bad.write_text(json.dumps({"entities": []}), encoding="utf-8")
         import_file(str(bad), kind="mcp_memory")
 
 
 def _vault(root: Path) -> Path:
     (root / "Projects").mkdir(parents=True)
     (root / ".obsidian").mkdir()
-    (root / ".obsidian" / "app.json").write_text("{}")
-    (root / "Home.md").write_text("---\ntags: [start]\ncustom: kept\n---\n\nSee [[Garden]].\n")
-    (root / "Projects" / "Garden.md").write_text("# Garden\n\nBack to [[Home]].\n\n- links_to [[Home]]\n")
+    (root / ".obsidian" / "app.json").write_text("{}", encoding="utf-8")
+    (root / "Home.md").write_text("---\ntags: [start]\ncustom: kept\n---\n\nSee [[Garden]].\n", encoding="utf-8")
+    (root / "Projects" / "Garden.md").write_text("# Garden\n\nBack to [[Home]].\n\n- links_to [[Home]]\n", encoding="utf-8")
     (root / "Projects" / "photo.png").write_bytes(b"\x89PNG")
     return root
 
@@ -572,10 +640,10 @@ def test_markdown_folder_import_keeps_frontmatter_and_never_overwrites(home):
     r = import_file(str(vault))
     assert r.kind == "markdown" and r.extra["copied"] == 2 and r.extra["permalinks_changed"] == 1
     dest = kdir(home) / "imported" / "vault"
-    home_md = (dest / "Home.md").read_text()
+    home_md = (dest / "Home.md").read_text(encoding="utf-8")
     assert "custom: kept" in home_md and "tags: [start]" in home_md and "See [[Garden]]." in home_md
     assert "permalink: vault-home" in home_md
-    assert (dest / "Projects" / "Garden.md").read_text() == (vault / "Projects" / "Garden.md").read_text()
+    assert (dest / "Projects" / "Garden.md").read_text(encoding="utf-8") == (vault / "Projects" / "Garden.md").read_text(encoding="utf-8")
     assert not (dest / ".obsidian").exists() and not (dest / "Projects" / "photo.png").exists()
     assert note("home").title == "My own home note"  # the user's note is untouched
     garden = note("garden")
@@ -585,24 +653,24 @@ def test_markdown_folder_import_keeps_frontmatter_and_never_overwrites(home):
     assert again.extra["copied"] == 0 and again.extra["unchanged_files"] == 2
     # review item 10: a changed note updates our own (unedited) copy — no -2 pile-up;
     # the previous version is kept in .trash
-    (vault / "Projects" / "Garden.md").write_text("# Garden\n\nChanged.\n")
+    (vault / "Projects" / "Garden.md").write_text("# Garden\n\nChanged.\n", encoding="utf-8")
     third = import_file(str(vault))
     assert third.extra["updated_files"] == 1 and third.extra["kept_your_edits"] == 0
-    assert "Changed." in (dest / "Projects" / "Garden.md").read_text()
+    assert "Changed." in (dest / "Projects" / "Garden.md").read_text(encoding="utf-8")
     assert not (dest / "Projects" / "Garden-2.md").exists()
-    assert any("Back to [[Home]]" in t.read_text() for t in (kdir(home) / ".trash").glob("*.md"))
+    assert any("Back to [[Home]]" in t.read_text(encoding="utf-8") for t in (kdir(home) / ".trash").glob("*.md"))
     # the user edits our copy: the next change is written beside it, once
-    (dest / "Projects" / "Garden.md").write_text("# Garden\n\nMY EDIT\n")
-    (vault / "Projects" / "Garden.md").write_text("# Garden\n\nChanged again.\n")
+    (dest / "Projects" / "Garden.md").write_text("# Garden\n\nMY EDIT\n", encoding="utf-8")
+    (vault / "Projects" / "Garden.md").write_text("# Garden\n\nChanged again.\n", encoding="utf-8")
     fourth = import_file(str(vault))
     assert fourth.extra["kept_your_edits"] == 1
-    assert (dest / "Projects" / "Garden.md").read_text() == "# Garden\n\nMY EDIT\n"
-    assert "Changed again." in (dest / "Projects" / "Garden-2.md").read_text()
-    (vault / "Projects" / "Garden.md").write_text("# Garden\n\nThird change.\n")
+    assert (dest / "Projects" / "Garden.md").read_text(encoding="utf-8") == "# Garden\n\nMY EDIT\n"
+    assert "Changed again." in (dest / "Projects" / "Garden-2.md").read_text(encoding="utf-8")
+    (vault / "Projects" / "Garden.md").write_text("# Garden\n\nThird change.\n", encoding="utf-8")
     import_file(str(vault))
-    assert "Third change." in (dest / "Projects" / "Garden-2.md").read_text()
+    assert "Third change." in (dest / "Projects" / "Garden-2.md").read_text(encoding="utf-8")
     assert not (dest / "Projects" / "Garden-3.md").exists()
-    assert (dest / "Projects" / "Garden.md").read_text() == "# Garden\n\nMY EDIT\n"
+    assert (dest / "Projects" / "Garden.md").read_text(encoding="utf-8") == "# Garden\n\nMY EDIT\n"
 
 
 def test_markdown_zip_import(home):
@@ -622,10 +690,10 @@ def test_markdown_zip_import(home):
 def test_detect_kind_and_unknown_kind(home):
     from myclaw.knowledge.ingest.importers import detect_kind, normalize_kind
 
-    (home / "c.json").write_text(json.dumps(CHATGPT))
-    (home / "k.json").write_text(json.dumps(CLAUDE))
-    (home / "p.json").write_text(json.dumps(PROJECTS))
-    (home / "other.json").write_text(json.dumps({"x": 1}))
+    (home / "c.json").write_text(json.dumps(CHATGPT), encoding="utf-8")
+    (home / "k.json").write_text(json.dumps(CLAUDE), encoding="utf-8")
+    (home / "p.json").write_text(json.dumps(PROJECTS), encoding="utf-8")
+    (home / "other.json").write_text(json.dumps({"x": 1}), encoding="utf-8")
     assert [detect_kind(home / n) for n in ("c.json", "k.json", "p.json", "other.json")] == \
         ["chatgpt", "claude", "claude", "document"]
     assert normalize_kind("Obsidian") == "markdown" and normalize_kind("mcp") == "mcp_memory"
@@ -639,7 +707,7 @@ def test_every_run_is_logged(home):
     from myclaw.knowledge.ingest.log import log_path, read_recent
 
     f = home / "a.txt"
-    f.write_text("Some text " * 50)
+    f.write_text("Some text " * 50, encoding="utf-8")
     assimilate(str(f))
     with pytest.raises(IngestError):
         assimilate(str(home / "missing.txt"))
@@ -660,13 +728,13 @@ def test_agent_tools_are_registered_and_answer_every_input(home):
     assimilate = TOOLS["assimilate"]["func"]
     import_knowledge = TOOLS["import_knowledge"]["func"]
     doc = home / "report.md"
-    doc.write_text("# Report\n\n## Findings\n\n" + "Finding. " * 60 + "\n\n## Next steps\n\n" + "Step. " * 60)
+    doc.write_text("# Report\n\n## Findings\n\n" + "Finding. " * 60 + "\n\n## Next steps\n\n" + "Step. " * 60, encoding="utf-8")
     out = assimilate(str(doc))
     assert out.startswith("✅") and "memory://" in out and "```mermaid" in out
     assert "Could not assimilate" in assimilate("") and "Could not assimilate" in assimilate("~/nope.pdf")
     out = import_knowledge("~/nope.zip")
     assert out.startswith("Could not import") and "chatgpt" in out
-    (home / "c.json").write_text(json.dumps(CHATGPT))
+    (home / "c.json").write_text(json.dumps(CHATGPT), encoding="utf-8")
     assert "Unknown import kind" in import_knowledge("~/c.json", kind="word")
     out = import_knowledge("~/c.json")
     assert out.startswith("✅ Imported") and "conversations: 2" in out
@@ -676,7 +744,7 @@ def test_tools_use_the_knowledge_base_of_the_turn(home):
     from myclaw.knowledge.scope import KB_USER
     from myclaw.tools.ingest import assimilate
 
-    (home / "n.txt").write_text("Text " * 80)
+    (home / "n.txt").write_text("Text " * 80, encoding="utf-8")
     token = KB_USER.set("alice")
     try:
         out = assimilate("~/n.txt", user_id="default")
@@ -693,7 +761,7 @@ def test_tool_returns_partial_result_at_the_time_limit(home, monkeypatch):
     folder = home / "many"
     folder.mkdir()
     for i in range(40):
-        (folder / f"f{i:02}.md").write_text(f"# F{i}\n\n" + "Text. " * 100)
+        (folder / f"f{i:02}.md").write_text(f"# F{i}\n\n" + "Text. " * 100, encoding="utf-8")
     real = notes_mod._write
 
     def slow(*a, **k):
@@ -729,7 +797,7 @@ def _wait(client, job_id, seconds=20):
 
 def test_api_assimilate_and_upload_jobs(web, home):
     (home / "docs").mkdir()
-    (home / "docs" / "a.md").write_text("# A\n\n## One\n\n" + "x " * 300 + "\n\n## Two\n\n" + "y " * 300)
+    (home / "docs" / "a.md").write_text("# A\n\n## One\n\n" + "x " * 300 + "\n\n## Two\n\n" + "y " * 300, encoding="utf-8")
     r = web.post("/api/knowledge/assimilate", json={"base": "default", "source": "~/docs/a.md"})
     assert r.status_code == 200
     j = _wait(web, r.json()["job_id"])
@@ -775,12 +843,12 @@ def test_cli_assimilate_and_import(home):
     from myclaw.cli import cli
 
     f = home / "notes.txt"
-    f.write_text("Plain text. " * 60)
+    f.write_text("Plain text. " * 60, encoding="utf-8")
     res = CliRunner().invoke(cli, ["knowledge", "assimilate", str(f), "--max-notes", "5"])
     assert res.exit_code == 0, res.output
     assert "✅ Assimilated" in res.output and "memory://" in res.output
     c = home / "c.json"
-    c.write_text(json.dumps(CHATGPT))
+    c.write_text(json.dumps(CHATGPT), encoding="utf-8")
     res = CliRunner().invoke(cli, ["knowledge", "import", str(c), "--kind", "chatgpt", "-b", "work"])
     assert res.exit_code == 0, res.output
     assert "(chatgpt)" in res.output and list((home / ".myclaw" / "knowledge" / "work").glob("chatgpt-*.md"))
@@ -906,15 +974,15 @@ def test_2_markdown_import_never_follows_symlinks(home):
     from myclaw.knowledge.ingest import import_file
 
     secret = home / "outside.txt"
-    secret.write_text("TOP SECRET OUTSIDE")
+    secret.write_text("TOP SECRET OUTSIDE", encoding="utf-8")
     vault = home / "vault"
     vault.mkdir()
-    (vault / "a.md").write_text("# A\n\nhello")
+    (vault / "a.md").write_text("# A\n\nhello", encoding="utf-8")
     os.symlink(secret, vault / "link.md")
     os.symlink(home, vault / "linkdir")
     r = import_file(str(vault))
     assert r.extra["copied"] == 1 and any("symbolic links" in s for s in r.skipped)
-    texts = "\n".join(p.read_text() for p in (kdir(home) / "imported").rglob("*.md"))
+    texts = "\n".join(p.read_text(encoding="utf-8") for p in (kdir(home) / "imported").rglob("*.md"))
     assert "TOP SECRET" not in texts
     z = home / "links.zip"
     with zipfile.ZipFile(z, "w") as zf:
@@ -932,20 +1000,20 @@ def test_3_workspace_and_cli_paths_follow_the_same_secret_and_hidden_rules(home)
     from myclaw.knowledge.ingest.safety import check_local_path
 
     ws = home / ".myclaw" / "workspace"
-    (ws / "credentials.json").write_text('{"client_secret": "zzz"}')
+    (ws / "credentials.json").write_text('{"client_secret": "zzz"}', encoding="utf-8")
     (ws / ".hidden").mkdir()
-    (ws / ".hidden" / "n.txt").write_text("hidden")
+    (ws / ".hidden" / "n.txt").write_text("hidden", encoding="utf-8")
     with pytest.raises(IngestError, match="keys or passwords"):
         assimilate("credentials.json")
     with pytest.raises(IngestError, match="hidden"):
         assimilate(".hidden/n.txt")
     (home / ".ssh").mkdir()
-    (home / ".ssh" / "notes.md").write_text("x")
+    (home / ".ssh" / "notes.md").write_text("x", encoding="utf-8")
     with pytest.raises(IngestError, match="hidden"):
         check_local_path(str(home / ".ssh" / "notes.md"), trusted=True)  # the CLI too
     with pytest.raises(IngestError, match="keys or passwords"):
         import_file(str(ws / "credentials.json"), trusted=True)
-    (home / "wp-config.php").write_text("<?php define('DB_PASSWORD', 'x');")
+    (home / "wp-config.php").write_text("<?php define('DB_PASSWORD', 'x');", encoding="utf-8")
     with pytest.raises(IngestError, match="keys or passwords"):
         read_document(home / "wp-config.php")
 
@@ -958,7 +1026,7 @@ def test_4_credentials_in_source_urls_are_never_stored_or_logged(home, monkeypat
         {"content-type": "text/html"}))
     r = assimilate("https://alice:SuperSecretPw1@example.com/docs?api_key=ZZZKEY123456&sig=QQQSIG&page=2")
     assert r.source == "https://example.com/docs?page=2"
-    stored = "\n".join(p.read_text() for p in (home / ".myclaw").rglob("*") if p.is_file()
+    stored = "\n".join(p.read_text(encoding="utf-8") for p in (home / ".myclaw").rglob("*") if p.is_file()
                        and p.suffix in (".md", ".jsonl", ".json"))
     for secret in ("SuperSecretPw1", "ZZZKEY123456", "QQQSIG", "LINKTOKEN123"):
         assert secret not in stored
@@ -986,7 +1054,7 @@ def test_5_redaction_and_secret_file_names():
 def test_6_tool_runs_are_limited_and_a_source_runs_once(home, monkeypatch):
     from myclaw.tools import ingest as tool_mod
 
-    (home / "n.txt").write_text("Text " * 80)
+    (home / "n.txt").write_text("Text " * 80, encoding="utf-8")
     with tool_mod._active_lock:
         tool_mod._active.add(f"default:{home / 'n.txt'}")
     try:
@@ -1042,7 +1110,7 @@ def test_8_imports_never_replace_a_hand_written_note(home):
 
     write_note("chatgpt-conversations", title="ChatGPT conversations", content="MY OWN NOTES")
     f = home / "c.json"
-    f.write_text(json.dumps(CHATGPT))
+    f.write_text(json.dumps(CHATGPT), encoding="utf-8")
     r = import_file(str(f))
     assert "MY OWN NOTES" in note("chatgpt-conversations").content
     assert r.overview.permalink == "chatgpt-conversations-imported"
@@ -1062,15 +1130,15 @@ def test_9_reingest_keeps_notes_edited_by_hand(home):
     from myclaw.knowledge.sync import sync_knowledge
 
     f = home / "a.md"
-    f.write_text("# A\n\n## One\n\n" + "x " * 300 + "\n\n## Two\n\n" + "y " * 300)
+    f.write_text("# A\n\n## One\n\n" + "x " * 300 + "\n\n## Two\n\n" + "y " * 300, encoding="utf-8")
     r = assimilate(str(f))
     part = next(n.permalink for n in r.notes if n.permalink.endswith("one"))
     path = kdir(home) / f"{part}.md"
-    path.write_text(path.read_text().replace("x x x", "x MY ANNOTATION x", 1))
+    path.write_text(path.read_text(encoding="utf-8").replace("x x x", "x MY ANNOTATION x", 1), encoding="utf-8")
     sync_knowledge("default")
-    f.write_text("# A\n\n## One\n\n" + "z " * 300 + "\n\n## Two\n\n" + "y " * 300)
+    f.write_text("# A\n\n## One\n\n" + "z " * 300 + "\n\n## Two\n\n" + "y " * 300, encoding="utf-8")
     again = assimilate(str(f))
-    assert ("kept" in {n.action for n in again.notes}) and "MY ANNOTATION" in path.read_text()
+    assert ("kept" in {n.action for n in again.notes}) and "MY ANNOTATION" in path.read_text(encoding="utf-8")
     assert any("kept your edits" in s for s in again.skipped)
 
 
@@ -1078,11 +1146,11 @@ def test_10_renamed_conversation_updates_the_same_note(home):
     from myclaw.knowledge.ingest import import_file
 
     f = home / "c.json"
-    f.write_text(json.dumps(CHATGPT))
+    f.write_text(json.dumps(CHATGPT), encoding="utf-8")
     first = {n.permalink for n in import_file(str(f)).notes}
     renamed = json.loads(json.dumps(CHATGPT))
     renamed[0]["title"] = "Rome, renamed"
-    f.write_text(json.dumps(renamed))
+    f.write_text(json.dumps(renamed), encoding="utf-8")
     again = import_file(str(f))
     assert {n.permalink for n in again.notes} == first and again.count("created") == 0
     rome = next(n for n in again.notes if "Rome, renamed" in n.title)
@@ -1097,14 +1165,14 @@ def test_11_repo_analysis_prefers_central_code_and_caps_docs(home):
     (repo / "pkg").mkdir(parents=True)
     (repo / "docs" / "archive").mkdir(parents=True)
     (repo / "tests").mkdir()
-    (repo / "README.md").write_text("# Proj\n\nA project.")
-    (repo / "pkg" / "__init__.py").write_text("")
-    (repo / "pkg" / "core.py").write_text("def core():\n    return 1\n" * 20)
+    (repo / "README.md").write_text("# Proj\n\nA project.", encoding="utf-8")
+    (repo / "pkg" / "__init__.py").write_text("", encoding="utf-8")
+    (repo / "pkg" / "core.py").write_text("def core():\n    return 1\n" * 20, encoding="utf-8")
     for i in range(12):
-        (repo / "pkg" / f"mod{i}.py").write_text(f"from pkg.core import core\n\ndef f{i}():\n    return core()\n")
-        (repo / "docs" / f"guide{i}.md").write_text(f"# Guide {i}\n\n" + "words " * 60)
-        (repo / "docs" / "archive" / f"old{i}.md").write_text("# Old\n\n" + "old " * 60)
-        (repo / "tests" / f"test_{i}.py").write_text("def test():\n    assert True\n")
+        (repo / "pkg" / f"mod{i}.py").write_text(f"from pkg.core import core\n\ndef f{i}():\n    return core()\n", encoding="utf-8")
+        (repo / "docs" / f"guide{i}.md").write_text(f"# Guide {i}\n\n" + "words " * 60, encoding="utf-8")
+        (repo / "docs" / "archive" / f"old{i}.md").write_text("# Old\n\n" + "old " * 60, encoding="utf-8")
+        (repo / "tests" / f"test_{i}.py").write_text("def test():\n    assert True\n", encoding="utf-8")
     r = assimilate(str(repo), max_notes=9)
     files = [n.title.split(" — ", 1)[1] for n in r.notes[1:]]
     assert "pkg/core.py" in files[:4]
@@ -1120,7 +1188,7 @@ def test_12_running_again_continues_with_the_next_files(home):
     repo = home / "many"
     repo.mkdir()
     for i in range(9):
-        (repo / f"m{i}.py").write_text(f"def f{i}():\n    return {i}\n")
+        (repo / f"m{i}.py").write_text(f"def f{i}():\n    return {i}\n", encoding="utf-8")
     first = assimilate(str(repo), max_notes=4)
     assert first.stopped.startswith("note limit")
     seen = {n.permalink for n in first.notes[1:]}
@@ -1154,7 +1222,7 @@ def test_14_size_caps_for_archives_and_exports(home, monkeypatch):
     assert r.extra["copied"] == 1 and any("big.md" in s and "not imported" in s for s in r.skipped)
     monkeypatch.setattr(importers, "MAX_JSON_BYTES", 50)
     f = home / "conversations.json"
-    f.write_text(json.dumps(CHATGPT))
+    f.write_text(json.dumps(CHATGPT), encoding="utf-8")
     with pytest.raises(IngestError, match="ijson"):
         import_file(str(f))
     # a Word / Excel file that unpacks to too much is refused before parsing

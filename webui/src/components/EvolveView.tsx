@@ -31,16 +31,24 @@ interface Preview {
 interface FusionFinding { claim: string; evidence_ids: string[] }
 interface FusionSection { findings: FusionFinding[]; limitations: string[] }
 interface FusionEstimate { value: number; rationale: string; evidence_ids: string[] }
+interface FusionCheck { name: string; ok: boolean }
+interface FusionNoteSection { pass: boolean; checks?: FusionCheck[]; notes?: string[] }
 interface FusionCandidate {
   a: string; b: string;
-  status: 'assessed' | 'error'; error?: string; blocked_reason?: string;
+  status: 'selected' | 'assessed' | 'error'; error?: string; blocked_reason?: string;
+  probability?: number; compatibility?: number; progress?: number; can_fuse?: boolean;
+  rationale?: string; selection_rationale?: string; evidence_ids?: string[];
+  quality_assurance?: FusionNoteSection; performance_optimization?: FusionNoteSection; security?: FusionNoteSection;
   assessment?: {
     estimates: { compatibility: FusionEstimate; fusion_success_probability: FusionEstimate };
     quality_assurance: FusionSection; performance_optimization: FusionSection; security: FusionSection;
   };
-  progress: Record<string, { state: string; reason: string; runs_observed: number; successful_runs: number; failed_runs: number }>;
+  job_progress?: Record<string, { state: string; reason: string; runs_observed: number; successful_runs: number; failed_runs: number }>;
 }
-interface FusionCandidateResponse { candidates: FusionCandidate[]; checked_pairs: number; assessed_pairs: number; at: string }
+interface FusionCandidateResponse {
+  candidates: FusionCandidate[]; heuristic_pool: FusionCandidate[]; checked_pairs: number; assessed_pairs: number;
+  selection_method: 'model' | 'heuristic_fallback'; rationale: string; evidence_ids: string[]; at: string;
+}
 
 const ACTIONS = [
   { value: 'optimise', label: 'Optimise', help: 'faster, simpler or more reliable; same behaviour' },
@@ -251,12 +259,20 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void; o
           {fusionEval && (
             <div className="evolve-suggest">
               <div className="muted small">Assessed {fusionEval.assessed_pairs} of {fusionEval.checked_pairs} candidate pairs at {fusionEval.at}.
-                Estimates are uncalibrated model opinions, not measured probabilities. No tests, benchmarks or security scans were performed.</div>
+                Selection: {fusionEval.selection_method === 'model' ? 'local model from a deterministic heuristic pool' : 'deterministic heuristic fallback'}.
+                No tests, benchmarks or security scans were performed.</div>
+              <div className="muted small"><b>Selection rationale:</b> {fusionEval.rationale}{' '}
+                {fusionEval.evidence_ids.length > 0 && <>Evidence: {fusionEval.evidence_ids.join(', ')}.</>}</div>
+              <div className="muted small">Top heuristic pool considered: {fusionEval.heuristic_pool.length} of {fusionEval.checked_pairs} pairs.</div>
               {fusionEval.candidates.map((c, i) => (
                 <div key={`${c.a}:${c.b}:${i}`} className="ai-item">
                   <div><b>{c.a} + {c.b}</b></div>
                   {c.error && <div className="notice error">{c.error}</div>}
                   {c.blocked_reason && <div className="notice error">{c.blocked_reason}</div>}
+                  {c.probability !== undefined && <>
+                    <div className="muted small">Heuristic probability: {(c.probability * 100).toFixed(0)}% · compatibility: {((c.compatibility || 0) * 100).toFixed(0)}% · progress: {((c.progress || 0) * 100).toFixed(0)}%</div>
+                    {!c.can_fuse && <div className="muted small">The heuristic marked this pair as needing review before fusion.</div>}
+                  </>}
                   {c.assessment && <>
                     <div className="muted small">Estimated compatibility: {(c.assessment.estimates.compatibility.value * 100).toFixed(0)}% — {c.assessment.estimates.compatibility.rationale}</div>
                     <div className="muted small">Estimated fusion success: {(c.assessment.estimates.fusion_success_probability.value * 100).toFixed(0)}% — {c.assessment.estimates.fusion_success_probability.rationale}</div>
@@ -266,13 +282,13 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void; o
                         {c.assessment?.[section].limitations.join(' ')}
                       </div>
                     ))}
-                    {Object.entries(c.progress).map(([key, p]) => (
+                    {Object.entries(c.job_progress || {}).map(([key, p]) => (
                       <div key={key} className="muted small">{key === 'job_history.a' ? c.a : c.b} progress: {p.state === 'unknown'
                         ? p.reason : `${p.runs_observed} runs observed, ${p.successful_runs} successful, ${p.failed_runs} failed. ${p.reason}`}</div>
                     ))}
                   </>}
                   <div className="probe-row">
-                    <button className="ghost-btn small-btn" disabled={c.status !== 'assessed' || !!c.blocked_reason} onClick={() => { setPair({ a: c.a, b: c.b }); setPreview(null); }}>
+                    <button className="ghost-btn small-btn" disabled={!['selected', 'assessed'].includes(c.status) || !!c.blocked_reason} onClick={() => { setPair({ a: c.a, b: c.b }); setPreview(null); }}>
                       Use this pair</button>
                   </div>
                 </div>

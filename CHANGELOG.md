@@ -9,6 +9,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Evolve's fusion evaluator now has an AI short-listing stage over a
+  deterministic candidate pool; selection remains read-only and only populates
+  the explicit preview/fuse workflow.
+- Medic now records and reviews every terminal job and tool attempt, persists
+  proposal-only workflow evidence, and surfaces reviews in the Doctor UI.
+- Jobs have a compact tile layout, a table toggle, and per-job/run **AI Ask**.
+  The advisor can recommend an agent from task/run/tool evidence; switching the
+  agent remains an explicit one-click action.
+- Knowledge recall now uses a bounded shared worker pool instead of creating
+  four daemon threads per request. Timed-out work is cooperatively cancelled,
+  queue saturation is reported as partial retrieval, and executor diagnostics
+  are included in search metadata.
+- Automatic knowledge-gap web research is opt-in and uses a durable queue with
+  retry state; failed items are kept instead of being truncated or repeated.
+- Knowledge sync fast-paths unchanged files and periodically verifies
+  checksums. Full rebuilds stage parsed notes in bounded batches, and failed
+  Markdown/index handoffs leave a durable pending-index marker for repair.
+- Conversation extraction and file watching are separate settings. The legacy
+  `knowledge.auto_extract` value remains as a compatibility fallback.
+- Knowledge note inputs now share limits and normalization, and Health exposes
+  watcher/semantic coverage and truncation warnings.
+- Web chat REST and WebSocket endpoints now require local/admin access; remote
+  WebSocket clients use short-lived one-use tickets. WhatsApp webhooks require a
+  configured app secret and verify `X-Hub-Signature-256`. Traditional installs
+  load the release-local `.env`, including generated systemd services.
 - Dependency manifests now cover every direct core Python dependency in the
   application; the contributor workflow documents how to keep `pyproject.toml`,
   `requirements.txt`, and `requirements-lock.txt` synchronized.

@@ -144,6 +144,15 @@ def agent():
             await _sched.start()
             logger.info(f"Background Researcher active (every {interval}h)")
 
+        if config.knowledge.watch_files_enabled():
+            try:
+                from .knowledge.watch import start_background
+
+                start_background()
+                logger.info("Knowledge file watcher active in console mode")
+            except Exception as exc:
+                logger.warning("Could not start knowledge file watcher: %s", exc)
+
         async with registry["default"]:
             print(f"💬 MyClaw console — agents: {agent_names}")
             print("   Use @agentname to address a specific agent. Type 'exit' to quit.")

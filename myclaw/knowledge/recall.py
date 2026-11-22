@@ -6,13 +6,118 @@ import logging
 import re
 import threading
 import time
+from collections import Counter, deque
 from concurrent.futures import Future, wait
 from datetime import datetime, timedelta
-from typing import Any, Callable, Dict, Iterable, List, Tuple
+from typing import Any, Callable, Deque, Dict, Iterable, List, Tuple
 
 logger = logging.getLogger(__name__)
 
 _OPTIONS = {"enabled": True, "timeout_seconds": 1.5}
+_MAX_WORKERS = 4
+_MAX_QUEUED = 16
+_PER_STRATEGY = 1
+_PER_BASE = 4
+
+
+class _RecallQueueFull(RuntimeError):
+    pass
+
+
+class _RecallExecutor:
+    """Small scheduler that bounds both running and waiting recall work."""
+
+    def __init__(self, workers: int, queue_limit: int) -> None:
+        self.workers = max(1, workers)
+        self.queue_limit = max(1, queue_limit)
+        self._lock = threading.Condition()
+        self._queue: Deque[Tuple[str, str, Future, Callable[[], List[Any]], threading.Event]] = deque()
+        self._threads: List[threading.Thread] = []
+        self._active: Dict[str, int] = Counter()
+        self._active_by_base: Dict[str, int] = Counter()
+
+    def _ensure_workers(self) -> None:
+        with self._lock:
+            for number in range(len(self._threads), self.workers):
+                thread = threading.Thread(
+                    target=self._run, name=f"kb-recall-worker-{number + 1}", daemon=True)
+                self._threads.append(thread)
+                thread.start()
+
+    def submit(self, strategy: str, user_id: str, search: Callable[[], List[Any]],
+               cancel: threading.Event) -> Future:
+        future: Future = Future()
+        with self._lock:
+            if len([item for item in self._queue if not item[2].cancelled()]) >= self.queue_limit:
+                future.set_exception(_RecallQueueFull(
+                    "the shared knowledge recall queue is full"))
+                return future
+            self._queue.append((strategy, str(user_id), future, search, cancel))
+            self._lock.notify()
+        self._ensure_workers()
+        return future
+
+    def _take(self) -> Tuple[str, str, Future, Callable[[], List[Any]], threading.Event]:
+        while True:
+            with self._lock:
+                self._queue = deque(item for item in self._queue if not item[2].cancelled())
+                for index, item in enumerate(self._queue):
+                    strategy, user_id = item[0], item[1]
+                    if (self._active[strategy] < _PER_STRATEGY
+                            and self._active_by_base[user_id] < _PER_BASE):
+                        del self._queue[index]
+                        self._active[strategy] += 1
+                        self._active_by_base[user_id] += 1
+                        self._lock.notify_all()
+                        return item
+                self._lock.wait()
+
+    @staticmethod
+    def _execute(future: Future, search: Callable[[], List[Any]],
+                 cancel: threading.Event) -> None:
+        if not future.set_running_or_notify_cancel():
+            return
+        if cancel.is_set():
+            future.set_result([])
+            return
+        try:
+            result = search()
+        except Exception as exc:
+            future.set_exception(exc)
+        else:
+            future.set_result(result)
+
+    def _run(self) -> None:
+        while True:
+            strategy, user_id, future, search, cancel = self._take()
+            try:
+                self._execute(future, search, cancel)
+            finally:
+                with self._lock:
+                    self._active[strategy] -= 1
+                    self._active_by_base[user_id] -= 1
+                    self._lock.notify_all()
+
+    @staticmethod
+    def cancel(future: Future, event: threading.Event) -> None:
+        event.set()
+        future.cancel()
+
+    def diagnostics(self) -> Dict[str, Any]:
+        with self._lock:
+            queued = sum(1 for item in self._queue if not item[2].cancelled())
+            return {
+                "max_workers": self.workers,
+                "max_queued": self.queue_limit,
+                "active": sum(self._active.values()),
+                "queued": queued,
+                "active_by_strategy": dict(self._active),
+                "active_by_base": dict(self._active_by_base),
+                "threads": sum(thread.is_alive() for thread in self._threads),
+            }
+
+
+_EXECUTOR = _RecallExecutor(_MAX_WORKERS, _MAX_QUEUED)
 
 
 def set_options(enabled: Any = None, timeout_seconds: Any = None) -> None:
@@ -35,7 +140,8 @@ def _ranked(notes: Iterable[Any]) -> List[Any]:
     return list(unique.values())
 
 
-def _graph_search(query: str, user_id: str, limit: int, boolean: bool = False) -> List[Any]:
+def _graph_search(query: str, user_id: str, limit: int, boolean: bool = False,
+                  cancel: threading.Event | None = None) -> List[Any]:
     from .graph import get_related_entities
     from .storage import _batch_read_notes, search_notes
 
@@ -44,6 +150,8 @@ def _graph_search(query: str, user_id: str, limit: int, boolean: bool = False) -
     related = []
     seen = {note.permalink for note in seeds}
     for seed in seeds:
+        if cancel is not None and cancel.is_set():
+            return []
         for item in get_related_entities(seed.permalink, user_id, depth=1):
             permalink = item.get("permalink")
             if permalink and permalink not in seen:
@@ -127,7 +235,8 @@ def _temporal_query(query: str) -> str:
     return " ".join(text.split())
 
 
-def _temporal_search(query: str, user_id: str, limit: int) -> List[Any]:
+def _temporal_search(query: str, user_id: str, limit: int,
+                     cancel: threading.Event | None = None) -> List[Any]:
     """Search dated evidence independently, then rank matches by relevance and time."""
     from .db import KnowledgeDB
     from .decision import _tokens, assess_memory
@@ -167,6 +276,8 @@ def _temporal_search(query: str, user_id: str, limit: int) -> List[Any]:
     topic_query = _temporal_query(query)
     scored = []
     for index, row in enumerate(rows):
+        if cancel is not None and cancel.is_set():
+            return []
         note = by_permalink.get(str(row["permalink"]))
         if note is None:
             continue
@@ -212,7 +323,8 @@ def _temporal_search(query: str, user_id: str, limit: int) -> List[Any]:
 
 
 def _streams(query: str, user_id: str, limit: int, boolean: bool = False,
-             details: Dict[str, Any] | None = None) -> Dict[str, Callable[[], List[Any]]]:
+             details: Dict[str, Any] | None = None,
+             cancel: threading.Event | None = None) -> Dict[str, Callable[[], List[Any]]]:
     from .semantic import AGENT_TIMEOUT
     from .storage import search_notes
 
@@ -226,14 +338,20 @@ def _streams(query: str, user_id: str, limit: int, boolean: bool = False,
     def constrain(search: Callable[[], List[Any]]) -> Callable[[], List[Any]]:
         def run() -> List[Any]:
             notes = search()
+            if cancel is not None and cancel.is_set():
+                return []
             if not boolean or not has_explicit_syntax:
                 return notes
             allowed = {note.permalink for note in search_notes(
                 query, user_id, limit=max(limit * 4, limit), boolean=True, mode="fts")}
+            if cancel is not None and cancel.is_set():
+                return []
             return [note for note in notes if note.permalink in allowed]
         return run
 
     def semantic_search() -> List[Any]:
+        if cancel is not None and cancel.is_set():
+            return []
         semantic_query = re.sub(r"\b(?:AND|OR|NOT)\b|tag:[^\s]+", " ", query,
                                 flags=re.IGNORECASE)
         semantic_query = " ".join(semantic_query.replace('"', " ").replace("*", " ").split())
@@ -246,14 +364,16 @@ def _streams(query: str, user_id: str, limit: int, boolean: bool = False,
             semantic_wait=0.0, info=semantic_details)
         if semantic_details.get("fallback") or semantic_details.get("mode") != "semantic":
             return []
-        return notes
+        return [] if cancel is not None and cancel.is_set() else notes
 
     return {
         "fts": lambda: search_notes(query, user_id, limit=limit,
                                     boolean=boolean, mode="fts"),
         "semantic": constrain(semantic_search),
-        "graph": constrain(lambda: _graph_search(query, user_id, limit, boolean)),
-        "temporal": constrain(lambda: _temporal_search(query, user_id, limit)),
+        "graph": constrain(lambda: _graph_search(
+            query, user_id, limit, boolean, cancel=cancel)),
+        "temporal": constrain(lambda: _temporal_search(
+            query, user_id, limit, cancel=cancel)),
     }
 
 
@@ -405,28 +525,16 @@ def parallel_recall(query: str, user_id: str = "default", limit: int = 10,
     info = info if info is not None else {}
     candidates = max(limit, limit * 3)
     stream_details: Dict[str, Any] = {}
-    streams = _streams(query, user_id, candidates, boolean, stream_details)
+    cancel = threading.Event()
+    streams = _streams(
+        query, user_id, candidates, boolean, stream_details, cancel)
     futures: Dict[Future, str] = {}
-
-    def run_search(future: Future, search: Callable[[], List[Any]]) -> None:
-        if not future.set_running_or_notify_cancel():
-            return
-        try:
-            result = search()
-        except Exception as exc:
-            future.set_exception(exc)
-        else:
-            future.set_result(result)
-
     for name, search in streams.items():
-        future: Future = Future()
+        def guarded_search(search: Callable[[], List[Any]] = search) -> List[Any]:
+            return [] if cancel.is_set() else search()
+
+        future = _EXECUTOR.submit(name, user_id, guarded_search, cancel)
         futures[future] = name
-        threading.Thread(
-            target=run_search,
-            args=(future, search),
-            name=f"kb-recall-{name}",
-            daemon=True,
-        ).start()
     done, pending = wait(futures, timeout=_OPTIONS["timeout_seconds"])
     results: Dict[str, List[Any]] = {}
     statuses: Dict[str, str] = {name: "pending" for name in streams}
@@ -435,13 +543,17 @@ def parallel_recall(query: str, user_id: str = "default", limit: int = 10,
         try:
             results[name] = future.result()
             statuses[name] = "ok"
+        except _RecallQueueFull as exc:
+            logger.info("Knowledge %s recall stream could not be queued: %s", name, exc)
+            results[name] = []
+            statuses[name] = "queue_full"
         except Exception as exc:
             logger.info("Knowledge %s recall stream failed: %s", name, exc)
             results[name] = []
             statuses[name] = "error"
     for future in pending:
         name = futures[future]
-        future.cancel()
+        _EXECUTOR.cancel(future, cancel)
         results[name] = []
         statuses[name] = "timeout"
     semantic_details = stream_details.get("semantic", {})
@@ -454,7 +566,9 @@ def parallel_recall(query: str, user_id: str = "default", limit: int = 10,
         result_counts={name: len(results.get(name, [])) for name in streams},
         partial=any(status != "ok" for status in statuses.values()),
         search_mode="parallel-hybrid",
+        executor=_EXECUTOR.diagnostics(),
     )
+    cancel.set()
     fused = _fuse(results, limit, query=query, info=info)
     if fused:
         from .db import touch_access

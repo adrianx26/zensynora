@@ -286,9 +286,21 @@ in turn (v0.7.4); the message under the button names the model that wrote it.
 ![Jobs page](images/webui-jobs.png)
 
 A job is an instruction an agent carries out on a schedule or when you click
-**Run**. Scheduled jobs run while `zensynora webui` is running. Each row has
-**▶ Run**, **Pause/Resume**, **Edit** and **🗑 Delete** (asks *Delete it and
-its run history?* in the row; not possible while the job is running).
+**Run**. Scheduled jobs run while `zensynora webui` is running. The page has a
+compact tile view (the default) and the original table view. Tiles use small
+icon actions for **▶ Run**, **Pause/Resume**, **Edit**, **🗑 Delete** and
+**✦ AI Ask**; deletion is refused while a run is active.
+
+**✦ AI Ask** analyses the job, latest selected run, Medic workflow review and
+bounded tool evidence, then recommends the best available agent for the task.
+It can also propose prompt, timeout, retry or tool-step changes, but changes
+nothing automatically. Click **Use @agent** to apply the suggested agent.
+The model-side analysis is restricted to the configured local
+knowledge-decision endpoint; if it is unavailable, deterministic routing
+provides a fallback answer instead of sending job evidence to a cloud model.
+Every completed job and every tool use is recorded and reviewed by Medic;
+successful, failed and warning findings appear as proposal-only workflow
+reviews on the Doctor page.
 
 | Field | Meaning |
 |---|---|
@@ -345,9 +357,12 @@ searches it automatically; agents can also use these tools themselves:
 | `list_knowledge_tags` / `sync_knowledge_base` | Tags; re-read files you edited by hand |
 | `record_lesson` | The medic's lessons (note `medic-lessons`) |
 
-With *auto extract* on (Settings → Features → `knowledge.auto_extract`),
-useful facts from conversations and tool results are saved by themselves. The
-**knowledge-keeper** skill teaches an agent when to save and how. Allowed
+With *Extract knowledge from conversations* on (Settings → Features →
+`knowledge.extract_from_conversations`), useful facts from conversations and
+tool results are saved by themselves. The separate *Watch note files* option
+re-indexes notes edited by hand. Old `knowledge.auto_extract` configs still
+work as a compatibility alias. The **knowledge-keeper** skill teaches an agent
+when to save and how. Allowed
 Telegram users use the same knowledge base as the Web UI (switch it off in
 Settings → Channels to give each Telegram user their own); WhatsApp users each
 keep their own knowledge base.
@@ -703,8 +718,10 @@ anything fails. *Updates → Roll back* undoes it later.
    model (change that in *Settings → Agents*). Every agent has a level from 1 to 9 (new
    agents start at 1; for now it is a label), changed here
    (`agents.named[].level`, `agents.defaults.level`). **Fuse two agents into
-   one:** **🤖 Evaluate fusion candidates** uses the configured local
-   knowledge-decision model to assess pairs. Compatibility and fusion-success
+   one:** **🤖 Evaluate fusion candidates** first uses deterministic candidate
+   scoring, then asks the configured local knowledge-decision model to choose
+   the strongest pairs to assess. The page shows why the AI selected them and
+   which evidence ids it used. Compatibility and fusion-success
    numbers are uncalibrated model estimates, not measured probabilities;
    progress summarizes available job history. Quality, performance and
    security findings are suggestions, not verified tests or scans. A local

@@ -17,6 +17,7 @@ settings guard (this computer or the admin API key).
 from __future__ import annotations
 
 import asyncio
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -75,6 +76,60 @@ async def reject(pid: str, req: RejectIn = RejectIn()):
         return selfupdate.reject(pid, by="you", note=req.note)
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
+
+
+@router.get("/api/medic/workflow-reviews", dependencies=guard)
+async def workflow_reviews(status: str | None = None, limit: int = 50):
+    """Return Medic workflow proposals (read-only; never applied automatically)."""
+    from myclaw.jobs import store
+
+    reviews = await asyncio.to_thread(
+        store.list_medic_reviews, status=status, limit=max(1, min(limit, 200)))
+    return {"reviews": [{**item.get("review", {}), **{k: v for k, v in item.items() if k != "review"}}
+                        for item in reviews]}
+
+
+class WorkflowReviewStatusIn(BaseModel):
+    status: Literal["acknowledged", "dismissed"]
+
+
+@router.post("/api/medic/workflow-reviews/{review_id}/status", dependencies=guard)
+async def set_workflow_review_status(review_id: str, req: WorkflowReviewStatusIn):
+    from myclaw.jobs import store
+
+    try:
+        review = await asyncio.to_thread(store.set_medic_review_status, int(review_id), req.status)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Workflow review not found")
+    if review is None:
+        raise HTTPException(status_code=404, detail="Workflow review not found")
+    return {**review.get("review", {}), **{k: v for k, v in review.items() if k != "review"}}
+
+
+@router.post("/api/medic/workflow-reviews/{review_id}/acknowledge", dependencies=guard)
+async def acknowledge_workflow_review(review_id: str):
+    from myclaw.jobs import store
+
+    try:
+        review = await asyncio.to_thread(store.set_medic_review_status, int(review_id), "acknowledged")
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Workflow review not found")
+    if review is None:
+        raise HTTPException(status_code=404, detail="Workflow review not found")
+    return {**review.get("review", {}), **{k: v for k, v in review.items() if k != "review"}}
+
+
+@router.post("/api/medic/workflow-reviews/{review_id}/dismiss", dependencies=guard)
+async def dismiss_workflow_review(review_id: str):
+    from myclaw.jobs import store
+
+    try:
+        review = await asyncio.to_thread(store.set_medic_review_status, int(review_id), "dismissed")
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Workflow review not found")
+    if review is None:
+        raise HTTPException(status_code=404, detail="Workflow review not found")
+    return {**review.get("review", {}), **{k: v for k, v in review.items() if k != "review"}}
 
 
 @router.post("/api/medic/proposals/{pid}/apply", dependencies=ui_guard)

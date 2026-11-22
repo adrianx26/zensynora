@@ -1,8 +1,8 @@
 """Knowledge notes keep their text AND their tags, facts and links (2026-10-23).
 
 On mindy01 the Knowledge page showed 266 notes with 0 tags, 0 facts, 0 links:
-write_note(content=…) stored only the raw text, and generate_markdown() never
-wrote the text — so callers had to choose, and every caller lost the structure.
+write_note(content=?) stored only the raw text, and generate_markdown() never
+wrote the text â€” so callers had to choose, and every caller lost the structure.
 """
 import asyncio
 import importlib
@@ -29,12 +29,73 @@ def test_write_to_knowledge_keeps_text_tags_facts_links(home):
 
     write_to_knowledge("Home server", "Runs Ubuntu 24.04.\nHosts ZenSynora.", tags="homelab, linux",
                        observations="spec | 32 GB RAM", relations="runs | ZenSynora")
-    raw = (_kdir(home) / "home-server.md").read_text()
+    raw = (_kdir(home) / "home-server.md").read_text(encoding="utf-8")
     assert raw.startswith("---\ntitle: \"Home server\"") and "Runs Ubuntu 24.04." in raw
     n = read_note("home-server")
     assert n.tags == ["homelab", "linux"]
     assert [(o.category, o.content) for o in n.observations] == [("spec", "32 GB RAM")]
     assert [(r.relation_type, r.target) for r in n.relations] == [("runs", "ZenSynora")]
+
+
+def test_manual_note_write_rejects_oversized_fields_with_actionable_messages(home):
+    from myclaw.knowledge.validation import (
+        MAX_CONTENT_BYTES,
+        MAX_FACTS,
+        MAX_RELATIONS,
+        MAX_TAGS,
+        MAX_TITLE_CHARS,
+    )
+    from myclaw.tools.kb import write_to_knowledge
+
+    assert "maximum is 120" in write_to_knowledge("t" * (MAX_TITLE_CHARS + 1), "body")
+    assert "maximum is 200000" in write_to_knowledge(
+        "body", "€" * (MAX_CONTENT_BYTES // 3 + 1)
+    )
+    assert f"maximum is {MAX_TAGS}" in write_to_knowledge(
+        "tags", "body", tags=",".join(f"t{i}" for i in range(MAX_TAGS + 1))
+    )
+    assert f"maximum is {MAX_FACTS}" in write_to_knowledge(
+        "facts", "body", observations="\n".join(f"fact | f{i}" for i in range(MAX_FACTS + 1))
+    )
+    assert f"maximum is {MAX_RELATIONS}" in write_to_knowledge(
+        "links", "body", relations="\n".join(f"related_to | N{i}" for i in range(MAX_RELATIONS + 1))
+    )
+    assert "missing ' | '" in write_to_knowledge("bad fact", "body", observations="not a fact")
+    assert not (_kdir(home) / "body.md").exists()
+
+
+def test_extracted_note_write_applies_existing_caps_with_utf8_safe_truncation(home):
+    from myclaw.knowledge.parser import extract_body
+    from myclaw.knowledge.extract import save_items
+    from myclaw.knowledge.validation import MAX_CONTENT_BYTES
+
+    saved = save_items([{
+        "title": "Unicode " + ("世界" * 200),
+        "content": "€" * (MAX_CONTENT_BYTES // 3 + 100),
+        "tags": ",".join(f"tag{i}" for i in range(20)),
+        "facts": [{"category": "spec", "text": f"fact {i} " + ("x" * 500)}
+                  for i in range(20)],
+        "links": [{"type": "related_to", "target": f"Target {i} " + ("y" * 200)}
+                  for i in range(20)],
+    }], "default", ["auto-extracted"], 5, "[T]")
+
+    assert saved == 1
+    note = _iter_one_note(home)[0]
+    assert len(note.title) == 120
+    assert len(extract_body(note.content).encode("utf-8")) <= MAX_CONTENT_BYTES
+    assert len(note.tags) <= 6
+    assert len(note.observations) == 8
+    assert all(len(f.content) == 400 for f in note.observations)
+    assert len(note.relations) == 8
+    assert all(len(r.target) == 120 for r in note.relations)
+
+
+def _iter_one_note(home):
+    from myclaw.knowledge import list_notes
+
+    notes = list_notes("default")
+    assert len(notes) == 1
+    return notes
 
 
 def test_facts_and_links_written_in_the_text_are_kept_once(home):
@@ -46,14 +107,14 @@ def test_facts_and_links_written_in_the_text_are_kept_once(home):
     n = read_note("pi")
     assert [(o.category, o.content) for o in n.observations] == [("spec", "8 GB RAM")]
     assert [r.target for r in n.relations] == ["Homelab"]
-    assert (_kdir(home) / "pi.md").read_text().count("8 GB RAM") == 1
+    assert (_kdir(home) / "pi.md").read_text(encoding="utf-8").count("8 GB RAM") == 1
 
 
 def test_escaped_newlines_become_real_lines(home):
     from myclaw.knowledge import write_note
 
     write_note("Weather", content="Line one\\nLine two")
-    assert "Line one\nLine two" in (_kdir(home) / "weather.md").read_text()
+    assert "Line one\nLine two" in (_kdir(home) / "weather.md").read_text(encoding="utf-8")
 
 
 def test_update_note_keeps_the_text(home):
@@ -62,7 +123,7 @@ def test_update_note_keeps_the_text(home):
     write_note("Server", content="Important text.", tags=["a"])
     created = read_note("server").created_at
     update_note("server", tags=["a", "b"])
-    raw = (_kdir(home) / "server.md").read_text()
+    raw = (_kdir(home) / "server.md").read_text(encoding="utf-8")
     assert "Important text." in raw and read_note("server").tags == ["a", "b"]
     assert read_note("server").created_at == created
 
@@ -72,7 +133,7 @@ def test_a_full_note_file_is_kept_as_given(home):
 
     doc = '---\ntitle: "X"\npermalink: x\ntags: ["t"]\n---\n\n# X\n\nbody\n'
     write_note("x", content=doc)
-    assert (_kdir(home) / "x.md").read_text() == doc
+    assert (_kdir(home) / "x.md").read_text(encoding="utf-8") == doc
 
 
 def test_extracted_items_are_saved_with_structure(home):
@@ -96,16 +157,16 @@ def test_migration_adds_structure_to_plain_notes_once(home):
 
     m = importlib.import_module("updater.migrations.m_0002_knowledge_note_structure")
     d = _kdir(home)
-    (d / "agent-delegation-protocol.md").write_text("Use the delegate tool.\\n- uses [[Delegate tool]]")
-    (d / "already.md").write_text('---\ntitle: "Already"\n---\n\n# Already\n')
+    (d / "agent-delegation-protocol.md").write_text("Use the delegate tool.\\n- uses [[Delegate tool]]", encoding="utf-8")
+    (d / "already.md").write_text('---\ntitle: "Already"\n---\n\n# Already\n', encoding="utf-8")
     ctx = MigrationContext(data_dir=home / ".myclaw", app_version="0.7.5", log=logging.getLogger("t"))
     m.apply(ctx)
-    first = (d / "agent-delegation-protocol.md").read_text()
+    first = (d / "agent-delegation-protocol.md").read_text(encoding="utf-8")
     m.apply(ctx)
-    assert (d / "agent-delegation-protocol.md").read_text() == first  # idempotent
+    assert (d / "agent-delegation-protocol.md").read_text(encoding="utf-8") == first  # idempotent
     assert first.startswith('---\ntitle: "Agent delegation protocol"') and "Use the delegate tool." in first
     assert "- uses [[Delegate tool]]" in first
-    assert (d / "already.md").read_text() == '---\ntitle: "Already"\n---\n\n# Already\n'
+    assert (d / "already.md").read_text(encoding="utf-8") == '---\ntitle: "Already"\n---\n\n# Already\n'
 
 
 def test_enrich_adds_tags_facts_links_without_changing_text(home, monkeypatch):
@@ -127,7 +188,7 @@ def test_enrich_adds_tags_facts_links_without_changing_text(home, monkeypatch):
     assert r == {"permalink": "mindy01", "ok": True, "tags": 2, "facts": 1, "links": 1}
     n = read_note("mindy01")
     assert n.tags == ["homelab", "hardware"] and n.relations[0].target == "ZenSynora"
-    assert "Linux PC with 32 GB RAM that runs ZenSynora." in Path(n.file_path).read_text()
+    assert "Linux PC with 32 GB RAM that runs ZenSynora." in Path(n.file_path).read_text(encoding="utf-8")
     assert not needs_structure(n)
 
 
