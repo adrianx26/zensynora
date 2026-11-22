@@ -1846,9 +1846,20 @@ in turn (v0.7.4); the message under the button names the model that wrote it.</p
 <h2 id="jobs-scheduled-and-on-demand-tasks">Jobs: scheduled and on-demand tasks<a class="headerlink" href="#jobs-scheduled-and-on-demand-tasks" title="Permanent link">&para;</a></h2>
 <p><img alt="Jobs page" src="../images/webui-jobs.png" /></p>
 <p>A job is an instruction an agent carries out on a schedule or when you click
-<strong>Run</strong>. Scheduled jobs run while <code>zensynora webui</code> is running. Each row has
-<strong>▶ Run</strong>, <strong>Pause/Resume</strong>, <strong>Edit</strong> and <strong>🗑 Delete</strong> (asks <em>Delete it and
-its run history?</em> in the row; not possible while the job is running).</p>
+<strong>Run</strong>. Scheduled jobs run while <code>zensynora webui</code> is running. The page has a
+compact tile view (the default) and the original table view. Tiles use small
+icon actions for <strong>▶ Run</strong>, <strong>Pause/Resume</strong>, <strong>Edit</strong>, <strong>🗑 Delete</strong> and
+<strong>✦ AI Ask</strong>; deletion is refused while a run is active.</p>
+<p><strong>✦ AI Ask</strong> analyses the job, latest selected run, Medic workflow review and
+bounded tool evidence, then recommends the best available agent for the task.
+It can also propose prompt, timeout, retry or tool-step changes, but changes
+nothing automatically. Click <strong>Use @agent</strong> to apply the suggested agent.
+The model-side analysis is restricted to the configured local
+knowledge-decision endpoint; if it is unavailable, deterministic routing
+provides a fallback answer instead of sending job evidence to a cloud model.
+Every completed job and every tool use is recorded and reviewed by Medic;
+successful, failed and warning findings appear as proposal-only workflow
+reviews on the Doctor page.</p>
 <table>
 <thead>
 <tr>
@@ -1952,9 +1963,12 @@ searches it automatically; agents can also use these tools themselves:</p>
 </tr>
 </tbody>
 </table>
-<p>With <em>auto extract</em> on (Settings → Features → <code>knowledge.auto_extract</code>),
-useful facts from conversations and tool results are saved by themselves. The
-<strong>knowledge-keeper</strong> skill teaches an agent when to save and how. Allowed
+<p>With <em>Extract knowledge from conversations</em> on (Settings → Features →
+<code>knowledge.extract_from_conversations</code>), useful facts from conversations and
+tool results are saved by themselves. The separate <em>Watch note files</em> option
+re-indexes notes edited by hand. Old <code>knowledge.auto_extract</code> configs still
+work as a compatibility alias. The <strong>knowledge-keeper</strong> skill teaches an agent
+when to save and how. Allowed
 Telegram users use the same knowledge base as the Web UI (switch it off in
 Settings → Channels to give each Telegram user their own); WhatsApp users each
 keep their own knowledge base.</p>
@@ -2391,8 +2405,10 @@ anything fails. <em>Updates → Roll back</em> undoes it later.</p>
    model (change that in <em>Settings → Agents</em>). Every agent has a level from 1 to 9 (new
    agents start at 1; for now it is a label), changed here
    (<code>agents.named[].level</code>, <code>agents.defaults.level</code>). <strong>Fuse two agents into
-   one:</strong> <strong>🤖 Evaluate fusion candidates</strong> uses the configured local
-   knowledge-decision model to assess pairs. Compatibility and fusion-success
+   one:</strong> <strong>🤖 Evaluate fusion candidates</strong> first uses deterministic candidate
+   scoring, then asks the configured local knowledge-decision model to choose
+   the strongest pairs to assess. The page shows why the AI selected them and
+   which evidence ids it used. Compatibility and fusion-success
    numbers are uncalibrated model estimates, not measured probabilities;
    progress summarizes available job history. Quality, performance and
    security findings are suggestions, not verified tests or scans. A local
