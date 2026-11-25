@@ -1896,8 +1896,27 @@ reviews on the Doctor page.</p>
 <td>Clean memory</td>
 <td>Each run starts without the previous runs' conversation</td>
 </tr>
+<tr>
+<td>Prior runs context</td>
+<td>How many previous finished runs the agent sees as background (0–20; default 0 = none)</td>
+</tr>
+<tr>
+<td>Insight notes / profile updates</td>
+<td>Opt-in: save knowledge-base notes or propose profile updates</td>
+</tr>
 </tbody>
 </table>
+<p><strong>Job insights</strong> (v0.8.5): a run can teach the next one. <em>Prior runs context</em>
+gives the agent a bounded, sanitised summary of its last finished runs (status,
+output, score, Medic review — secrets and personal data are scrubbed before
+anything reaches the prompt, and a run never sees itself). Job results feed
+your <strong>knowledge base</strong> and <strong>profile</strong> only when you opt in per job
+(<em>Save insight notes</em> / <em>Propose profile updates</em> in the editor). Insight
+notes are kept as one durable <em>Job insights</em> note per job, updated in place
+after each run; profile changes stay <strong>proposals you review</strong> on the Customize
+page — your profile is never changed automatically. The
+small <strong>💡 insights</strong> link on a compact tile asks AI Ask what the recent runs
+taught us; the chip is highlighted while either insight option is on.</p>
 <p><strong>When a run fails</strong> (v0.7.5): click <strong>🩺 Ask the medic</strong> on the run. The
 medic says what went wrong, explains it, and suggests changes to the job
 (shown as <em>now → suggested</em>) and anything only you can do (start a model
