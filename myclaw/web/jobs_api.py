@@ -74,6 +74,9 @@ class JobIn(BaseModel):
     retries: int | None = None
     on_failure: str | None = None   # v0.7.5: "" | "diagnose" | "fix"
     max_steps: int | None = None    # v0.7.5: tool rounds per run
+    context_runs: int | None = Field(None, ge=0, le=20)  # prior finished runs included as prompt context (0 = off)
+    insight_notes: bool | None = None    # v0.8.5: save knowledge-base notes from run insights (opt-in)
+    insight_profile: bool | None = None  # v0.8.5: propose profile updates from run insights (opt-in)
 
 
 class BenchIn(BaseModel):

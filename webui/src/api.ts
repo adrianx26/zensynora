@@ -174,6 +174,9 @@ export interface Job {
   retries: number;
   on_failure?: '' | 'diagnose' | 'fix'; // v0.7.5: what the medic does when a run fails
   max_steps?: number;                    // v0.7.5: tool rounds per run
+  context_runs?: number;                 // prior finished runs shown to the agent as context (0 = off)
+  insight_notes?: boolean;               // v0.8.5: save knowledge-base notes from run insights (opt-in)
+  insight_profile?: boolean;             // v0.8.5: propose profile updates from run insights (opt-in)
   created_by: string;
   next_run: number | null;
   last_run: number | null;

@@ -920,6 +920,18 @@ textarea.chat-input { resize: none; line-height: 1.4; min-height: 52px; padding:
 .job-ai-changes { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
 .job-ai-changes > div { display: grid; grid-template-columns: minmax(100px, 160px) 1fr; gap: 10px; padding: 4px 0; border-bottom: 1px solid var(--panel-border); }
 
+/* v0.8.5: job insights — small 💡 link on the compact tile + opt-in hint in the editor */
+.insight-link {
+  font-family: inherit; font-size: 0.72rem; padding: 1px 8px; border-radius: 999px; cursor: pointer;
+  border: 1px solid transparent; background: transparent; color: var(--text-secondary);
+}
+.insight-link:hover { border-color: var(--accent-color); color: var(--accent-color); }
+.insight-link.on {
+  border-color: color-mix(in srgb, var(--accent-color) 40%, var(--panel-border));
+  color: var(--accent-color); background: var(--accent-glow);
+}
+.insight-hint { font-size: 0.78rem; color: var(--text-secondary); margin: 4px 0 0; }
+
 /* models */
 .rotation-list { padding-left: 22px; display: flex; flex-direction: column; gap: 4px; }
 .rotation-list li { display: list-item; }

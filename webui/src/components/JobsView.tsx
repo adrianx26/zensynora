@@ -30,8 +30,21 @@ interface AITarget { jobId: string; runId?: number }
 const EMPTY: Draft = {
   name: '', prompt: '', agent: 'default', schedule: 'manual', every_minutes: 60, at_time: '09:00', days: 'mon,tue,wed,thu,fri',
   enabled: true, channel_id: '', success_criteria: '', auto_evaluate: false, fresh_context: true, timeout_s: 300, retries: 0,
-  on_failure: '', max_steps: 8,
+  on_failure: '', max_steps: 8, context_runs: 0, insight_notes: false, insight_profile: false,
 };
+
+// Asked when you click the 💡 insights link on a compact tile — a focused AI Ask question.
+const INSIGHT_QUESTION = 'What did the recent runs of this job teach us? Which insights are worth proposing ' +
+  'as a knowledge-base note or a profile update?';
+
+/** Tooltip for the 💡 insights link and the enabled destinations. */
+function insightTitle(j: Partial<Job>): string {
+  const ask = 'Click to ask AI what the recent runs taught us.';
+  if (!j.insight_notes && !j.insight_profile) return `Job insights are off (opt in via Edit). ${ask}`;
+  const notes = j.insight_notes ? 'Knowledge-base notes are saved automatically. ' : '';
+  const profile = j.insight_profile ? 'Profile proposals require your review. ' : '';
+  return `${notes}${profile}${ask}`;
+}
 
 const TEMPLATES: { label: string; job: Draft }[] = [
   {
@@ -342,6 +355,8 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
           <input className="field-input narrow" type="number" min={0} max={5} value={draft.retries} onChange={e => set('retries', Number(e.target.value))} /></div>
         <div className="field"><label className="field-label" title="How many extra tool rounds (search, read, retry…) the agent may use per run">Tool steps</label>
           <input className="field-input narrow" type="number" min={1} max={30} value={draft.max_steps ?? 8} onChange={e => set('max_steps', Number(e.target.value))} /></div>
+        <div className="field"><label className="field-label" title="How many previous finished runs the agent sees as background context (0 = none)">Prior runs context</label>
+          <input className="field-input narrow" type="number" min={0} max={20} value={draft.context_runs ?? 0} onChange={e => set('context_runs', Number(e.target.value))} /></div>
         <div className="field"><label className="field-label">When a run fails</label>
           <select className="field-input" value={draft.on_failure ?? ''} onChange={e => set('on_failure', e.target.value as Job['on_failure'])}>
             <option value="">do nothing</option>
@@ -349,13 +364,19 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
             <option value="fix">the medic diagnoses, fixes the job and runs it again</option>
           </select></div>
       </div>
-      {([['enabled', 'Enabled'], ['auto_evaluate', 'Score every run with the main model'], ['fresh_context', 'Start each run with a clean memory']] as const).map(([k, label]) => (
+      {([['enabled', 'Enabled'], ['auto_evaluate', 'Score every run with the main model'], ['fresh_context', 'Start each run with a clean memory'],
+        ['insight_notes', 'Save insight notes to the knowledge base'],
+        ['insight_profile', 'Propose profile updates from results']] as const).map(([k, label]) => (
         <div className="field field-inline" key={k}>
           <label className="field-label">{label}</label>
           <label className="switch"><input type="checkbox" checked={!!draft[k]} onChange={e => set(k, e.target.checked)} />
             <span className="switch-track"><span className="switch-thumb" /></span></label>
         </div>
       ))}
+      {(draft.insight_notes || draft.insight_profile) && (
+        <p className="insight-hint">Insight notes are saved automatically when enabled.
+          Profile changes are proposed for your review, not applied automatically.</p>
+      )}
       <div className="save-actions">
         <button className="ghost-btn" onClick={() => { setDraft(null); setEditingId(null); }}>Cancel</button>
         <button className="primary-btn" onClick={save} disabled={!draft.name.trim() || !draft.prompt.trim()}>{editingId ? 'Save job' : 'Create job'}</button>
@@ -401,6 +422,10 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                     {!j.enabled && <span className="badge">paused</span>}
                     {j.stats?.success_rate != null && <span>{Math.round(j.stats.success_rate * 100)}% success</span>}
                     <ScoreBadge score={j.stats?.avg_score} />
+                    <button className={`insight-link ${j.insight_notes || j.insight_profile ? 'on' : ''}`}
+                      title={insightTitle(j)} aria-label={`Insights about ${j.name}`}
+                      onClick={e => { e.stopPropagation(); void askAI(j.id, undefined, INSIGHT_QUESTION); }}>
+                      💡 insights</button>
                   </div>
                   <div className="job-tile-actions row-actions" onClick={e => e.stopPropagation()}>
                     <button className="icon-btn" disabled={j.running} onClick={() => runNow(j.id)}

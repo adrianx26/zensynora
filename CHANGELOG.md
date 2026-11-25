@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Job insights: an opt-in per-job *Prior runs context* setting (0–20, default 0) lets a
+  run see a bounded, secret/PII-scrubbed summary of its previous finished runs,
+  and new opt-in toggles save knowledge-base notes or propose profile updates
+  from run results. Profile proposals require user review; enabled insight notes
+  are saved automatically. The Jobs page editor exposes the new settings and compact
+  tiles show a small 💡 insights link wired into AI Ask.
+- Job reflexion notes: a job that opts in (`insight_notes`, default off) keeps
+  one stable knowledge note (`job-insight-<id>`, "Job insights: <name>") that is
+  updated in place after each terminal run — deterministic lessons first
+  (a Medic diagnosis or a recurring failure pattern for failed runs; never
+  ephemeral state), with an optional time-limited local-model polish that falls
+  back to the deterministic text. Existing note content is preserved, run text is
+  credential/PII-scrubbed, and writes go through the shared validation,
+  pending-index and write-budget path.
+
 ### Changed
 
 - Evolve's fusion evaluator now has an AI short-listing stage over a

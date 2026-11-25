@@ -109,7 +109,8 @@ CREATE INDEX IF NOT EXISTS ix_medic_reviews_status_created ON medic_reviews(stat
 
 EDITABLE = ("name", "prompt", "agent", "schedule", "every_minutes", "at_time", "days", "run_at",
             "enabled", "channel_id", "success_criteria", "auto_evaluate", "fresh_context",
-            "timeout_s", "retries", "on_failure", "max_steps")
+            "timeout_s", "retries", "on_failure", "max_steps", "context_runs",
+            "insight_notes", "insight_profile")
 ON_FAILURE = ("", "diagnose", "fix")  # v0.7.5: what the medic does when a run fails
 
 # Set by the runner/tool layer while a job is active.  The values deliberately
@@ -137,7 +138,11 @@ _SECRET_KEY = re.compile(
 
 # Columns added after 0.7.1 (older jobs.db files get them on first use).
 _ADDED_COLUMNS = {
-    "jobs": [("on_failure", "TEXT NOT NULL DEFAULT ''"), ("max_steps", "INTEGER NOT NULL DEFAULT 8")],
+    "jobs": [("on_failure", "TEXT NOT NULL DEFAULT ''"), ("max_steps", "INTEGER NOT NULL DEFAULT 8"),
+             ("context_runs", "INTEGER NOT NULL DEFAULT 0"),
+             # v0.8.5: insight notes and profile proposals are opt-in.
+             ("insight_notes", "INTEGER NOT NULL DEFAULT 0"),
+             ("insight_profile", "INTEGER NOT NULL DEFAULT 0")],
     "runs": [("diagnosis", "TEXT NOT NULL DEFAULT ''")],
     "tool_events": [
         ("run_id", "INTEGER"), ("job_id", "TEXT NOT NULL DEFAULT ''"),
@@ -194,7 +199,7 @@ def _conn() -> Iterator[sqlite3.Connection]:
 
 def _job(row: sqlite3.Row) -> dict[str, Any]:
     d = dict(row)
-    for k in ("enabled", "auto_evaluate", "fresh_context"):
+    for k in ("enabled", "auto_evaluate", "fresh_context", "insight_notes", "insight_profile"):
         d[k] = bool(d[k])
     return d
 
@@ -478,6 +483,9 @@ def validate(job: dict[str, Any]) -> None:
         raise ValueError("When a run fails: choose nothing, diagnose or fix.")
     if not 1 <= int(job.get("max_steps") or 8) <= 30:
         raise ValueError("Tool steps must be between 1 and 30.")
+    context_runs = job.get("context_runs")
+    if not 0 <= int(0 if context_runs is None else context_runs) <= 20:
+        raise ValueError("Prior-run context must be between 0 and 20 runs.")
 
 
 def compute_next_run(job: dict[str, Any], after: float | None = None) -> float | None:
@@ -537,7 +545,8 @@ def create_job(data: dict[str, Any]) -> dict[str, Any]:
     job = {"agent": "default", "schedule": "manual", "every_minutes": 60, "at_time": "09:00", "days": "",
            "run_at": None, "enabled": True, "channel_id": "", "success_criteria": "",
            "auto_evaluate": False, "fresh_context": True, "timeout_s": 300, "retries": 0,
-           "on_failure": "", "max_steps": 8, "created_by": "you"}
+           "on_failure": "", "max_steps": 8, "context_runs": 0, "created_by": "you",
+           "insight_notes": False, "insight_profile": False}
     job.update({k: v for k, v in data.items() if k in EDITABLE or k == "created_by"})
     validate(job)
     now = time.time()
@@ -697,3 +706,34 @@ def recover_interrupted() -> int:
     with _conn() as c:
         return c.execute("UPDATE runs SET status = 'interrupted', finished = ? WHERE status = 'running'",
                          (time.time(),)).rowcount
+
+
+def prior_runs(job_id: str, exclude_run_id: int, limit: int = 3) -> list[dict[str, Any]]:
+    """The last ``limit`` finished runs of a job (newest first), excluding one run.
+
+    Used to give a job run bounded context about its own history.  Each run
+    gets its latest Medic review summary attached as ``medic_summary`` /
+    ``medic_severity`` when a review exists.  Text fields are returned raw
+    from the database; the caller sanitizes before they reach a prompt.
+    """
+    limit = max(0, min(int(limit), 20))
+    if limit == 0:
+        return []
+    with _conn() as c:
+        rows = c.execute(
+            "SELECT * FROM runs WHERE job_id = ? AND kind = 'run' AND id != ? "
+            "AND status != 'running' ORDER BY id DESC LIMIT ?",
+            (job_id, int(exclude_run_id), limit)).fetchall()
+        runs = [_run(r) for r in rows]
+        for run in runs:
+            row = c.execute(
+                "SELECT review_json FROM medic_reviews WHERE run_id = ? ORDER BY id DESC LIMIT 1",
+                (run["id"],)).fetchone()
+            try:
+                review = json.loads(row["review_json"]) if row else {}
+            except (TypeError, ValueError):
+                review = {}
+            if review.get("summary"):
+                run["medic_summary"] = str(review["summary"])[:500]
+                run["medic_severity"] = str(review.get("severity") or "info")
+    return runs

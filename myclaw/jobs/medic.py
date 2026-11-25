@@ -246,6 +246,7 @@ def _agents(config: Any) -> dict[str, str]:
 _SECRET_PATTERNS = (
     re.compile(r"(?i)\b(bearer\s+)[A-Za-z0-9._~+/-]{8,}"),
     re.compile(r"(?i)\b(sk-[A-Za-z0-9_-]{8,})\b"),
+    re.compile(r"\b(?:gh[opsur]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,})\b"),
     re.compile(
         r"(?i)\b(api[_ -]?key|token|password|passwd|secret|authorization|cookie)"
         r"(\s*[=:]\s*|\s+)([^\s,;\"']{4,})"
