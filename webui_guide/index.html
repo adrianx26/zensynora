@@ -2282,7 +2282,9 @@ web sites are refused.</p>
   machine), <em>Knowledge base</em>, <em>Conversations &amp; chat channels</em>, <em>Jobs, own
   tools &amp; skills</em>. Add a note if you like.</li>
 <li><strong>Automatic backups</strong> — every N hours while the Web UI runs; keeps the
-  last N automatic ones (manual backups are never deleted automatically).</li>
+  last N automatic ones (manual backups are never deleted automatically).
+  If a backup is blocked by agent work or an interrupted fusion, it retries
+  while the Web UI is running; the cause is logged.</li>
 <li><strong>Restore</strong> — choose which parts to restore (click the part chips);
   your current files are backed up first, so a restore can be undone.
   <strong>Check</strong> verifies every file against its checksum; ⬇ downloads;
@@ -2290,7 +2292,21 @@ web sites are refused.</p>
 </ul>
 <p>Backups are <code>.tar.gz</code> files in <code>~/.myclaw-backups</code> (change it in Settings or
 with <code>MYCLAW_BACKUP_DIR</code>). They contain your API keys — keep them private.
-The same works from a terminal:</p>
+Backups wait until agent work is finished and interrupted fusions are recovered;
+they do not bypass restore or lifecycle safety checks. If the error identifies
+a pending fusion, recover the named operation via
+<code>POST /api/evolve/fuse/resume</code> with <code>{"id": "OPERATION_ID"}</code>.</p>
+<p>Execution leases created by older releases use process IDs alone. If a backup
+still reports running work after a restart, a reused process ID can leave an
+old lease ambiguous. First stop <strong>all</strong> ZenSynora instances and their workers,
+including containers, CLI and gateway processes sharing the data directory.
+Confirm no work is still running and no fusion or restore needs recovery.
+Then move <code>~/.myclaw/agent-executions.sqlite</code> and any accompanying <code>-wal</code>,
+<code>-shm</code> or <code>-journal</code> files together into a private, retained recovery folder
+before restarting ZenSynora. Do not remove the graveyard, fusion or restore
+records. The app creates a fresh lease database. New leases use process-held
+locks so a terminated process is not mistaken for a reused PID.</p>
+<p>The same works from a terminal:</p>
 <div class="highlight"><pre><span></span><code>zensynora<span class="w"> </span>backup<span class="w"> </span>create<span class="w">                 </span><span class="c1"># parts chosen in Settings</span>
 zensynora<span class="w"> </span>backup<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>settings<span class="w">     </span><span class="c1"># only settings + API keys</span>
 zensynora<span class="w"> </span>backup<span class="w"> </span>list
