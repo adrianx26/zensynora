@@ -20,6 +20,24 @@ against runaway loops.
 | Let an agent check/repair itself | the medic tools below (available to every agent) |
 | Let agents propose fixes to the code (you approve) | Doctor → **Change proposals**, `zensynora medic` ([section 6](#6-self-update-proposals)) |
 
+### Investigation reports for GitHub
+
+Use **Doctor → Investigate with an agent** to check an error using live
+diagnostics. Medic can propose a code fix; installing it still requires your
+approval under **Change proposals**.
+
+After a Doctor or Medic investigation finishes, open its run in **Jobs** and
+choose **Export bug report**. The downloaded Markdown draft includes timestamps,
+tool names, outcomes and durations for the latest 1,000 recorded tool actions.
+It does not include prompts, tool arguments or results, raw logs, source code,
+agent names, or model details. Non-tool actions and background work may not be
+represented; a successful run is not proof that a fix was applied.
+
+Review and complete the description, reproduction steps and verification, then
+use **Report on GitHub** to open the repository's bug-report form and paste your
+reviewed report. Nothing is uploaded automatically and no GitHub token is stored.
+Do not attach raw logs or configuration containing private data.
+
 ---
 
 ## 1. The doctor

@@ -176,7 +176,6 @@ def default_parts(cfg: Any = None) -> list[str]:
 
 
 # ── create ───────────────────────────────────────────────────────────────────
-@activity.recorded("backup", lambda *a, **k: f"backup ({k.get('label', a[1] if len(a) > 1 else 'manual')})")
 def create_backup(parts: list[str] | None = None, label: str = "manual", note: str = "",
                   dest: Path | None = None, cfg: Any = None) -> dict[str, Any]:
     """Write a backup archive; returns its info (as listed by ``list_backups``)."""
@@ -184,9 +183,26 @@ def create_backup(parts: list[str] | None = None, label: str = "manual", note: s
     from .executions import active_for
 
     with _lifecycle_guard():
-        if pending_fusions() or active_for(None):
-            raise ValueError("Wait for agent work and recover pending fusions before making a backup.")
-        return _create_backup_locked(parts, label, note, dest, cfg)
+        pending = pending_fusions()
+        if pending:
+            raise ValueError(
+                f"Cannot back up: recover pending fusions first (operation {pending[0]['id']}) "
+                "using /api/evolve/fuse/resume."
+            )
+        if active_for(None):
+            raise ValueError(
+                "Cannot back up while agent turns, jobs or background work are running. "
+                "Wait for them to finish; cancelled work may require restarting its process. "
+                "If this persists after restarting all ZenSynora processes, see the Backups guide "
+                "for safe execution-lease recovery."
+            )
+        return _recorded_create_backup(parts, label, note, dest, cfg)
+
+
+@activity.recorded("backup", lambda *a, **k: f"backup ({k.get('label', a[1] if len(a) > 1 else 'manual')})")
+def _recorded_create_backup(parts: list[str] | None, label: str, note: str,
+                            dest: Path | None, cfg: Any) -> dict[str, Any]:
+    return _create_backup_locked(parts, label, note, dest, cfg)
 
 
 def _create_backup_locked(parts: list[str] | None = None, label: str = "manual", note: str = "",

@@ -58,7 +58,7 @@ export const AskAI: React.FC<{
     setBusy('investigate'); setNote(null);
     try {
       const r = await api<{ name: string }>('/api/doctor/ai/investigate', { method: 'POST', body: body() });
-      setNote({ ok: true, text: `Started “${r.name}”. Its report is on the Jobs page; a code fix, if any, appears under Change proposals.` });
+      setNote({ ok: true, text: `Started “${r.name}”. Its report is on the Jobs page; use Export bug report after it finishes to prepare a reviewed GitHub report. A code fix, if any, appears under Change proposals.` });
     } catch (e) {
       setNote({ ok: false, text: (e as Error).message });
     } finally {

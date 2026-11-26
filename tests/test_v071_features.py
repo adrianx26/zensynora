@@ -239,6 +239,124 @@ def test_backup_create_verify_restore(home):
         backup.resolve("../../etc/passwd")
 
 
+def test_backup_api_reports_the_actual_blocker(home, monkeypatch):
+    from myclaw import backup, evolve, executions
+    from myclaw.web import backup_api
+
+    monkeypatch.setattr(backup, "install_root", lambda: home)
+    monkeypatch.setattr(evolve, "pending_fusions", lambda: [{"id": "fusion-1"}])
+    app = FastAPI()
+    app.include_router(backup_api.router)
+    with TestClient(app) as client:
+        response = client.post("/api/backups", json={})
+        assert response.status_code == 409
+        assert "fusion-1" in response.json()["detail"]
+        assert "/api/evolve/fuse/resume" in response.json()["detail"]
+
+        monkeypatch.setattr(evolve, "pending_fusions", lambda: [])
+        monkeypatch.setattr(executions, "active_for", lambda _: [("agent", "turn", 1)])
+        response = client.post("/api/backups", json={})
+        assert response.status_code == 409
+        assert "agent turns, jobs or background work" in response.json()["detail"]
+        assert "pending fusion" not in response.json()["detail"]
+        assert not backup.list_backups()
+
+        monkeypatch.setattr(executions, "active_for", lambda _: [])
+        response = client.post("/api/backups", json={})
+        assert response.status_code == 200
+        assert backup.verify_backup(backup.resolve(response.json()["name"])) == (True, [])
+
+
+@pytest.mark.parametrize("blocker", ["active", "unverifiable"])
+def test_automatic_backup_retries_after_blocker_clears(home, monkeypatch, caplog, blocker):
+    import logging
+
+    from myclaw import backup, evolve, executions
+    from myclaw.config import load_config
+    from myclaw.web import backup_api
+
+    monkeypatch.setattr(backup, "install_root", lambda: home)
+    monkeypatch.setattr(backup_api, "_last_auto_failure", None)
+    cfg = load_config()
+    cfg.backup.auto_enabled = True
+    monkeypatch.setattr(backup_api, "load_config", lambda: cfg)
+    running = [("agent", "turn", 1)]
+
+    def active_for(_):
+        if running and blocker == "unverifiable":
+            raise evolve.LifecycleError("Cannot verify execution lease lock")
+        return running
+
+    monkeypatch.setattr(executions, "active_for", active_for)
+
+    async def tick():
+        monkeypatch.setattr(backup_api, "_last_check", 0.0)
+        await backup_api.auto_backup_tick()
+
+    with caplog.at_level(logging.WARNING, logger=backup_api.__name__):
+        asyncio.run(tick())
+        asyncio.run(tick())
+        assert len([r for r in caplog.records if "Automatic backup failed" in r.message]) == 1
+        assert not backup.list_backups(cfg)
+        running.clear()
+        asyncio.run(tick())
+
+    items = backup.list_backups(cfg)
+    assert len(items) == 1 and items[0]["label"] == "auto"
+    assert backup.verify_backup(backup.resolve(items[0]["name"], cfg)) == (True, [])
+
+
+def test_automatic_backup_runs_from_job_runner(home, monkeypatch):
+    from myclaw import backup
+    from myclaw.config import load_config
+    from myclaw.executions import execution
+    from myclaw.jobs import runner as runner_module
+    from myclaw.web import backup_api
+
+    monkeypatch.setattr(backup, "install_root", lambda: home)
+    monkeypatch.setattr(backup_api, "_last_auto_failure", None)
+    cfg = load_config()
+    cfg.backup.auto_enabled = True
+    monkeypatch.setattr(backup_api, "load_config", lambda: cfg)
+    monkeypatch.setattr(runner_module.store, "recover_interrupted", lambda: 0)
+    monkeypatch.setattr(runner_module.store, "due_jobs", lambda: [])
+    monkeypatch.setattr(runner_module, "TICK_SECONDS", 0.01)
+    async def scenario():
+        blocked = asyncio.Event()
+        retry = asyncio.Event()
+        completed = asyncio.Event()
+        runner = runner_module.JobRunner(lambda: {})
+        attempts = 0
+
+        async def tick():
+            nonlocal attempts
+            monkeypatch.setattr(backup_api, "_last_check", 0.0)
+            await backup_api.auto_backup_tick()
+            attempts += 1
+            if attempts == 1:
+                blocked.set()
+                await retry.wait()
+            else:
+                completed.set()
+
+        runner.on_tick.append(tick)
+        try:
+            async with execution("default", "turn"):
+                runner.start()
+                await asyncio.wait_for(blocked.wait(), timeout=5)
+                assert not backup.list_backups(cfg)
+            retry.set()
+            await asyncio.wait_for(completed.wait(), timeout=5)
+        finally:
+            retry.set()
+            await runner.stop()
+
+    asyncio.run(scenario())
+    items = backup.list_backups(cfg)
+    assert len(items) == 1 and items[0]["label"] == "auto"
+    assert backup.verify_backup(backup.resolve(items[0]["name"], cfg)) == (True, [])
+
+
 def test_rotation_falls_back_to_the_next_model(home, monkeypatch):
     """A failing default model hands over to the next model in the rotation list."""
     import myclaw.agent as agent_mod

@@ -8,6 +8,7 @@ POST /api/doctor/ai/summary      {hours, offline}             the model's health
 POST /api/doctor/ai/explain      {kind, key, level, hours}    explain one error group / check (cached)
 GET  /api/doctor/ai/explanations                              cached explanations (also automatic ones)
 POST /api/doctor/ai/investigate  {kind, key, level, hours, agent}  an agent job (may file a proposal)
+GET  /api/doctor/ai/investigations/{run_id}/report   privacy-filtered GitHub report draft
 GET  /api/doctor/logs?source=activity|app&hours=&kind=&status=&level=&q=&limit=&offset=   (2026-11-05)
 GET  /api/doctor/logs/export?source=&hours=&fmt=txt|jsonl&…   the period as a file
 POST /api/doctor/logs/analyze    {hours}           the model's summary and options
@@ -129,6 +130,19 @@ async def ai_investigate(body: ProblemIn):
         return ai.investigate(body.kind, body.key, body.level, _hours(body.hours), body.agent)
     except LookupError as e:
         raise HTTPException(status_code=404, detail=str(e))
+
+
+@router.get("/api/doctor/ai/investigations/{run_id}/report", dependencies=guard)
+async def investigation_report(run_id: int):
+    from myclaw.doctor import ai
+
+    try:
+        text = await asyncio.to_thread(ai.investigation_report, run_id)
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"text": text}
 
 
 # ── 2026-11-05: logs ─────────────────────────────────────────────────────────

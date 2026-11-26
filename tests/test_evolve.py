@@ -618,6 +618,62 @@ def test_cross_process_execution_blocks_fusion_and_dead_process_is_reaped(home):
         child.stderr.close()
 
 
+def test_backup_reaps_dead_execution_even_when_pid_is_reused(home, monkeypatch):  # noqa: F811
+    import os
+    import subprocess
+    import sys
+
+    from myclaw import backup, executions
+
+    monkeypatch.setattr(backup, "install_root", lambda: home)
+    code = ("from myclaw.executions import _start\n"
+            "print(_start('A', 'turn'), flush=True)\n"
+            "input()\n")
+    child = subprocess.Popen([sys.executable, "-c", code], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.PIPE, text=True)
+    try:
+        token = child.stdout.readline().strip()
+        assert token
+        with pytest.raises(ValueError, match="agent turns"):
+            backup.create_backup()
+        child.terminate()
+        child.wait(timeout=10)
+        with executions._connect() as db:
+            db.execute("UPDATE executions SET pid = ? WHERE id = ?", (os.getpid(), token))
+        info = backup.create_backup()
+        assert backup.verify_backup(backup.resolve(info["name"])) == (True, [])
+    finally:
+        if child.poll() is None:
+            child.terminate()
+            child.wait(timeout=10)
+        child.stdin.close()
+        child.stdout.close()
+        child.stderr.close()
+
+
+@pytest.mark.parametrize("condition", ["missing", "replaced", "legacy"])
+def test_backup_keeps_ambiguous_execution_leases(home, monkeypatch, condition):  # noqa: F811
+    import os
+    import time
+
+    from myclaw import backup, evolve, executions
+
+    monkeypatch.setattr(backup, "install_root", lambda: home)
+    token = "legacy" if condition == "legacy" else "v2-" + "a" * 32 + "-0-0"
+    if condition == "replaced":
+        lock_dir = home / ".myclaw" / "agent-execution-locks"
+        lock_dir.mkdir()
+        (lock_dir / ("v2-" + "a" * 32)).write_bytes(b"0")
+    with executions._connect() as db:
+        db.execute("INSERT INTO executions VALUES (?, ?, ?, ?, ?)",
+                   (token, "A", "turn", os.getpid(), time.time()))
+    error = ValueError if condition == "legacy" else evolve.LifecycleError
+    with pytest.raises(error, match="execution-lease recovery"):
+        backup.create_backup()
+    with executions._connect() as db:
+        assert db.execute("SELECT COUNT(*) FROM executions").fetchone()[0] == 1
+
+
 def test_parent_agents_setting_cannot_revive_graveyard(home):  # noqa: F811
     from fastapi import HTTPException
 

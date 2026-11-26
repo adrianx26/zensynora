@@ -607,6 +607,8 @@ web sites are refused.
   tools & skills*. Add a note if you like.
 * **Automatic backups** — every N hours while the Web UI runs; keeps the
   last N automatic ones (manual backups are never deleted automatically).
+  If a backup is blocked by agent work or an interrupted fusion, it retries
+  while the Web UI is running; the cause is logged.
 * **Restore** — choose which parts to restore (click the part chips);
   your current files are backed up first, so a restore can be undone.
   **Check** verifies every file against its checksum; ⬇ downloads;
@@ -614,6 +616,22 @@ web sites are refused.
 
 Backups are `.tar.gz` files in `~/.myclaw-backups` (change it in Settings or
 with `MYCLAW_BACKUP_DIR`). They contain your API keys — keep them private.
+Backups wait until agent work is finished and interrupted fusions are recovered;
+they do not bypass restore or lifecycle safety checks. If the error identifies
+a pending fusion, recover the named operation via
+`POST /api/evolve/fuse/resume` with `{"id": "OPERATION_ID"}`.
+
+Execution leases created by older releases use process IDs alone. If a backup
+still reports running work after a restart, a reused process ID can leave an
+old lease ambiguous. First stop **all** ZenSynora instances and their workers,
+including containers, CLI and gateway processes sharing the data directory.
+Confirm no work is still running and no fusion or restore needs recovery.
+Then move `~/.myclaw/agent-executions.sqlite` and any accompanying `-wal`,
+`-shm` or `-journal` files together into a private, retained recovery folder
+before restarting ZenSynora. Do not remove the graveyard, fusion or restore
+records. The app creates a fresh lease database. New leases use process-held
+locks so a terminated process is not mistaken for a reused PID.
+
 The same works from a terminal:
 
 ```bash

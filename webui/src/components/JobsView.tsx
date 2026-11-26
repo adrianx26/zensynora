@@ -278,6 +278,15 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
     return res;
   }, 'The medic is looking at the code (job “Medic code fix”). A fix appears in Doctor → Change proposals for you to approve.');
   const cancel = (r: JobRun) => act(() => api(`/api/jobs/runs/${r.id}/cancel`, { method: 'POST' }));
+  const exportInvestigation = (r: JobRun) => act(async () => {
+    const report = await api<{ text: string }>(`/api/doctor/ai/investigations/${r.id}/report`);
+    const url = URL.createObjectURL(new Blob([report.text], { type: 'text/markdown;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `medic-investigation-${r.id}.md`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, 'Downloaded a privacy-filtered action journal. Review and complete it before posting to GitHub; nothing was uploaded.');
   const runBench = () => job && act(() => api(`/api/jobs/${job.id}/benchmark`, { method: 'POST', body: JSON.stringify({ models: bench, evaluate: true }) }),
     `Benchmark started on ${bench.length} model(s).`);
 
@@ -567,6 +576,17 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                           : <button className="ghost-btn" onClick={() => evaluate(r)}>{r.score == null ? 'Evaluate' : 'Re-evaluate'}</button>}
                         <button className="icon-btn ai" onClick={() => void askAI(job.id, r.id)}
                           aria-label={`AI Ask about run ${r.id}`} title="AI Ask about this run">✦</button>
+                        {r.status !== 'running' && ['doctor', 'medic'].includes(job.created_by || '') && (
+                          <>
+                            <button className="ghost-btn" onClick={() => exportInvestigation(r)}
+                              title="Download a GitHub-ready draft with action timestamps and outcomes, without private log text">
+                              Export bug report</button>
+                            <a className="ghost-btn" href="https://github.com/adrianx26/zensynora/issues/new?template=bug_report.md"
+                              target="_blank" rel="noopener noreferrer"
+                              title="Open GitHub, then paste only your reviewed report. Nothing is uploaded automatically.">
+                              Report on GitHub</a>
+                          </>
+                        )}
                         {['error', 'timeout', 'interrupted'].includes(r.status) && (
                           <button className="ghost-btn" disabled={medicBusy === r.id} onClick={() => askMedic(r)}
                             title="The medic finds why this run failed and suggests a fix">

@@ -148,17 +148,29 @@ async def auto_backup_tick() -> None:
     """Called every few seconds by the job runner; cheap unless a backup is due."""
     import time
 
-    global _last_check
+    from myclaw.evolve import LifecycleError
+
+    global _last_check, _last_auto_failure
     now = time.monotonic()
     if now - _last_check < 60:  # look at the folder at most once a minute
         return
     _last_check = now
     cfg = load_config()
     if not cfg.backup.auto_enabled:
+        _last_auto_failure = None
         return
-    info = await asyncio.to_thread(backup.run_auto_backup, cfg)
+    try:
+        info = await asyncio.to_thread(backup.run_auto_backup, cfg)
+    except (ValueError, LifecycleError, OSError) as exc:
+        message = str(exc)
+        if message != _last_auto_failure:
+            logger.warning("Automatic backup failed; will retry: %s", message)
+            _last_auto_failure = message
+        return
+    _last_auto_failure = None
     if info:
         logger.info("Automatic backup created: %s", info["name"])
 
 
 _last_check = 0.0
+_last_auto_failure: str | None = None

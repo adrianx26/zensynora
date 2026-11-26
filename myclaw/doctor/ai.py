@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
@@ -211,6 +212,75 @@ def investigate(kind: str, key: str, level: str = "", hours: float = 24, agent: 
         raise ValueError("kind must be 'error' or 'check'.")
     prompt = f"DOCTOR INVESTIGATION\n<facts>\n{facts}\n</facts>\n\n{INVESTIGATE_STEPS}"
     return evolve.start_job(f"Doctor: {title[:70]}", prompt, agent, "doctor")
+
+
+def investigation_report(run_id: int) -> str:
+    """Create a shareable action journal without exporting private log text."""
+    from datetime import datetime, timezone
+
+    from .. import __version__
+    from ..jobs import store
+    from ..tools import TOOLS
+
+    run = store.get_run(run_id)
+    if run is None:
+        raise LookupError("Run not found; select an existing investigation run.")
+    job = store.get_job(run["job_id"])
+    if job is None or job.get("created_by") not in ("doctor", "medic"):
+        raise ValueError("Select a Doctor or Medic investigation run to export its action journal.")
+    if run["status"] == "running":
+        raise ValueError("Wait for the investigation to finish before exporting its action journal.")
+    status = run["status"] if run["status"] in (
+        "ok", "error", "timeout", "cancelled", "interrupted", "blocked"
+    ) else "unknown"
+    lines = [
+        "# Medic investigation report",
+        "",
+        "Review and complete this draft before sharing it on GitHub.",
+        "Private prompts, log messages, source code, tool arguments/results, agent names,",
+        "and model details are intentionally omitted. No data has been uploaded.",
+        "",
+        "## Bug Description",
+        "Describe the problem without private data.",
+        "",
+        "## Steps to Reproduce",
+        "Add the minimal steps needed to reproduce the problem.",
+        "",
+        "## Expected Behavior",
+        "Describe the expected result.",
+        "",
+        "## Actual Behavior",
+        f"Investigation outcome: {status}. This does not prove that a fix was applied.",
+        "",
+        "## Environment",
+        f"- ZenSynora version: {__version__}",
+        "",
+        "## Logs",
+        "Tool actions only; newest 1,000 actions shown chronologically.",
+        "Non-tool actions and background work may not be represented.",
+        "",
+        "| Action | Time (UTC) | Tool | Outcome | Duration (ms) |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    events = store.list_tool_events(run_id=run_id, limit=1000)
+    for index, event in enumerate(reversed(events), 1):
+        name = event["tool"]
+        tool = name if name in TOOLS and re.fullmatch(r"[A-Za-z0-9_]+", name) else "unlisted tool"
+        at = datetime.fromtimestamp(event["created"], timezone.utc).isoformat()
+        lines.append(
+            f"| {index} | {at} | {tool} | {'ok' if event['ok'] else 'error'} "
+            f"| {event['duration_ms']} |"
+        )
+    if not events:
+        lines.append("\nNo tool actions were recorded for this run.")
+    lines += [
+        "",
+        "## Additional Context",
+        "Review the investigation output and any code proposal locally.",
+        "Describe the proposed fix and verification here without copying sensitive data.",
+        "Code changes still require approval in Doctor > Change proposals.",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 async def auto_tick(hours: float = 24) -> int:
