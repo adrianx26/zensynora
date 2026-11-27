@@ -1040,6 +1040,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#20-backup-and-restore-maintenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        20. Backup and restore maintenance
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1485,6 +1496,17 @@
   
 </li>
       
+        <li class="md-nav__item">
+  <a href="#20-backup-and-restore-maintenance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        20. Backup and restore maintenance
+      
+    </span>
+  </a>
+  
+</li>
+      
     </ul>
   
 </nav>
@@ -1507,15 +1529,12 @@
 
 <h1 id="zensynora-architecture-visual-guide">ZenSynora Architecture — Visual Guide<a class="headerlink" href="#zensynora-architecture-visual-guide" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Version:</strong> 0.7.1 · <strong>Last updated:</strong> 2026-10-13
-0.7.1: chat channels and agent-to-agent events (§12), jobs (§13),
-approval-gated self-update (§14), backups, model rotation and custom
-providers (§4), full program-folder backup in updates (§9).
-Unreleased: the Telegram bot can run inside the Web UI process, message
-flow through queue and workers, shared knowledge base (§1, §2, §15).
-Rewritten for 0.7.0. The previous version showed planning phases and
-modules that no longer match the code. Every diagram below reflects the
-current source tree; file names are given so you can jump to the code.
+<p><strong>Version:</strong> 0.8.5 · <strong>Last updated:</strong> 2026-11-27
+Modular maintenance progress, safe optional update decisions (§9),
+approved Doctor GitHub reinstall (§10), job insights and reviewed reports
+(§13), and verified backup/restore recovery (§20).
+Earlier feature-introduction versions are kept as history. Source package
+names are provided so you can jump from each flow to its implementation.
 Text-oriented companion: <a href="../ARCHITECTURE/">ARCHITECTURE.md</a>.</p>
 </blockquote>
 <p><strong>Contents</strong></p>
@@ -1523,7 +1542,7 @@ Text-oriented companion: <a href="../ARCHITECTURE/">ARCHITECTURE.md</a>.</p>
 <li><a href="#1-system-context">System context</a></li>
 <li><a href="#2-component-map">Component map</a></li>
 <li><a href="#3-a-chat-message-end-to-end">A chat message, end to end</a></li>
-<li><a href="#4-provider-selection-and-fallback">Provider selection and fallback</a></li>
+<li><a href="#4-provider-selection-rotation-and-fallback">Provider selection, rotation and fallback</a></li>
 <li><a href="#5-tool-execution">Tool execution</a></li>
 <li><a href="#6-swarms">Swarms</a></li>
 <li><a href="#7-settings-from-the-web-ui">Settings from the Web UI</a></li>
@@ -1535,6 +1554,11 @@ Text-oriented companion: <a href="../ARCHITECTURE/">ARCHITECTURE.md</a>.</p>
 <li><a href="#13-jobs">Jobs</a></li>
 <li><a href="#14-self-update-proposals">Self-update proposals</a></li>
 <li><a href="#15-telegram-bot">Telegram bot</a></li>
+<li><a href="#16-providers-keys-and-agents">Providers, keys and agents</a></li>
+<li><a href="#17-knowledge-page-web-ui">Knowledge page</a></li>
+<li><a href="#18-context-length-per-agent">Context length per agent</a></li>
+<li><a href="#19-knowledge-tuning-decay-and-re-ranking">Knowledge tuning, decay and re-ranking</a></li>
+<li><a href="#20-backup-and-restore-maintenance">Backup and restore maintenance</a></li>
 </ol>
 <hr />
 <h2 id="1-system-context">1. System context<a class="headerlink" href="#1-system-context" title="Permanent link">&para;</a></h2>
@@ -1597,7 +1621,7 @@ layer to the layer it uses.</p>
     subgraph L3["Capabilities"]
         direction LR
         tools["tools/&lt;br/&gt;shell · files · web · browser · kb · scheduler · swarm · toolbox"]
-        provider["provider.py&lt;br/&gt;8 built-in + your own providers · rotation"]
+        provider["provider.py&lt;br/&gt;local + cloud providers · rotation"]
         events["events.py&lt;br/&gt;agent-to-agent activity"]
         resilience["resilience/ + offline.py&lt;br/&gt;circuit breaker · offline fallback"]
         prompts["prompts/ · structured_output/"]
@@ -1617,9 +1641,9 @@ layer to the layer it uses.</p>
     subgraph L5["Operations"]
         direction LR
         doctor["doctor/&lt;br/&gt;health checks · integrity"]
-        updater["updater/ (repo root)&lt;br/&gt;safe updates · app backup · migrations"]
+        updater["updater/ (repo root)&lt;br/&gt;safe steps · optional decisions · structured progress"]
         selfupd["selfupdate.py&lt;br/&gt;agent proposals → updater"]
-        backupx["backup.py&lt;br/&gt;settings · keys · knowledge"]
+        backupx["backup.py + maintenance.py&lt;br/&gt;verified backup · restore · private progress"]
         obs["observability/ · metrics.py · logging_config.py"]
     end
 
@@ -1823,6 +1847,7 @@ and a model that is gone for good is replaced in every agent
         chatdb["chat.db · jobs.db&lt;br/&gt;channels + messages · jobs + runs (0.7.1)"]
         logs["logs/zensynora.log&lt;br/&gt;rotating JSON log (since 0.7.0)"]
         mig[".migrations.json&lt;br/&gt;applied data migrations"]
+        progress["maintenance-progress.json&lt;br/&gt;latest backup/restore steps and events"]
     end
     app["ZenSynora (any version)"] &lt;--&gt; data
     upd["updater"] -- "backup before every update" --&gt; data
@@ -1831,13 +1856,22 @@ and a model that is gone for good is replaced in every agent
 <hr />
 <h2 id="9-safe-updates">9. Safe updates<a class="headerlink" href="#9-safe-updates" title="Permanent link">&para;</a></h2>
 <p><code>zensynora update</code> (<code>updater/</code>, added in 0.6.0; program-folder backup and
-data check added in 0.7.1). Steps 1–10 never touch the running version; any
-failure undoes the completed steps in reverse order.</p>
+data check added in 0.7.1). Version 0.8.5 records step and rollback outcomes.
+Only the program-folder archive is optional; user-data backup, verification
+and recovery cannot be skipped. Failures attempt rollback of completed steps.</p>
 <pre class="mermaid"><code>flowchart TD
     s1["1 Preflight&lt;br/&gt;Python, disk space, service state"] --&gt; s2["2 Fetch&lt;br/&gt;GitHub, folder or archive"]
     s2 --&gt; s3["3 Hand-off&lt;br/&gt;newer updater takes over"]
     s3 --&gt; s4["4 Back up ~/.myclaw + .env"]
-    s4 --&gt; s5["5 Back up the whole program folder&lt;br/&gt;archive + inventory of every file"]
+    s4 --&gt; mode{"Program archive enabled?"}
+    mode -- no --&gt; skip["SKIPPED: program archive"]
+    mode -- yes --&gt; interactive{"Interactive mode?"}
+    interactive -- no --&gt; s5["5 Program archive&lt;br/&gt;full or code-only"]
+    interactive -- yes --&gt; decision{"WAITING: Continue / Skip / Abort"}
+    decision -- Continue --&gt; s5
+    decision -- Skip --&gt; skip
+    decision -- Abort --&gt; rb
+    skip --&gt; s6
     s5 --&gt; s6["6 Carry over .env, data/"]
     s6 --&gt; s7["7 Build side by side&lt;br/&gt;venv · packages · extras · Web UI"]
     s7 --&gt; s8["8 Verify&lt;br/&gt;imports new code, loads YOUR config"]
@@ -1848,7 +1882,11 @@ failure undoes the completed steps in reverse order.</p>
     s12 --&gt; s13["13 Start service, confirm up"]
     s13 --&gt; s14(["14 Record, prune old releases"])
 
-    s2 &amp; s7 &amp; s8 &amp; s10 &amp; s11 &amp; s13 -. "failure" .-&gt; rb["Roll back&lt;br/&gt;old version active again · data restored if migrated ·&lt;br/&gt;program folder compared with the inventory and&lt;br/&gt;restored from the archive if anything differs"]</code></pre>
+    s2 &amp; s4 &amp; s5 &amp; s7 &amp; s8 &amp; s10 &amp; s11 &amp; s12 &amp; s13 &amp; s14 -. "failure" .-&gt; rb["Attempt reverse rollback&lt;br/&gt;restore changed data and previous activation;&lt;br/&gt;verify program folder when archive exists"]
+    rb --&gt; outcomes{"Recovery outcome"}
+    outcomes -- success --&gt; restored["ROLLED-BACK"]
+    outcomes -- failure --&gt; attention["ROLLBACK-FAILED&lt;br/&gt;preserve backups and repair"]
+    s1 &amp; s4 &amp; s5 &amp; s7 &amp; s8 &amp; s10 &amp; s11 &amp; s12 &amp; s13 &amp; s14 -. events .-&gt; log[("PROCESS events&lt;br/&gt;timestamps · durations · colored log")]</code></pre>
 <hr />
 <h2 id="10-doctor-and-medic">10. Doctor and medic<a class="headerlink" href="#10-doctor-and-medic" title="Permanent link">&para;</a></h2>
 <p><code>zensynora doctor</code>, the Web UI <strong>Doctor</strong> page and the medic agent's tools
@@ -1872,6 +1910,11 @@ share one set of checks (<code>myclaw/doctor/</code>, rewritten in 0.7.0).</p>
     end
     run --&gt; checks --&gt; rep["Report&lt;br/&gt;ok / warn / fail + how to fix"]
     rep -- "--fix" --&gt; fx["Safe fixes&lt;br/&gt;folders · permissions · migrations"]
+    c2 --&gt; repair["Repair installation&lt;br/&gt;choose GitHub branch or tag"]
+    repair --&gt; confirm{"User confirms?"}
+    confirm -- yes --&gt; reinstall["Safe updater --force&lt;br/&gt;mandatory backups · preserve user data"]
+    confirm -- no --&gt; keep["No changes"]
+    reinstall --&gt; steps["Detailed step and rollback outcomes"]
 
     subgraph medicx["Other medic tools"]
         m1["scan_files · verify_file_integrity · recover_file"]
@@ -1893,13 +1936,13 @@ apart from real crashes; only the latter start the medic diagnosis.</p>
 <h2 id="11-install-layout-on-disk">11. Install layout on disk<a class="headerlink" href="#11-install-layout-on-disk" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart TB
     base["~/.local/share/zensynora/"]
-    base --&gt; src["source → releases/0.7.1-…&lt;br/&gt;(symlink: the active version)"]
+    base --&gt; src["source → releases/0.8.5-…&lt;br/&gt;(symlink: the active version)"]
     base --&gt; rel["releases/"]
-    rel --&gt; r1["0.7.1-20261013T…&lt;br/&gt;code + venv/ + webui/dist"]
-    rel --&gt; r2["0.7.0-…&lt;br/&gt;kept for rollback"]
+    rel --&gt; r1["0.8.5-20261127T…&lt;br/&gt;code + venv/ + webui/dist"]
+    rel --&gt; r2["0.8.4-…&lt;br/&gt;kept for rollback"]
     base --&gt; bk["backups/&lt;br/&gt;~/.myclaw snapshots + app-folder.tar.gz (mode 700)"]
     base --&gt; stg["staging/&lt;br/&gt;temporary copies for approved proposals"]
-    base --&gt; lg["logs/update-*.log"]
+    base --&gt; lg["logs/update-*.log · webui-update-*.log&lt;br/&gt;private optional-decision folders"]
     base --&gt; st["updater-state.json"]
     svc["systemd myclaw.service&lt;br/&gt;and source/venv/bin/activate"] -. "use the path through" .-&gt; src</code></pre>
 <hr />
@@ -1956,7 +1999,14 @@ apart from real crashes; only the latter start the medic diagnosis.</p>
     agent["agents (chat)&lt;br/&gt;job_create · job_update"] --&gt; store
     agent -- "job_run" --&gt; run
     store -- "job_list · job_status" --&gt; agent
-    run -- "result in the channel&lt;br/&gt;the job was made in" --&gt; chan</code></pre>
+    run -- "result in the channel&lt;br/&gt;the job was made in" --&gt; chan
+    store -- "opt-in prior runs context" --&gt; context["Scrubbed previous-run evidence"]
+    context --&gt; run
+    run -- "opt-in insight notes" --&gt; notes[("Stable Job insights note")]
+    run -- "opt-in profile proposals" --&gt; review["User reviews profile proposal"]
+    run --&gt; actions["Medic action review&lt;br/&gt;timestamps · outcomes · duration"]
+    actions --&gt; draft["User exports privacy-filtered bug-report draft"]
+    draft --&gt; github["User reviews and pastes into GitHub issue form"]</code></pre>
 <p>Since 2026-10-21 agents use the Jobs page through tools (<code>myclaw/tools/jobs.py</code>);
 <code>schedule</code> / <code>nlp_schedule</code> also create jobs there when the Web UI runs.</p>
 <hr />
@@ -1976,7 +2026,7 @@ apart from real crashes; only the latter start the medic diagnosis.</p>
     stale -- yes --&gt; stage["staging/ = copy of current release + change"]
     stage --&gt; upd["update.sh update --from-dir staging --force&lt;br/&gt;(all steps of §9)"]
     upd -- ok --&gt; ok["new release active · restart to use it ·&lt;br/&gt;zensynora update rollback undoes it"]
-    upd -- failure --&gt; rb["rolled back · running version unchanged"]
+    upd -- failure --&gt; rb["attempt rollback · show recovery outcomes"]
     agent -- record_lesson --&gt; kb[("knowledge note&lt;br/&gt;medic-lessons")]
     kb -. "found by later searches" .-&gt; agent</code></pre>
 <hr />
@@ -2053,7 +2103,7 @@ stops its own.</p>
 pages are generated into <a href="../diagrams/index.html"><code>diagrams/</code></a> with
 <code>python diagrams/generate.py</code>.</em></p>
 <h2 id="16-providers-keys-and-agents">16. Providers, keys and agents<a class="headerlink" href="#16-providers-keys-and-agents" title="Permanent link">&para;</a></h2>
-<p>Since the Unreleased changes a provider can hold several named API keys
+<p>As of 0.8.5 a provider can hold several named API keys
 (<code>providers.&lt;name&gt;.keys</code>; the plain <code>api_key</code> is the <em>Default key</em>). Each agent,
 the default model and every rotation entry pick a provider, a key and a model.
 With <code>providers.&lt;name&gt;.rotate_keys</code> on, a rate-limited or exhausted key makes
@@ -2102,6 +2152,7 @@ about 3.8 characters per token.</p>
 <h2 id="19-knowledge-tuning-decay-and-re-ranking">19. Knowledge tuning, decay and re-ranking<a class="headerlink" href="#19-knowledge-tuning-decay-and-re-ranking" title="Permanent link">&para;</a></h2>
 <p>Who may change a ranking value, and where the values act on a search
 (2026-11-11). Details: <a href="../knowledge_base_guide/#tuning-thresholds-decay-models-relevance-link-strength">Knowledge base guide → Tuning</a>.</p>
+<p>The maintenance flow is documented separately in <a href="#20-backup-and-restore-maintenance">§20</a>.</p>
 <pre class="mermaid"><code>flowchart TD
     user["You&lt;br/&gt;Knowledge → Tune"] -- "any value inside its limits" --&gt; setv["tuning.set_values()"]
     ai["AI suggest · weekly decay review&lt;br/&gt;agent tool kb_tuning_set"] -- "value + reason" --&gt; setv
@@ -2120,6 +2171,37 @@ about 3.8 characters per token.</p>
     use --&gt; rel["relations.py&lt;br/&gt;strengthen from use"]
     rel -- "- uses [[Note]] (x3)" --&gt; md[("notes *.md")]
     rr --&gt; out["results&lt;br/&gt;identical to before when decay is off and the query has no marks"]</code></pre>
+<hr />
+<h2 id="20-backup-and-restore-maintenance">20. Backup and restore maintenance<a class="headerlink" href="#20-backup-and-restore-maintenance" title="Permanent link">&para;</a></h2>
+<p><code>myclaw/backup.py</code> keeps the lifecycle and database guards in place.
+<code>myclaw/maintenance.py</code> records the latest Web UI operation privately;
+<code>updater/progress.py</code> supplies shared, context-local events. Select optional
+parts before starting; settings are always included in a backup, and linked
+lifecycle parts must be restored together.</p>
+<pre class="mermaid"><code>flowchart TD
+    user["Backups page or CLI&lt;br/&gt;select optional parts before starting"] --&gt; operation{"Backup or restore?"}
+    operation -- Backup --&gt; guard["Check active work and pending lifecycle operations"]
+    guard --&gt; copy["Snapshot selected parts&lt;br/&gt;SQLite online backup"]
+    copy --&gt; manifest["Manifest, SHA-256 and private compression"]
+    manifest --&gt; verify["Verify archived file checksums"]
+    verify --&gt; publish["Publish only the verified archive"]
+    operation -- Restore --&gt; inspect["Verify archive and selected-part dependencies"]
+    inspect --&gt; safety["Mandatory verified safety backup"]
+    safety --&gt; journal["Record recovery journal"]
+    journal --&gt; staging["Extract selected files into staging"]
+    staging --&gt; preserve["Keep overwritten notes in trash"]
+    preserve --&gt; replace["Restore selected files; reset SQLite side files"]
+    replace --&gt; reload["Reload configuration; clear journal"]
+    replace &amp; reload -. failure .-&gt; recover["Keep recovery marker&lt;br/&gt;restore named safety backup"]
+    copy &amp; manifest &amp; verify &amp; publish &amp; inspect &amp; safety &amp; journal &amp; replace &amp; reload -. events .-&gt; events["Shared progress events&lt;br/&gt;steps · counts · timestamps · durations"]
+    events -- CLI --&gt; terminal["Colored terminal output"]
+    events -- Web UI --&gt; progress[("maintenance-progress.json&lt;br/&gt;private latest operation")]
+    progress --&gt; ui["ProcessProgress&lt;br/&gt;OK / FAILED / SKIPPED / RUNNING"]</code></pre>
+<p>A failed progress write is reported separately from the operation result.
+It must not undo a successful restore or skip the post-restore reload hook.
+Interrupted recovery remains blocked until its named safety archive is
+restored. Full details: <a href="../UPDATING/">Updating</a> and
+<a href="../webui_guide/#backups-settings-api-keys-knowledge">Backups guide</a>.</p>
 
 
 

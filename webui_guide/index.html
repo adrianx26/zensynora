@@ -1521,10 +1521,9 @@
 
 <h1 id="web-ui-guide-chat-models-jobs-backups">Web UI Guide — chat, models, jobs, backups<a class="headerlink" href="#web-ui-guide-chat-models-jobs-backups" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Applies to:</strong> v0.7.5 · <strong>Added:</strong> 2026-10-13 · <strong>v0.7.3:</strong> Channels page,
-real model tests · <strong>v0.7.4:</strong> Updates page, Restart button · <strong>v0.7.5:</strong>
-Skills, agents that create and delegate, medic for failed jobs, token speed
-· <strong>Unreleased:</strong> Telegram bot inside the Web UI (Settings → Channels)</p>
+<p><strong>Applies to:</strong> v0.8.5 · <strong>Updated:</strong> 2026-11-27. Detailed colored
+maintenance steps, safe optional decisions, approved Doctor GitHub reinstall,
+reviewed Medic investigation exports, and opt-in job insights.</p>
 </blockquote>
 <p>Start the Web UI with <code>zensynora webui</code> and open <a href="http://localhost:8000">http://localhost:8000</a>
 (<code>--host 127.0.0.1</code> keeps it on this computer only). This guide covers the
@@ -2290,6 +2289,34 @@ web sites are refused.</p>
   <strong>Check</strong> verifies every file against its checksum; ⬇ downloads;
   <strong>Import…</strong> adds a backup file made elsewhere.</li>
 </ul>
+<p><strong>Detailed process log:</strong> backup and restore show named stages, file counts,
+timestamps, durations and text status labels. Green means <strong>OK</strong>, red means
+<strong>FAILED</strong>, yellow means <strong>SKIPPED / WAITING / ROLLBACK</strong>, and blue means
+<strong>RUNNING</strong>. The latest manual or automatic operation remains visible after
+completion; its recent progress is stored privately in
+<code>~/.myclaw/maintenance-progress.json</code>. Backup archives are checksum-verified
+before publication.</p>
+<p>Skip optional data parts using the chips <strong>before</strong> starting. Settings remain
+required for a backup, and lifecycle-linked restore parts must be selected
+together. Safety checks, archive verification and the before-restore safety
+backup cannot be skipped. A failed restore retains its recovery journal and
+names the safety backup to restore; overwritten knowledge notes are kept in
+their notebook's <code>.trash</code>.</p>
+<pre class="mermaid"><code>flowchart TD
+    select["Select parts before starting"] --&gt; action{"Backup or restore?"}
+    action -- Backup --&gt; safe["Check active work and lifecycle"]
+    safe --&gt; snapshot["Snapshot selected parts"]
+    snapshot --&gt; verify["Manifest, compress, verify checksums"]
+    verify --&gt; publish["Publish verified archive"]
+    action -- Restore --&gt; inspect["Verify archive and part dependencies"]
+    inspect --&gt; safety["Mandatory verified safety backup"]
+    safety --&gt; journal["Recovery journal"]
+    journal --&gt; extract["Extract selected files into staging"]
+    extract --&gt; trash["Preserve overwritten notes in trash"]
+    trash --&gt; replace["Restore selected files"]
+    replace --&gt; reload["Reload configuration and clear journal"]
+    replace &amp; trash &amp; reload -. failure .-&gt; recovery["Keep journal; restore named safety backup"]
+    snapshot &amp; verify &amp; publish &amp; inspect &amp; safety &amp; journal &amp; replace &amp; reload -. events .-&gt; progress[("Private progress; colored steps and counts")]</code></pre>
 <p>Backups are <code>.tar.gz</code> files in <code>~/.myclaw-backups</code> (change it in Settings or
 with <code>MYCLAW_BACKUP_DIR</code>). They contain your API keys — keep them private.
 Backups wait until agent work is finished and interrupted fusions are recovered;
@@ -2309,8 +2336,10 @@ locks so a terminated process is not mistaken for a reused PID.</p>
 <p>The same works from a terminal:</p>
 <div class="highlight"><pre><span></span><code>zensynora<span class="w"> </span>backup<span class="w"> </span>create<span class="w">                 </span><span class="c1"># parts chosen in Settings</span>
 zensynora<span class="w"> </span>backup<span class="w"> </span>create<span class="w"> </span>-p<span class="w"> </span>settings<span class="w">     </span><span class="c1"># only settings + API keys</span>
+zensynora<span class="w"> </span>backup<span class="w"> </span>create<span class="w"> </span>--interactive<span class="w">  </span><span class="c1"># asks which optional parts to include</span>
 zensynora<span class="w"> </span>backup<span class="w"> </span>list
 zensynora<span class="w"> </span>backup<span class="w"> </span>restore<span class="w"> </span>NAME<span class="w"> </span><span class="o">[</span>-p<span class="w"> </span>knowledge<span class="o">]</span>
+zensynora<span class="w"> </span>backup<span class="w"> </span>restore<span class="w"> </span>NAME<span class="w"> </span>--interactive
 </code></pre></div>
 <p>Updates make their own backups automatically — see <a href="../UPDATING/">UPDATING.md</a>.</p>
 <h2 id="updates-check-update-roll-back-restart">Updates: check, update, roll back, restart<a class="headerlink" href="#updates-check-update-roll-back-restart" title="Permanent link">&para;</a></h2>
@@ -2349,12 +2378,24 @@ zensynora<span class="w"> </span>backup<span class="w"> </span>restore<span clas
 </tr>
 </tbody>
 </table>
+<p><strong>Program backup</strong> selects full, code-only or skipped program-folder
+archiving. The user-data backup remains mandatory. <strong>Pause before optional
+steps</strong> pauses at the optional program backup for <strong>Continue</strong>, <strong>Skip</strong> or
+<strong>Abort and roll back</strong>; reopen the page if it was closed while waiting.
+Named steps and the colored event log show separate processing and rollback
+outcomes. Required safety, verification, migration and recovery stages
+cannot be skipped.</p>
 <p>Works for standard installs (<code>~/.local/share/zensynora</code>); a git checkout
 shows why it cannot update itself. Restart works when the server was started
 with <code>zensynora webui</code>. Details: <a href="../UPDATING/">UPDATING.md</a>.</p>
 <h2 id="doctor-report-errors-and-download">Doctor: report, errors and download<a class="headerlink" href="#doctor-report-errors-and-download" title="Permanent link">&para;</a></h2>
-<p>The Doctor page has two tabs. <strong>Checks</strong> is the health check (the same as
-<code>zensynora doctor</code>). <strong>Report</strong> shows:</p>
+<p>The Doctor page has <strong>Checks</strong>, <strong>Report</strong>, <strong>Logs</strong> and <strong>Repair installation</strong>
+tabs. <strong>Checks</strong> is the health check (the same as <code>zensynora doctor</code>).
+<strong>Repair installation</strong> offers an explicitly approved GitHub reinstall of
+application code through the safe updater, even at the same version. It keeps
+your data and shows detailed progress; it cannot bypass backup failures.
+Managed installations only (Docker repairs use image rebuilds).
+<strong>Report</strong> shows:</p>
 <ul>
 <li><strong>🤖 AI health summary</strong> (2026-11-04) — <em>Write the summary</em>: the default
   model reads the checks, errors, restarts, failed jobs and model health of

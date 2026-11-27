@@ -1248,35 +1248,33 @@
 78: 
 79: ## 2. Architecture
 80: 
-81: <code>mermaid
-82: graph TB
-83:     subgraph Channels
-84:         CLI[CLI]
-85:         TG[Telegram]
-86:         WA[WhatsApp]
-87:     end
-88:
-89:     subgraph Core
-90:         GW[Gateway]
-91:         AG[Agent]
-92:     end
-93:
-94:     subgraph Services
-95:         MEM[Memory&lt;br/&gt;SQLite]
-96:         PRV[Provider&lt;br/&gt;LLM Abstraction]
-97:         TLS[Tools&lt;br/&gt;shell, files, web, etc]
-98:         KB[Knowledge&lt;br/&gt;Markdown + FTS5]
-99:     end
-100:
-101:     CLI --&gt; GW
-102:     TG --&gt; GW
-103:     WA --&gt; GW
-104:     GW --&gt; AG
-105:     AG --&gt; MEM
-106:     AG --&gt; PRV
-107:     AG --&gt; TLS
-108:     AG --&gt; KB
-109:</code>
+<pre class="mermaid"><code>graph TB
+    subgraph Channels
+        CLI[CLI]
+        TG[Telegram]
+        WA[WhatsApp]
+    end
+
+    subgraph Core
+        GW[Gateway]
+        AG[Agent]
+    end
+
+    subgraph Services
+        MEM[Memory&lt;br/&gt;SQLite]
+        PRV[Provider&lt;br/&gt;LLM Abstraction]
+        TLS[Tools&lt;br/&gt;shell, files, web, etc]
+        KB[Knowledge&lt;br/&gt;Markdown + FTS5]
+    end
+
+    CLI --&gt; GW
+    TG --&gt; GW
+    WA --&gt; GW
+    GW --&gt; AG
+    AG --&gt; MEM
+    AG --&gt; PRV
+    AG --&gt; TLS
+    AG --&gt; KB</code></pre>
 110: 
 111: ---
 112: 

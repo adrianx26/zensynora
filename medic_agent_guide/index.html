@@ -498,6 +498,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#reinstall-application-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reinstall application code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#investigation-reports-for-github" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1251,6 +1262,17 @@
     <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
       
         <li class="md-nav__item">
+  <a href="#reinstall-application-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reinstall application code
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
   <a href="#investigation-reports-for-github" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1455,8 +1477,8 @@
 
 <h1 id="medic-doctor-guide">Medic &amp; Doctor Guide<a class="headerlink" href="#medic-doctor-guide" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Applies to:</strong> v0.7.1 · <strong>Rewritten:</strong> 2026-10-13 · <strong>v0.7.1:</strong> self-update
-proposals and learning (<a href="#6-self-update-proposals">section 6</a>)
+<p><strong>Applies to:</strong> v0.8.5 · <strong>Updated:</strong> 2026-11-27. Approved GitHub
+reinstall, reviewed per-action investigation exports and detailed recovery.
 Before 0.7.0 most medic tools described here did not exist in the code
 (two "health" tools returned fixed text). Everything below is implemented
 and covered by <code>tests/test_doctor_medic.py</code>.</p>
@@ -1497,8 +1519,32 @@ against runaway loops.</p>
 <td>Let agents propose fixes to the code (you approve)</td>
 <td>Doctor → <strong>Change proposals</strong>, <code>zensynora medic</code> (<a href="#6-self-update-proposals">section 6</a>)</td>
 </tr>
+<tr>
+<td>Replace application code from GitHub while keeping user data</td>
+<td>Doctor → <strong>Repair installation</strong> → <strong>Approve GitHub reinstall</strong></td>
+</tr>
 </tbody>
 </table>
+<h3 id="reinstall-application-code">Reinstall application code<a class="headerlink" href="#reinstall-application-code" title="Permanent link">&para;</a></h3>
+<p><strong>Doctor → Repair installation</strong> accepts a GitHub branch or tag and asks for
+explicit confirmation before invoking the safe updater with <code>--force</code>.
+Application code is replaced from a clean release folder even at the same
+version. Settings, credentials, notes, conversations and release-local user
+files are preserved; mandatory user-data backup and the default full program
+archive remain enabled. The repair screen shows the same detailed step and
+rollback outcomes as Updates. This needs a managed installation; Docker
+repairs use an image rebuild, and ordinary checkouts use git/install commands.</p>
+<pre class="mermaid"><code>flowchart LR
+    user["Doctor: select GitHub branch or tag"] --&gt; approve{"User confirms reinstall?"}
+    approve -- no --&gt; unchanged["No changes"]
+    approve -- yes --&gt; updater["Safe updater --force"]
+    updater --&gt; fetch["Fetch clean GitHub release"]
+    fetch --&gt; safety["Data and full program backups"]
+    safety --&gt; clean["Build and verify clean release"]
+    clean --&gt; activate["Activate while preserving user data"]
+    activate --&gt; report["Colored step and recovery outcomes"]
+    clean &amp; activate -. failure .-&gt; rollback["Rollback; show any recovery failure"]
+    rollback --&gt; report</code></pre>
 <h3 id="investigation-reports-for-github">Investigation reports for GitHub<a class="headerlink" href="#investigation-reports-for-github" title="Permanent link">&para;</a></h3>
 <p>Use <strong>Doctor → Investigate with an agent</strong> to check an error using live
 diagnostics. Medic can propose a code fix; installing it still requires your
@@ -1967,7 +2013,7 @@ program folder</strong>. They propose; you decide; the safe updater installs.</p
     you -- approve --&gt; stage["copy of current release&lt;br/&gt;+ the change"]
     stage --&gt; upd["safe updater&lt;br/&gt;backup · build · verify · switch"]
     upd -- ok --&gt; applied["new release active&lt;br/&gt;(restart ZenSynora)"]
-    upd -- failure --&gt; rb["automatic rollback&lt;br/&gt;running version unchanged"]</code></pre>
+    upd -- failure --&gt; rb["attempt rollback&lt;br/&gt;explicit recovery outcomes"]</code></pre>
 <p><strong>How a proposal is checked.</strong> Paths must stay inside the installed program
 folder; <code>venv/</code>, <code>.git</code>, <code>node_modules</code>, build output, <code>.env</code> and the config
 key are off limits; Python files must compile; at most 20 files of 400 KB

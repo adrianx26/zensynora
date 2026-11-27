@@ -1315,6 +1315,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#75-a-completed-restore-looked-failed-because-progress-storage-failed-085-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.5 A completed restore looked failed because progress storage failed (0.8.5 validation)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2054,6 +2065,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#75-a-completed-restore-looked-failed-because-progress-storage-failed-085-validation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7.5 A completed restore looked failed because progress storage failed (0.8.5 validation)
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -2268,7 +2290,8 @@ was seen, why it happened, how it was fixed, how it is caught now, and the
 rule that keeps it from coming back. The rules are collected at the end and,
 in short form, in <code>AGENTS.md</code>.</p>
 <p>PR numbers refer to <a href="https://github.com/adrianx26/zensynora/pulls">https://github.com/adrianx26/zensynora/pulls</a>.
-"Unreleased" fixes are listed in <code>CHANGELOG.md</code> under <em>[Unreleased]</em>.</p>
+Release fixes are listed in <code>CHANGELOG.md</code>; the current release is <strong>0.8.5</strong>.
+Unreleased work remains under <em>[Unreleased]</em>.</p>
 <hr />
 <h2 id="1-telegram">1. Telegram<a class="headerlink" href="#1-telegram" title="Permanent link">&para;</a></h2>
 <h3 id="11-the-bot-never-answered-2026-10-18-pr-26">1.1 The bot never answered (2026-10-18, PR #26)<a class="headerlink" href="#11-the-bot-never-answered-2026-10-18-pr-26" title="Permanent link">&para;</a></h3>
@@ -3081,6 +3104,39 @@ in short form, in <code>AGENTS.md</code>.</p>
 <tr>
 <td><strong>Rule</strong></td>
 <td>CI checks every shipped Python package; a red check must mean a real problem.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="75-a-completed-restore-looked-failed-because-progress-storage-failed-085-validation">7.5 A completed restore looked failed because progress storage failed (0.8.5 validation)<a class="headerlink" href="#75-a-completed-restore-looked-failed-because-progress-storage-failed-085-validation" title="Permanent link">&para;</a></h3>
+<p>This was reproduced in isolated release-validation experiments, not diagnosed
+on the user's Linux installation.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Symptom</strong></td>
+<td>Restored content and a cleared recovery marker, but the API returned a progress-write error and skipped its reload hook.</td>
+</tr>
+<tr>
+<td><strong>Root cause</strong></td>
+<td>The auxiliary final progress save raised after the actual restore had succeeded.</td>
+</tr>
+<tr>
+<td><strong>Fix</strong></td>
+<td>Progress writes warn once and do not mask the operation result. Completed results expose <code>progress_warning</code>; released process locks identify stale progress as unavailable.</td>
+</tr>
+<tr>
+<td><strong>Detected by</strong></td>
+<td><code>test_completed_restore_keeps_success_and_reload_hook_when_progress_write_fails</code> and an independent injected-failure/recovery experiment.</td>
+</tr>
+<tr>
+<td><strong>Rule</strong></td>
+<td>Observability failure must not turn completed data work into a false operation failure; report it separately and still run required completion hooks.</td>
 </tr>
 </tbody>
 </table>

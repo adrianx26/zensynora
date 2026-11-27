@@ -1419,7 +1419,7 @@
     C --&gt;|Parse payload| D[WhatsAppChannel._handle_webhook]
     D --&gt;|Text message| E{Command or Agent?}
     E --&gt;|/command| F[Command Handler]
-    E --&gt;|@agent or plain text| G[Agent Router]
+    E --&gt;|"@agent or plain text"| G[Agent Router]
     G --&gt;|agent.think| H[MyClaw Agent]
     H --&gt;|Response| I[WhatsApp Cloud API - Send Message]
     I --&gt;|Delivered| A

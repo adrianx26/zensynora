@@ -911,6 +911,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#maintenance-progress-085" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maintenance progress (0.8.5)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#myclawobservability" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1318,6 +1329,17 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
+  <a href="#maintenance-progress-085" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Maintenance progress (0.8.5)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#myclawobservability" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1487,7 +1509,11 @@
 
 <h1 id="zensynora-architecture">ZenSynora Architecture<a class="headerlink" href="#zensynora-architecture" title="Permanent link">&para;</a></h1>
 <blockquote>
-<p><strong>Status:</strong> reflects <strong>v0.8.3</strong> (2026-11-14: four-way knowledge recall, safe merge review/recovery, local decision fallback, and evidence-ranked distillation proposals; 2026-11-12: Knowledge → Tune — thresholds, temporal decay, bigger embedding models, relevance test, link strength, curate duplicates; 2026-11-07: Customize page — customization
+<p><strong>Current release: v0.8.5</strong> (2026-11-27: modular maintenance progress,
+optional update decisions, verified backup/restore recovery, approved
+GitHub reinstall and reviewed Medic exports). Earlier changes: four-way
+knowledge recall, safe merge review/recovery, local decision fallback, and
+evidence-ranked distillation proposals; Knowledge → Tune and Customize
 profiles per situation and agent, Telegram teams; see the
 <a href="../customize_guide/">Customize guide</a>). v0.8.0 (2026-10-27; knowledge base: see the
 <a href="../knowledge_base_guide/">Knowledge base guide</a>). Updated from the v0.4.1
@@ -1518,7 +1544,8 @@ fit together. It complements <a href="../architecture_diagram/"><code>docs/archi
 ├── api_server.py            # FastAPI app: REST + WebSocket + cost + auth endpoints
 ├── auth/                    # JWT verification + OAuth2 PKCE callback [Sprint 6]
 ├── backends/                # local / docker / ssh / wsl2 execution
-├── backup.py                # Backups of settings, API keys, knowledge, chat, jobs [0.7.1]
+├── backup.py                # Verified snapshots and journaled restore; optional parts [0.8.5]
+├── maintenance.py           # Cross-process operation lock + private latest progress [0.8.5]
 ├── caching/                 # Shared BaseTTLCache + PersistentCacheMixin [Sprint 11]
 ├── channels/                # telegram / whatsapp / discord / web adapters [Sprint 6]
 │   ├── attachments.py       # Received files → workspace inbox/&lt;channel&gt;/&lt;date&gt;/, text for the agent [0.8.1]
@@ -1563,7 +1590,7 @@ fit together. It complements <a href="../architecture_diagram/"><code>docs/archi
 ├── messaging/               # AgentMessage envelope + InProcessBroker [Sprint 7]
 ├── observability/           # OpenTelemetry tracing — wired Sprint 10
 ├── prompts/                 # Versioned Jinja2 prompt registry [Sprint 3]
-├── provider.py              # LLM providers (+ your own, providers.custom; nvpair, freetoken [Unreleased]) + Message TypedDict
+├── provider.py              # LLM providers (+ your own, providers.custom; nvpair, freetoken [0.8.5]) + Message TypedDict
 ├── provider_keys.py         # Several API keys per provider: lookup, key fallback order, who uses which key [0.7.5]
 ├── resilience/              # Circuit breaker + fallback chain — wired Sprint 10
 ├── evolve.py                # Evolve: agent levels, agent fusion (+ agent trash), AI change requests as jobs [0.8.1]
@@ -1587,13 +1614,13 @@ fit together. It complements <a href="../architecture_diagram/"><code>docs/archi
 │   ├── models_api.py        # Default model, rotation, prompt generator [0.7.1]; model health, replace in all agents [0.8.1]
 │   ├── provider_keys_api.py # Add / rename / delete / test a provider's API keys [0.7.5]
 │   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
-│   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
+│   ├── backup_api.py        # Backups/restore + GET /api/backups/process [0.8.5]
 │   ├── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
 │   ├── evolve_api.py        # Evolve page: overview, levels, change requests, fusion, restore [0.8.1]
-│   ├── doctor_api.py        # Doctor report, errors viewer, report download, health timeline [0.8.1]
+│   ├── doctor_api.py        # Reports, logs, timeline, approved GitHub reinstall [0.8.5]
 │   ├── knowledge_usage_api.py # Knowledge usage log, benchmarks, overview infographic [0.8.1]
 │   ├── knowledge_tuning_api.py # Knowledge → Tune: values, decay, test bench, relations, curate duplicates [0.8.2]
-│   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
+│   ├── update_api.py        # Check/update/rollback/restart + optional-step decisions [0.8.5]
 │   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [0.8.1]
 │   ├── knowledge_api.py     # Knowledge page: graph, notes, edit, trash, search, conflicts, duplicates [0.8.0]
 │   ├── knowledge_{import,semantic,distill,health}_api.py  # import jobs, semantic status/backfill/install, distillation, health [0.8.0]
@@ -1608,6 +1635,7 @@ updater/                     # Safe updates: side-by-side releases, backups,
                              # app_backup.py: full program-folder archive [0.7.1];
                              # nodejs.py: finds Node.js 20.19+ or installs Node 22
                              # into BASE/node for the web UI build [0.8.1]
+                             # progress.py: structured step events; protocol 5 [0.8.5]
 
 webui/src/
 ├── App.tsx                  # Shell: channels + agents sidebar, navigation, live health
@@ -1633,7 +1661,7 @@ webui/src/
     ├── SettingsView.tsx     # Settings page [0.5.0]
     ├── DoctorView.tsx       # Doctor page [0.7.0]
     ├── DoctorReport.tsx     # Doctor → Report: errors viewer, report view, download [0.8.1]
-    ├── ToolsView.tsx        # Your tools (editor, on/off, make skill, repair) + all tools [0.5.0, Unreleased]
+    ├── ToolsView.tsx        # Your tools (editor, on/off, make skill, repair) + all tools [0.5.0, 0.8.5]
     ├── TransferImport.tsx   # Import tools/skills from a file (bundle, .py, SKILL.md) [0.8.1]
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
@@ -1703,6 +1731,24 @@ one copy of a bot to receive updates.</p>
 </ul>
 <hr />
 <h2 id="3-new-modules-quick-reference">3. New modules — quick reference<a class="headerlink" href="#3-new-modules-quick-reference" title="Permanent link">&para;</a></h2>
+<h3 id="maintenance-progress-085">Maintenance progress (0.8.5)<a class="headerlink" href="#maintenance-progress-085" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>updater/progress.py</code> is stdlib-only: context-local capture, named stages,
+  details and structured <code>PROCESS</code> events. Terminal formatting adds color;
+  redirected output remains machine-readable.</li>
+<li><code>myclaw/maintenance.py</code> serializes backup/restore across cooperating
+  processes and atomically records private steps/recent events. Progress
+  storage failures are explicit warnings, not false operation failures.</li>
+<li><code>backup.py</code> stages selected parts, creates a private archive, verifies
+  checksums before publication, and records restore safety/journal/reload
+  steps. Overwritten notes are kept in <code>.trash</code>; interrupted restore
+  retains its recovery marker.</li>
+<li><code>updater/pipeline.py</code> gates only explicitly optional steps. Continue, Skip
+  and Abort decisions never bypass mandatory data backup or verification;
+  rollback failure and successful updater handoff have distinct outcomes.</li>
+<li><code>DoctorView</code> reuses <code>UpdatesView</code> for user-approved GitHub <code>--force</code>
+  reinstall; <code>ProcessProgress</code> renders labels, colors, counts and timing.</li>
+</ul>
 <h3 id="myclawobservability"><code>myclaw/observability/</code><a class="headerlink" href="#myclawobservability" title="Permanent link">&para;</a></h3>
 <ul>
 <li><code>init_tracing(...)</code> — idempotent global setup; reads <code>ZENSYNORA_TRACING_ENABLED</code>.</li>
@@ -1863,7 +1909,12 @@ silently fall back to Ollama.</p>
 </ul>
 <hr />
 <h2 id="6-test-inventory">6. Test inventory<a class="headerlink" href="#6-test-inventory" title="Permanent link">&para;</a></h2>
-<p>Counted with <code>pytest --collect-only</code> on 2026-10-13 (v0.7.2).</p>
+<p><strong>Current inventory: 1,937 tests collected</strong> on 2026-11-27 for v0.8.5 with
+<code>pytest --collect-only -q -o addopts=""</code>. Collection does not mean all tests
+passed. The maintenance validation ran 123 targeted tests successfully;
+four known baseline/platform cases were excluded.</p>
+<p>The table below is the retained historical suite snapshot, not the current
+total.</p>
 <table>
 <thead>
 <tr>
@@ -2109,7 +2160,7 @@ silently fall back to Ollama.</p>
 <td>39</td>
 </tr>
 <tr>
-<td><strong>Total</strong></td>
+<td><strong>Historical total</strong></td>
 <td><strong>1129</strong></td>
 </tr>
 </tbody>
