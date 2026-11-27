@@ -1,5 +1,6 @@
 // Shared update helpers (v0.7.4): status type and the restart-and-wait helper.
 import { api } from './api';
+import type { ProcessEvent } from './components/ProcessProgress';
 
 export interface UpdateStatus {
   running_version: string;
@@ -15,6 +16,9 @@ export interface UpdateStatus {
   step_text?: string;
   result?: string | null;
   tail?: string;
+  process_steps?: Record<string, ProcessEvent>;
+  events?: ProcessEvent[];
+  waiting?: ProcessEvent | null;
   log?: string | null;
   exit_code?: number | null;
   finished_ok?: boolean;

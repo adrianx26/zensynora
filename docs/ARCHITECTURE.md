@@ -1,6 +1,10 @@
 # ZenSynora Architecture
 
-> **Status:** reflects **v0.8.3** (2026-11-14: four-way knowledge recall, safe merge review/recovery, local decision fallback, and evidence-ranked distillation proposals; 2026-11-12: Knowledge → Tune — thresholds, temporal decay, bigger embedding models, relevance test, link strength, curate duplicates; 2026-11-07: Customize page — customization
+> **Current release: v0.8.5** (2026-11-27: modular maintenance progress,
+> optional update decisions, verified backup/restore recovery, approved
+> GitHub reinstall and reviewed Medic exports). Earlier changes: four-way
+> knowledge recall, safe merge review/recovery, local decision fallback, and
+> evidence-ranked distillation proposals; Knowledge → Tune and Customize
 > profiles per situation and agent, Telegram teams; see the
 > [Customize guide](customize_guide.md)). v0.8.0 (2026-10-27; knowledge base: see the
 > [Knowledge base guide](knowledge_base_guide.md)). Updated from the v0.4.1
@@ -35,7 +39,8 @@ myclaw/
 ├── api_server.py            # FastAPI app: REST + WebSocket + cost + auth endpoints
 ├── auth/                    # JWT verification + OAuth2 PKCE callback [Sprint 6]
 ├── backends/                # local / docker / ssh / wsl2 execution
-├── backup.py                # Backups of settings, API keys, knowledge, chat, jobs [0.7.1]
+├── backup.py                # Verified snapshots and journaled restore; optional parts [0.8.5]
+├── maintenance.py           # Cross-process operation lock + private latest progress [0.8.5]
 ├── caching/                 # Shared BaseTTLCache + PersistentCacheMixin [Sprint 11]
 ├── channels/                # telegram / whatsapp / discord / web adapters [Sprint 6]
 │   ├── attachments.py       # Received files → workspace inbox/<channel>/<date>/, text for the agent [0.8.1]
@@ -80,7 +85,7 @@ myclaw/
 ├── messaging/               # AgentMessage envelope + InProcessBroker [Sprint 7]
 ├── observability/           # OpenTelemetry tracing — wired Sprint 10
 ├── prompts/                 # Versioned Jinja2 prompt registry [Sprint 3]
-├── provider.py              # LLM providers (+ your own, providers.custom; nvpair, freetoken [Unreleased]) + Message TypedDict
+├── provider.py              # LLM providers (+ your own, providers.custom; nvpair, freetoken [0.8.5]) + Message TypedDict
 ├── provider_keys.py         # Several API keys per provider: lookup, key fallback order, who uses which key [0.7.5]
 ├── resilience/              # Circuit breaker + fallback chain — wired Sprint 10
 ├── evolve.py                # Evolve: agent levels, agent fusion (+ agent trash), AI change requests as jobs [0.8.1]
@@ -104,13 +109,13 @@ myclaw/
 │   ├── models_api.py        # Default model, rotation, prompt generator [0.7.1]; model health, replace in all agents [0.8.1]
 │   ├── provider_keys_api.py # Add / rename / delete / test a provider's API keys [0.7.5]
 │   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
-│   ├── backup_api.py        # Backups list/create/restore/download/import [0.7.1]
+│   ├── backup_api.py        # Backups/restore + GET /api/backups/process [0.8.5]
 │   ├── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
 │   ├── evolve_api.py        # Evolve page: overview, levels, change requests, fusion, restore [0.8.1]
-│   ├── doctor_api.py        # Doctor report, errors viewer, report download, health timeline [0.8.1]
+│   ├── doctor_api.py        # Reports, logs, timeline, approved GitHub reinstall [0.8.5]
 │   ├── knowledge_usage_api.py # Knowledge usage log, benchmarks, overview infographic [0.8.1]
 │   ├── knowledge_tuning_api.py # Knowledge → Tune: values, decay, test bench, relations, curate duplicates [0.8.2]
-│   ├── update_api.py        # Check / update / roll back / restart from the Web UI [0.7.4]
+│   ├── update_api.py        # Check/update/rollback/restart + optional-step decisions [0.8.5]
 │   ├── telegram_api.py      # Telegram status/test/restart for the Web UI [0.8.1]
 │   ├── knowledge_api.py     # Knowledge page: graph, notes, edit, trash, search, conflicts, duplicates [0.8.0]
 │   ├── knowledge_{import,semantic,distill,health}_api.py  # import jobs, semantic status/backfill/install, distillation, health [0.8.0]
@@ -125,6 +130,7 @@ updater/                     # Safe updates: side-by-side releases, backups,
                              # app_backup.py: full program-folder archive [0.7.1];
                              # nodejs.py: finds Node.js 20.19+ or installs Node 22
                              # into BASE/node for the web UI build [0.8.1]
+                             # progress.py: structured step events; protocol 5 [0.8.5]
 
 webui/src/
 ├── App.tsx                  # Shell: channels + agents sidebar, navigation, live health
@@ -150,7 +156,7 @@ webui/src/
     ├── SettingsView.tsx     # Settings page [0.5.0]
     ├── DoctorView.tsx       # Doctor page [0.7.0]
     ├── DoctorReport.tsx     # Doctor → Report: errors viewer, report view, download [0.8.1]
-    ├── ToolsView.tsx        # Your tools (editor, on/off, make skill, repair) + all tools [0.5.0, Unreleased]
+    ├── ToolsView.tsx        # Your tools (editor, on/off, make skill, repair) + all tools [0.5.0, 0.8.5]
     ├── TransferImport.tsx   # Import tools/skills from a file (bundle, .py, SKILL.md) [0.8.1]
     ├── CostDashboard.tsx    # Cost dashboard [Sprint 3]
     └── TypewriterText.tsx   # Token-level streaming UI [Sprint 11]
@@ -228,6 +234,24 @@ one copy of a bot to receive updates.
 ---
 
 ## 3. New modules — quick reference
+
+### Maintenance progress (0.8.5)
+
+* `updater/progress.py` is stdlib-only: context-local capture, named stages,
+  details and structured `PROCESS` events. Terminal formatting adds color;
+  redirected output remains machine-readable.
+* `myclaw/maintenance.py` serializes backup/restore across cooperating
+  processes and atomically records private steps/recent events. Progress
+  storage failures are explicit warnings, not false operation failures.
+* `backup.py` stages selected parts, creates a private archive, verifies
+  checksums before publication, and records restore safety/journal/reload
+  steps. Overwritten notes are kept in `.trash`; interrupted restore
+  retains its recovery marker.
+* `updater/pipeline.py` gates only explicitly optional steps. Continue, Skip
+  and Abort decisions never bypass mandatory data backup or verification;
+  rollback failure and successful updater handoff have distinct outcomes.
+* `DoctorView` reuses `UpdatesView` for user-approved GitHub `--force`
+  reinstall; `ProcessProgress` renders labels, colors, counts and timing.
 
 ### `myclaw/observability/`
 * `init_tracing(...)` — idempotent global setup; reads `ZENSYNORA_TRACING_ENABLED`.
@@ -345,7 +369,13 @@ Install all extras: `python -m pip install 'zensynora[all]'`.
 
 ## 6. Test inventory
 
-Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
+**Current inventory: 1,937 tests collected** on 2026-11-27 for v0.8.5 with
+`pytest --collect-only -q -o addopts=""`. Collection does not mean all tests
+passed. The maintenance validation ran 123 targeted tests successfully;
+four known baseline/platform cases were excluded.
+
+The table below is the retained historical suite snapshot, not the current
+total.
 
 | Suite | Tests |
 |---|---|
@@ -408,7 +438,7 @@ Counted with `pytest --collect-only` on 2026-10-13 (v0.7.2).
 | `test_kb_phase5_ingest.py` | 51 |
 | `test_kb_phase5_wiring.py` | 1 |
 | `test_kb_phase6_robust.py` | 39 |
-| **Total** | **1129** |
+| **Historical total** | **1129** |
 
 Run everything (the coverage gate in `pyproject.toml` is skipped with `-o addopts=`):
 

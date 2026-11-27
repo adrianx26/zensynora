@@ -1,5 +1,7 @@
 # ZenSynora Diagram Palette
 
+Used by the **0.8.5** architecture and maintenance diagrams.
+
 Canonical color palette for all architecture diagrams. Use these tokens in any
 new diagram (HTML, SVG, mermaid theme override) to keep the visual language
 consistent.

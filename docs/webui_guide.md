@@ -1,9 +1,8 @@
 # Web UI Guide — chat, models, jobs, backups
 
-> **Applies to:** v0.7.5 · **Added:** 2026-10-13 · **v0.7.3:** Channels page,
-> real model tests · **v0.7.4:** Updates page, Restart button · **v0.7.5:**
-> Skills, agents that create and delegate, medic for failed jobs, token speed
-> · **Unreleased:** Telegram bot inside the Web UI (Settings → Channels)
+> **Applies to:** v0.8.5 · **Updated:** 2026-11-27. Detailed colored
+> maintenance steps, safe optional decisions, approved Doctor GitHub reinstall,
+> reviewed Medic investigation exports, and opt-in job insights.
 
 Start the Web UI with `zensynora webui` and open <http://localhost:8000>
 (`--host 127.0.0.1` keeps it on this computer only). This guide covers the
@@ -614,6 +613,39 @@ web sites are refused.
   **Check** verifies every file against its checksum; ⬇ downloads;
   **Import…** adds a backup file made elsewhere.
 
+**Detailed process log:** backup and restore show named stages, file counts,
+timestamps, durations and text status labels. Green means **OK**, red means
+**FAILED**, yellow means **SKIPPED / WAITING / ROLLBACK**, and blue means
+**RUNNING**. The latest manual or automatic operation remains visible after
+completion; its recent progress is stored privately in
+`~/.myclaw/maintenance-progress.json`. Backup archives are checksum-verified
+before publication.
+
+Skip optional data parts using the chips **before** starting. Settings remain
+required for a backup, and lifecycle-linked restore parts must be selected
+together. Safety checks, archive verification and the before-restore safety
+backup cannot be skipped. A failed restore retains its recovery journal and
+names the safety backup to restore; overwritten knowledge notes are kept in
+their notebook's `.trash`.
+
+```mermaid
+flowchart TD
+    select["Select parts before starting"] --> action{"Backup or restore?"}
+    action -- Backup --> safe["Check active work and lifecycle"]
+    safe --> snapshot["Snapshot selected parts"]
+    snapshot --> verify["Manifest, compress, verify checksums"]
+    verify --> publish["Publish verified archive"]
+    action -- Restore --> inspect["Verify archive and part dependencies"]
+    inspect --> safety["Mandatory verified safety backup"]
+    safety --> journal["Recovery journal"]
+    journal --> extract["Extract selected files into staging"]
+    extract --> trash["Preserve overwritten notes in trash"]
+    trash --> replace["Restore selected files"]
+    replace --> reload["Reload configuration and clear journal"]
+    replace & trash & reload -. failure .-> recovery["Keep journal; restore named safety backup"]
+    snapshot & verify & publish & inspect & safety & journal & replace & reload -. events .-> progress[("Private progress; colored steps and counts")]
+```
+
 Backups are `.tar.gz` files in `~/.myclaw-backups` (change it in Settings or
 with `MYCLAW_BACKUP_DIR`). They contain your API keys — keep them private.
 Backups wait until agent work is finished and interrupted fusions are recovered;
@@ -637,8 +669,10 @@ The same works from a terminal:
 ```bash
 zensynora backup create                 # parts chosen in Settings
 zensynora backup create -p settings     # only settings + API keys
+zensynora backup create --interactive  # asks which optional parts to include
 zensynora backup list
 zensynora backup restore NAME [-p knowledge]
+zensynora backup restore NAME --interactive
 ```
 
 Updates make their own backups automatically — see [UPDATING.md](UPDATING.md).
@@ -656,14 +690,27 @@ Open **Updates** in the sidebar (or click the version at the bottom).
 | Restart ZenSynora | After an update or rollback the server still runs the old code. This restarts it with the installed version; the page reloads when it is back (a few seconds). The same button appears in the yellow banner on every page. |
 | History | Recent updates and rollbacks, and the versions kept for rollback. |
 
+**Program backup** selects full, code-only or skipped program-folder
+archiving. The user-data backup remains mandatory. **Pause before optional
+steps** pauses at the optional program backup for **Continue**, **Skip** or
+**Abort and roll back**; reopen the page if it was closed while waiting.
+Named steps and the colored event log show separate processing and rollback
+outcomes. Required safety, verification, migration and recovery stages
+cannot be skipped.
+
 Works for standard installs (`~/.local/share/zensynora`); a git checkout
 shows why it cannot update itself. Restart works when the server was started
 with `zensynora webui`. Details: [UPDATING.md](UPDATING.md).
 
 ## Doctor: report, errors and download
 
-The Doctor page has two tabs. **Checks** is the health check (the same as
-`zensynora doctor`). **Report** shows:
+The Doctor page has **Checks**, **Report**, **Logs** and **Repair installation**
+tabs. **Checks** is the health check (the same as `zensynora doctor`).
+**Repair installation** offers an explicitly approved GitHub reinstall of
+application code through the safe updater, even at the same version. It keeps
+your data and shows detailed progress; it cannot bypass backup failures.
+Managed installations only (Docker repairs use image rebuilds).
+**Report** shows:
 
 * **🤖 AI health summary** (2026-11-04) — *Write the summary*: the default
   model reads the checks, errors, restarts, failed jobs and model health of

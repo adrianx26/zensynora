@@ -16,12 +16,27 @@
   <span class="dot"></span>
   <h1 class="title">Medic &amp; Doctor Guide</h1>
 </div>
-<p class="subtitle">1 diagram(s) extracted from <code>docs/medic_agent_guide.md</code></p>
+<p class="subtitle">2 diagram(s) extracted from <code>docs/medic_agent_guide.md</code></p>
 <div class="legend">
   <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
   <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
   <div class="legend-item"><span class="legend-swatch backend"></span>Backend Service</div>
   <div class="legend-item"><span class="legend-swatch database"></span>Database / Storage</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Reinstall application code</h2>
+  <p class="diagram-desc">**Doctor → Repair installation** accepts a GitHub branch or tag and asks for explicit confirmation before invoking the safe updater with `--force`. Application code is replaced from a clean release folder even at the same version. Settings,</p>
+  <div class="mermaid">flowchart LR
+    user[&quot;Doctor: select GitHub branch or tag&quot;] --&gt; approve{&quot;User confirms reinstall?&quot;}
+    approve -- no --&gt; unchanged[&quot;No changes&quot;]
+    approve -- yes --&gt; updater[&quot;Safe updater --force&quot;]
+    updater --&gt; fetch[&quot;Fetch clean GitHub release&quot;]
+    fetch --&gt; safety[&quot;Data and full program backups&quot;]
+    safety --&gt; clean[&quot;Build and verify clean release&quot;]
+    clean --&gt; activate[&quot;Activate while preserving user data&quot;]
+    activate --&gt; report[&quot;Colored step and recovery outcomes&quot;]
+    clean &amp; activate -. failure .-&gt; rollback[&quot;Rollback; show any recovery failure&quot;]
+    rollback --&gt; report</div>
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">6. Self-update proposals</h2>
@@ -36,7 +51,7 @@
     you -- approve --&gt; stage[&quot;copy of current release&lt;br/&gt;+ the change&quot;]
     stage --&gt; upd[&quot;safe updater&lt;br/&gt;backup · build · verify · switch&quot;]
     upd -- ok --&gt; applied[&quot;new release active&lt;br/&gt;(restart ZenSynora)&quot;]
-    upd -- failure --&gt; rb[&quot;automatic rollback&lt;br/&gt;running version unchanged&quot;]</div>
+    upd -- failure --&gt; rb[&quot;attempt rollback&lt;br/&gt;explicit recovery outcomes&quot;]</div>
 </div>
 
 <div class="footer">

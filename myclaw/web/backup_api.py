@@ -1,6 +1,7 @@
 """Backups API (added in v0.7.1) — see ``myclaw.backup``.
 
 GET    /api/backups                    list + settings + folder
+GET    /api/backups/process            latest detailed backup/restore progress
 POST   /api/backups                    create {parts?, note?}
 GET    /api/backups/{name}/download    download the .tar.gz
 POST   /api/backups/{name}/restore     restore {parts?} (safety backup first)
@@ -22,6 +23,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from myclaw import backup
+from myclaw import maintenance
 from myclaw.config import load_config
 from myclaw.web.settings_api import guard
 
@@ -65,6 +67,11 @@ async def list_backups():
     }
 
 
+@router.get("/api/backups/process", dependencies=guard)
+async def process_status():
+    return await asyncio.to_thread(maintenance.status)
+
+
 @router.post("/api/backups", dependencies=guard)
 async def create_backup(body: CreateIn = CreateIn()):
     from myclaw.evolve import LifecycleError
@@ -73,7 +80,8 @@ async def create_backup(body: CreateIn = CreateIn()):
     if bad:
         raise HTTPException(status_code=400, detail=f"Unknown part(s): {', '.join(bad)}")
     try:
-        return await asyncio.to_thread(backup.create_backup, body.parts, "manual", body.note)
+        return await asyncio.to_thread(
+            maintenance.run, "backup", lambda: backup.create_backup(body.parts, "manual", body.note))
     except (ValueError, LifecycleError) as e:
         raise HTTPException(status_code=409, detail=str(e))
     except OSError as e:
@@ -107,7 +115,8 @@ async def restore_backup(name: str, body: RestoreIn = RestoreIn()):
     from myclaw.evolve import LifecycleError
 
     try:
-        result = await asyncio.to_thread(backup.restore_backup, name, body.parts)
+        result = await asyncio.to_thread(
+            maintenance.run, "restore", lambda: backup.restore_backup(name, body.parts))
     except FileNotFoundError:
         raise _not_found(name)
     except (ValueError, LifecycleError) as e:
@@ -160,7 +169,10 @@ async def auto_backup_tick() -> None:
         _last_auto_failure = None
         return
     try:
-        info = await asyncio.to_thread(backup.run_auto_backup, cfg)
+        if not await asyncio.to_thread(backup.auto_backup_due, cfg):
+            return
+        info = await asyncio.to_thread(
+            maintenance.run, "automatic backup", lambda: backup.run_auto_backup(cfg))
     except (ValueError, LifecycleError, OSError) as exc:
         message = str(exc)
         if message != _last_auto_failure:

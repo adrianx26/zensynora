@@ -1,6 +1,6 @@
 # Task Timer Integration Summary
 
-> **Applies to:** v0.7.0 · **Reviewed:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent).
+> **Current release:** v0.8.5 · **Original review:** 2026-10-13. Commands use the installed `zensynora` CLI (`python cli.py …` from the source folder is equivalent).
 
 ## Overview
 The deployment orchestrator with a configurable maximum (default 600 s since

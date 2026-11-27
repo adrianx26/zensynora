@@ -236,6 +236,7 @@ export interface ModelsOverview {
 
 export interface BackupInfo {
   name: string;
+  progress_warning?: string;
   bytes: number;
   mtime: number;
   created?: string;

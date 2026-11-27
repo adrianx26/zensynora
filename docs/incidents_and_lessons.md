@@ -7,7 +7,8 @@ rule that keeps it from coming back. The rules are collected at the end and,
 in short form, in `AGENTS.md`.
 
 PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
-"Unreleased" fixes are listed in `CHANGELOG.md` under *[Unreleased]*.
+Release fixes are listed in `CHANGELOG.md`; the current release is **0.8.5**.
+Unreleased work remains under *[Unreleased]*.
 
 ---
 
@@ -300,6 +301,19 @@ PR numbers refer to <https://github.com/adrianx26/zensynora/pulls>.
 | **Symptom** | CI failed on unrelated things (graphify extra, ruff running all rules, Docker build missing README, mypy without stubs); later the updater was not type-checked at all. |
 | **Fix** | ruff with real-error rules, mypy with stub packages, Docker smoke test, `mypy myclaw/ updater/` (PR #35). |
 | **Rule** | CI checks every shipped Python package; a red check must mean a real problem. |
+
+### 7.5 A completed restore looked failed because progress storage failed (0.8.5 validation)
+
+This was reproduced in isolated release-validation experiments, not diagnosed
+on the user's Linux installation.
+
+| | |
+|---|---|
+| **Symptom** | Restored content and a cleared recovery marker, but the API returned a progress-write error and skipped its reload hook. |
+| **Root cause** | The auxiliary final progress save raised after the actual restore had succeeded. |
+| **Fix** | Progress writes warn once and do not mask the operation result. Completed results expose `progress_warning`; released process locks identify stale progress as unavailable. |
+| **Detected by** | `test_completed_restore_keeps_success_and_reload_hook_when_progress_write_fails` and an independent injected-failure/recovery experiment. |
+| **Rule** | Observability failure must not turn completed data work into a false operation failure; report it separately and still run required completion hooks. |
 
 ---
 

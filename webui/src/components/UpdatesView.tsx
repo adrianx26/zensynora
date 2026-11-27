@@ -6,14 +6,18 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api';
 import { restartServer, type UpdateStatus } from '../updates';
 import { useAutoClear } from '../notice';
+import ProcessProgress from './ProcessProgress';
 
-const UpdatesView: React.FC = () => {
+const UpdatesView: React.FC<{ repair?: boolean }> = ({ repair = false }) => {
   const [st, setSt] = useState<UpdateStatus | null>(null);
   const [checking, setChecking] = useState(false);
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [ref, setRef] = useState('main');
   const [force, setForce] = useState(false);
+  const [interactive, setInteractive] = useState(false);
+  const [appBackup, setAppBackup] = useState<'full' | 'code' | 'none'>('full');
+  const [deciding, setDeciding] = useState(false);
   const [restarting, setRestarting] = useState<string | null>(null);
   const timer = useRef<number | null>(null);
 
@@ -50,15 +54,33 @@ const UpdatesView: React.FC = () => {
 
   const run = async (action: 'start' | 'rollback') => {
     const what = action === 'start'
-      ? `Update ZenSynora${ref !== 'main' ? ` from "${ref}"` : ''}? Your settings, API keys and knowledge are backed up first; if anything fails the previous version is restored automatically.`
+      ? `${repair ? 'Reinstall application code from GitHub' : 'Update ZenSynora'}${ref !== 'main' ? ` from "${ref}"` : ''}? User data is preserved. Settings, API keys and knowledge are backed up first; if anything fails rollback is attempted. ${appBackup === 'none' && !repair ? 'You have chosen to skip the program-folder archive.' : ''}`
       : 'Go back to the previous installed version? Your data stays as it is.';
     if (!window.confirm(what)) return;
     setNotice(null);
     try {
-      await api(`/api/update/${action}`, { method: 'POST', body: JSON.stringify(action === 'start' ? { ref, force } : {}) });
+      await api(repair && action === 'start' ? '/api/doctor/reinstall' : `/api/update/${action}`, {
+        method: 'POST',
+        body: JSON.stringify(action === 'start'
+          ? repair ? { ref, confirmed: true } : { ref, force, interactive, app_backup: appBackup }
+          : {}),
+      });
       await load(false);
     } catch (e) {
       setNotice({ kind: 'error', text: (e as Error).message });
+    }
+  };
+
+  const decide = async (action: 'continue' | 'skip' | 'abort') => {
+    if (!st?.waiting?.request) return;
+    setDeciding(true);
+    try {
+      await api('/api/update/decision', { method: 'POST', body: JSON.stringify({ request: st.waiting.request, action }) });
+      await load(false);
+    } catch (e) {
+      setNotice({ kind: 'error', text: (e as Error).message });
+    } finally {
+      setDeciding(false);
     }
   };
 
@@ -117,15 +139,16 @@ const UpdatesView: React.FC = () => {
 
         {st.managed && (
           <div className="settings-card">
-            <h3>Update</h3>
+            <h3>{repair ? 'Reinstall application code from GitHub' : 'Update'}</h3>
             <p className="muted">
-              The safe updater backs up your settings, API keys, knowledge and the program folder, installs the new
+              The safe updater backs up your data and, by default, the program folder, installs the new
               version next to the current one, checks it, and switches over only if everything works. If a step fails,
-              the previous version is restored. It keeps running even if you close this page.
+              rollback is attempted and its results are recorded. It keeps running even if you close this page.
             </p>
+            {repair && <p className="notice">Doctor replaces the installed application using a clean GitHub release folder, even at the same version. Knowledge, conversations, credentials and custom data are preserved. Review and approve below; this is not an AI rewrite of your data.</p>}
             <div className="save-actions" style={{ justifyContent: 'flex-start', flexWrap: 'wrap', gap: 8 }}>
               <button className="primary-btn" disabled={st.update_running} onClick={() => run('start')}>
-                {st.update_available ? `Update to ${st.latest_version}` : 'Update now'}
+                {repair ? 'Approve GitHub reinstall' : st.update_available ? `Update to ${st.latest_version}` : 'Update now'}
               </button>
               <button className="ghost-btn" disabled={st.update_running || releases.length < 2} onClick={() => run('rollback')}
                 title={releases.length < 2 ? 'There is no previous version to go back to' : 'Switch back to the previous version'}>
@@ -136,12 +159,32 @@ const UpdatesView: React.FC = () => {
                 <input className="field-input" style={{ width: 140 }} value={ref} disabled={st.update_running}
                   onChange={e => setRef(e.target.value.trim() || 'main')} />
               </label>
-              <label className="muted small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+              {!repair && <label className="muted small" style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                 title="Install again even if this version is already installed — repairs a damaged install">
                 <input type="checkbox" checked={force} disabled={st.update_running} onChange={e => setForce(e.target.checked)} />
                 Reinstall even if up to date
-              </label>
+              </label>}
+              {!repair && <label className="muted small">
+                Program backup{' '}
+                <select className="field-input" value={appBackup} disabled={st.update_running}
+                  onChange={e => setAppBackup(e.target.value as 'full' | 'code' | 'none')}>
+                  <option value="full">Full</option><option value="code">Code only</option><option value="none">Skip program backup</option>
+                </select>
+              </label>}
+              {!repair && <label className="muted small">
+                <input type="checkbox" checked={interactive} disabled={st.update_running} onChange={e => setInteractive(e.target.checked)} />{' '}
+                Pause before optional steps
+              </label>}
             </div>
+            <p className="muted small">Data backup, verification, migration and recovery are mandatory. Skipping the program archive reduces program-file rollback protection. Interactive updates stay paused if you close this page.</p>
+            {st.update_running && st.waiting?.request && (
+              <div className="notice">
+                <b>Waiting for your decision:</b> {st.waiting.text}{' '}
+                <button className="primary-btn" disabled={deciding} onClick={() => decide('continue')}>Continue step</button>{' '}
+                <button className="ghost-btn" disabled={deciding} onClick={() => decide('skip')}>Skip optional step</button>{' '}
+                <button className="ghost-btn danger" disabled={deciding} onClick={() => decide('abort')}>Abort and roll back</button>
+              </div>
+            )}
 
             {(st.update_running || finished) && (
               <div style={{ marginTop: 12 }}>
@@ -150,7 +193,7 @@ const UpdatesView: React.FC = () => {
                     ? `${st.action === 'rollback' ? 'Rolling back' : 'Updating'} — step ${st.step ?? '…'} of ${st.steps ?? '…'}: ${st.step_text || 'starting'}`
                     : st.finished_ok
                       ? `✔ ${st.result}`
-                      : `✖ The ${st.action || 'update'} did not finish${st.exit_code != null ? ` (exit code ${st.exit_code})` : ''}. ${st.action === 'update' ? 'The previous version was kept.' : ''}`}
+                      : `✖ The ${st.action || 'update'} did not finish${st.exit_code != null ? ` (exit code ${st.exit_code})` : ''}. Check failed steps and rollback results before restarting.`}
                 </div>
                 {st.update_running && (
                   <div className="progress-bar" style={{ height: 6, background: 'var(--panel-border)', borderRadius: 3, overflow: 'hidden', margin: '6px 0' }}>
@@ -158,6 +201,7 @@ const UpdatesView: React.FC = () => {
                   </div>
                 )}
                 {st.tail && <pre className="log-tail" style={{ maxHeight: 260, overflow: 'auto', fontSize: 12, whiteSpace: 'pre-wrap' }}>{st.tail}</pre>}
+                <ProcessProgress steps={st.process_steps} events={st.events} />
                 {st.log && <div className="muted small">Full log: <code>{st.log}</code></div>}
               </div>
             )}

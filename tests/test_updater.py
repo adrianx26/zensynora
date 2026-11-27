@@ -53,6 +53,84 @@ def test_pipeline_rolls_back_completed_steps_in_reverse(tmp_path):
     assert log == ["run:a", "run:b", "run:c", "undo:c", "undo:b", "undo:a"]
 
 
+@pytest.mark.parametrize("action", ["continue", "skip", "abort"])
+def test_interactive_optional_step_records_real_outcome_and_rollback(tmp_path, action):
+    from updater.progress import capture
+
+    calls, events = [], []
+    control = tmp_path / "decisions"
+    control.mkdir()
+    optional = _Rec("optional", calls)
+    optional.skippable = True
+
+    def record(event):
+        events.append(event)
+        if event["status"] == "waiting":
+            (control / f"{event['request']}.json").write_text(json.dumps({"action": action}))
+
+    with capture(record):
+        with pytest.raises(UpdateError):
+            run_pipeline([_Rec("mandatory", calls), optional, _Rec("failure", calls, fail=True)],
+                         _ctx(_layout(tmp_path), interactive=True, control_dir=str(control)))
+    assert events[0]["step"] == "mandatory" and events[0]["status"] == "running"
+    assert sum(event["status"] == "waiting" for event in events) == 1
+    assert not list(control.iterdir())  # the decision is consumed, not reused
+    if action == "continue":
+        assert calls == ["run:mandatory", "run:optional", "run:failure",
+                         "undo:failure", "undo:optional", "undo:mandatory"]
+    elif action == "skip":
+        assert calls == ["run:mandatory", "run:failure", "undo:failure", "undo:mandatory"]
+        assert any(e["step"] == "optional" and e["status"] == "skipped" for e in events)
+    else:
+        assert calls == ["run:mandatory", "undo:mandatory"]
+        assert any(e["step"] == "optional" and e["status"] == "failed" for e in events)
+
+
+def test_interactive_without_terminal_aborts_before_optional_work(tmp_path, monkeypatch):
+    import updater.pipeline as pipeline
+
+    monkeypatch.setattr(pipeline.sys.stdin, "isatty", lambda: False)
+    calls = []
+    step = _Rec("optional", calls)
+    step.skippable = True
+    with pytest.raises(UpdateError, match="requires a terminal"):
+        run_pipeline([_Rec("mandatory", calls), step], _ctx(_layout(tmp_path), interactive=True))
+    assert calls == ["run:mandatory", "undo:mandatory"]
+
+
+def test_handoff_is_successful_transfer_without_rollback(tmp_path):
+    from updater.pipeline import Handoff
+    from updater.progress import capture
+
+    calls, events = [], []
+
+    class Transfer(_Rec):
+        def run(self, ctx):
+            raise Handoff(tmp_path / "new")
+
+    with capture(events.append), pytest.raises(Handoff):
+        run_pipeline([_Rec("fetch", calls), Transfer("handoff", calls)], _ctx(_layout(tmp_path)))
+    assert calls == ["run:fetch"]
+    assert [(e["step"], e["status"]) for e in events] == [
+        ("fetch", "running"), ("fetch", "ok"), ("handoff", "running"), ("handoff", "ok")]
+
+
+def test_failed_rollback_is_recorded_without_hiding_original_failure(tmp_path):
+    from updater.progress import capture
+
+    class BrokenRollback(_Rec):
+        def rollback(self, ctx):
+            raise OSError("cannot restore old folder")
+
+    events = []
+    ctx = _ctx(_layout(tmp_path))
+    with capture(events.append), pytest.raises(UpdateError, match="boom"):
+        run_pipeline([BrokenRollback("backup-app", []), _Rec("build", [], fail=True)], ctx)
+    assert ctx.extra["rollback_failed"]
+    assert events[-1]["status"] == "rollback-failed"
+    assert "cannot restore old folder" in events[-1]["text"]
+
+
 # ── versions ─────────────────────────────────────────────────────────────────
 def test_version_helpers(tmp_path):
     assert read_version(_release(tmp_path / "r", "1.2.3")) == "1.2.3"

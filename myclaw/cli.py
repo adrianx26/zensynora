@@ -641,11 +641,22 @@ def backup():
               type=click.Choice(["settings", "knowledge", "memory", "jobs"]),
               help="What to include (repeat). Default: the parts chosen in Settings.")
 @click.option("--note", default="", help="A note stored with the backup.")
-def backup_create(parts, note):
+@click.option("--interactive", is_flag=True, help="Choose optional parts before starting.")
+def backup_create(parts, note, interactive):
     """Create a backup now."""
     from . import backup as _backup
+    from updater.progress import capture
+    from .config import load_config
 
-    info = _backup.create_backup(list(parts) or None, "manual", note)
+    selected = list(parts) or _backup.default_parts(load_config())
+    if interactive:
+        selected = ["settings"] + [part for part in _backup.PARTS[1:]
+                                   if click.confirm(f"Include {part}?", default=part in selected)]
+    try:
+        with capture(_maintenance_console):
+            info = _backup.create_backup(selected, "manual", note)
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise click.ClickException(str(exc))
     click.echo(f"✔ {info['name']}  ({info['bytes'] // 1024} KB, parts: {', '.join(info.get('parts', []))})")
     click.echo(f"  in {Path(info['path']).parent}")
 
@@ -671,21 +682,40 @@ def backup_list():
               type=click.Choice(["settings", "knowledge", "memory", "jobs"]),
               help="Only restore these parts (repeat). Default: everything in the backup.")
 @click.option("--yes", is_flag=True, help="Don't ask for confirmation.")
-def backup_restore(name, parts, yes):
+@click.option("--interactive", is_flag=True, help="Choose parts before starting; safety backup remains required.")
+def backup_restore(name, parts, yes, interactive):
     """Restore a backup (stop the web UI / agents first)."""
     from . import backup as _backup
+    from updater.progress import capture
+
+    selected = list(parts) or None
+    if interactive:
+        try:
+            manifest = _backup.read_manifest(_backup.resolve(name))
+        except (FileNotFoundError, ValueError, OSError) as exc:
+            raise click.ClickException(str(exc))
+        selected = [part for part in manifest["parts"] if click.confirm(f"Restore {part}?", default=True)]
+        if not selected:
+            raise click.ClickException("Nothing selected; restore cancelled.")
 
     if not yes:
         click.confirm(f"Restore {name}? Current files will be replaced (a safety backup is made first)",
                       abort=True)
     try:
-        r = _backup.restore_backup(name, list(parts) or None)
+        with capture(_maintenance_console):
+            r = _backup.restore_backup(name, selected)
     except FileNotFoundError:
         raise click.ClickException(f"No backup called {name}. See: zensynora backup list")
     except ValueError as e:
         raise click.ClickException(str(e))
     click.echo(f"✔ Restored {r['restored']} files ({', '.join(r['parts'])}). "
                f"Undo with: zensynora backup restore {r['safety_backup']}")
+
+
+def _maintenance_console(event):
+    colors = {"ok": "green", "failed": "red", "skipped": "yellow", "running": "cyan", "detail": "white"}
+    click.secho(f"[{event['status'].upper()}] {event['step']}: {event['text']}",
+                fg=colors.get(event["status"], "white"))
 
 
 @backup.command("delete")

@@ -1,14 +1,11 @@
 # ZenSynora Architecture — Visual Guide
 
-> **Version:** 0.7.1 · **Last updated:** 2026-10-13
-> 0.7.1: chat channels and agent-to-agent events (§12), jobs (§13),
-> approval-gated self-update (§14), backups, model rotation and custom
-> providers (§4), full program-folder backup in updates (§9).
-> Unreleased: the Telegram bot can run inside the Web UI process, message
-> flow through queue and workers, shared knowledge base (§1, §2, §15).
-> Rewritten for 0.7.0. The previous version showed planning phases and
-> modules that no longer match the code. Every diagram below reflects the
-> current source tree; file names are given so you can jump to the code.
+> **Version:** 0.8.5 · **Last updated:** 2026-11-27
+> Modular maintenance progress, safe optional update decisions (§9),
+> approved Doctor GitHub reinstall (§10), job insights and reviewed reports
+> (§13), and verified backup/restore recovery (§20).
+> Earlier feature-introduction versions are kept as history. Source package
+> names are provided so you can jump from each flow to its implementation.
 > Text-oriented companion: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 **Contents**
@@ -16,7 +13,7 @@
 1. [System context](#1-system-context)
 2. [Component map](#2-component-map)
 3. [A chat message, end to end](#3-a-chat-message-end-to-end)
-4. [Provider selection and fallback](#4-provider-selection-and-fallback)
+4. [Provider selection, rotation and fallback](#4-provider-selection-rotation-and-fallback)
 5. [Tool execution](#5-tool-execution)
 6. [Swarms](#6-swarms)
 7. [Settings from the Web UI](#7-settings-from-the-web-ui)
@@ -28,6 +25,11 @@
 13. [Jobs](#13-jobs)
 14. [Self-update proposals](#14-self-update-proposals)
 15. [Telegram bot](#15-telegram-bot)
+16. [Providers, keys and agents](#16-providers-keys-and-agents)
+17. [Knowledge page](#17-knowledge-page-web-ui)
+18. [Context length per agent](#18-context-length-per-agent)
+19. [Knowledge tuning, decay and re-ranking](#19-knowledge-tuning-decay-and-re-ranking)
+20. [Backup and restore maintenance](#20-backup-and-restore-maintenance)
 
 ---
 
@@ -100,7 +102,7 @@ flowchart TB
     subgraph L3["Capabilities"]
         direction LR
         tools["tools/<br/>shell · files · web · browser · kb · scheduler · swarm · toolbox"]
-        provider["provider.py<br/>8 built-in + your own providers · rotation"]
+        provider["provider.py<br/>local + cloud providers · rotation"]
         events["events.py<br/>agent-to-agent activity"]
         resilience["resilience/ + offline.py<br/>circuit breaker · offline fallback"]
         prompts["prompts/ · structured_output/"]
@@ -120,9 +122,9 @@ flowchart TB
     subgraph L5["Operations"]
         direction LR
         doctor["doctor/<br/>health checks · integrity"]
-        updater["updater/ (repo root)<br/>safe updates · app backup · migrations"]
+        updater["updater/ (repo root)<br/>safe steps · optional decisions · structured progress"]
         selfupd["selfupdate.py<br/>agent proposals → updater"]
-        backupx["backup.py<br/>settings · keys · knowledge"]
+        backupx["backup.py + maintenance.py<br/>verified backup · restore · private progress"]
         obs["observability/ · metrics.py · logging_config.py"]
     end
 
@@ -317,6 +319,7 @@ flowchart TB
         chatdb["chat.db · jobs.db<br/>channels + messages · jobs + runs (0.7.1)"]
         logs["logs/zensynora.log<br/>rotating JSON log (since 0.7.0)"]
         mig[".migrations.json<br/>applied data migrations"]
+        progress["maintenance-progress.json<br/>latest backup/restore steps and events"]
     end
     app["ZenSynora (any version)"] <--> data
     upd["updater"] -- "backup before every update" --> data
@@ -329,15 +332,24 @@ flowchart TB
 ## 9. Safe updates
 
 `zensynora update` (`updater/`, added in 0.6.0; program-folder backup and
-data check added in 0.7.1). Steps 1–10 never touch the running version; any
-failure undoes the completed steps in reverse order.
+data check added in 0.7.1). Version 0.8.5 records step and rollback outcomes.
+Only the program-folder archive is optional; user-data backup, verification
+and recovery cannot be skipped. Failures attempt rollback of completed steps.
 
 ```mermaid
 flowchart TD
     s1["1 Preflight<br/>Python, disk space, service state"] --> s2["2 Fetch<br/>GitHub, folder or archive"]
     s2 --> s3["3 Hand-off<br/>newer updater takes over"]
     s3 --> s4["4 Back up ~/.myclaw + .env"]
-    s4 --> s5["5 Back up the whole program folder<br/>archive + inventory of every file"]
+    s4 --> mode{"Program archive enabled?"}
+    mode -- no --> skip["SKIPPED: program archive"]
+    mode -- yes --> interactive{"Interactive mode?"}
+    interactive -- no --> s5["5 Program archive<br/>full or code-only"]
+    interactive -- yes --> decision{"WAITING: Continue / Skip / Abort"}
+    decision -- Continue --> s5
+    decision -- Skip --> skip
+    decision -- Abort --> rb
+    skip --> s6
     s5 --> s6["6 Carry over .env, data/"]
     s6 --> s7["7 Build side by side<br/>venv · packages · extras · Web UI"]
     s7 --> s8["8 Verify<br/>imports new code, loads YOUR config"]
@@ -348,7 +360,11 @@ flowchart TD
     s12 --> s13["13 Start service, confirm up"]
     s13 --> s14(["14 Record, prune old releases"])
 
-    s2 & s7 & s8 & s10 & s11 & s13 -. "failure" .-> rb["Roll back<br/>old version active again · data restored if migrated ·<br/>program folder compared with the inventory and<br/>restored from the archive if anything differs"]
+    s2 & s4 & s5 & s7 & s8 & s10 & s11 & s12 & s13 & s14 -. "failure" .-> rb["Attempt reverse rollback<br/>restore changed data and previous activation;<br/>verify program folder when archive exists"]
+    rb --> outcomes{"Recovery outcome"}
+    outcomes -- success --> restored["ROLLED-BACK"]
+    outcomes -- failure --> attention["ROLLBACK-FAILED<br/>preserve backups and repair"]
+    s1 & s4 & s5 & s7 & s8 & s10 & s11 & s12 & s13 & s14 -. events .-> log[("PROCESS events<br/>timestamps · durations · colored log")]
 ```
 
 ---
@@ -378,6 +394,11 @@ flowchart LR
     end
     run --> checks --> rep["Report<br/>ok / warn / fail + how to fix"]
     rep -- "--fix" --> fx["Safe fixes<br/>folders · permissions · migrations"]
+    c2 --> repair["Repair installation<br/>choose GitHub branch or tag"]
+    repair --> confirm{"User confirms?"}
+    confirm -- yes --> reinstall["Safe updater --force<br/>mandatory backups · preserve user data"]
+    confirm -- no --> keep["No changes"]
+    reinstall --> steps["Detailed step and rollback outcomes"]
 
     subgraph medicx["Other medic tools"]
         m1["scan_files · verify_file_integrity · recover_file"]
@@ -408,13 +429,13 @@ flowchart LR
 ```mermaid
 flowchart TB
     base["~/.local/share/zensynora/"]
-    base --> src["source → releases/0.7.1-…<br/>(symlink: the active version)"]
+    base --> src["source → releases/0.8.5-…<br/>(symlink: the active version)"]
     base --> rel["releases/"]
-    rel --> r1["0.7.1-20261013T…<br/>code + venv/ + webui/dist"]
-    rel --> r2["0.7.0-…<br/>kept for rollback"]
+    rel --> r1["0.8.5-20261127T…<br/>code + venv/ + webui/dist"]
+    rel --> r2["0.8.4-…<br/>kept for rollback"]
     base --> bk["backups/<br/>~/.myclaw snapshots + app-folder.tar.gz (mode 700)"]
     base --> stg["staging/<br/>temporary copies for approved proposals"]
-    base --> lg["logs/update-*.log"]
+    base --> lg["logs/update-*.log · webui-update-*.log<br/>private optional-decision folders"]
     base --> st["updater-state.json"]
     svc["systemd myclaw.service<br/>and source/venv/bin/activate"] -. "use the path through" .-> src
 ```
@@ -483,6 +504,13 @@ flowchart LR
     agent -- "job_run" --> run
     store -- "job_list · job_status" --> agent
     run -- "result in the channel<br/>the job was made in" --> chan
+    store -- "opt-in prior runs context" --> context["Scrubbed previous-run evidence"]
+    context --> run
+    run -- "opt-in insight notes" --> notes[("Stable Job insights note")]
+    run -- "opt-in profile proposals" --> review["User reviews profile proposal"]
+    run --> actions["Medic action review<br/>timestamps · outcomes · duration"]
+    actions --> draft["User exports privacy-filtered bug-report draft"]
+    draft --> github["User reviews and pastes into GitHub issue form"]
 ```
 
 Since 2026-10-21 agents use the Jobs page through tools (`myclaw/tools/jobs.py`);
@@ -509,7 +537,7 @@ flowchart TD
     stale -- yes --> stage["staging/ = copy of current release + change"]
     stage --> upd["update.sh update --from-dir staging --force<br/>(all steps of §9)"]
     upd -- ok --> ok["new release active · restart to use it ·<br/>zensynora update rollback undoes it"]
-    upd -- failure --> rb["rolled back · running version unchanged"]
+    upd -- failure --> rb["attempt rollback · show recovery outcomes"]
     agent -- record_lesson --> kb[("knowledge note<br/>medic-lessons")]
     kb -. "found by later searches" .-> agent
 ```
@@ -601,7 +629,7 @@ pages are generated into [`diagrams/`](../diagrams/index.html) with
 
 ## 16. Providers, keys and agents
 
-Since the Unreleased changes a provider can hold several named API keys
+As of 0.8.5 a provider can hold several named API keys
 (`providers.<name>.keys`; the plain `api_key` is the *Default key*). Each agent,
 the default model and every rotation entry pick a provider, a key and a model.
 With `providers.<name>.rotate_keys` on, a rate-limited or exhausted key makes
@@ -668,6 +696,8 @@ about 3.8 characters per token.
 Who may change a ranking value, and where the values act on a search
 (2026-11-11). Details: [Knowledge base guide → Tuning](knowledge_base_guide.md#tuning-thresholds-decay-models-relevance-link-strength).
 
+The maintenance flow is documented separately in [§20](#20-backup-and-restore-maintenance).
+
 ```mermaid
 flowchart TD
     user["You<br/>Knowledge → Tune"] -- "any value inside its limits" --> setv["tuning.set_values()"]
@@ -688,3 +718,41 @@ flowchart TD
     rel -- "- uses [[Note]] (x3)" --> md[("notes *.md")]
     rr --> out["results<br/>identical to before when decay is off and the query has no marks"]
 ```
+
+---
+
+## 20. Backup and restore maintenance
+
+`myclaw/backup.py` keeps the lifecycle and database guards in place.
+`myclaw/maintenance.py` records the latest Web UI operation privately;
+`updater/progress.py` supplies shared, context-local events. Select optional
+parts before starting; settings are always included in a backup, and linked
+lifecycle parts must be restored together.
+
+```mermaid
+flowchart TD
+    user["Backups page or CLI<br/>select optional parts before starting"] --> operation{"Backup or restore?"}
+    operation -- Backup --> guard["Check active work and pending lifecycle operations"]
+    guard --> copy["Snapshot selected parts<br/>SQLite online backup"]
+    copy --> manifest["Manifest, SHA-256 and private compression"]
+    manifest --> verify["Verify archived file checksums"]
+    verify --> publish["Publish only the verified archive"]
+    operation -- Restore --> inspect["Verify archive and selected-part dependencies"]
+    inspect --> safety["Mandatory verified safety backup"]
+    safety --> journal["Record recovery journal"]
+    journal --> staging["Extract selected files into staging"]
+    staging --> preserve["Keep overwritten notes in trash"]
+    preserve --> replace["Restore selected files; reset SQLite side files"]
+    replace --> reload["Reload configuration; clear journal"]
+    replace & reload -. failure .-> recover["Keep recovery marker<br/>restore named safety backup"]
+    copy & manifest & verify & publish & inspect & safety & journal & replace & reload -. events .-> events["Shared progress events<br/>steps · counts · timestamps · durations"]
+    events -- CLI --> terminal["Colored terminal output"]
+    events -- Web UI --> progress[("maintenance-progress.json<br/>private latest operation")]
+    progress --> ui["ProcessProgress<br/>OK / FAILED / SKIPPED / RUNNING"]
+```
+
+A failed progress write is reported separately from the operation result.
+It must not undo a successful restore or skip the post-restore reload hook.
+Interrupted recovery remains blocked until its named safety archive is
+restored. Full details: [Updating](UPDATING.md) and
+[Backups guide](webui_guide.md#backups-settings-api-keys-knowledge).

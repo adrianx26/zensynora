@@ -1,6 +1,6 @@
 # Telegram Guide — chat with your agents from your phone
 
-> **Applies to:** v0.7.5 + Unreleased changes · **Added:** 2026-10-16 — the
+> **Current release:** v0.8.5 · **Originally added:** 2026-10-16 — the
 > Telegram bot was reviewed and fixed, and it now runs inside the Web UI.
 
 The Telegram bot lets you talk to your ZenSynora agents from the Telegram app

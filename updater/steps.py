@@ -19,7 +19,7 @@ from typing import Dict, List
 from . import UPDATER_PROTOCOL, app_backup
 from .backup import RELEASE_USER_FILES, _safe_extract, create_backup, ensure_user_data, restore_backup
 from .layout import read_version, version_tuple
-from .pipeline import Context, NothingToDo, Step, UpdateError, clean_env, sh
+from .pipeline import Context, Handoff, NothingToDo, Step, UpdateError, clean_env, sh
 
 log = logging.getLogger("zensynora.updater")
 
@@ -28,14 +28,6 @@ COPY_IGNORE = shutil.ignore_patterns(
     ".mypy_cache", "graphify-out", ".update.lock",
 )
 MIN_FREE_BYTES = 1_500_000_000
-
-
-class Handoff(Exception):
-    """A newer updater was downloaded; re-run it on the staged source."""
-
-    def __init__(self, staged: Path):
-        super().__init__(str(staged))
-        self.staged = staged
 
 
 def build_python() -> str:
@@ -253,6 +245,7 @@ class BackupAppFolder(Step):
 
     name = "backup-app"
     description = "Backing up the whole installed program folder"
+    skippable = True
 
     def should_run(self, ctx: Context) -> bool:
         return ctx.opts.app_backup != "none" and ctx.backup_dir is not None

@@ -25,7 +25,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">🏗️ Agent Swarm Architecture</h2>
-  
+
   <div class="mermaid">flowchart TB
     UI[&quot;USER INTERFACE&lt;br/&gt;(CLI, Telegram, WhatsApp, API)&quot;] --&gt; Orchestrator[&quot;SWARM ORCHESTRATOR&lt;br/&gt;(Central Controller)&quot;]
 
@@ -46,7 +46,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">🎯 Swarm Coordinator (Hierarchical Strategy)</h2>
-  
+
   <div class="mermaid">flowchart TD
     Coord[&quot;Coordinator (lead_dev)&quot;] --&gt; Plan[&quot;1. Analyze Task &amp; Plan&quot;]
     Plan --&gt; Delegate[&quot;2. Delegate to Workers&quot;]
@@ -63,7 +63,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">Agent Swarm Components</h2>
-  
+
   <div class="mermaid">flowchart LR
     subgraph Config [&quot;Configuration&quot;]
         direction TB
@@ -86,7 +86,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">Data Flow Diagram</h2>
-  
+
   <div class="mermaid">sequenceDiagram
     participant User
     participant UI as CLI/Telegram/WhatsApp
@@ -113,7 +113,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">Swarm Lifecycle</h2>
-  
+
   <div class="mermaid">stateDiagram-v2
     [*] --&gt; PENDING: Created by User
     PENDING --&gt; RUNNING: Execution Started

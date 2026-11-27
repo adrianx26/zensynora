@@ -1,7 +1,7 @@
 # Medic & Doctor Guide
 
-> **Applies to:** v0.7.1 · **Rewritten:** 2026-10-13 · **v0.7.1:** self-update
-> proposals and learning ([section 6](#6-self-update-proposals))
+> **Applies to:** v0.8.5 · **Updated:** 2026-11-27. Approved GitHub
+> reinstall, reviewed per-action investigation exports and detailed recovery.
 > Before 0.7.0 most medic tools described here did not exist in the code
 > (two "health" tools returned fixed text). Everything below is implemented
 > and covered by `tests/test_doctor_medic.py`.
@@ -19,6 +19,32 @@ against runaway loops.
 | Get one file to understand or share a problem | `zensynora doctor --report` or Doctor → **Report** → Download |
 | Let an agent check/repair itself | the medic tools below (available to every agent) |
 | Let agents propose fixes to the code (you approve) | Doctor → **Change proposals**, `zensynora medic` ([section 6](#6-self-update-proposals)) |
+| Replace application code from GitHub while keeping user data | Doctor → **Repair installation** → **Approve GitHub reinstall** |
+
+### Reinstall application code
+
+**Doctor → Repair installation** accepts a GitHub branch or tag and asks for
+explicit confirmation before invoking the safe updater with `--force`.
+Application code is replaced from a clean release folder even at the same
+version. Settings, credentials, notes, conversations and release-local user
+files are preserved; mandatory user-data backup and the default full program
+archive remain enabled. The repair screen shows the same detailed step and
+rollback outcomes as Updates. This needs a managed installation; Docker
+repairs use an image rebuild, and ordinary checkouts use git/install commands.
+
+```mermaid
+flowchart LR
+    user["Doctor: select GitHub branch or tag"] --> approve{"User confirms reinstall?"}
+    approve -- no --> unchanged["No changes"]
+    approve -- yes --> updater["Safe updater --force"]
+    updater --> fetch["Fetch clean GitHub release"]
+    fetch --> safety["Data and full program backups"]
+    safety --> clean["Build and verify clean release"]
+    clean --> activate["Activate while preserving user data"]
+    activate --> report["Colored step and recovery outcomes"]
+    clean & activate -. failure .-> rollback["Rollback; show any recovery failure"]
+    rollback --> report
+```
 
 ### Investigation reports for GitHub
 
@@ -286,7 +312,7 @@ flowchart LR
     you -- approve --> stage["copy of current release<br/>+ the change"]
     stage --> upd["safe updater<br/>backup · build · verify · switch"]
     upd -- ok --> applied["new release active<br/>(restart ZenSynora)"]
-    upd -- failure --> rb["automatic rollback<br/>running version unchanged"]
+    upd -- failure --> rb["attempt rollback<br/>explicit recovery outcomes"]
 ```
 
 **How a proposal is checked.** Paths must stay inside the installed program

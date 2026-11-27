@@ -16,7 +16,7 @@
   <span class="dot"></span>
   <h1 class="title">ZenSynora Architecture — Visual Guide</h1>
 </div>
-<p class="subtitle">21 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
+<p class="subtitle">22 diagram(s) extracted from <code>docs/architecture_diagram.md</code></p>
 <div class="legend">
   <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
   <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
@@ -84,7 +84,7 @@
     subgraph L3[&quot;Capabilities&quot;]
         direction LR
         tools[&quot;tools/&lt;br/&gt;shell · files · web · browser · kb · scheduler · swarm · toolbox&quot;]
-        provider[&quot;provider.py&lt;br/&gt;8 built-in + your own providers · rotation&quot;]
+        provider[&quot;provider.py&lt;br/&gt;local + cloud providers · rotation&quot;]
         events[&quot;events.py&lt;br/&gt;agent-to-agent activity&quot;]
         resilience[&quot;resilience/ + offline.py&lt;br/&gt;circuit breaker · offline fallback&quot;]
         prompts[&quot;prompts/ · structured_output/&quot;]
@@ -104,9 +104,9 @@
     subgraph L5[&quot;Operations&quot;]
         direction LR
         doctor[&quot;doctor/&lt;br/&gt;health checks · integrity&quot;]
-        updater[&quot;updater/ (repo root)&lt;br/&gt;safe updates · app backup · migrations&quot;]
+        updater[&quot;updater/ (repo root)&lt;br/&gt;safe steps · optional decisions · structured progress&quot;]
         selfupd[&quot;selfupdate.py&lt;br/&gt;agent proposals → updater&quot;]
-        backupx[&quot;backup.py&lt;br/&gt;settings · keys · knowledge&quot;]
+        backupx[&quot;backup.py + maintenance.py&lt;br/&gt;verified backup · restore · private progress&quot;]
         obs[&quot;observability/ · metrics.py · logging_config.py&quot;]
     end
 
@@ -186,7 +186,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">5. Tool execution</h2>
-  
+
   <div class="mermaid">flowchart LR
     llm[&quot;Model returns tool calls&quot;] --&gt; exec[&quot;agent_internals/tool_executor.py&quot;]
     exec --&gt; indep{&quot;Independent&lt;br/&gt;of each other?&quot;}
@@ -251,6 +251,7 @@
         chatdb[&quot;chat.db · jobs.db&lt;br/&gt;channels + messages · jobs + runs (0.7.1)&quot;]
         logs[&quot;logs/zensynora.log&lt;br/&gt;rotating JSON log (since 0.7.0)&quot;]
         mig[&quot;.migrations.json&lt;br/&gt;applied data migrations&quot;]
+        progress[&quot;maintenance-progress.json&lt;br/&gt;latest backup/restore steps and events&quot;]
     end
     app[&quot;ZenSynora (any version)&quot;] &lt;--&gt; data
     upd[&quot;updater&quot;] -- &quot;backup before every update&quot; --&gt; data
@@ -259,12 +260,20 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">9. Safe updates</h2>
-  <p class="diagram-desc">`zensynora update` (`updater/`, added in 0.6.0; program-folder backup and data check added in 0.7.1). Steps 1–10 never touch the running version; any failure undoes the completed steps in reverse order.</p>
+  <p class="diagram-desc">`zensynora update` (`updater/`, added in 0.6.0; program-folder backup and data check added in 0.7.1). Version 0.8.5 records step and rollback outcomes. Only the program-folder archive is optional; user-data backup, verification and recovery</p>
   <div class="mermaid">flowchart TD
     s1[&quot;1 Preflight&lt;br/&gt;Python, disk space, service state&quot;] --&gt; s2[&quot;2 Fetch&lt;br/&gt;GitHub, folder or archive&quot;]
     s2 --&gt; s3[&quot;3 Hand-off&lt;br/&gt;newer updater takes over&quot;]
     s3 --&gt; s4[&quot;4 Back up ~/.myclaw + .env&quot;]
-    s4 --&gt; s5[&quot;5 Back up the whole program folder&lt;br/&gt;archive + inventory of every file&quot;]
+    s4 --&gt; mode{&quot;Program archive enabled?&quot;}
+    mode -- no --&gt; skip[&quot;SKIPPED: program archive&quot;]
+    mode -- yes --&gt; interactive{&quot;Interactive mode?&quot;}
+    interactive -- no --&gt; s5[&quot;5 Program archive&lt;br/&gt;full or code-only&quot;]
+    interactive -- yes --&gt; decision{&quot;WAITING: Continue / Skip / Abort&quot;}
+    decision -- Continue --&gt; s5
+    decision -- Skip --&gt; skip
+    decision -- Abort --&gt; rb
+    skip --&gt; s6
     s5 --&gt; s6[&quot;6 Carry over .env, data/&quot;]
     s6 --&gt; s7[&quot;7 Build side by side&lt;br/&gt;venv · packages · extras · Web UI&quot;]
     s7 --&gt; s8[&quot;8 Verify&lt;br/&gt;imports new code, loads YOUR config&quot;]
@@ -275,7 +284,11 @@
     s12 --&gt; s13[&quot;13 Start service, confirm up&quot;]
     s13 --&gt; s14([&quot;14 Record, prune old releases&quot;])
 
-    s2 &amp; s7 &amp; s8 &amp; s10 &amp; s11 &amp; s13 -. &quot;failure&quot; .-&gt; rb[&quot;Roll back&lt;br/&gt;old version active again · data restored if migrated ·&lt;br/&gt;program folder compared with the inventory and&lt;br/&gt;restored from the archive if anything differs&quot;]</div>
+    s2 &amp; s4 &amp; s5 &amp; s7 &amp; s8 &amp; s10 &amp; s11 &amp; s12 &amp; s13 &amp; s14 -. &quot;failure&quot; .-&gt; rb[&quot;Attempt reverse rollback&lt;br/&gt;restore changed data and previous activation;&lt;br/&gt;verify program folder when archive exists&quot;]
+    rb --&gt; outcomes{&quot;Recovery outcome&quot;}
+    outcomes -- success --&gt; restored[&quot;ROLLED-BACK&quot;]
+    outcomes -- failure --&gt; attention[&quot;ROLLBACK-FAILED&lt;br/&gt;preserve backups and repair&quot;]
+    s1 &amp; s4 &amp; s5 &amp; s7 &amp; s8 &amp; s10 &amp; s11 &amp; s12 &amp; s13 &amp; s14 -. events .-&gt; log[(&quot;PROCESS events&lt;br/&gt;timestamps · durations · colored log&quot;)]</div>
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">10. Doctor and medic</h2>
@@ -299,6 +312,11 @@
     end
     run --&gt; checks --&gt; rep[&quot;Report&lt;br/&gt;ok / warn / fail + how to fix&quot;]
     rep -- &quot;--fix&quot; --&gt; fx[&quot;Safe fixes&lt;br/&gt;folders · permissions · migrations&quot;]
+    c2 --&gt; repair[&quot;Repair installation&lt;br/&gt;choose GitHub branch or tag&quot;]
+    repair --&gt; confirm{&quot;User confirms?&quot;}
+    confirm -- yes --&gt; reinstall[&quot;Safe updater --force&lt;br/&gt;mandatory backups · preserve user data&quot;]
+    confirm -- no --&gt; keep[&quot;No changes&quot;]
+    reinstall --&gt; steps[&quot;Detailed step and rollback outcomes&quot;]
 
     subgraph medicx[&quot;Other medic tools&quot;]
         m1[&quot;scan_files · verify_file_integrity · recover_file&quot;]
@@ -321,16 +339,16 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">11. Install layout on disk</h2>
-  
+
   <div class="mermaid">flowchart TB
     base[&quot;~/.local/share/zensynora/&quot;]
-    base --&gt; src[&quot;source → releases/0.7.1-…&lt;br/&gt;(symlink: the active version)&quot;]
+    base --&gt; src[&quot;source → releases/0.8.5-…&lt;br/&gt;(symlink: the active version)&quot;]
     base --&gt; rel[&quot;releases/&quot;]
-    rel --&gt; r1[&quot;0.7.1-20261013T…&lt;br/&gt;code + venv/ + webui/dist&quot;]
-    rel --&gt; r2[&quot;0.7.0-…&lt;br/&gt;kept for rollback&quot;]
+    rel --&gt; r1[&quot;0.8.5-20261127T…&lt;br/&gt;code + venv/ + webui/dist&quot;]
+    rel --&gt; r2[&quot;0.8.4-…&lt;br/&gt;kept for rollback&quot;]
     base --&gt; bk[&quot;backups/&lt;br/&gt;~/.myclaw snapshots + app-folder.tar.gz (mode 700)&quot;]
     base --&gt; stg[&quot;staging/&lt;br/&gt;temporary copies for approved proposals&quot;]
-    base --&gt; lg[&quot;logs/update-*.log&quot;]
+    base --&gt; lg[&quot;logs/update-*.log · webui-update-*.log&lt;br/&gt;private optional-decision folders&quot;]
     base --&gt; st[&quot;updater-state.json&quot;]
     svc[&quot;systemd myclaw.service&lt;br/&gt;and source/venv/bin/activate&quot;] -. &quot;use the path through&quot; .-&gt; src</div>
 </div>
@@ -381,7 +399,14 @@
     agent[&quot;agents (chat)&lt;br/&gt;job_create · job_update&quot;] --&gt; store
     agent -- &quot;job_run&quot; --&gt; run
     store -- &quot;job_list · job_status&quot; --&gt; agent
-    run -- &quot;result in the channel&lt;br/&gt;the job was made in&quot; --&gt; chan</div>
+    run -- &quot;result in the channel&lt;br/&gt;the job was made in&quot; --&gt; chan
+    store -- &quot;opt-in prior runs context&quot; --&gt; context[&quot;Scrubbed previous-run evidence&quot;]
+    context --&gt; run
+    run -- &quot;opt-in insight notes&quot; --&gt; notes[(&quot;Stable Job insights note&quot;)]
+    run -- &quot;opt-in profile proposals&quot; --&gt; review[&quot;User reviews profile proposal&quot;]
+    run --&gt; actions[&quot;Medic action review&lt;br/&gt;timestamps · outcomes · duration&quot;]
+    actions --&gt; draft[&quot;User exports privacy-filtered bug-report draft&quot;]
+    draft --&gt; github[&quot;User reviews and pastes into GitHub issue form&quot;]</div>
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">14. Self-update proposals</h2>
@@ -399,7 +424,7 @@
     stale -- yes --&gt; stage[&quot;staging/ = copy of current release + change&quot;]
     stage --&gt; upd[&quot;update.sh update --from-dir staging --force&lt;br/&gt;(all steps of §9)&quot;]
     upd -- ok --&gt; ok[&quot;new release active · restart to use it ·&lt;br/&gt;zensynora update rollback undoes it&quot;]
-    upd -- failure --&gt; rb[&quot;rolled back · running version unchanged&quot;]
+    upd -- failure --&gt; rb[&quot;attempt rollback · show recovery outcomes&quot;]
     agent -- record_lesson --&gt; kb[(&quot;knowledge note&lt;br/&gt;medic-lessons&quot;)]
     kb -. &quot;found by later searches&quot; .-&gt; agent</div>
 </div>
@@ -456,7 +481,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">16. Providers, keys and agents</h2>
-  <p class="diagram-desc">Since the Unreleased changes a provider can hold several named API keys (`providers.&lt;name&gt;.keys`; the plain `api_key` is the *Default key*). Each agent, the default model and every rotation entry pick a provider, a key and a model. With `pr</p>
+  <p class="diagram-desc">As of 0.8.5 a provider can hold several named API keys (`providers.&lt;name&gt;.keys`; the plain `api_key` is the *Default key*). Each agent, the default model and every rotation entry pick a provider, a key and a model. With `providers.&lt;name&gt;.ro</p>
   <div class="mermaid">flowchart LR
     agent[&quot;Agent&lt;br/&gt;provider · key · model&quot;] --&gt; pick{&quot;key id&quot;}
     pick -- &quot;empty&quot; --&gt; defkey[&quot;Default key&lt;br/&gt;providers.X.api_key&quot;]
@@ -484,7 +509,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">18. Context length per agent</h2>
-  
+
   <div class="mermaid">flowchart LR
     ui[&quot;Settings → Agents&lt;br/&gt;slider + number box&quot;] -- &quot;prompt · skills · provider · model&lt;br/&gt;(after each edit)&quot; --&gt; est[&quot;POST /api/agents/context-estimate&quot;]
     est --&gt; parts[&quot;estimate_context()&lt;br/&gt;prompt + skills + team + tool schemas&lt;br/&gt;→ min · recommended&quot;]
@@ -516,6 +541,29 @@
     use --&gt; rel[&quot;relations.py&lt;br/&gt;strengthen from use&quot;]
     rel -- &quot;- uses [[Note]] (x3)&quot; --&gt; md[(&quot;notes *.md&quot;)]
     rr --&gt; out[&quot;results&lt;br/&gt;identical to before when decay is off and the query has no marks&quot;]</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">20. Backup and restore maintenance</h2>
+  <p class="diagram-desc">`myclaw/backup.py` keeps the lifecycle and database guards in place. `myclaw/maintenance.py` records the latest Web UI operation privately; `updater/progress.py` supplies shared, context-local events. Select optional parts before starting; </p>
+  <div class="mermaid">flowchart TD
+    user[&quot;Backups page or CLI&lt;br/&gt;select optional parts before starting&quot;] --&gt; operation{&quot;Backup or restore?&quot;}
+    operation -- Backup --&gt; guard[&quot;Check active work and pending lifecycle operations&quot;]
+    guard --&gt; copy[&quot;Snapshot selected parts&lt;br/&gt;SQLite online backup&quot;]
+    copy --&gt; manifest[&quot;Manifest, SHA-256 and private compression&quot;]
+    manifest --&gt; verify[&quot;Verify archived file checksums&quot;]
+    verify --&gt; publish[&quot;Publish only the verified archive&quot;]
+    operation -- Restore --&gt; inspect[&quot;Verify archive and selected-part dependencies&quot;]
+    inspect --&gt; safety[&quot;Mandatory verified safety backup&quot;]
+    safety --&gt; journal[&quot;Record recovery journal&quot;]
+    journal --&gt; staging[&quot;Extract selected files into staging&quot;]
+    staging --&gt; preserve[&quot;Keep overwritten notes in trash&quot;]
+    preserve --&gt; replace[&quot;Restore selected files; reset SQLite side files&quot;]
+    replace --&gt; reload[&quot;Reload configuration; clear journal&quot;]
+    replace &amp; reload -. failure .-&gt; recover[&quot;Keep recovery marker&lt;br/&gt;restore named safety backup&quot;]
+    copy &amp; manifest &amp; verify &amp; publish &amp; inspect &amp; safety &amp; journal &amp; replace &amp; reload -. events .-&gt; events[&quot;Shared progress events&lt;br/&gt;steps · counts · timestamps · durations&quot;]
+    events -- CLI --&gt; terminal[&quot;Colored terminal output&quot;]
+    events -- Web UI --&gt; progress[(&quot;maintenance-progress.json&lt;br/&gt;private latest operation&quot;)]
+    progress --&gt; ui[&quot;ProcessProgress&lt;br/&gt;OK / FAILED / SKIPPED / RUNNING&quot;]</div>
 </div>
 
 <div class="footer">

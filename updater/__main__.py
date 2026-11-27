@@ -19,6 +19,7 @@ from .backup import create_backup, restore_backup, restore_release_files
 from .layout import Layout, State, default_base, default_data_dir, read_version, timestamp, version_tuple
 from .pipeline import Context, NothingToDo, Options, UpdateError, run_pipeline, sh
 from .steps import Handoff, default_pipeline, point_source_to, prune
+from .progress import ConsoleFormatter
 
 log = logging.getLogger("zensynora.updater")
 
@@ -28,7 +29,7 @@ def _setup_logging(layout: Layout, verbose: bool, to_file: bool) -> Path | None:
     log.handlers.clear()
     console = logging.StreamHandler(sys.stdout)
     console.setLevel(logging.DEBUG if verbose else logging.INFO)
-    console.setFormatter(logging.Formatter("%(message)s"))
+    console.setFormatter(ConsoleFormatter())
     log.addHandler(console)
     if not to_file:
         return None
@@ -77,6 +78,7 @@ def cmd_update(args) -> int:
         keep_releases=args.keep_releases, keep_backups=args.keep_backups,
         manage_service=not args.no_service, skip_webui=args.skip_webui,
         app_backup=args.app_backup,
+        interactive=args.interactive, control_dir=args.control_dir,
     )
     with _lock(layout):
         ctx = Context(layout=layout, state=State.load(layout.state_file), opts=opts, stamp=timestamp())
@@ -93,11 +95,17 @@ def cmd_update(args) -> int:
             env = dict(os.environ, PYTHONPATH=str(h.staged))
             os.execve(sys.executable, cmd, env)
         except UpdateError as e:
-            log.error("✘ Update failed: %s", e)
-            log.error("Your previous version is still active. Log: %s", logfile)
+            if ctx.extra.get("user_aborted"):
+                log.warning("Update cancelled: %s", e)
+            else:
+                log.error("✘ Update failed: %s", e)
+            if ctx.extra.get("rollback_failed"):
+                log.error("Recovery is incomplete. Keep your backups and inspect the failed rollback steps. Log: %s", logfile)
+            else:
+                log.info("Completed steps rolled back. Log: %s", logfile)
             return 1
         except KeyboardInterrupt:
-            log.error("✘ Update interrupted — previous version restored. Log: %s", logfile)
+            log.error("✘ Update interrupted — inspect rollback results before restarting. Log: %s", logfile)
             return 130
         finally:
             if args.cleanup_source and args.from_dir:
@@ -126,6 +134,10 @@ def _passthrough(args) -> list:
     for flag in ("force", "allow_downgrade", "run_tests", "no_service", "skip_webui", "verbose"):
         if getattr(args, flag):
             out.append("--" + flag.replace("_", "-"))
+    if getattr(args, "interactive", False):
+        out.append("--interactive")
+    if getattr(args, "control_dir", None):
+        out += ["--control-dir", args.control_dir]
     if args.base:
         out += ["--base", args.base]
     if args.data_dir:
@@ -342,6 +354,9 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("--app-backup", choices=("full", "code", "none"), default="full",
                    help="back up the installed program folder first: full (default, with venv), "
                         "code (without venv) or none")
+    u.add_argument("--interactive", action="store_true",
+                   help="ask before optional steps; mandatory data safety steps cannot be skipped")
+    u.add_argument("--control-dir", help=argparse.SUPPRESS)
     u.add_argument("--no-handoff", action="store_true", help=argparse.SUPPRESS)
     u.add_argument("--cleanup-source", action="store_true", help=argparse.SUPPRESS)
     u.set_defaults(func=cmd_update)

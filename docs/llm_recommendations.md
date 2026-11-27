@@ -6,8 +6,9 @@
 
 ---
 
-> **Updated 2026-10-13 (v0.7.0).** Model advice below is from April 2026; the
-> setup notes in this box are current.
+> **Current release: v0.8.5.** Model recommendations below are retained
+> historical advice from April 2026, not a new model evaluation. The setup
+> notes in this box describe the supported provider configuration.
 >
 > * **Any provider works the same way.** Choose it in Web UI → Settings → Model,
 >   click *Test connection & list models*, pick a model, save. No restart needed.

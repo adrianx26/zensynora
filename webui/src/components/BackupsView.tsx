@@ -4,6 +4,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ago, api, fmtBytes, getAdminKey, getApiBase, type BackupInfo } from '../api';
 import { useAutoClear } from '../notice';
+import ProcessProgress, { type MaintenanceProcess } from './ProcessProgress';
 
 interface BackupSettings {
   auto_enabled: boolean; interval_hours: number; keep: number;
@@ -35,18 +36,32 @@ const BackupsView: React.FC<Props> = ({ onRestored }) => {
   const [notice, setNotice] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   useAutoClear(notice, setNotice);  // 2026-11-08: success messages go away within 3 s
   const [restoreParts, setRestoreParts] = useState<Record<string, string[]>>({});
+  const [process, setProcess] = useState<MaintenanceProcess | null>(null);
 
   const load = useCallback(async () => {
     try {
       const res = await api<ListResponse>('/api/backups');
       setData(res);
       setParts(p => (p.length ? p : res.default_parts));
+      setProcess(await api<MaintenanceProcess>('/api/backups/process'));
     } catch (e) {
       setNotice({ kind: 'error', text: (e as Error).message });
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    let active = true;
+    const timer = window.setInterval(() => {
+      api<MaintenanceProcess>('/api/backups/process').then(result => {
+        if (active) setProcess(result);
+      }).catch(e => {
+        if (active) setNotice({ kind: 'error', text: (e as Error).message });
+      });
+    }, busy ? 1000 : 5000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [busy]);
 
   const act = async (label: string, fn: () => Promise<string | void>) => {
     setBusy(label);
@@ -57,6 +72,11 @@ const BackupsView: React.FC<Props> = ({ onRestored }) => {
       await load();
     } catch (e) {
       setNotice({ kind: 'error', text: (e as Error).message });
+      try {
+        setProcess(await api<MaintenanceProcess>('/api/backups/process'));
+      } catch (progressError) {
+        setNotice({ kind: 'error', text: `${(e as Error).message}; progress unavailable: ${(progressError as Error).message}` });
+      }
     } finally {
       setBusy(null);
     }
@@ -65,7 +85,7 @@ const BackupsView: React.FC<Props> = ({ onRestored }) => {
   const create = () => act('create', async () => {
     const info = await api<BackupInfo>('/api/backups', { method: 'POST', body: JSON.stringify({ parts, note }) });
     setNote('');
-    return `Backup ${info.name} created (${fmtBytes(info.bytes)}).`;
+    return `Backup ${info.name} created (${fmtBytes(info.bytes)}).${info.progress_warning ? ` Warning: ${info.progress_warning}` : ''}`;
   });
 
   const verify = (b: BackupInfo) => act(`verify-${b.name}`, async () => {
@@ -78,11 +98,11 @@ const BackupsView: React.FC<Props> = ({ onRestored }) => {
     const chosen = restoreParts[b.name] || b.parts || [];
     if (!window.confirm(`Restore ${chosen.map(p => PART_LABELS[p] || p).join(', ')} from ${b.name}?\n\nYour current files are backed up first, so you can undo this.`)) return;
     act(`restore-${b.name}`, async () => {
-      const r = await api<{ restored: number; safety_backup: string }>(`/api/backups/${encodeURIComponent(b.name)}/restore`, {
+      const r = await api<{ restored: number; safety_backup: string; progress_warning?: string }>(`/api/backups/${encodeURIComponent(b.name)}/restore`, {
         method: 'POST', body: JSON.stringify({ parts: chosen }),
       });
       onRestored?.();
-      return `Restored ${r.restored} files. To undo, restore ${r.safety_backup}.`;
+      return `Restored ${r.restored} files. To undo, restore ${r.safety_backup}.${r.progress_warning ? ` Warning: ${r.progress_warning}` : ''}`;
     });
   };
 
@@ -139,7 +159,7 @@ const BackupsView: React.FC<Props> = ({ onRestored }) => {
           <p className="muted">Saved in <code>{data.folder}</code>. API keys stay encrypted with your config key, which is included so the backup can be restored on a new machine — keep backups private.</p>
           <div className="chip-row">
             {data.parts.map(p => (
-              <button key={p} className={`chip ${parts.includes(p) ? 'active' : ''}`} disabled={p === 'settings'}
+              <button key={p} className={`chip ${parts.includes(p) ? 'active' : ''}`} disabled={p === 'settings' || !!busy}
                 onClick={() => setParts(cur => (cur.includes(p) ? cur.filter(x => x !== p) : [...cur, p]))}>
                 {parts.includes(p) ? '✓ ' : ''}{PART_LABELS[p] || p}
               </button>
@@ -147,8 +167,14 @@ const BackupsView: React.FC<Props> = ({ onRestored }) => {
           </div>
           <div className="field-row">
             <input className="field-input" placeholder="Note (optional), e.g. before trying a new model" value={note} onChange={e => setNote(e.target.value)} />
-            <button className="primary-btn" onClick={create} disabled={busy === 'create'}>{busy === 'create' ? 'Backing up…' : 'Create backup'}</button>
+            <button className="primary-btn" onClick={create} disabled={!!busy}>{busy === 'create' ? 'Backing up…' : 'Create backup'}</button>
           </div>
+          {process?.id && (
+            <>
+              <div className="muted small">{process.action}: {process.status}. Optional parts can be skipped using the chips before starting; safety steps cannot be skipped.</div>
+              <ProcessProgress steps={process.steps} events={process.events} error={process.error} />
+            </>
+          )}
         </div>
 
         <div className="settings-card">

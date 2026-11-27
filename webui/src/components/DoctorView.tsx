@@ -5,6 +5,7 @@ import ProposalsPanel from './ProposalsPanel';
 import DoctorLogs from './DoctorLogs';
 import { AskAI } from './DoctorAI';
 import { explainKey, useExplanations } from '../doctorAi';
+import UpdatesView from './UpdatesView';
 
 // Same checks as `zensynora doctor` (myclaw/doctor/checks.py).
 interface CheckResult {
@@ -34,7 +35,7 @@ const DoctorView: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fixNote, setFixNote] = useState<string[] | null>(null);
-  const [tab, setTab] = useState<'checks' | 'report' | 'logs'>('checks');
+  const [tab, setTab] = useState<'checks' | 'report' | 'logs' | 'repair'>('checks');
   const [explained, reloadExplained] = useExplanations();
 
   const run = useCallback(async () => {
@@ -73,9 +74,11 @@ const DoctorView: React.FC = () => {
         <button className={`settings-tab ${tab === 'checks' ? 'active' : ''}`} onClick={() => setTab('checks')}>Checks</button>
         <button className={`settings-tab ${tab === 'report' ? 'active' : ''}`} onClick={() => setTab('report')}>Report</button>
         <button className={`settings-tab ${tab === 'logs' ? 'active' : ''}`} onClick={() => setTab('logs')}>Logs</button>
+        <button className={`settings-tab ${tab === 'repair' ? 'active' : ''}`} onClick={() => setTab('repair')}>Repair installation</button>
       </div>
       {tab === 'report' && <div className="settings-body"><DoctorReport /></div>}
       {tab === 'logs' && <div className="settings-body"><DoctorLogs /></div>}
+      {tab === 'repair' && <UpdatesView repair />}
       {tab === 'checks' && <div className="settings-body">
         <div className="settings-card">
           <h3>

@@ -18,6 +18,7 @@ def home(tmp_path, monkeypatch):
     from myclaw.web import settings_api
 
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     (tmp_path / ".myclaw").mkdir()
     cfg_file = tmp_path / ".myclaw" / "config.json"
     monkeypatch.setattr(cfg_mod, "CONFIG_FILE", cfg_file)
@@ -172,6 +173,20 @@ def test_check_reads_the_updater_json(upd, monkeypatch):
     assert "no network" in c.get("/api/update/status?check=true").json()["check_error"]
 
 
+def test_interactive_update_passes_only_optional_controls_to_updater(upd):
+    c, base, update_api = upd
+    assert c.post("/api/update/start", json={"app_backup": "unsafe"}).status_code == 422
+    result = c.post("/api/update/start", json={"interactive": True, "app_backup": "none"})
+    assert result.status_code == 200, result.text
+    state = update_api._read_state()
+    control = Path(state["control_dir"])
+    assert control.is_dir() and control.parent == base / "logs"
+    done = _wait_done(c)
+    assert done["finished_ok"]
+    assert "--app-backup none --interactive --control-dir" in done["tail"]
+    assert "--skip-data" not in done["tail"]
+
+
 def test_restart_is_refused_outside_webui_and_during_an_update(upd, monkeypatch):
     c, _, update_api = upd
     execs = []
@@ -198,3 +213,80 @@ def test_already_up_to_date_counts_as_success(tmp_path):
     log = tmp_path / "u.log"
     log.write_text("[1/14] Checking\n[2/14] Getting the new version\n✔ Already on 0.7.4. Use --force to reinstall it.\n")
     assert _progress(str(log))["result"] == "Already on 0.7.4"
+
+
+def test_web_decision_drives_real_optional_pipeline_and_rejects_stale_requests(home, monkeypatch):
+    import os
+    from updater.layout import Layout, State
+    from updater.pipeline import Context, Options, Step, run_pipeline
+    from updater.progress import PREFIX, capture
+    from myclaw.web import update_api
+    from myclaw.web.api import app
+
+    monkeypatch.setattr(update_api, "install_base", lambda: home)
+    monkeypatch.setattr(update_api, "_proc", None)
+    monkeypatch.setattr(update_api, "_pid_alive", lambda pid: pid == os.getpid())
+    control = home / "decisions"
+    control.mkdir()
+    log = home / "update.log"
+    log.write_text("")
+    update_api._write_state({"pid": os.getpid(), "log": str(log), "control_dir": str(control)})
+    client = TestClient(app)
+
+    class Optional(Step):
+        name = "program-backup"
+        description = "Optional program archive"
+        skippable = True
+
+        def run(self, ctx):
+            raise AssertionError("The skipped step must not run")
+
+    def record(event):
+        with log.open("a", encoding="utf-8") as fh:
+            fh.write(PREFIX + json.dumps(event) + "\n")
+        if event["status"] == "waiting":
+            stale = client.post("/api/update/decision", json={"request": "0" * 32, "action": "skip"})
+            assert stale.status_code == 409
+            body = {"request": event["request"], "action": "skip"}
+            assert TestClient(app, headers={}).post("/api/update/decision", json=body).status_code == 403
+            assert client.post("/api/update/decision", json=body).status_code == 200
+            assert client.post("/api/update/decision", json=body).status_code == 409
+
+    layout = Layout(base=home / "base", data_dir=home / ".myclaw")
+    ctx = Context(layout, State.load(layout.state_file), Options(interactive=True, control_dir=str(control)), "test")
+    with capture(record):
+        run_pipeline([Optional()], ctx)
+    result = client.get("/api/update/status").json()
+    assert result["waiting"] is None
+    assert result["process_steps"]["program-backup"]["status"] == "skipped"
+    assert [e["status"] for e in result["events"]] == ["waiting", "skipped"]
+    assert not list(control.iterdir())
+
+
+def test_doctor_reinstall_requires_approval_and_preserves_safe_updater_options(home, monkeypatch):
+    from myclaw.web import update_api
+    from myclaw.web.api import app
+
+    calls = []
+    monkeypatch.setattr(update_api, "_spawn", lambda action, args: calls.append((action, args)) or {"ok": True})
+    c = TestClient(app)
+    assert c.post("/api/doctor/reinstall", json={}).status_code == 400
+    assert TestClient(app, headers={}).post("/api/doctor/reinstall", json={"confirmed": True}).status_code == 403
+    assert c.post("/api/doctor/reinstall", json={"confirmed": True, "ref": "main;evil"}).status_code == 400
+    assert not calls
+    assert c.post("/api/doctor/reinstall", json={"confirmed": True, "ref": "release/test"}).status_code == 200
+    assert calls == [("update", ["--ref", "release/test", "--force"])]
+
+
+def test_structured_progress_is_bounded_and_redacted(home):
+    from updater.progress import PREFIX
+    from myclaw.web.update_api import _progress
+
+    log = home / "update.log"
+    log.write_text("\n".join(PREFIX + json.dumps({
+        "step": "build", "status": "detail", "text": "api_key=sk-secret-value", "at": i,
+    }) for i in range(600)), encoding="utf-8")
+    result = _progress(str(log))
+    assert len(result["events"]) == 500
+    assert result["events"][0]["at"] == 100
+    assert "sk-secret-value" not in json.dumps(result)

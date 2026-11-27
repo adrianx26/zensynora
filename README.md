@@ -9,9 +9,9 @@ your conversations, builds a personal knowledge base, uses 121 tools, and can
 split work across teams of agents — with a local model like llama.cpp or
 Ollama, or any major cloud provider.
 
-[![Version](https://img.shields.io/badge/version-0.8.4-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.5-blue.svg)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/python-3.11%E2%80%933.14-blue.svg)](#requirements)
-[![Tests](https://img.shields.io/badge/tests-1128-brightgreen.svg)](#development)
+[![Tests](https://img.shields.io/badge/tests-1937-brightgreen.svg)](#development)
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-green.svg)](LICENSE)
 
 [Quick start](#quick-start) · [Using it](#using-zensynora) · [Updating](#updating-and-health) ·
@@ -46,7 +46,8 @@ Ollama, or any major cloud provider.
 - **Runs jobs.** Scheduled or on-demand tasks with history, scoring and
   model benchmarks — created by you or by the agents themselves.
 - **Safe to run and to change.** Backups of settings, API keys and knowledge;
-  updates that back up the whole install and roll back on failure; agents
+  detailed, colored maintenance logs; updates with mandatory data backup,
+  optional program archives and rollback outcomes; agents
   can propose fixes to their own code — installed only when you approve.
 
 ## Quick start
@@ -157,6 +158,7 @@ re-index). Everything:
 zensynora update                  # newest version from GitHub
 zensynora update status --check   # installed vs. latest
 zensynora update rollback         # back to the previous version
+zensynora update --interactive    # continue / skip / abort optional steps
 zensynora doctor --fix            # check everything, repair safe issues
 ```
 
@@ -166,15 +168,24 @@ After a terminal update, click *Restart now* in the Web UI banner (or restart
 `zensynora webui`); a terminal opened before the update switches to the new
 version by itself.
 
-Updates never overwrite a working install. Your data **and the whole
-installed program folder** are backed up first; the new version is built
+Updates never overwrite a working install. Your data is backed up first;
+the **whole installed program folder** is backed up by default (full,
+code-only or skipped). The new version is built
 next to the current one, checked against **your** configuration and switched
 in atomically; settings, API keys and knowledge are verified afterwards. Any
-failure restores the previous install exactly as it was. Details:
+failure triggers rollback, with explicit recovery outcomes. Detailed,
+colored step logs show timestamps, file counts, durations and failures.
+Optional update steps can pause for Continue, Skip or Abort; required
+data safety and verification cannot be skipped. Details:
 [docs/UPDATING.md](docs/UPDATING.md).
 
 For your own backups use the Web UI **Backups** page (manual or automatic)
-or `zensynora backup create`.
+or `zensynora backup create --interactive`. Choose optional parts before
+starting a backup or restore; verified safety backups remain mandatory.
+
+**Doctor → Repair installation** offers a confirmed GitHub reinstall
+even at the same version. It replaces application code while preserving
+your settings, credentials, notes and conversations.
 
 The doctor checks packages and provider libraries, your settings, the model
 server and model, databases, permissions, code integrity and recent errors —
@@ -244,6 +255,11 @@ flowchart LR
     agent <--> agent2["other agents<br/>delegation · swarms"]
     jobs["Jobs<br/>schedule · score · bench"] --> agent
     ops["doctor · medic · updater"] -.-> agent & state
+    ops --> maintenance["Modular backup / restore / update<br/>colored step outcomes · optional decisions"]
+    maintenance <--> progress[("Private progress + updater logs")]
+    user["You approve GitHub reinstall<br/>or Continue / Skip / Abort"] --> maintenance
+    maintenance --> safety["Mandatory data backup<br/>checksums · recovery journal"]
+    safety --> state
     agent -. proposals .-> ops
 ```
 
@@ -253,7 +269,7 @@ flowchart LR
 | Chat channels, agent-to-agent events | `myclaw/chat/`, `myclaw/events.py`, `myclaw/web/chat_api.py` |
 | Telegram bot (in the Web UI or `zensynora gateway`) | `myclaw/channels/telegram.py`, `myclaw/web/telegram_api.py`, `myclaw/gateway.py` |
 | Jobs (schedule, evaluate, benchmark) | `myclaw/jobs/`, `myclaw/web/jobs_api.py` |
-| Backups | `myclaw/backup.py`, `myclaw/web/backup_api.py` |
+| Backups and restore progress | `myclaw/backup.py`, `myclaw/maintenance.py`, `myclaw/web/backup_api.py` |
 | LLM providers, fallback, circuit breaker | `myclaw/provider.py`, `myclaw/offline.py`, `myclaw/resilience/` |
 | Model health, fallback order, replacing a model in all agents | `myclaw/model_health.py`, `myclaw/llm_errors.py` |
 | Tools | `myclaw/tools/` |
@@ -261,7 +277,7 @@ flowchart LR
 | Swarms and agent profiles | `myclaw/swarm/`, `myclaw/agents/data/agents.yaml` |
 | Web UI backend / front end | `myclaw/web/`, `webui/` |
 | Doctor, medic and self-update proposals | `myclaw/doctor/`, `myclaw/agents/medic_agent.py`, `myclaw/selfupdate.py` |
-| Safe updater | `updater/`, `update.sh` |
+| Safe updater and optional-step decisions | `updater/`, `update.sh`, `myclaw/web/update_api.py` |
 
 Diagrams of every major flow: [docs/architecture_diagram.md](docs/architecture_diagram.md) ·
 module reference: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -293,6 +309,9 @@ is not required by the app, installer, CI, updater, or Docker image.
 Where to add a tool, a health check, a data migration or a web page:
 [CONTRIBUTING.md](CONTRIBUTING.md). Release notes: [CHANGELOG.md](CHANGELOG.md).
 All documentation: [docs/README.md](docs/README.md).
+
+The current test inventory contains **1,937 collected cases**
+(`pytest --collect-only -q -o addopts=""`); collection is not a full test run.
 
 ## License
 

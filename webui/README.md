@@ -1,8 +1,8 @@
 # ZenSynora Web UI
 
-> Replaces the Vite template README (2026-10-13). **v0.7.1:** chat channels with
-> several agents, Models, Jobs and Backups pages, change proposals on the
-> Doctor page. User guide: [docs/webui_guide.md](../docs/webui_guide.md).
+> **Current release: v0.8.5 · Updated 2026-11-27.** Colored maintenance
+> progress, optional update decisions and confirmed Doctor GitHub reinstall.
+> User guide: [docs/webui_guide.md](../docs/webui_guide.md).
 
 React 19 + TypeScript + Vite front end for ZenSynora. The production build in
 `dist/` is served by the Python backend (`myclaw/web/api.py`) on the same
@@ -18,11 +18,12 @@ zensynora webui            # http://localhost:8000
 |---|---|---|
 | Chat — channels, direct messages, @mentions, agent-to-agent activity | `src/components/ChatView.tsx` (+ sidebar in `src/App.tsx`) | `/api/channels…`, WebSocket `/ws/channels/{id}`, `/api/activity` |
 | Models — default model, rotation, your own providers | `src/components/ModelsView.tsx` | `/api/models`, `/api/models/default`, `/api/models/rotate`, `/api/settings` |
-| Jobs — add, run, monitor, evaluate, benchmark | `src/components/JobsView.tsx` | `/api/jobs…` |
-| Backups — create, check, restore, download, import, automatic | `src/components/BackupsView.tsx` | `/api/backups…` |
+| Jobs — add, run, monitor, evaluate, benchmark, opt-in insights and reviewed Medic report export | `src/components/JobsView.tsx` | `/api/jobs…` |
+| Backups — create, check, restore, automatic, detailed progress | `src/components/BackupsView.tsx`, `src/components/ProcessProgress.tsx` | `/api/backups…`, `GET /api/backups/process` |
+| Updates — detailed step/rollback outcomes, optional Continue/Skip/Abort, restart | `src/components/UpdatesView.tsx`, `src/components/ProcessProgress.tsx` | `/api/update/status`, `/api/update/start`, `/api/update/decision` |
 | Settings — providers, agents (✨ generate prompt), channels, features, security | `src/components/SettingsView.tsx` | `GET/PUT /api/settings`, `POST /api/settings/probe`, `POST /api/agents/generate-prompt` |
 | Customize — profiles (style, structure, behaviour, tools off), who uses what, Telegram answering agent / team, agents' proposals, AI review / adapt, built-in features | `src/components/CustomizeView.tsx` (Built-in features: `SettingsView only="Features"`) | `/api/customize…`, `PUT /api/settings` (Telegram) |
-| Doctor — health checks, safe fixes, change proposals, lessons | `src/components/DoctorView.tsx`, `src/components/ProposalsPanel.tsx` | `/api/system/doctor…`, `/api/medic/…` |
+| Doctor — checks, reports, logs, confirmed GitHub reinstall, proposals | `src/components/DoctorView.tsx`, `src/components/UpdatesView.tsx`, `src/components/ProposalsPanel.tsx` | `/api/system/doctor…`, `/api/medic/…`, `POST /api/doctor/reinstall` |
 | Costs & usage | `src/components/CostDashboard.tsx` | `/api/v1/costs/*` |
 | Tools | `src/components/ToolsView.tsx` | `GET /api/tools` |
 | Sidebar health | `src/App.tsx` | `GET /api/system/health` (every 15 s) |
@@ -37,6 +38,12 @@ socket `/ws/chat/{agent}` still works for scripts.
 Settings, Models, Jobs, Backups, Doctor, Costs, deleting channels and history
 clearing are answered only for requests from the same computer, or with the admin API key (`X-API-Key`; the UI asks
 for it when needed). Secrets are never sent to the browser.
+
+Maintenance colors use the root CSS success/danger/accent variables and the
+existing amber warning color, with text labels as well as color. Backup/restore
+parts are selected before starting; only explicitly optional updater steps
+can pause. User-data backup, verification and restore recovery cannot be skipped.
+Doctor reinstall and optional-step decisions require the guarded UI header.
 
 ## Development
 

@@ -25,7 +25,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">Architecture</h2>
-  
+
   <div class="mermaid">flowchart LR
     ui[&quot;Web UI · terminal · Telegram · WhatsApp · MCP&quot;] --&gt; agent[&quot;Agents&lt;br/&gt;router · context · tools&quot;]
     agent --&gt; llm[&quot;LLM providers&lt;br/&gt;local or cloud&quot;]
@@ -34,6 +34,11 @@
     agent &lt;--&gt; agent2[&quot;other agents&lt;br/&gt;delegation · swarms&quot;]
     jobs[&quot;Jobs&lt;br/&gt;schedule · score · bench&quot;] --&gt; agent
     ops[&quot;doctor · medic · updater&quot;] -.-&gt; agent &amp; state
+    ops --&gt; maintenance[&quot;Modular backup / restore / update&lt;br/&gt;colored step outcomes · optional decisions&quot;]
+    maintenance &lt;--&gt; progress[(&quot;Private progress + updater logs&quot;)]
+    user[&quot;You approve GitHub reinstall&lt;br/&gt;or Continue / Skip / Abort&quot;] --&gt; maintenance
+    maintenance --&gt; safety[&quot;Mandatory data backup&lt;br/&gt;checksums · recovery journal&quot;]
+    safety --&gt; state
     agent -. proposals .-&gt; ops</div>
 </div>
 

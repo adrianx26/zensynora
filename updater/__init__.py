@@ -26,7 +26,8 @@ itself, so a failure at any point leaves the previous working release active.
 #   found (the Web UI was silently not rebuilt), checks Python venv/pip first.
 # 4 (2026-10-24): optional packages the user added are re-installed with the
 #   version range of the new release's extras (pyproject), e.g. fastembed.
-UPDATER_PROTOCOL = 4
+# 5: detailed step outcomes and opt-in user decisions for optional steps.
+UPDATER_PROTOCOL = 5
 
 DEFAULT_REPO = "adrianx26/zensynora"
 DEFAULT_REF = "main"

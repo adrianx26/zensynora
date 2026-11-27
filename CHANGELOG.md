@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.5] - 2026-11-27
+
 ### Added
 
 - Job insights: an opt-in per-job *Prior runs context* setting (0–20, default 0) lets a
@@ -23,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   back to the deterministic text. Existing note content is preserved, run text is
   credential/PII-scrubbed, and writes go through the shared validation,
   pending-index and write-budget path.
+- Detailed backup, restore and update progress: named stages, timestamps,
+  file counts, durations and colored text outcomes in the Web UI and terminal.
+- Interactive optional-part selection for terminal backup/restore; update
+  Continue / Skip / Abort decisions for the optional program-folder archive.
+  Mandatory user-data backup, verification and recovery remain enforced.
+- Doctor's approved GitHub reinstall replaces application code through the
+  safe updater while preserving user data, even at the same version.
+- Reviewed Medic investigation reports for GitHub, with privacy-filtered
+  per-tool timestamps, outcomes and durations; no automatic upload.
 
 ### Changed
 
@@ -58,6 +69,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `graphify-out/` data and historical graph snapshots are ignored instead of
   committed, and the OpenCode reminder plugin was removed; runtime, installer,
   updater, Docker, and CI workflows do not depend on Graphify.
+- Updater protocol 5 records structured step and rollback outcomes, preserves
+  interactive options across handoff, and keeps optional decisions one-use.
+- Release metadata, current Markdown references and generated architecture
+  diagrams are synchronized for 0.8.5.
+
+### Fixed
+
+- New execution leases use process-held locks so PID reuse cannot keep idle
+  installations falsely blocked from backup; legacy leases remain conservative.
+  Manual errors distinguish pending fusions from active work, and automatic
+  backups retry with deduplicated warnings.
+- Backup archives are created privately, checksum-verified before publication,
+  and partial archives are removed on failure. Verification streams file hashes.
+- Restore progress-storage failures no longer turn a completed restore into an
+  API error or prevent the post-restore reload hook; an explicit warning is
+  returned and stale progress is not shown as indefinitely running.
+- Updater handoff is recorded as a successful transfer rather than a failure;
+  failed rollback is surfaced instead of claiming recovery succeeded.
+- Provider connection tests allow slower LAN FreeToken servers and explain
+  connection timeout/refusal and bind-address fixes. They wait 15 seconds
+  to connect, 10 seconds for an answer, and retry once. For remote FreeToken,
+  use `ft serve --host 0.0.0.0` and the real port; the setup link points to
+  the official FlashML-org/FreeToken repository.
 
 ## [0.8.4] - 2026-11-19
 
@@ -83,19 +117,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reviewable and recoverable through the merge journal.
 - Added the bounded local decision-model fallback and readiness controls for
   knowledge recall and evidence-ranked distillation proposals.
-
-## [Unreleased — FreeToken connection test]
-
-- The connection test of a provider (Settings → Providers → Test) waited 6 s
-  with one attempt, while chat waits 60 s and retries a connection error. A
-  FreeToken server on the LAN that was slow to answer worked in chat and failed
-  the test ("Cannot reach …: ConnectTimeout"). The test now waits 15 s to connect,
-  10 s to answer, and retries once.
-- The error now says what to do: no answer (off, asleep, firewall, or the server
-  only on 127.0.0.1); refused (not running or wrong port); for FreeToken on
-  another computer, `ft serve --host 0.0.0.0` (its default is 127.0.0.1).
-- The "Setup / docs" link for FreeToken points to the official repository
-  (FlashML-org/FreeToken).
 
 ## [0.8.2] - 2026-11-12
 
@@ -2987,6 +3008,6 @@ A comprehensive code optimization initiative implementing 21 performance, reliab
 
 ---
 
-[Unreleased]: https://github.com/adrianx26/zensynora/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/adrianx26/zensynora/compare/v0.8.5...HEAD
 [0.1.0]: https://github.com/adrianx26/zensynora/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/adrianx26/zensynora/releases/tag/v0.0.1

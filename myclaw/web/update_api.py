@@ -3,6 +3,7 @@
 GET  /api/update/status?check=true   versions (installed / running / latest),
                                      progress of a running update, history
 POST /api/update/start {ref}         run the safe updater in the background
+POST /api/update/decision            continue/skip/abort the waiting optional step
 POST /api/update/rollback            back to the previous version
 POST /api/update/restart             restart this server with the installed version
 
@@ -17,6 +18,7 @@ has to find the right terminal.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -27,13 +29,18 @@ import threading
 import time
 from pathlib import Path
 from typing import Any, Dict, Optional
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
+from updater.progress import PREFIX
 
 from myclaw import activity
 from myclaw.doctor.paths import active_release, install_base, install_root, release_version, stale_release
 from myclaw.web.settings_api import guard
+from myclaw.web.settings_api import ui_guard
+from myclaw.config_encryption import _atomic_write
+from myclaw.doctor.logscan import redact
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -41,6 +48,20 @@ router = APIRouter()
 _STEP = re.compile(r"^\[(\d+)/(\d+)\]\s+(.*)$")
 _DONE = re.compile(r"✔ (Updated|Rolled back|Already on) (.*?)(?:\. Use --force.*)?$")
 _proc: Optional[subprocess.Popen] = None
+_bad_progress_logs: set[str] = set()
+
+
+class ProcessEvent(BaseModel):
+    model_config = ConfigDict(extra="allow", allow_inf_nan=False)
+    step: str
+    status: Literal["running", "ok", "failed", "skipped", "waiting", "detail",
+                    "rollback-running", "rolled-back", "rollback-failed"]
+    text: str
+    at: float
+    seconds: float | None = None
+    index: int | None = None
+    total: int | None = None
+    request: str | None = None
 
 
 def _state_file() -> Optional[Path]:
@@ -88,16 +109,15 @@ def _pid_alive(pid: Optional[int]) -> bool:
         return False
     if _proc is not None and _proc.pid == pid:
         return _proc.poll() is None
-    try:
-        os.kill(pid, 0)
-    except OSError:
-        return False
-    return True
+    import psutil
+
+    return psutil.pid_exists(pid)
 
 
 def _progress(log: Optional[str]) -> Dict[str, Any]:
     """Current step, result and tail from an updater log."""
-    out: Dict[str, Any] = {"step": None, "steps": None, "step_text": "", "result": None, "tail": ""}
+    out: Dict[str, Any] = {"step": None, "steps": None, "step_text": "", "result": None, "tail": "",
+                           "process_steps": {}, "events": [], "waiting": None}
     if not log or not Path(log).exists():
         return out
     try:
@@ -106,13 +126,30 @@ def _progress(log: Optional[str]) -> Dict[str, Any]:
         return out
     for line in text.splitlines():
         line = line.strip()
+        if line.startswith(PREFIX):
+            try:
+                event = ProcessEvent.model_validate_json(line[len(PREFIX):]).model_dump(exclude_none=True)
+            except ValueError:
+                if log not in _bad_progress_logs:
+                    logger.warning("Invalid maintenance progress event in %s; check the updater log for details.", log)
+                    _bad_progress_logs.add(log)
+                continue
+            event["text"] = redact(str(event["text"]))[:1000]
+            out["events"] = [*out["events"][-499:], event]
+            if event["status"] != "detail":
+                out["process_steps"][event["step"]] = event
+            if event["status"] == "waiting":
+                out["waiting"] = event
+            elif out["waiting"] and out["waiting"]["step"] == event["step"]:
+                out["waiting"] = None
+            continue
         m = _STEP.match(line)
         if m:
             out.update(step=int(m.group(1)), steps=int(m.group(2)), step_text=m.group(3))
         d = _DONE.search(line)
         if d:
             out["result"] = f"{d.group(1)} {d.group(2)}"
-    out["tail"] = "\n".join(text.splitlines()[-25:])
+    out["tail"] = redact("\n".join(line for line in text.splitlines()[-100:] if not line.startswith(PREFIX)))
     return out
 
 
@@ -170,6 +207,8 @@ async def update_status(check: bool = False):
 class StartIn(BaseModel):
     ref: str = "main"
     force: bool = False  # reinstall even when the version is the same (repair)
+    app_backup: Literal["full", "code", "none"] = "full"
+    interactive: bool = False
 
 
 @activity.recorded("update", lambda action, args: f"{action} started")
@@ -185,6 +224,13 @@ def _spawn(action: str, args: list) -> Dict[str, Any]:
     (base / "logs").mkdir(parents=True, exist_ok=True)
     log = base / "logs" / f"webui-{action}-{time.strftime('%Y%m%dT%H%M%S')}.log"
     cmd = ["bash", str(install_root() / "update.sh"), action, "--base", str(base), *args]
+    control = None
+    if "--interactive" in args:
+        import uuid
+
+        control = base / "logs" / f"decisions-{uuid.uuid4().hex}"
+        control.mkdir(mode=0o700)
+        cmd += ["--control-dir", str(control)]
     fh = open(log, "w", encoding="utf-8")
     fh.write("$ " + " ".join(cmd) + "\n")
     fh.flush()
@@ -192,7 +238,8 @@ def _spawn(action: str, args: list) -> Dict[str, Any]:
     _proc = subprocess.Popen(cmd, stdout=fh, stderr=subprocess.STDOUT, cwd="/", env=_clean_env(),
                              start_new_session=True)
     fh.close()
-    _write_state({"pid": _proc.pid, "action": action, "log": str(log), "started": time.time()})
+    _write_state({"pid": _proc.pid, "action": action, "log": str(log), "started": time.time(),
+                  "control_dir": str(control) if control else None})
 
     def _wait(p=_proc):
         code = p.wait()
@@ -213,7 +260,33 @@ async def start_update(body: StartIn = StartIn()):
     args = [] if ref == "main" else ["--ref", ref]
     if body.force:
         args.append("--force")
+    if body.app_backup != "full":
+        args += ["--app-backup", body.app_backup]
+    if body.interactive:
+        args.append("--interactive")
     return _spawn("update", args)
+
+
+class DecisionIn(BaseModel):
+    request: str
+    action: Literal["continue", "skip", "abort"]
+
+
+@router.post("/api/update/decision", dependencies=ui_guard)
+async def decide(body: DecisionIn):
+    state = _read_state()
+    waiting = _progress(state.get("log")).get("waiting")
+    if (not _pid_alive(state.get("pid")) or not state.get("control_dir")
+            or not waiting or waiting.get("request") != body.request):
+        raise HTTPException(status_code=409, detail="This optional step is no longer waiting for a decision.")
+    if not re.fullmatch(r"[0-9a-f]{32}", body.request):
+        raise HTTPException(status_code=400, detail="Invalid decision request.")
+    path = Path(state["control_dir"]) / f"{body.request}.json"
+    if path.exists():
+        raise HTTPException(status_code=409, detail="A decision has already been submitted; wait for the next step.")
+    # No await between checking and writing: decisions are serialized by this event loop.
+    _atomic_write(path, json.dumps({"action": body.action}))
+    return {"ok": True}
 
 
 @router.post("/api/update/rollback", dependencies=guard)

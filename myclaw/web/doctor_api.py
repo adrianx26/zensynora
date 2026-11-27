@@ -31,8 +31,24 @@ from pydantic import BaseModel, Field
 
 from myclaw.doctor import report as _report
 from myclaw.web.settings_api import guard
+from myclaw.web.settings_api import ui_guard
 
 router = APIRouter()
+
+
+class ReinstallIn(BaseModel):
+    ref: str = Field("main", max_length=100)
+    confirmed: bool = False
+
+
+@router.post("/api/doctor/reinstall", dependencies=ui_guard)
+async def reinstall(body: ReinstallIn):
+    """User-approved replacement of application code, never of the user's data."""
+    from myclaw.web.update_api import StartIn, start_update
+
+    if not body.confirmed:
+        raise HTTPException(status_code=400, detail="Confirm reinstalling application code; user data is preserved.")
+    return await start_update(StartIn(ref=body.ref, force=True))
 
 _LEVELS = {"WARNING", "ERROR", "CRITICAL"}
 

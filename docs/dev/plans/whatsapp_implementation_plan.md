@@ -15,7 +15,7 @@ flowchart TD
     C -->|Parse payload| D[WhatsAppChannel._handle_webhook]
     D -->|Text message| E{Command or Agent?}
     E -->|/command| F[Command Handler]
-    E -->|@agent or plain text| G[Agent Router]
+    E -->|"@agent or plain text"| G[Agent Router]
     G -->|agent.think| H[MyClaw Agent]
     H -->|Response| I[WhatsApp Cloud API - Send Message]
     I -->|Delivered| A

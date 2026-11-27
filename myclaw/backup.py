@@ -59,6 +59,8 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
+from updater.progress import detail, emit, stage
+
 from . import activity
 
 logger = logging.getLogger(__name__)
@@ -183,19 +185,20 @@ def create_backup(parts: list[str] | None = None, label: str = "manual", note: s
     from .executions import active_for
 
     with _lifecycle_guard():
-        pending = pending_fusions()
-        if pending:
-            raise ValueError(
-                f"Cannot back up: recover pending fusions first (operation {pending[0]['id']}) "
-                "using /api/evolve/fuse/resume."
-            )
-        if active_for(None):
-            raise ValueError(
-                "Cannot back up while agent turns, jobs or background work are running. "
-                "Wait for them to finish; cancelled work may require restarting its process. "
-                "If this persists after restarting all ZenSynora processes, see the Backups guide "
-                "for safe execution-lease recovery."
-            )
+        with stage("backup-safety", "Checking lifecycle, running agents and pending fusions"):
+            pending = pending_fusions()
+            if pending:
+                raise ValueError(
+                    f"Cannot back up: recover pending fusions first (operation {pending[0]['id']}) "
+                    "using /api/evolve/fuse/resume."
+                )
+            if active_for(None):
+                raise ValueError(
+                    "Cannot back up while agent turns, jobs or background work are running. "
+                    "Wait for them to finish; cancelled work may require restarting its process. "
+                    "If this persists after restarting all ZenSynora processes, see the Backups guide "
+                    "for safe execution-lease recovery."
+                )
         return _recorded_create_backup(parts, label, note, dest, cfg)
 
 
@@ -234,22 +237,13 @@ def _create_backup_locked(parts: list[str] | None = None, label: str = "manual",
 
     files: dict[str, dict[str, Any]] = {}
     with tempfile.TemporaryDirectory(prefix="zs-backup-") as tmp:
-        stage = Path(tmp) / "data"
-        stage.mkdir()
-        for part in parts:
-            for entry in _matches(src_root, _PART_PATTERNS[part]):
-                for f in _walk(entry):
-                    rel = f.relative_to(src_root).as_posix()
-                    out = stage / rel
-                    out.parent.mkdir(parents=True, exist_ok=True)
-                    try:
-                        if f.suffix == ".db" and _is_sqlite(f):
-                            _snapshot_sqlite(f, out)
-                        else:
-                            shutil.copy2(f, out)
-                    except (OSError, sqlite3.Error) as e:
-                        raise OSError(f"Cannot back up {rel}; no backup was created: {e}") from e
-                    files[f"data/{rel}"] = {"part": part, "bytes": out.stat().st_size, "sha256": _sha256(out)}
+        staged_data = Path(tmp) / "data"
+        staged_data.mkdir()
+        for part in PARTS:
+            if part not in parts:
+                emit(f"backup-{part}", "skipped", f"{part}: not selected by the user/settings")
+                continue
+            _snapshot_part(src_root, staged_data, part, files)
         env = install_root() / ".env"
         if "settings" in parts and env.is_file():
             (Path(tmp) / "install").mkdir()
@@ -263,17 +257,48 @@ def _create_backup_locked(parts: list[str] | None = None, label: str = "manual",
             "parts": parts, "host": os.uname().nodename if hasattr(os, "uname") else "",
             "files": files,
         }
-        (Path(tmp) / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-        partial = target.with_suffix(".partial")
-        with tarfile.open(partial, "w:gz") as tar:
-            tar.add(Path(tmp) / "manifest.json", arcname="manifest.json")
-            for sub in ("data", "install"):
-                if (Path(tmp) / sub).exists():
-                    tar.add(Path(tmp) / sub, arcname=sub)
-        os.chmod(partial, 0o600)
-        os.replace(partial, target)
+        with stage("backup-manifest", "Writing file inventory and SHA-256 checksums"):
+            (Path(tmp) / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+        partial = target.with_suffix(f".{uuid.uuid4().hex}.partial")
+        try:
+            with stage("backup-archive", "Compressing staged files into a private archive"):
+                fd = os.open(partial, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+                with os.fdopen(fd, "wb") as archive, tarfile.open(fileobj=archive, mode="w:gz") as tar:
+                    tar.add(Path(tmp) / "manifest.json", arcname="manifest.json")
+                    for sub in ("data", "install"):
+                        if (Path(tmp) / sub).exists():
+                            tar.add(Path(tmp) / sub, arcname=sub)
+            with stage("backup-verify", "Verifying every archived file before publication"):
+                ok, problems = verify_backup(partial)
+                if not ok:
+                    raise ValueError("Backup verification failed: " + "; ".join(problems[:3]))
+            with stage("backup-publish", "Publishing the verified backup"):
+                os.replace(partial, target)
+        finally:
+            partial.unlink(missing_ok=True)
     logger.info("Backup written: %s (%d files)", target, len(files))
     return _info(target)
+
+
+def _snapshot_part(root: Path, target: Path, part: str, files: dict[str, dict[str, Any]]) -> None:
+    with stage(f"backup-{part}", f"Snapshotting {part} (live SQLite databases use online backup)"):
+        count = 0
+        for entry in _matches(root, _PART_PATTERNS[part]):
+            for src in _walk(entry):
+                rel = src.relative_to(root).as_posix()
+                dst = target / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    if src.suffix == ".db" and _is_sqlite(src):
+                        _snapshot_sqlite(src, dst)
+                    else:
+                        shutil.copy2(src, dst)
+                except (OSError, sqlite3.Error) as exc:
+                    raise OSError(f"Cannot back up {rel}; no backup was created: {exc}") from exc
+                files[f"data/{rel}"] = {"part": part, "bytes": dst.stat().st_size, "sha256": _sha256(dst)}
+                count += 1
+                detail(f"{part}: copied and checksummed {count} files", completed=count)
+        detail(f"{part}: completed {count} files", completed=count)
 
 
 # ── list / inspect ───────────────────────────────────────────────────────────
@@ -330,7 +355,7 @@ def verify_backup(path: Path) -> tuple[bool, list[str]]:
             if not member.isfile() or member.name == "manifest.json":
                 continue
             f = tar.extractfile(member)
-            h = hashlib.sha256(f.read()).hexdigest() if f else ""
+            h = hashlib.file_digest(f, "sha256").hexdigest() if f else ""
             seen.add(member.name)
             if member.name in expected and expected[member.name]["sha256"] != h:
                 problems.append(f"{member.name}: content changed")
@@ -384,6 +409,40 @@ def _trash_restored_file(root: Path, rel: str, src: Path) -> None:
     os.replace(src, dest)
 
 
+def _restore_selected_files(staged: Path, root: Path, wanted: set[str],
+                            manifest: dict[str, Any]) -> list[str]:
+    restored: list[str] = []
+    part_counts: dict[str, int] = {}
+    for rel in sorted(wanted):
+        src = staged / rel
+        if not src.is_file():
+            raise ValueError(f"Staged restore file {rel} is missing; restore the safety backup before retrying.")
+        part = manifest["files"][rel]["part"]
+        if part not in part_counts:
+            part_counts[part] = 0
+            emit(f"restore-{part}", "running", f"Restoring {part}")
+        dst = _restore_destination(rel, root)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if (rel.startswith("data/knowledge/") and dst.suffix.lower() == ".md"
+                and dst.is_file() and _sha256(dst) != manifest["files"][rel]["sha256"]):
+            _trash_restored_file(root, rel, dst)
+        for side in ("-wal", "-shm"):
+            Path(str(dst) + side).unlink(missing_ok=True)
+        tmp_dst = dst.with_name(dst.name + ".restoring")
+        try:
+            shutil.copy2(src, tmp_dst)
+            os.replace(tmp_dst, dst)
+        finally:
+            tmp_dst.unlink(missing_ok=True)
+        restored.append(rel)
+        part_counts[part] += 1
+        emit(f"restore-{part}", "detail", f"Restored {part_counts[part]} {part} files; "
+             f"{len(restored)} of {len(wanted)} total", completed=len(restored), total=len(wanted))
+    for part, count in part_counts.items():
+        emit(f"restore-{part}", "ok", f"Restored {count} {part} files")
+    return restored
+
+
 # ── restore ──────────────────────────────────────────────────────────────────
 def restore_backup(name: str, parts: list[str] | None = None, safety_copy: bool = True,
                    cfg: Any = None) -> dict[str, Any]:
@@ -425,11 +484,13 @@ def restore_backup(name: str, parts: list[str] | None = None, safety_copy: bool 
 
 def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool,
                            cfg: Any, marker: Path, recovering: bool) -> dict[str, Any]:
-    path = resolve(name, cfg)
-    ok, problems = verify_backup(path)
-    if not ok:
-        raise ValueError("The backup is damaged: " + "; ".join(problems[:3]))
-    m = read_manifest(path)
+    with stage("restore-verify", "Checking archive identity and every file checksum"):
+        path = resolve(name, cfg)
+        ok, problems = verify_backup(path)
+        if not ok:
+            raise ValueError("The backup is damaged: " + "; ".join(problems[:3]))
+        m = read_manifest(path)
+    emit("restore-selection", "running", "Validating selected parts and lifecycle dependencies")
     chosen = [p for p in (parts or m.get("parts", [])) if p in m.get("parts", [])]
     if not chosen:
         raise ValueError("Nothing to restore — pick at least one part that the backup contains.")
@@ -450,13 +511,21 @@ def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool
             raise ValueError("A safety backup is required when restoring lifecycle data.")
     if recovering and set(chosen) != set(m.get("parts", [])):
         raise ValueError("Restore every part of the safety backup to finish recovery.")
+    emit("restore-selection", "ok", "Selected parts and lifecycle dependencies are valid")
+    for part in PARTS:
+        if part not in chosen:
+            emit(f"restore-{part}", "skipped", f"{part}: not selected for restore")
     safety = None
     if safety_copy:
-        safety = _create_backup_locked(parts=list(PARTS), label="before-restore", cfg=cfg)["name"]
+        with stage("restore-safety-copy", "Creating a verified safety backup before changing any data"):
+            safety = _create_backup_locked(parts=list(PARTS), label="before-restore", cfg=cfg)["name"]
+    else:
+        emit("restore-safety-copy", "skipped", "Recovering an interrupted restore from its existing safety backup")
     root = data_dir()
     wanted = {k for k, v in m["files"].items() if v.get("part") in chosen}
     from .config_encryption import _atomic_write
 
+    emit("restore-journal", "running", "Recording recovery journal and invalidating stale database connections")
     _atomic_write(root / ".chat-restore-generation", uuid.uuid4().hex)
     if not recovering and safety:
         introduced = [{"path": rel, "sha256": m["files"][rel]["sha256"]} for rel in sorted(wanted)
@@ -473,6 +542,7 @@ def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool
         marker.parent.mkdir(parents=True, exist_ok=True)
         _atomic_write(marker, json.dumps({"safety_backup": safety, "introduced": introduced,
                                          "introduced_dirs": sorted(introduced_dirs)}))
+    emit("restore-journal", "ok", "Recovery journal is ready")
 
     if not recovering and "settings" in chosen and archived_lifecycle:
         for rel in sorted(life_files - set(m["files"])):
@@ -481,7 +551,7 @@ def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool
                 _trash_restored_file(root, rel, old)
     restored: list[str] = []
     with tempfile.TemporaryDirectory(prefix="zs-restore-") as tmp:
-        with tarfile.open(path, "r:gz") as tar:
+        with stage("restore-extract", "Extracting selected files into temporary staging"), tarfile.open(path, "r:gz") as tar:
             members = [mb for mb in tar.getmembers() if mb.name in wanted and mb.isfile()]
             try:
                 tar.extractall(tmp, members=members, filter="data")
@@ -490,24 +560,9 @@ def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool
                     if mb.name.startswith("/") or ".." in Path(mb.name).parts:
                         raise ValueError(f"Unsafe path in backup: {mb.name}")
                 tar.extractall(tmp, members=members)
-        for rel in sorted(wanted):
-            src = Path(tmp) / rel
-            if not src.is_file():
-                continue
-            dst = _restore_destination(rel, root)
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            if (rel.startswith("data/knowledge/") and dst.suffix.lower() == ".md"
-                    and dst.is_file() and _sha256(dst) != m["files"][rel]["sha256"]):
-                _trash_restored_file(root, rel, dst)
-            for side in ("-wal", "-shm"):  # stale SQLite side files would corrupt the restored DB
-                Path(str(dst) + side).unlink(missing_ok=True)
-            tmp_dst = dst.with_name(dst.name + ".restoring")
-            try:
-                shutil.copy2(src, tmp_dst)
-                os.replace(tmp_dst, dst)
-            finally:
-                tmp_dst.unlink(missing_ok=True)
-            restored.append(rel)
+        with stage("restore-files", "Replacing selected files; preserving overwritten knowledge notes in trash"):
+            restored = _restore_selected_files(Path(tmp), root, wanted, m)
+    emit("restore-recovery", "running", "Finishing recovery and restoring private file permissions")
     if recovering:
         recovery_state = json.loads(marker.read_text(encoding="utf-8"))
         introduced = recovery_state.get("introduced", [])
@@ -541,13 +596,15 @@ def _restore_backup_locked(name: str, parts: list[str] | None, safety_copy: bool
                 os.chmod(secret, 0o600)
             except OSError:
                 pass
-    try:
-        from .config import load_config
-        load_config(force_reload=True)
-    except (Exception, SystemExit) as e:
-        raise ValueError(f"Config reload after restore failed: {e}") from e
-    _atomic_write(root / ".chat-restore-generation", uuid.uuid4().hex)
-    marker.unlink(missing_ok=True)
+    emit("restore-recovery", "ok", "Recovery files and permissions checked")
+    with stage("restore-reload", "Reloading restored configuration and clearing the recovery marker"):
+        try:
+            from .config import load_config
+            load_config(force_reload=True)
+        except (Exception, SystemExit) as e:
+            raise ValueError(f"Config reload after restore failed: {e}") from e
+        _atomic_write(root / ".chat-restore-generation", uuid.uuid4().hex)
+        marker.unlink(missing_ok=True)
     logger.info("Restored %d files from %s (parts: %s)", len(restored), path.name, ", ".join(chosen))
     return {"restored": len(restored), "parts": chosen, "safety_backup": safety, "from": path.name}
 

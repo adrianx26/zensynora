@@ -239,6 +239,123 @@ def test_backup_create_verify_restore(home):
         backup.resolve("../../etc/passwd")
 
 
+def test_backup_and_restore_progress_reaches_published_archive_and_keeps_notes(home, monkeypatch):
+    from myclaw import backup, maintenance
+    from myclaw.web.api import app
+
+    monkeypatch.setattr(backup, "install_root", lambda: home / "app")
+    note = home / ".myclaw" / "knowledge" / "default" / "note.md"
+    note.parent.mkdir(parents=True)
+    note.write_text("# original")
+    c = TestClient(app)
+    response = c.post("/api/backups", json={"parts": ["settings", "knowledge"]})
+    assert response.status_code == 200, response.text
+    info = response.json()
+    state = c.get("/api/backups/process").json()
+    assert state["status"] == "ok"
+    assert state["steps"]["backup-memory"]["status"] == "skipped"
+    statuses = [(e["step"], e["status"]) for e in state["events"]]
+    assert statuses.index(("backup-verify", "ok")) < statuses.index(("backup-publish", "ok"))
+    assert backup.verify_backup(backup.resolve(info["name"])) == (True, [])
+    note.write_text("# user edits")
+    r = c.post(f"/api/backups/{info['name']}/restore", json={"parts": ["knowledge"]})
+    assert r.status_code == 200, r.text
+    assert note.read_text() == "# original"
+    assert any(p.read_text() == "# user edits" for p in (note.parent / ".trash").rglob("note.md"))
+    state = maintenance.status()
+    assert state["action"] == "restore" and state["status"] == "ok"
+    assert state["steps"]["restore-safety-copy"]["status"] == "ok"
+    assert state["steps"]["restore-reload"]["status"] == "ok"
+    assert not (home / ".myclaw" / ".lifecycle-restore-pending.json").exists()
+
+
+def test_failed_verification_never_publishes_archive_and_records_failure(home, monkeypatch):
+    from myclaw import backup, maintenance
+
+    monkeypatch.setattr(backup, "install_root", lambda: home / "app")
+    monkeypatch.setattr(backup, "verify_backup", lambda path: (False, ["checksum mismatch"]))
+    with pytest.raises(ValueError, match="verification failed"):
+        maintenance.run("backup", lambda: backup.create_backup(["settings"]))
+    assert not list(backup.backup_dir().iterdir())
+    state = maintenance.status()
+    assert state["status"] == "failed"
+    assert state["steps"]["backup-verify"]["status"] == "failed"
+    assert "checksum mismatch" in state["error"]
+
+
+def test_progress_failure_does_not_hide_original_operation_error(home, monkeypatch):
+    from myclaw import maintenance
+    from updater.progress import emit
+
+    original = maintenance._atomic_write
+    calls = 0
+
+    def fail_progress(path, text):
+        nonlocal calls
+        calls += 1
+        if calls > 2:
+            raise OSError("progress disk unavailable")
+        return original(path, text)
+
+    def fail_operation():
+        emit("restore-files", "running", "Replacing files")
+        raise ValueError("original restore failure")
+
+    monkeypatch.setattr(maintenance, "_atomic_write", fail_progress)
+    with pytest.raises(ValueError, match="original restore failure"):
+        maintenance.run("restore", fail_operation)
+
+
+def test_terminal_backup_interactive_selection_and_detailed_restore(home, monkeypatch):
+    from click.testing import CliRunner
+    from myclaw import backup
+    from myclaw.cli import cli
+
+    monkeypatch.setattr(backup, "install_root", lambda: home / "app")
+    runner = CliRunner()
+    result = runner.invoke(cli, ["backup", "create", "--interactive"], input="n\nn\nn\n")
+    assert result.exit_code == 0, result.output
+    assert "[SKIPPED] backup-knowledge" in result.output
+    assert "[OK] backup-verify" in result.output
+    info = backup.list_backups()[0]
+    assert info["parts"] == ["settings"]
+    restored = runner.invoke(cli, ["backup", "restore", info["name"], "--interactive", "--yes"], input="y\n")
+    assert restored.exit_code == 0, restored.output
+    assert "[OK] restore-safety-copy" in restored.output
+    assert "[OK] restore-reload" in restored.output
+
+
+def test_completed_restore_keeps_success_and_reload_hook_when_progress_write_fails(home, monkeypatch, caplog):
+    from myclaw import backup, maintenance
+    from myclaw.web import backup_api
+    from myclaw.web.api import app
+
+    monkeypatch.setattr(backup, "install_root", lambda: home / "app")
+    note = home / ".myclaw" / "knowledge" / "default" / "note.md"
+    note.parent.mkdir(parents=True)
+    note.write_text("# original")
+    info = backup.create_backup(["settings", "knowledge"])
+    note.write_text("# changed")
+    hooks = []
+    monkeypatch.setattr(backup_api, "_on_restored", lambda: hooks.append("reload"))
+    original_write = maintenance._atomic_write
+
+    def fail_final_progress(path, text):
+        state = json.loads(text)
+        if state["status"] == "ok" or state["steps"].get("restore-reload", {}).get("status") == "ok":
+            raise OSError("progress disk unavailable")
+        return original_write(path, text)
+
+    monkeypatch.setattr(maintenance, "_atomic_write", fail_final_progress)
+    response = TestClient(app).post(f"/api/backups/{info['name']}/restore", json={})
+    assert response.status_code == 200, response.text
+    assert note.read_text() == "# original" and hooks == ["reload"]
+    assert not (home / ".myclaw" / ".lifecycle-restore-pending.json").exists()
+    assert "Progress could not be saved" in response.json()["progress_warning"]
+    assert maintenance.status()["status"] == "progress-unavailable"
+    assert caplog.text.count("Progress could not be saved") == 1
+
+
 def test_backup_api_reports_the_actual_blocker(home, monkeypatch):
     from myclaw import backup, evolve, executions
     from myclaw.web import backup_api

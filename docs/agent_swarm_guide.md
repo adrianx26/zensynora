@@ -1,6 +1,6 @@
 # Agent Swarm Guide
 
-> **Applies to:** v0.7.1 · **Reviewed:** 2026-10-13. **v0.7.1:** delegation
+> **Current release:** v0.8.5 · **Original review:** 2026-10-13. **v0.7.1:** delegation
 > works again (before, every `delegate` call answered "Agent registry not
 > initialized"), and in the Web UI each hand-over between agents — delegation
 > or swarm — is shown in the chat channel and its Activity panel

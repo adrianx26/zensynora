@@ -179,11 +179,11 @@ mermaid.initialize({{
 
 
 def render_diagram_card(d: Diagram) -> str:
-    desc = f'<p class="diagram-desc">{html.escape(d.description)}</p>' if d.description else ""
+    desc = f'  <p class="diagram-desc">{html.escape(d.description)}</p>' if d.description else ""
     return (
         '<div class="diagram-card">\n'
         f'  <h2 class="diagram-title">{html.escape(d.title)}</h2>\n'
-        f'  {desc}\n'
+        f'{desc}\n'
         f'  <div class="mermaid">{html.escape(d.code)}</div>\n'
         '</div>\n'
     )
@@ -220,9 +220,9 @@ def render_source_page(src: SourceDoc) -> str:
 def render_index(sources: list[SourceDoc]) -> str:
     total = sum(len(s.diagrams) for s in sources)
     cards = [
-        '<a class="index-card" href="readme-architecture.html">\n'
-        '  <h2>★ ZenSynora Architecture (hand-laid)</h2>\n'
-        '  <p>README.md — pixel-positioned SVG with full color palette</p>\n'
+        '<a class="index-card" href="assets/readme-architecture.svg">\n'
+        '  <h2>★ ZenSynora Architecture (SVG)</h2>\n'
+        '  <p>Architecture and maintenance — rendered from assets/readme-architecture.mmd</p>\n'
         '  <span class="count">featured</span>\n'
         '</a>\n'
     ]

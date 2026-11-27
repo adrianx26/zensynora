@@ -3,12 +3,13 @@
 ZenSynora updates **side by side**: the new version is downloaded and built in
 its own folder while the current one keeps working. It is only switched in
 after it has passed its checks against your configuration. Before anything
-changes, **your data and the whole installed program folder are backed up**;
-any failure puts the previous version back exactly as it was.
+changes, **your data is backed up** and, by default, the whole installed
+program folder is backed up too. Failures trigger rollback; the detailed
+log distinguishes successful recovery from a rollback that needs attention.
 
-> Updated for v0.7.1: full program-folder backup and restore, settings/API
-> keys/knowledge base checked and restored after the switch, approval-gated
-> self-update proposals (see [Medic & Doctor](medic_agent_guide.md#6-self-update-proposals)).
+> **Applies to v0.8.5 · Updated 2026-11-27.** Structured progress and optional
+> decisions use updater protocol 5. Data backups and recovery remain mandatory;
+> Doctor can reinstall GitHub application code after explicit approval.
 
 ## Everyday use
 
@@ -22,6 +23,50 @@ reloads by itself. *Branch or tag* and *Reinstall even if up to date* match
 `--ref` and `--force` below. Updating from the Web UI needs a standard install
 (`~/.local/share/zensynora`); it is available from this computer or with the
 admin key, like Settings.
+
+### Detailed progress and optional steps
+
+Updates show a timestamped event log, named steps, duration and explicit
+**RUNNING / OK / FAILED / SKIPPED / WAITING** outcomes. Rollback has its own
+outcomes, so a failed step is not presented as successful work. Terminal
+output is colored when connected to a terminal; redirected output retains
+structured `PROCESS` JSON events. Existing updater logs remain available.
+
+In **Updates**, choose **Program backup: Full / Code only / Skip program
+backup**. This affects only the program-folder archive, never the user-data
+backup. Skipping it reduces program-file rollback protection.
+
+Enable **Pause before optional steps** to decide at the program-folder
+backup: **Continue step**, **Skip optional step**, or **Abort and roll back**.
+An interactive Web UI update stays paused if the page closes; reopen Updates
+to decide. Data backup, release verification, migrations, activation and
+data recovery cannot be skipped.
+
+```bash
+zensynora update --interactive
+zensynora update --force --interactive
+zensynora update --app-backup none  # still takes the mandatory data backup
+```
+
+Interactive terminal updates require a terminal (not an unattended pipe).
+Decision files used by the Web UI are private, one-use requests tied to the
+currently waiting step. Updates from older releases retain their existing
+plain-text progress until the newer updater takes over (protocol 5).
+
+### Doctor: reinstall the application from GitHub
+
+Open **Doctor → Repair installation**, select the GitHub branch/tag and click
+**Approve GitHub reinstall**. After explicit confirmation, Doctor uses the
+normal updater with `--force`: it stages and builds a clean copy even when
+the version number is unchanged, verifies it, then switches the installation.
+Settings, credentials, knowledge, conversations and release-local user files
+are preserved; mandatory data backup and the default full program archive
+remain enabled. Progress and rollback outcomes appear on the repair screen.
+
+This replaces application code; it does not let an agent rewrite user data
+or bypass backup failures. It needs a managed installation. Docker copies
+must be repaired by rebuilding their image; ordinary git checkouts use
+their normal git/install workflow.
 
 **From a terminal:**
 
@@ -57,6 +102,31 @@ curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-on
 ```
 
 ## What happens during an update
+
+```mermaid
+flowchart TD
+    start["Update or approved Doctor reinstall"] --> pre["Preflight, fetch, updater handoff"]
+    pre --> data["Mandatory user-data backup"]
+    data --> mode{"Program archive enabled?"}
+    mode -- no --> skip["SKIPPED: program archive"]
+    mode -- yes --> pause{"Interactive mode?"}
+    pause -- no --> archive["Create program archive"]
+    pause -- yes --> decision{"WAITING: user decision"}
+    decision -- Continue --> archive
+    decision -- Skip --> skip
+    decision -- Abort --> rollback["Roll back completed steps"]
+    archive --> build["Carry user files, build, verify"]
+    skip --> build
+    build --> activate["Stop service, migrate, activate"]
+    activate --> check["Verify or restore user data"]
+    check --> finish["Start service, record history, prune"]
+    build & activate & check & finish -. failure .-> rollback
+    rollback --> outcome{"Recovery succeeded?"}
+    outcome -- yes --> recovered["ROLLED-BACK: inspect outcomes"]
+    outcome -- no --> failed["ROLLBACK-FAILED: preserve backups and repair"]
+    finish --> ok["OK: restart into installed release"]
+    pre & data & archive & build & activate & check & finish -. events .-> logs[("Timestamped colored progress and logs")]
+```
 
 ```
  1 preflight        Python ≥ 3.11 that can make a venv with pip, ~1.5 GB free,
@@ -137,16 +207,19 @@ update installs them; nothing to do by hand.
 
 ```
 ~/.local/share/zensynora/
-  source -> releases/0.6.0-20261013T203000   # what everything runs from
+  source -> releases/0.8.5-20261127T235538   # active release (example)
   releases/                                  # one complete copy per version (own venv)
   backups/                                   # data snapshots + program archives (contain API keys)
   staging/                                   # temporary copies for approved self-update proposals
   logs/update-*.log                          # full log of every update
+  logs/webui-update-*.log                    # structured Web UI process events
+  logs/decisions-<id>/                       # private, one-use optional-step decisions
   node -> node-v22.x.y-linux-x64/            # Node.js for building the web UI (only if
                                              # the computer had no usable node/npm)
   updater-state.json                         # history used by rollback
 ~/.myclaw/                                   # your data, shared by all versions
   .migrations.json                           # which data migrations have run
+  maintenance-progress.json                  # latest backup/restore steps and recent events
 ```
 
 Paths through `source/` (systemd unit, `source/venv/bin/activate`) keep

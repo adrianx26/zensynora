@@ -25,14 +25,14 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">Architecture</h2>
-  
+
   <div class="mermaid">flowchart TD
     A[WhatsApp User] --&gt;|Sends message| B[Meta Cloud API]
     B --&gt;|Webhook POST| C[FastAPI Server - /webhook]
     C --&gt;|Parse payload| D[WhatsAppChannel._handle_webhook]
     D --&gt;|Text message| E{Command or Agent?}
     E --&gt;|/command| F[Command Handler]
-    E --&gt;|@agent or plain text| G[Agent Router]
+    E --&gt;|&quot;@agent or plain text&quot;| G[Agent Router]
     G --&gt;|agent.think| H[MyClaw Agent]
     H --&gt;|Response| I[WhatsApp Cloud API - Send Message]
     I --&gt;|Delivered| A

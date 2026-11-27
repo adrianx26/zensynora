@@ -336,6 +336,22 @@ the resulting changes in `diagrams/`. Build the docs with `mkdocs build`.
 Historical material under `docs/archive/` and `docs/dev/` is retained as
 background and may describe superseded workflows.
 
+### Release metadata and diagram assets
+
+For a patch release (for example 0.8.4 → 0.8.5), keep the version in
+`pyproject.toml`, `myclaw/__init__.py`, the root project entry in `uv.lock`,
+and `webui/package.json` / `webui/package-lock.json` synchronized. Use
+`npm version VERSION --no-git-tag-version` in `webui/` for its metadata.
+Update the README badge, release notes and current guide headers; retain
+historical version examples, archive dates and agent/profile Markdown.
+
+Regenerate every HTML diagram page with `python diagrams/generate.py`.
+The featured architecture SVG comes from
+`diagrams/assets/readme-architecture.mmd`, rendered with Mermaid CLI and
+`diagrams/assets/mermaid-config.json`. Rendering is optional developer
+tooling, not an application dependency. Check the generated files are
+reproducible and build the Markdown site with `mkdocs build`.
+
 Graphify is optional local code-navigation tooling. It is not installed by the
 app, CI, Docker, deploy, or updater workflows. If a contributor chooses to run
 it, `graphify-out/` is generated, ignored, and must not be committed.
