@@ -80,7 +80,7 @@ flowchart TB
     subgraph Maintenance ["Maintenance · ZenSynora 0.8.5"]
         Backup["backup.py<br/>verified snapshots + journaled restore"]
         Progress["maintenance.py + updater/progress.py<br/>private step outcomes + logs"]
-        Update["Modular updater<br/>mandatory data backup · optional program archive"]
+        Update["Modular updater<br/>default data backup · explicit unsafe CLI override"]
         Decision["User Continue / Skip / Abort<br/>optional steps only"]
         Doctor["Doctor approved GitHub reinstall<br/>preserves user data"]
         Backup --> Progress

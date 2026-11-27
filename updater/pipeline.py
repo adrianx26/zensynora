@@ -56,6 +56,7 @@ class Options:
     skip_webui: bool = False
     dry_run: bool = False
     app_backup: str = "full"  # v0.7.1: full | code | none (program-folder backup)
+    no_backup: bool = False
     interactive: bool = False
     control_dir: Optional[str] = None
 
@@ -99,6 +100,12 @@ class Step:
 
 
 def run_pipeline(steps: Sequence[Step], ctx: Context) -> None:
+    if ctx.opts.no_backup:
+        if not ctx.opts.force:
+            raise UpdateError("--no-backup requires --force. Without backups, user-data changes cannot be recovered.")
+        ctx.note("NO-BACKUP MODE: no data or program archives will be created. "
+                 "Missing user files and failed migrations cannot be recovered from this update. "
+                 "The previous program release is kept, but may not work with migrated data.")
     done: List[Step] = []
     total = len(steps)
     for i, step in enumerate(steps, 1):

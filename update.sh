@@ -4,13 +4,14 @@
 #   bash update.sh                    # update to the latest version on GitHub (main)
 #   bash update.sh --ref v0.6.0       # a specific branch or tag
 #   bash update.sh --from-dir PATH    # from a local source folder
+#   bash update.sh --force --no-backup # UNSAFE: no backup archives or data recovery
 #   bash update.sh status --check     # what's installed / is there an update?
 #   bash update.sh rollback           # go back to the previous version
 #   bash update.sh backup             # back up ~/.myclaw now
 #   bash update.sh node               # install Node.js 22 for the web UI (no sudo)
 #   bash update.sh --help
 #
-# Every update: backs up ~/.myclaw, builds the new version in its own folder
+# By default: backs up ~/.myclaw, builds the new version in its own folder
 # next to the running one, checks it against your config, then switches over
 # atomically. Any failure leaves the previous version active.
 #

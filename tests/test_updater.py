@@ -5,6 +5,9 @@ These tests never touch the network or pip; the full end-to-end flow
 """
 import json
 import os
+import shutil
+import subprocess
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -251,3 +254,150 @@ def test_prune_keeps_current_and_rollback_target(tmp_path):
     assert rels[4].name in left and rels[3].name in left   # newest two
     assert rels[0].name in left                            # rollback target protected
     assert "releases/" + rels[1].name in removed
+
+
+def test_no_backup_requires_force_before_any_work(tmp_path):
+    calls = []
+    with pytest.raises(UpdateError, match="--no-backup requires --force"):
+        run_pipeline([_Rec("work", calls)], _ctx(_layout(tmp_path), no_backup=True))
+    assert calls == []
+
+
+@pytest.mark.parametrize("no_backup", [False, True])
+def test_no_backup_excludes_archives_but_keeps_release_user_files(tmp_path, no_backup):
+    from updater import app_backup
+    from updater.progress import capture
+
+    lay = _layout(tmp_path)
+    lay.data_dir.mkdir(parents=True)
+    (lay.data_dir / "config.json").write_text('{"saved": true}')
+    old = _release(lay.releases / "old", "0.8.5")
+    (old / ".env").write_text("LOCAL_SETTING=keep")
+    new = _release(lay.releases / "new", "0.8.5")
+    ctx = _ctx(lay, force=True, no_backup=no_backup)
+    ctx.current_dir, ctx.new_dir = old, new
+    ctx.current_version = ctx.new_version = "0.8.5"
+    events = []
+    with capture(events.append):
+        run_pipeline([steps.BackupUserData(), steps.BackupAppFolder(),
+                      steps.CarryOverUserFiles(), steps.RestoreUserData()], ctx)
+    assert (new / ".env").read_text() == "LOCAL_SETTING=keep"
+    assert (lay.data_dir / "config.json").read_text() == '{"saved": true}'
+    if no_backup:
+        assert ctx.backup_dir is None and not list(lay.backups.iterdir())
+        assert {e["step"] for e in events if e["status"] == "skipped"} == {
+            "backup", "backup-app", "restore-data"}
+    else:
+        assert (ctx.backup_dir / "user-data.tar.gz").is_file()
+        assert (ctx.backup_dir / app_backup.ARCHIVE).is_file()
+
+
+@pytest.mark.parametrize("no_backup", [False, True])
+def test_no_backup_failed_migration_reports_unrecoverable_data(tmp_path, no_backup):
+    from updater.progress import capture
+
+    lay = _layout(tmp_path)
+    lay.data_dir.mkdir(parents=True)
+    config = lay.data_dir / "config.json"
+    config.write_text('{"before": true}')
+    ctx = _ctx(lay, force=True, no_backup=no_backup)
+    ctx.current_dir = _release(lay.releases / "old", "0.8.5")
+    ctx.current_version = ctx.new_version = "0.8.5"
+
+    class PartialMigration(steps.MigrateUserData):
+        def run(self, ctx):
+            ctx.extra["migrate_attempted"] = True
+            config.write_text('{"partially_migrated": true}')
+            raise UpdateError("migration failed")
+
+    events = []
+    with capture(events.append), pytest.raises(UpdateError, match="migration failed"):
+        run_pipeline([steps.BackupUserData(), PartialMigration()], ctx)
+    if no_backup:
+        assert config.read_text() == '{"partially_migrated": true}'
+        assert ctx.extra["rollback_failed"]
+        assert any(e["step"] == "migrate" and e["status"] == "rollback-failed"
+                   and "disabled recovery" in e["text"] for e in events)
+    else:
+        assert config.read_text() == '{"before": true}'
+        assert not ctx.extra.get("rollback_failed")
+
+
+@pytest.mark.parametrize("applied, completed, fails", [([], True, False), (["change"], True, True), ([], False, True)])
+def test_no_backup_migration_rollback_distinguishes_noop_from_changes(tmp_path, applied, completed, fails):
+    ctx = _ctx(_layout(tmp_path), force=True, no_backup=True)
+    ctx.extra.update(migrate_attempted=True, migrate_completed=completed)
+    ctx.migrations_applied = applied
+    if fails:
+        with pytest.raises(UpdateError, match="--no-backup disabled recovery"):
+            steps.MigrateUserData().rollback(ctx)
+    else:
+        steps.MigrateUserData().rollback(ctx)
+
+
+def test_no_backup_cli_option_is_explicit_and_survives_handoff(monkeypatch, capsys):
+    import sys
+    import types
+
+    if os.name == "nt":
+        monkeypatch.setitem(sys.modules, "fcntl", types.ModuleType("fcntl"))
+    from updater import __main__ as cli
+
+    args = cli.build_parser().parse_args(["update", "--force", "--no-backup"])
+    assert "--no-backup" in cli._passthrough(args) and "--force" in cli._passthrough(args)
+    assert not cli.build_parser().parse_args(["update", "--force"]).no_backup
+    monkeypatch.setattr(cli, "_layout", lambda args: pytest.fail("Invalid flags must not touch the installation"))
+    assert cli.main(["--no-backup"]) == 1
+    assert "--no-backup requires --force" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("supported, update_code", [(True, 0), (False, 0), (True, 7)])
+def test_no_backup_script_downloads_main_and_refuses_unsupported_updater(tmp_path, supported, update_code):
+    bash = shutil.which("bash")
+    if os.name == "nt":
+        git_bash = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Git" / "bin" / "bash.exe"
+        bash = str(git_bash) if git_bash.exists() else None
+    if not bash:
+        pytest.skip("Bash is required for the Linux bootstrap fixture")
+    base = tmp_path / "install base"
+    (base / "source").mkdir(parents=True)
+    source = tmp_path / "downloaded"
+    (source / "updater").mkdir(parents=True)
+    (source / "updater" / "steps.py").write_text("# fixture")
+    args_file = tmp_path / "arguments"
+    (source / "update.sh").write_text(
+        '#!/usr/bin/env bash\n'
+        'if [[ "$*" == "update --help" ]]; then\n'
+        f'  echo "options: {"--no-backup" if supported else "--force"}"; exit 0\n'
+        'fi\n'
+        'printf "%s\\n" "$@" > "$TEST_ARGUMENTS"\n'
+        f'exit {update_code}\n')
+    archive = tmp_path / "source.tar.gz"
+    with tarfile.open(archive, "w:gz") as tar:
+        tar.add(source, arcname="zensynora-main")
+    script = Path(__file__).resolve().parents[1] / "force-update-no-backup.sh"
+    launcher = (
+        'uname() { printf "Linux\\n"; }; export -f uname\n'
+        'curl() {\n'
+        '  [[ "$*" == *"https://codeload.github.com/adrianx26/zensynora/tar.gz/main"* ]] || return 9\n'
+        '  while [[ $# -gt 0 ]]; do\n'
+        '    if [[ "$1" == --output ]]; then cp "$TEST_ARCHIVE" "$2"; return; fi\n'
+        '    shift\n'
+        '  done\n'
+        '  return 8\n'
+        '}; export -f curl\n'
+        'bash "$1" "$2"\n')
+    env = dict(os.environ, TEST_ARCHIVE=str(archive), TEST_ARGUMENTS=str(args_file),
+               ZENSYNORA_DATA_DIR=str(tmp_path / "user data"))
+    result = subprocess.run([bash, "-c", launcher, "fixture", str(script), str(base)],
+                            env=env, capture_output=True, text=True, timeout=30)
+    if supported:
+        assert result.returncode == update_code, result.stderr
+        args = args_file.read_text().splitlines()
+        assert "--force" in args and "--no-backup" in args
+        assert args[args.index("--base") + 1] == str(base)
+        assert args[args.index("--data-dir") + 1] == str(tmp_path / "user data")
+        assert not Path(args[args.index("--from-dir") + 1]).exists()
+    else:
+        assert result.returncode != 0 and "does not yet support --no-backup" in result.stderr
+        assert not args_file.exists()

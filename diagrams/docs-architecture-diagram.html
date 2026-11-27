@@ -260,7 +260,7 @@
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">9. Safe updates</h2>
-  <p class="diagram-desc">`zensynora update` (`updater/`, added in 0.6.0; program-folder backup and data check added in 0.7.1). Version 0.8.5 records step and rollback outcomes. Only the program-folder archive is optional; user-data backup, verification and recovery</p>
+  <p class="diagram-desc">`zensynora update` (`updater/`, added in 0.6.0; program-folder backup and data check added in 0.7.1). Version 0.8.5 records step and rollback outcomes. In the default flow below, only the program-folder archive is optional; user-data backup</p>
   <div class="mermaid">flowchart TD
     s1[&quot;1 Preflight&lt;br/&gt;Python, disk space, service state&quot;] --&gt; s2[&quot;2 Fetch&lt;br/&gt;GitHub, folder or archive&quot;]
     s2 --&gt; s3[&quot;3 Hand-off&lt;br/&gt;newer updater takes over&quot;]

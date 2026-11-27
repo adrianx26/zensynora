@@ -12,7 +12,8 @@ Layout it manages (``BASE`` defaults to ``~/.local/share/zensynora``)::
       updater-state.json                         (history used for rollback)
 
 User data stays in ``~/.myclaw`` and is shared by all releases; it is backed up
-before every update and only changed by versioned migrations.
+by default before updates and only changed by versioned migrations. The explicit
+``--force --no-backup`` override disables data recovery.
 
 An update is a pipeline of small steps (see ``steps.py``). Every step can undo
 itself, so a failure at any point leaves the previous working release active.
@@ -27,7 +28,8 @@ itself, so a failure at any point leaves the previous working release active.
 # 4 (2026-10-24): optional packages the user added are re-installed with the
 #   version range of the new release's extras (pyproject), e.g. fastembed.
 # 5: detailed step outcomes and opt-in user decisions for optional steps.
-UPDATER_PROTOCOL = 5
+# 6: explicit force-required, CLI-only no-backup mode with honest recovery outcomes.
+UPDATER_PROTOCOL = 6
 
 DEFAULT_REPO = "adrianx26/zensynora"
 DEFAULT_REF = "main"

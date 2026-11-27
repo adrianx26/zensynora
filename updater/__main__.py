@@ -64,6 +64,8 @@ def _layout(args) -> Layout:
 
 # ── update ───────────────────────────────────────────────────────────────────
 def cmd_update(args) -> int:
+    if args.no_backup and not args.force:
+        raise UpdateError("--no-backup requires --force. User-data changes cannot be recovered without a backup.")
     layout = _layout(args)
     logfile = _setup_logging(layout, args.verbose, to_file=True)
     if args.from_dir:
@@ -78,6 +80,7 @@ def cmd_update(args) -> int:
         keep_releases=args.keep_releases, keep_backups=args.keep_backups,
         manage_service=not args.no_service, skip_webui=args.skip_webui,
         app_backup=args.app_backup,
+        no_backup=args.no_backup,
         interactive=args.interactive, control_dir=args.control_dir,
     )
     with _lock(layout):
@@ -100,7 +103,13 @@ def cmd_update(args) -> int:
             else:
                 log.error("✘ Update failed: %s", e)
             if ctx.extra.get("rollback_failed"):
-                log.error("Recovery is incomplete. Keep your backups and inspect the failed rollback steps. Log: %s", logfile)
+                if opts.no_backup:
+                    log.error("Recovery is incomplete: --no-backup left no data snapshot. Inspect migration "
+                              "and rollback results before restarting. Log: %s", logfile)
+                else:
+                    log.error("Recovery is incomplete. Keep your backups and inspect the failed rollback steps. Log: %s", logfile)
+            elif opts.no_backup:
+                log.warning("Program steps rolled back; --no-backup did not restore or verify user data. Log: %s", logfile)
             else:
                 log.info("Completed steps rolled back. Log: %s", logfile)
             return 1
@@ -114,7 +123,7 @@ def cmd_update(args) -> int:
     log.info("")
     log.info("✔ Updated %s → %s", ctx.current_version, ctx.new_version)
     log.info("  active release : %s", ctx.new_dir)
-    log.info("  data backup    : %s", ctx.backup_dir)
+    log.info("  data backup    : %s", "DISABLED by --no-backup" if opts.no_backup else ctx.backup_dir)
     for n in ctx.notes:
         log.info("  note: %s", n)
     if not ctx.service_was_active:
@@ -123,7 +132,11 @@ def cmd_update(args) -> int:
         log.info("  Terminals opened before this update: run  source %s/venv/bin/activate  first",
                  ctx.layout.source)
         log.info("  (or open a new terminal). Then reload the browser page.")
-    log.info("  Undo with      : %s rollback", _self_cmd())
+    if opts.no_backup:
+        log.warning("  Program-only rollback: %s rollback --keep-data; migrated data cannot be undone "
+                    "and may be incompatible with the old release.", _self_cmd())
+    else:
+        log.info("  Undo with      : %s rollback", _self_cmd())
     log.info("  Log            : %s", logfile)
     return 0
 
@@ -136,6 +149,8 @@ def _passthrough(args) -> list:
             out.append("--" + flag.replace("_", "-"))
     if getattr(args, "interactive", False):
         out.append("--interactive")
+    if getattr(args, "no_backup", False):
+        out.append("--no-backup")
     if getattr(args, "control_dir", None):
         out += ["--control-dir", args.control_dir]
     if args.base:
@@ -173,6 +188,10 @@ def cmd_rollback(args) -> int:
         backup_dir = None
         if restore:
             if not (entry and entry.get("backup")):
+                if entry and entry.get("no_backup"):
+                    raise UpdateError("This update used --no-backup; data migrations cannot be undone. "
+                                      "Use rollback --keep-data only for a program-only rollback, "
+                                      "after checking the old release can read the migrated data.")
                 raise UpdateError("No backup recorded for this update; use `restore --backup NAME`.")
             backup_dir = layout.backups / entry["backup"]
 
@@ -354,6 +373,9 @@ def build_parser() -> argparse.ArgumentParser:
     u.add_argument("--app-backup", choices=("full", "code", "none"), default="full",
                    help="back up the installed program folder first: full (default, with venv), "
                         "code (without venv) or none")
+    u.add_argument("--no-backup", action="store_true",
+                   help="UNSAFE: skip all backup archives and missing-file recovery; requires --force. "
+                        "Failed data migrations cannot be rolled back")
     u.add_argument("--interactive", action="store_true",
                    help="ask before optional steps; mandatory data safety steps cannot be skipped")
     u.add_argument("--control-dir", help=argparse.SUPPRESS)

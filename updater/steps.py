@@ -217,6 +217,9 @@ class BackupUserData(Step):
     name = "backup"
     description = "Backing up your settings and data (~/.myclaw)"
 
+    def should_run(self, ctx: Context) -> bool:
+        return not ctx.opts.no_backup
+
     def run(self, ctx: Context) -> None:
         ctx.backup_dir = create_backup(
             ctx.layout,
@@ -248,7 +251,7 @@ class BackupAppFolder(Step):
     skippable = True
 
     def should_run(self, ctx: Context) -> bool:
-        return ctx.opts.app_backup != "none" and ctx.backup_dir is not None
+        return not ctx.opts.no_backup and ctx.opts.app_backup != "none" and ctx.backup_dir is not None
 
     def run(self, ctx: Context) -> None:
         folder = ctx.current_dir
@@ -480,15 +483,22 @@ class MigrateUserData(Step):
         except (ValueError, IndexError):
             raise UpdateError(f"Migration runner returned unexpected output:\n{r.stdout[-500:]}")
         ctx.migrations_applied = result.get("applied", [])
+        ctx.extra["migrate_completed"] = True
         if ctx.migrations_applied:
             log.info("  applied: %s", ", ".join(ctx.migrations_applied))
         else:
             log.info("  no migrations needed")
 
     def rollback(self, ctx: Context) -> None:
-        if ctx.extra.get("migrate_attempted") and ctx.backup_dir:
+        if ctx.extra.get("migrate_attempted") and ctx.backup_dir and not ctx.opts.no_backup:
             log.info("  restoring your data from the pre-update backup")
             restore_backup(ctx.layout, ctx.backup_dir, take_safety_copy=False)
+        elif ctx.opts.no_backup and ctx.extra.get("migrate_attempted"):
+            if ctx.extra.get("migrate_completed") and not ctx.migrations_applied:
+                return
+            raise UpdateError("User data may have changed, but --no-backup disabled recovery. "
+                              "Do not assume the previous release can read it; inspect migration logs "
+                              "and recover from an existing external backup if available.")
 
 
 # ── 8. Stop the service ──────────────────────────────────────────────────────
@@ -566,7 +576,7 @@ class RestoreUserData(Step):
     description = "Restoring your settings, API keys and knowledge base in place"
 
     def should_run(self, ctx: Context) -> bool:
-        return ctx.backup_dir is not None
+        return not ctx.opts.no_backup and ctx.backup_dir is not None
 
     def run(self, ctx: Context) -> None:
         restored = ensure_user_data(ctx.layout, ctx.backup_dir, ctx.new_dir)
@@ -609,6 +619,7 @@ class Finalize(Step):
             "from_id": from_id,
             "from_version": ctx.current_version,
             "backup": ctx.backup_dir.name if ctx.backup_dir else None,
+            "no_backup": ctx.opts.no_backup,
             "migrations": ctx.migrations_applied,
             "notes": ctx.notes,
         })

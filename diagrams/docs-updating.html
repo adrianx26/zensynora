@@ -28,7 +28,10 @@
 
   <div class="mermaid">flowchart TD
     start[&quot;Update or approved Doctor reinstall&quot;] --&gt; pre[&quot;Preflight, fetch, updater handoff&quot;]
-    pre --&gt; data[&quot;Mandatory user-data backup&quot;]
+    pre --&gt; unsafe{&quot;Explicit CLI no-backup override?&quot;}
+    unsafe -- no --&gt; data[&quot;User-data backup&quot;]
+    unsafe -- yes --&gt; risk[&quot;SKIPPED: both backups&lt;br/&gt;no data recovery&quot;]
+    risk --&gt; build
     data --&gt; mode{&quot;Program archive enabled?&quot;}
     mode -- no --&gt; skip[&quot;SKIPPED: program archive&quot;]
     mode -- yes --&gt; pause{&quot;Interactive mode?&quot;}
@@ -40,12 +43,15 @@
     archive --&gt; build[&quot;Carry user files, build, verify&quot;]
     skip --&gt; build
     build --&gt; activate[&quot;Stop service, migrate, activate&quot;]
-    activate --&gt; check[&quot;Verify or restore user data&quot;]
+    activate --&gt; recovery{&quot;No-backup mode?&quot;}
+    recovery -- no --&gt; check[&quot;Verify or restore user data&quot;]
+    recovery -- yes --&gt; unchecked[&quot;SKIPPED: backup-based recovery&quot;]
+    unchecked --&gt; finish
     check --&gt; finish[&quot;Start service, record history, prune&quot;]
     build &amp; activate &amp; check &amp; finish -. failure .-&gt; rollback
     rollback --&gt; outcome{&quot;Recovery succeeded?&quot;}
     outcome -- yes --&gt; recovered[&quot;ROLLED-BACK: inspect outcomes&quot;]
-    outcome -- no --&gt; failed[&quot;ROLLBACK-FAILED: preserve backups and repair&quot;]
+    outcome -- no --&gt; failed[&quot;ROLLBACK-FAILED: repair&lt;br/&gt;no-backup cannot undo changed data&quot;]
     finish --&gt; ok[&quot;OK: restart into installed release&quot;]
     pre &amp; data &amp; archive &amp; build &amp; activate &amp; check &amp; finish -. events .-&gt; logs[(&quot;Timestamped colored progress and logs&quot;)]</div>
 </div>

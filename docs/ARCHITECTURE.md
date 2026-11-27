@@ -130,7 +130,7 @@ updater/                     # Safe updates: side-by-side releases, backups,
                              # app_backup.py: full program-folder archive [0.7.1];
                              # nodejs.py: finds Node.js 20.19+ or installs Node 22
                              # into BASE/node for the web UI build [0.8.1]
-                             # progress.py: structured step events; protocol 5 [0.8.5]
+                             # progress.py: structured step events; protocol 6 (CLI no-backup override)
 
 webui/src/
 ├── App.tsx                  # Shell: channels + agents sidebar, navigation, live health

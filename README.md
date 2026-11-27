@@ -183,6 +183,12 @@ For your own backups use the Web UI **Backups** page (manual or automatic)
 or `zensynora backup create --interactive`. Choose optional parts before
 starting a backup or restore; verified safety backups remain mandatory.
 
+An explicit Linux CLI override, `update --force --no-backup`, skips all
+update backup archives and disables data recovery. It is unsafe if migrations
+fail; ordinary updates and Doctor still take backups. The
+[download-and-force-update script](force-update-no-backup.sh) requires this
+option to be published on GitHub first; [details](docs/UPDATING.md#explicit-no-backup-forced-update-linux-cli-only).
+
 **Doctor → Repair installation** offers a confirmed GitHub reinstall
 even at the same version. It replaces application code while preserving
 your settings, credentials, notes and conversations.

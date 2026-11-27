@@ -333,8 +333,11 @@ flowchart TB
 
 `zensynora update` (`updater/`, added in 0.6.0; program-folder backup and
 data check added in 0.7.1). Version 0.8.5 records step and rollback outcomes.
-Only the program-folder archive is optional; user-data backup, verification
-and recovery cannot be skipped. Failures attempt rollback of completed steps.
+In the default flow below, only the program-folder archive is optional;
+user-data backup, verification and recovery remain enabled. The separate
+CLI-only `--force --no-backup` override (protocol 6) skips both archives and
+backup-based recovery; data changes cannot be undone without an external
+backup. Failures attempt rollback of completed steps.
 
 ```mermaid
 flowchart TD

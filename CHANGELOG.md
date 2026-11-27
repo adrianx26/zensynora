@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Explicit CLI-only `update --force --no-backup` and a Linux download script
+  for GitHub `main`. No backup archives or missing-file recovery are provided
+  in this mode; failed or changed migrations report unavailable data recovery.
+  Ordinary updates, Doctor and Web UI defaults retain their backup safeguards.
+- Updater protocol 6 carries the no-backup option across updater handoffs.
+
 ## [0.8.5] - 2026-11-27
 
 ### Added

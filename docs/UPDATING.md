@@ -3,13 +3,13 @@
 ZenSynora updates **side by side**: the new version is downloaded and built in
 its own folder while the current one keeps working. It is only switched in
 after it has passed its checks against your configuration. Before anything
-changes, **your data is backed up** and, by default, the whole installed
+changes, **your data is backed up by default**, along with the whole installed
 program folder is backed up too. Failures trigger rollback; the detailed
 log distinguishes successful recovery from a rollback that needs attention.
 
 > **Applies to v0.8.5 · Updated 2026-11-27.** Structured progress and optional
-> decisions use updater protocol 5. Data backups and recovery remain mandatory;
-> Doctor can reinstall GitHub application code after explicit approval.
+> decisions use updater protocol 5; the explicit CLI no-backup override requires
+> protocol 6. Normal updates and Doctor keep data backup and recovery enabled.
 
 ## Everyday use
 
@@ -52,6 +52,40 @@ Interactive terminal updates require a terminal (not an unattended pipe).
 Decision files used by the Web UI are private, one-use requests tied to the
 currently waiting step. Updates from older releases retain their existing
 plain-text progress until the newer updater takes over (protocol 5).
+
+### Explicit no-backup forced update (Linux CLI only)
+
+```bash
+bash ~/.local/share/zensynora/source/update.sh update --ref main --force --no-backup
+```
+
+`--no-backup` requires `--force`. It skips both the user-data snapshot and
+program-folder archive, and disables backup-based missing-file recovery.
+It does not delete existing backups, bypass Python/Node.js checks, skip
+release verification or prevent data migrations. The previous program release
+is retained, but cannot undo migrated data and may no longer be compatible.
+This mode is not exposed in the Web UI, Doctor or agent update actions.
+
+For a fresh updater downloaded from GitHub `main`, use
+[`force-update-no-backup.sh`](../force-update-no-backup.sh):
+
+```bash
+bash force-update-no-backup.sh
+# Nonstandard install base and optional custom data directory:
+ZENSYNORA_DATA_DIR=/path/to/user-data bash force-update-no-backup.sh /path/to/install-base
+```
+
+The script refuses to proceed if the downloaded updater lacks `--no-backup`.
+It needs Linux, curl, tar and Python 3.11+; the normal updater checks venv/pip
+and installs a suitable Node.js when needed. Run as the installation owner,
+not root. Stop manually launched Web UI, agent and Telegram processes first;
+the normal systemd handling remains in place.
+
+**Risk:** if a migration fails or a later step fails after data changes,
+recovery reports **ROLLBACK-FAILED**, not a successful data rollback. Inspect
+the log and recover from an existing external backup if available.
+`rollback --keep-data` only switches program versions; it cannot recover data.
+GitHub must contain the new option before the download script can use it.
 
 ### Doctor: reinstall the application from GitHub
 
@@ -106,7 +140,10 @@ curl -fsSL https://raw.githubusercontent.com/adrianx26/zensynora/main/install-on
 ```mermaid
 flowchart TD
     start["Update or approved Doctor reinstall"] --> pre["Preflight, fetch, updater handoff"]
-    pre --> data["Mandatory user-data backup"]
+    pre --> unsafe{"Explicit CLI no-backup override?"}
+    unsafe -- no --> data["User-data backup"]
+    unsafe -- yes --> risk["SKIPPED: both backups<br/>no data recovery"]
+    risk --> build
     data --> mode{"Program archive enabled?"}
     mode -- no --> skip["SKIPPED: program archive"]
     mode -- yes --> pause{"Interactive mode?"}
@@ -118,12 +155,15 @@ flowchart TD
     archive --> build["Carry user files, build, verify"]
     skip --> build
     build --> activate["Stop service, migrate, activate"]
-    activate --> check["Verify or restore user data"]
+    activate --> recovery{"No-backup mode?"}
+    recovery -- no --> check["Verify or restore user data"]
+    recovery -- yes --> unchecked["SKIPPED: backup-based recovery"]
+    unchecked --> finish
     check --> finish["Start service, record history, prune"]
     build & activate & check & finish -. failure .-> rollback
     rollback --> outcome{"Recovery succeeded?"}
     outcome -- yes --> recovered["ROLLED-BACK: inspect outcomes"]
-    outcome -- no --> failed["ROLLBACK-FAILED: preserve backups and repair"]
+    outcome -- no --> failed["ROLLBACK-FAILED: repair<br/>no-backup cannot undo changed data"]
     finish --> ok["OK: restart into installed release"]
     pre & data & archive & build & activate & check & finish -. events .-> logs[("Timestamped colored progress and logs")]
 ```
