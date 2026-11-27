@@ -493,6 +493,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#explicit-no-backup-forced-update-linux-cli-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explicit no-backup forced update (Linux CLI only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#doctor-reinstall-the-application-from-github" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1235,6 +1246,17 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#explicit-no-backup-forced-update-linux-cli-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Explicit no-backup forced update (Linux CLI only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#doctor-reinstall-the-application-from-github" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -1379,13 +1401,13 @@
 <p>ZenSynora updates <strong>side by side</strong>: the new version is downloaded and built in
 its own folder while the current one keeps working. It is only switched in
 after it has passed its checks against your configuration. Before anything
-changes, <strong>your data is backed up</strong> and, by default, the whole installed
+changes, <strong>your data is backed up by default</strong>, along with the whole installed
 program folder is backed up too. Failures trigger rollback; the detailed
 log distinguishes successful recovery from a rollback that needs attention.</p>
 <blockquote>
 <p><strong>Applies to v0.8.5 · Updated 2026-11-27.</strong> Structured progress and optional
-decisions use updater protocol 5. Data backups and recovery remain mandatory;
-Doctor can reinstall GitHub application code after explicit approval.</p>
+decisions use updater protocol 5; the explicit CLI no-backup override requires
+protocol 6. Normal updates and Doctor keep data backup and recovery enabled.</p>
 </blockquote>
 <h2 id="everyday-use">Everyday use<a class="headerlink" href="#everyday-use" title="Permanent link">&para;</a></h2>
 <p><strong>From the Web UI</strong> (v0.7.4): open <strong>Updates</strong> (or click the version at the
@@ -1420,6 +1442,31 @@ zensynora<span class="w"> </span>update<span class="w"> </span>--app-backup<span
 Decision files used by the Web UI are private, one-use requests tied to the
 currently waiting step. Updates from older releases retain their existing
 plain-text progress until the newer updater takes over (protocol 5).</p>
+<h3 id="explicit-no-backup-forced-update-linux-cli-only">Explicit no-backup forced update (Linux CLI only)<a class="headerlink" href="#explicit-no-backup-forced-update-linux-cli-only" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>bash<span class="w"> </span>~/.local/share/zensynora/source/update.sh<span class="w"> </span>update<span class="w"> </span>--ref<span class="w"> </span>main<span class="w"> </span>--force<span class="w"> </span>--no-backup
+</code></pre></div>
+<p><code>--no-backup</code> requires <code>--force</code>. It skips both the user-data snapshot and
+program-folder archive, and disables backup-based missing-file recovery.
+It does not delete existing backups, bypass Python/Node.js checks, skip
+release verification or prevent data migrations. The previous program release
+is retained, but cannot undo migrated data and may no longer be compatible.
+This mode is not exposed in the Web UI, Doctor or agent update actions.</p>
+<p>For a fresh updater downloaded from GitHub <code>main</code>, use
+<a href="../force-update-no-backup.sh"><code>force-update-no-backup.sh</code></a>:</p>
+<div class="highlight"><pre><span></span><code>bash<span class="w"> </span>force-update-no-backup.sh
+<span class="c1"># Nonstandard install base and optional custom data directory:</span>
+<span class="nv">ZENSYNORA_DATA_DIR</span><span class="o">=</span>/path/to/user-data<span class="w"> </span>bash<span class="w"> </span>force-update-no-backup.sh<span class="w"> </span>/path/to/install-base
+</code></pre></div>
+<p>The script refuses to proceed if the downloaded updater lacks <code>--no-backup</code>.
+It needs Linux, curl, tar and Python 3.11+; the normal updater checks venv/pip
+and installs a suitable Node.js when needed. Run as the installation owner,
+not root. Stop manually launched Web UI, agent and Telegram processes first;
+the normal systemd handling remains in place.</p>
+<p><strong>Risk:</strong> if a migration fails or a later step fails after data changes,
+recovery reports <strong>ROLLBACK-FAILED</strong>, not a successful data rollback. Inspect
+the log and recover from an existing external backup if available.
+<code>rollback --keep-data</code> only switches program versions; it cannot recover data.
+GitHub must contain the new option before the download script can use it.</p>
 <h3 id="doctor-reinstall-the-application-from-github">Doctor: reinstall the application from GitHub<a class="headerlink" href="#doctor-reinstall-the-application-from-github" title="Permanent link">&para;</a></h3>
 <p>Open <strong>Doctor → Repair installation</strong>, select the GitHub branch/tag and click
 <strong>Approve GitHub reinstall</strong>. After explicit confirmation, Doctor uses the
@@ -1485,7 +1532,10 @@ online installer once — it detects the existing install and runs the updater:<
 <h2 id="what-happens-during-an-update">What happens during an update<a class="headerlink" href="#what-happens-during-an-update" title="Permanent link">&para;</a></h2>
 <pre class="mermaid"><code>flowchart TD
     start["Update or approved Doctor reinstall"] --&gt; pre["Preflight, fetch, updater handoff"]
-    pre --&gt; data["Mandatory user-data backup"]
+    pre --&gt; unsafe{"Explicit CLI no-backup override?"}
+    unsafe -- no --&gt; data["User-data backup"]
+    unsafe -- yes --&gt; risk["SKIPPED: both backups&lt;br/&gt;no data recovery"]
+    risk --&gt; build
     data --&gt; mode{"Program archive enabled?"}
     mode -- no --&gt; skip["SKIPPED: program archive"]
     mode -- yes --&gt; pause{"Interactive mode?"}
@@ -1497,12 +1547,15 @@ online installer once — it detects the existing install and runs the updater:<
     archive --&gt; build["Carry user files, build, verify"]
     skip --&gt; build
     build --&gt; activate["Stop service, migrate, activate"]
-    activate --&gt; check["Verify or restore user data"]
+    activate --&gt; recovery{"No-backup mode?"}
+    recovery -- no --&gt; check["Verify or restore user data"]
+    recovery -- yes --&gt; unchecked["SKIPPED: backup-based recovery"]
+    unchecked --&gt; finish
     check --&gt; finish["Start service, record history, prune"]
     build &amp; activate &amp; check &amp; finish -. failure .-&gt; rollback
     rollback --&gt; outcome{"Recovery succeeded?"}
     outcome -- yes --&gt; recovered["ROLLED-BACK: inspect outcomes"]
-    outcome -- no --&gt; failed["ROLLBACK-FAILED: preserve backups and repair"]
+    outcome -- no --&gt; failed["ROLLBACK-FAILED: repair&lt;br/&gt;no-backup cannot undo changed data"]
     finish --&gt; ok["OK: restart into installed release"]
     pre &amp; data &amp; archive &amp; build &amp; activate &amp; check &amp; finish -. events .-&gt; logs[("Timestamped colored progress and logs")]</code></pre>
 <div class="highlight"><pre><span></span><code> 1 preflight        Python ≥ 3.11 that can make a venv with pip, ~1.5 GB free,

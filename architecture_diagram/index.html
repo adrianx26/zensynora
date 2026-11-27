@@ -1857,8 +1857,11 @@ and a model that is gone for good is replaced in every agent
 <h2 id="9-safe-updates">9. Safe updates<a class="headerlink" href="#9-safe-updates" title="Permanent link">&para;</a></h2>
 <p><code>zensynora update</code> (<code>updater/</code>, added in 0.6.0; program-folder backup and
 data check added in 0.7.1). Version 0.8.5 records step and rollback outcomes.
-Only the program-folder archive is optional; user-data backup, verification
-and recovery cannot be skipped. Failures attempt rollback of completed steps.</p>
+In the default flow below, only the program-folder archive is optional;
+user-data backup, verification and recovery remain enabled. The separate
+CLI-only <code>--force --no-backup</code> override (protocol 6) skips both archives and
+backup-based recovery; data changes cannot be undone without an external
+backup. Failures attempt rollback of completed steps.</p>
 <pre class="mermaid"><code>flowchart TD
     s1["1 Preflight&lt;br/&gt;Python, disk space, service state"] --&gt; s2["2 Fetch&lt;br/&gt;GitHub, folder or archive"]
     s2 --&gt; s3["3 Hand-off&lt;br/&gt;newer updater takes over"]
