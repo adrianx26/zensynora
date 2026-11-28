@@ -1361,6 +1361,11 @@
 <p>All additions are <strong>opt-in</strong>: existing <code>add_job()</code> callers and existing job
 functions continue to work unchanged. New behaviour is activated only when
 you pass the corresponding kwargs.</p>
+<p>For persisted Web UI jobs created with <code>job_create</code>, use the separate
+<a href="../webui_guide/#doctor-managed-jobs">Doctor-managed job lifecycle</a>: UUIDs,
+unassigned creation, approved teams/subtasks, assisted recovery and reusable
+job lessons. Enable <code>medic.plan_jobs</code> for automatic one-at-a-time planning;
+the scheduler building blocks below do not enable that background process.</p>
 <hr />
 <h2 id="files">Files<a class="headerlink" href="#files" title="Permanent link">&para;</a></h2>
 <ul>
