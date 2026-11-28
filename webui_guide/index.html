@@ -2520,6 +2520,14 @@ Managed installations only (Docker repairs use image rebuilds).
   or were interrupted (click one for its error); <strong>Restarts</strong> — each start of
   ZenSynora with the time since the previous one (red = within 2 minutes;
   many in a short time is a crash loop);</li>
+<li><strong>Web UI crashes</strong> (2026-11-28) — when a page crashes and the screen goes
+  black, the browser reports it to the server log as an ERROR group
+  <em>Web UI crashed on the … page: …</em>, with the browser stack in its log lines.
+  This works from other computers without the admin key; identical crashes are
+  reported once every 10 minutes (with a repeat count) and at most 20 reports
+  are logged per 10 minutes. To leave the black screen, run
+  <code>localStorage.setItem('zensynora_view', 'chat'); location.reload()</code> in the
+  browser console, then look the crash up here;</li>
 <li><strong>View report</strong> — the whole diagnostics report in the page;</li>
 <li><strong>Download</strong> — <strong>Markdown</strong>, <strong>JSON</strong> or <strong>ZIP</strong> (report + the last log
   lines). Keys and tokens are never included, so the file is safe to attach
