@@ -10,15 +10,53 @@ import { useAutoClear } from '../notice';
 
 type WorkflowReview = {
   id: number;
-  run_id: number;
+  run_id: number | null;
   job_id: string;
   severity: 'info' | 'warning' | 'error';
-  summary: string;
-  evidence: string[] | { summary?: string; message?: string; detail?: string }[];
-  recommendations: string[];
+  summary?: string;
+  evidence?: (string | { summary?: string; message?: string; detail?: string })[];
+  recommendations?: string[];
+  findings?: string[];
+  tool?: string;
+  event_id?: number;
   status: 'pending' | 'acknowledged' | 'dismissed';
   created: number;
 };
+
+export function WorkflowReviewCard({ review, onStatus }: {
+  review: WorkflowReview;
+  onStatus: (status: 'acknowledged' | 'dismissed') => void;
+}) {
+  const { evidence, recommendations, findings } = review;
+  return (
+    <div className="settings-card">
+      <div className="card-head">
+        <div>
+          <span className={`badge proposal-${review.status}`}>{review.status}</span>{' '}
+          <span className="badge">{review.severity}</span>{' '}
+          <b>{review.summary || (review.tool ? `Tool review: ${review.tool}` : 'Incomplete workflow review')}</b>
+        </div>
+        {review.status === 'pending' && <div className="row-actions">
+          <button className="ghost-btn" onClick={() => onStatus('acknowledged')}>Acknowledge</button>
+          <button className="ghost-btn" onClick={() => onStatus('dismissed')}>Dismiss</button>
+        </div>}
+      </div>
+      <div className="muted small">
+        {review.run_id != null ? `Run #${review.run_id} · job ${review.job_id}` : `Chat tool event #${review.event_id ?? 'unknown'}`} · {ago(review.created)}
+      </div>
+      {Array.isArray(evidence) && Array.isArray(recommendations) ? <details>
+        <summary>Evidence ({evidence.length}) and recommendations ({recommendations.length})</summary>
+        <b>Evidence</b>
+        <ul>{evidence.map((item, i) => <li key={i}>{typeof item === 'string' ? item : item.summary || item.message || item.detail || JSON.stringify(item)}</li>)}</ul>
+        <b>Recommended next steps (not applied)</b>
+        <ul>{recommendations.map((item, i) => <li key={i}>{item}</li>)}</ul>
+      </details> : Array.isArray(findings) ? <details>
+        <summary>Findings ({findings.length})</summary>
+        <ul>{findings.map((item, i) => <li key={i}>{item}</li>)}</ul>
+      </details> : <div className="notice error">This review has incomplete details. Check the Medic logs for more information.</div>}
+    </div>
+  );
+}
 
 const STATUS_LABEL: Record<Proposal['status'], string> = {
   pending: 'waiting for you', approved: 'approved', applying: 'installing…', applied: 'installed',
@@ -115,29 +153,9 @@ const ProposalsPanel: React.FC = () => {
         </div>
         <p className="muted">Medic's evidence-based recommendations are proposal-only: acknowledging or dismissing a review records your decision but never changes a job, tool, or configuration.</p>
         {reviews.length === 0 && <div className="muted">No workflow reviews yet.</div>}
-        {reviews.map(review => (
-          <div className="settings-card" key={review.id}>
-            <div className="card-head">
-              <div>
-                <span className={`badge proposal-${review.status}`}>{review.status}</span>{' '}
-                <span className="badge">{review.severity}</span>{' '}
-                <b>{review.summary}</b>
-              </div>
-              {review.status === 'pending' && <div className="row-actions">
-                <button className="ghost-btn" onClick={() => act(() => api(`/api/medic/workflow-reviews/${review.id}/status`, { method: 'POST', body: JSON.stringify({ status: 'acknowledged' }) }), 'Review acknowledged.')}>Acknowledge</button>
-                <button className="ghost-btn" onClick={() => act(() => api(`/api/medic/workflow-reviews/${review.id}/status`, { method: 'POST', body: JSON.stringify({ status: 'dismissed' }) }), 'Review dismissed.')}>Dismiss</button>
-              </div>}
-            </div>
-            <div className="muted small">Run #{review.run_id} · job {review.job_id} · {ago(review.created)}</div>
-            <details>
-              <summary>Evidence ({review.evidence.length}) and recommendations ({review.recommendations.length})</summary>
-              <b>Evidence</b>
-              <ul>{review.evidence.map((item, i) => <li key={i}>{typeof item === 'string' ? item : item.summary || item.message || item.detail || JSON.stringify(item)}</li>)}</ul>
-              <b>Recommended next steps (not applied)</b>
-              <ul>{review.recommendations.map((item, i) => <li key={i}>{item}</li>)}</ul>
-            </details>
-          </div>
-        ))}
+        {reviews.map(review => <WorkflowReviewCard key={review.id} review={review} onStatus={status =>
+          act(() => api(`/api/medic/workflow-reviews/${review.id}/status`, { method: 'POST', body: JSON.stringify({ status }) }), status === 'acknowledged' ? 'Review acknowledged.' : 'Review dismissed.')
+        } />)}
       </div>
 
       <div className="settings-card">

@@ -13,19 +13,24 @@ GET  /api/doctor/logs?source=activity|app&hours=&kind=&status=&level=&q=&limit=&
 GET  /api/doctor/logs/export?source=&hours=&fmt=txt|jsonl&…   the period as a file
 POST /api/doctor/logs/analyze    {hours}           the model's summary and options
 POST /api/doctor/logs/act        {option, agent}   start what an option suggests (a job)
+POST /api/doctor/ui-crash        {message, stack, component_stack, view}  a Web UI crash (2026-11-28)
 
 Secrets never leave the server: the report holds only "key set: yes/no" and
 log text is redacted (myclaw/doctor/logscan.py). Still guarded like the other
-settings routes (this computer or the admin API key) — logs are private.
+settings routes (this computer or the admin API key) — logs are private. The
+one exception is ui-crash, which only writes a bounded, de-duplicated line.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
+import re
+import time
 
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -34,6 +39,7 @@ from myclaw.web.settings_api import guard
 from myclaw.web.settings_api import ui_guard
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class ReinstallIn(BaseModel):
@@ -219,3 +225,64 @@ async def logs_act(body: ActIn):
         return L.act(body.option, body.agent)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# ── 2026-11-28: Web UI crash reports ─────────────────────────────────────────
+# A render error unmounts the whole React app (black screen). The browser
+# reports it here so it shows in Doctor → Errors. Not behind the admin guard:
+# the crash must be reported from other computers too, where the admin key is
+# often missing. Same-site + Web UI header, bounded fields, de-duplicated and
+# rate-limited so a crash loop or a LAN client cannot flood the log.
+CRASH_REPEAT_SECONDS = 600
+CRASH_WINDOW_SECONDS = 600
+CRASH_MAX_PER_WINDOW = 20
+_crash_seen: dict[str, list[float]] = {}  # signature -> [last logged, repeats since then]
+_crash_times: list[float] = []
+_CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f]")
+
+
+class UiCrashIn(BaseModel):
+    message: str = Field("", max_length=1000)
+    stack: str = Field("", max_length=8000)
+    component_stack: str = Field("", max_length=8000)
+    view: str = Field("", max_length=40)
+
+
+async def _same_site_ui(request: Request) -> None:
+    from myclaw.web.settings_api import _foreign_origin, require_ui
+
+    if _foreign_origin(request):
+        raise HTTPException(status_code=403, detail="Crash reports are only accepted from the ZenSynora Web UI.")
+    await require_ui(request)
+
+
+@router.post("/api/doctor/ui-crash", dependencies=[Depends(_same_site_ui)])
+async def ui_crash(body: UiCrashIn):
+    from myclaw.doctor.logscan import redact
+
+    message = redact(_CONTROL.sub(" ", body.message).strip()) or "unknown error"
+    view = re.sub(r"[^a-z0-9_-]", "", body.view.lower()) or "unknown"
+    signature = f"{view}|{message}"
+    now = time.time()
+    seen = _crash_seen.get(signature)
+    if seen and now - seen[0] < CRASH_REPEAT_SECONDS:
+        seen[1] += 1
+        return {"logged": False, "reason": "Already reported recently; repeats are counted."}
+    _crash_times[:] = [t for t in _crash_times if now - t < CRASH_WINDOW_SECONDS]
+    if len(_crash_times) >= CRASH_MAX_PER_WINDOW:
+        return {"logged": False, "reason": "Too many crash reports right now; try again in a few minutes."}
+    repeats = int(seen[1]) if seen else 0
+    if len(_crash_seen) >= 200:
+        _crash_seen.pop(next(iter(_crash_seen)))
+    _crash_seen[signature] = [now, 0]
+    _crash_times.append(now)
+    details = "\n".join(part for part in (
+        redact(body.stack.strip()),
+        "Component stack:" + redact(body.component_stack.rstrip()) if body.component_stack.strip() else "",
+    ) if part)
+    logger.error(
+        "Web UI crashed on the %s page: %s%s", view, message,
+        f" (repeated {repeats} more time(s) since the last report)" if repeats else "",
+        extra={"extra_fields": {"exception": details}} if details else None,
+    )
+    return {"logged": True}

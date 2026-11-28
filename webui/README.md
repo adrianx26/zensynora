@@ -23,7 +23,7 @@ zensynora webui            # http://localhost:8000
 | Updates — detailed step/rollback outcomes, optional Continue/Skip/Abort, restart | `src/components/UpdatesView.tsx`, `src/components/ProcessProgress.tsx` | `/api/update/status`, `/api/update/start`, `/api/update/decision` |
 | Settings — providers, agents (✨ generate prompt), channels, features, security | `src/components/SettingsView.tsx` | `GET/PUT /api/settings`, `POST /api/settings/probe`, `POST /api/agents/generate-prompt` |
 | Customize — profiles (style, structure, behaviour, tools off), who uses what, Telegram answering agent / team, agents' proposals, AI review / adapt, built-in features | `src/components/CustomizeView.tsx` (Built-in features: `SettingsView only="Features"`) | `/api/customize…`, `PUT /api/settings` (Telegram) |
-| Doctor — checks, reports, logs, confirmed GitHub reinstall, proposals | `src/components/DoctorView.tsx`, `src/components/UpdatesView.tsx`, `src/components/ProposalsPanel.tsx` | `/api/system/doctor…`, `/api/medic/…`, `POST /api/doctor/reinstall` |
+| Doctor — checks, reports, logs, confirmed GitHub reinstall, proposals | `src/components/DoctorView.tsx`, `src/components/UpdatesView.tsx`, `src/components/ProposalsPanel.tsx` | `/api/system/doctor…`, `/api/medic/…`, `POST /api/doctor/reinstall`, `POST /api/doctor/ui-crash` (crash reports from `src/crashReport.ts`) |
 | Costs & usage | `src/components/CostDashboard.tsx` | `/api/v1/costs/*` |
 | Tools | `src/components/ToolsView.tsx` | `GET /api/tools` |
 | Sidebar health | `src/App.tsx` | `GET /api/system/health` (every 15 s) |
@@ -53,6 +53,7 @@ npm ci
 npm run dev        # http://localhost:5173, talks to the backend on :8000
 npm run lint
 npm run build      # writes dist/ — installs and updates do this for you
+node --test tests/workflow-review.test.mjs
 ```
 
 Start the backend separately (`zensynora webui`). In dev mode the UI detects

@@ -368,3 +368,40 @@ def test_every_error_counts_as_a_failure(home):  # noqa: F811
                       _rec("WARNING", "Config file reloaded", ago=10)])
     v = report.error_view(2, kind="failures")
     assert v["kinds"]["failures"] == 1 and [g["level"] for g in v["groups"]] == ["ERROR"]
+
+
+def test_ui_crash_report_is_logged_redacted_and_deduplicated(monkeypatch, caplog):
+    import logging
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from myclaw.web import doctor_api
+
+    monkeypatch.setattr(doctor_api, "_crash_seen", {})
+    monkeypatch.setattr(doctor_api, "_crash_times", [])
+    app = FastAPI()
+    app.include_router(doctor_api.router)
+    crash = {"message": "TypeError: Cannot read properties of undefined (reading 'length')",
+             "stack": f"at wt (index.js:25:3152) token={SK_KEY}", "component_stack": "\n    at ProposalsPanel",
+             "view": "doctor"}
+    ui = {"X-ZenSynora-UI": "1"}
+    with TestClient(app, headers={}) as c, caplog.at_level(logging.INFO, logger="myclaw.web.doctor_api"):
+        assert c.post("/api/doctor/ui-crash", json=crash).status_code == 403
+        assert c.post("/api/doctor/ui-crash", json=crash,
+                      headers={**ui, "Origin": "https://evil.example"}).status_code == 403
+        assert c.post("/api/doctor/ui-crash", json=crash, headers=ui).json() == {"logged": True}
+        assert c.post("/api/doctor/ui-crash", json=crash, headers=ui).json()["logged"] is False
+        assert c.post("/api/doctor/ui-crash", json={**crash, "view": "x" * 41}, headers=ui).status_code == 422
+
+    records = [r for r in caplog.records if "Web UI crashed" in r.getMessage()]
+    assert len(records) == 1
+    assert records[0].levelno == logging.ERROR
+    assert "on the doctor page: TypeError" in records[0].getMessage()
+    details = records[0].extra_fields["exception"]
+    assert "ProposalsPanel" in details and SK_KEY not in details
+
+    doctor_api._crash_seen["doctor|" + crash["message"]][0] -= doctor_api.CRASH_REPEAT_SECONDS
+    with TestClient(app, headers={}) as c, caplog.at_level(logging.INFO, logger="myclaw.web.doctor_api"):
+        assert c.post("/api/doctor/ui-crash", json=crash, headers=ui).json() == {"logged": True}
+    assert "repeated 1 more time(s)" in caplog.records[-1].getMessage()
