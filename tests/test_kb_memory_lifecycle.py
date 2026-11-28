@@ -391,6 +391,43 @@ def test_temporal_recall_accepts_legacy_note_shapes(knowledge_home, monkeypatch)
     assert recall._temporal_search("legacy", "default", 3) == [note]
 
 
+@pytest.mark.parametrize(
+    ("observation_dates", "metadata_date", "row_date", "expected_date"),
+    [
+        ([None, "invalid", "1970-01-01T00:00:00+00:00", "2020-01-01"],
+         None, None, "2020-01-01"),
+        (["2020-01-01", "unknown"], "2021-01-01", None, "2021-01-01"),
+        ([None, "invalid"], None, "2019-01-01", "2019-01-01"),
+        ([None, "unknown"], None, None, "2018-01-01"),
+    ],
+)
+def test_temporal_recall_selects_valid_capture_dates(
+        knowledge_home, monkeypatch, observation_dates, metadata_date, row_date, expected_date):
+    from myclaw.knowledge import decay, storage, write_note
+    from myclaw.knowledge.db import KnowledgeDB
+    from myclaw.knowledge.parser import Observation
+
+    write_note("Router", "Router settings.",
+               observations=[Observation("spec", "Router settings", captured_at=row_date)])
+    with KnowledgeDB("default") as db:
+        with db._write_txn() as conn:
+            conn.execute("UPDATE entities SET updated_at = ? WHERE permalink = ?",
+                         ("2018-01-01", "router"))
+    note = SimpleNamespace(
+        permalink="router", title="Router", tags=[], metadata={"captured_at": metadata_date},
+        observations=[SimpleNamespace(content="Router settings", captured_at=date, status="active")
+                      for date in observation_dates],
+    )
+    monkeypatch.setattr(storage, "_batch_read_notes", lambda *_: [note])
+    decay_dates = []
+    monkeypatch.setattr(
+        decay, "note_factor",
+        lambda _tags, captured_at, now: (decay_dates.append(captured_at) or 0.5, 10, 5))
+
+    assert recall._temporal_search("router", "default", 3) == [note]
+    assert decay_dates == [recall._date_timestamp(expected_date)]
+
+
 def test_temporal_recall_uses_matching_observation_capture_time(knowledge_home, monkeypatch):
     from myclaw.knowledge import decay, storage, write_note
     from myclaw.knowledge.parser import Observation
@@ -664,5 +701,3 @@ def test_access_tracking_and_merge_preserves_combined_use_count(knowledge_home):
         rebuilt = db.get_entity_by_permalink("alpha")
         assert rebuilt.use_count == 3
         assert rebuilt.last_accessed is not None
-
-

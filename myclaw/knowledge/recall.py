@@ -288,10 +288,10 @@ def _temporal_search(query: str, user_id: str, limit: int,
             _date_timestamp(getattr(obs, "captured_at", None))
             for obs in observations
         ]
-        captures = [capture for capture in captures if capture is not None]
+        valid_captures = [capture for capture in captures if capture is not None]
         metadata_capture = _date_timestamp(metadata.get("captured_at"))
         captured_at = max(
-            captures + ([metadata_capture] if metadata_capture is not None else []),
+            valid_captures + ([metadata_capture] if metadata_capture is not None else []),
             default=_date_timestamp(row["captured_at"]),
         )
         updated_at = _date_timestamp(row["updated_at"])
