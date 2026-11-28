@@ -23,7 +23,7 @@ import KnowledgeView from './components/KnowledgeView';
 import EvolveView from './components/EvolveView';
 import CustomizeView from './components/CustomizeView';
 import { restartServer } from './updates';
-import { api, getAdminKey, getApiBase, type AgentInfo, type Channel, type SystemHealth } from './api';
+import { ADMIN_KEY_EVENT, api, getAdminKey, getApiBase, type AgentInfo, type Channel, type SystemHealth } from './api';
 
 type View = 'chat' | 'channels' | 'models' | 'jobs' | 'skills' | 'rules' | 'knowledge' | 'evolve' | 'customize' | 'backups' | 'updates' | 'settings' | 'costs' | 'tools' | 'doctor';
 const VIEWS: View[] = ['chat', 'channels', 'models', 'jobs', 'skills', 'rules', 'knowledge', 'evolve', 'customize', 'backups', 'updates', 'settings', 'costs', 'tools', 'doctor'];
@@ -125,6 +125,14 @@ function App() {
     loadHealth();
     const iv = setInterval(loadHealth, 15000);
     return () => clearInterval(iv);
+  }, [loadAgents, loadChannels, loadHealth]);
+
+  // 2026-11-28: on another computer the first loads fail with 403 until the admin
+  // key is entered; after unlocking, drop that stale error and load again.
+  useEffect(() => {
+    const onKey = () => { setError(null); loadAgents(); loadChannels(); loadHealth(); };
+    window.addEventListener(ADMIN_KEY_EVENT, onKey);
+    return () => window.removeEventListener(ADMIN_KEY_EVENT, onKey);
   }, [loadAgents, loadChannels, loadHealth]);
 
   const go = (v: View) => { setView(v); setSidebarOpen(false); };

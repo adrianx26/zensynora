@@ -15,6 +15,8 @@ export function getWsBase(): string {
 }
 
 const ADMIN_KEY = 'zensynora_admin_key';
+/** Fired on window when the admin key changes, so data loaded without it is fetched again. */
+export const ADMIN_KEY_EVENT = 'zensynora-admin-key';
 
 export function getAdminKey(): string {
   try { return sessionStorage.getItem(ADMIN_KEY) || ''; } catch { return ''; }
@@ -25,6 +27,7 @@ export function setAdminKey(key: string) {
     if (key) sessionStorage.setItem(ADMIN_KEY, key);
     else sessionStorage.removeItem(ADMIN_KEY);
   } catch { /* ignore */ }
+  window.dispatchEvent(new Event(ADMIN_KEY_EVENT));
 }
 
 export function authHeaders(contentType = false): Record<string, string> {
