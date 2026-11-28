@@ -9,6 +9,11 @@ from types import SimpleNamespace
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def isolated_home(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+
 def _agent(name, level, skills, description):
     return SimpleNamespace(
         name=name,
@@ -89,7 +94,7 @@ def test_model_selects_from_heuristic_pool_once_and_preserves_evidence(monkeypat
 
     assert len(calls) == 1
     assert fitted_calls == [("ollama", "local-model")]
-    assert result["selection_method"] == "model"
+    assert result["selection_method"] == "model", result.get("selection_error")
     assert result["candidates"][0]["a"] == result["heuristic_pool"][2]["a"]
     assert result["candidates"][0]["b"] == result["heuristic_pool"][2]["b"]
     assert result["checked_pairs"] == 6
@@ -255,19 +260,22 @@ def test_local_transport_failure_logs_warning_without_input_or_traceback(monkeyp
     assert "private agent prompt" not in caplog.text
 
 
-def test_rejects_missing_or_remote_local_model_setup(monkeypatch):
+def test_missing_or_remote_local_model_setup_preserves_candidates_without_network(monkeypatch):
     from myclaw.fusion_evaluation import evaluate_fusion_candidates
 
     config = _config()
     config.knowledge.decision_model = ""
-    _fake_model(monkeypatch)
-    with pytest.raises(ValueError, match="local provider and model"):
-        asyncio.run(evaluate_fusion_candidates(config))
+    calls = _fake_model(monkeypatch)
+    result = asyncio.run(evaluate_fusion_candidates(config))
+    assert result["selection_method"] == "heuristic_fallback" and result["candidates"]
+    assert "local provider and model" in result["selection_error"]
 
     config = _config()
     config.providers.ollama.base_url = "https://provider.example/v1"
-    with pytest.raises(ValueError, match="loopback"):
-        asyncio.run(evaluate_fusion_candidates(config))
+    result = asyncio.run(evaluate_fusion_candidates(config))
+    assert result["selection_method"] == "heuristic_fallback" and result["candidates"]
+    assert "loopback" in result["selection_error"]
+    assert calls == []
 
 
 def test_rejects_unbounded_inputs():
@@ -277,3 +285,43 @@ def test_rejects_unbounded_inputs():
         asyncio.run(evaluate_fusion_candidates(_config(), limit=1000))
     with pytest.raises(ValueError, match="Model timeout"):
         asyncio.run(evaluate_fusion_candidates(_config(), timeout_seconds=181))
+
+
+def test_curated_eight_agent_corpus_ranks_overlapping_roles_without_false_positive_top_pairs(monkeypatch):
+    from myclaw.fusion_evaluation import evaluate_fusion_candidates
+
+    config = _config()
+    config.knowledge.decision_model = ""
+    config.agents.named = [
+        _agent("CoderA", 5, ["python", "pytest"], "Build tested Python services"),
+        _agent("CoderB", 5, ["python", "pytest"], "Build tested Python services"),
+        _agent("WriterA", 4, ["markdown", "docs"], "Write Markdown documentation"),
+        _agent("WriterB", 4, ["markdown", "docs"], "Write Markdown documentation"),
+        _agent("Analyst", 7, ["pandas"], "Analyze research datasets"),
+        _agent("Budget", 6, ["budget"], "Prepare spending plans"),
+        _agent("Operator", 5, ["linux"], "Maintain Linux servers"),
+        _agent("Translator", 5, ["translation"], "Translate Romanian text"),
+    ]
+    calls = _fake_model(monkeypatch)
+    result = asyncio.run(evaluate_fusion_candidates(config, limit=2))
+    eligible = {frozenset(("CoderA", "CoderB")), frozenset(("WriterA", "WriterB"))}
+    incorrect = [item for item in result["candidates"] if frozenset((item["a"], item["b"])) not in eligible]
+    assert result["checked_pairs"] == 28 and len(result["candidates"]) == 2
+    assert len(incorrect) == 0 and not calls
+
+
+def test_configured_selection_is_explicit_fitted_and_preserves_evidence(monkeypatch):
+    from myclaw.fusion_evaluation import evaluate_fusion_candidates
+
+    calls = []
+
+    async def complete(config, messages, **kwargs):
+        calls.append(kwargs)
+        evidence = json.loads(messages[1]["content"])
+        pair = evidence["heuristic_pool"][0]
+        return json.dumps(_selection({"a": pair["a"], "b": pair["b"]})), "configured", "model"
+
+    monkeypatch.setattr("myclaw.provider.complete_with_fallback", complete)
+    result = asyncio.run(evaluate_fusion_candidates(_config(), limit=1, configured_model=True))
+    assert result["selection_method"] == "model" and result["model_scope"] == "configured"
+    assert calls == [{"fitted": True}]

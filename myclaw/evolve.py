@@ -138,6 +138,8 @@ def _pair(a: str, b: str) -> tuple:
     for n in (a, b):
         if n not in named:
             raise ValueError(f"{n} is not a named agent (the default agent cannot be fused).")
+        if fusion_blocks_agent(n):
+            raise ValueError(f"{n} is inactive; revive it through Medic before proposing another fusion.")
     items = _read_trash()
     if _roles(a, items) | _roles(b, items) == _MINDY_MEDIC:
         raise ValueError("Mindy and Medic cannot be fused, including their fusion lineage.")
@@ -302,24 +304,25 @@ def fusion_pending_for(name: str) -> bool:
 def fusion_blocks_agent(name: str) -> bool:
     """Block pending or inactive graveyard agents, even in a stale registry."""
     items = _read_trash()
-    if any(t.get("type") == "fusion" and t.get("state") == "pending" and name in t.get("sources", [])
+    if any(t.get("type") == "fusion" and t.get("state") == "pending"
+           and name.casefold() in {str(n).casefold() for n in t.get("sources", [])}
            for t in items):
         return True
-    if not any(isinstance(t.get("agent"), dict) and t["agent"].get("name") == name
-               and t.get("state") not in {"revived", "aborted"} for t in items):
-        return False
-    from .config import load_config
-
-    return not any(a.name == name for a in load_config(force_reload=True).agents.named)
+    return any(isinstance(t.get("agent"), dict) and str(t["agent"].get("name", "")).casefold() == name.casefold()
+               and t.get("state") not in {"revived", "aborted"} for t in items)
 
 
 def _move_fusion_references(operation: Dict[str, Any]) -> None:
     from .chat import store as chat_store
     from .jobs import store as job_store
+    from .config import load_config
 
     chat_store.fuse_members(operation["sources"], operation["destination"])
     for source in operation["sources"]:
-        job_store.rename_agent(source, operation["destination"])
+        if load_config().medic.plan_jobs:
+            job_store.reassign_agent(source, operation["destination"])
+        else:
+            job_store.rename_agent(source, operation["destination"])
 
 
 def _complete_fusion(items: List[Dict[str, Any]], operation: Dict[str, Any]) -> None:
@@ -498,7 +501,7 @@ def evaluate_fusion_candidates(limit: int = 8, config: Any = None) -> Dict[str, 
         cfg = load_config(force_reload=True)
     else:
         cfg = config
-    agents = cfg.agents.named
+    agents = [agent for agent in cfg.agents.named if not fusion_blocks_agent(agent.name)]
     items = _read_trash()
     out: list[dict[str, Any]] = []
     for A, B in combinations(agents, 2):

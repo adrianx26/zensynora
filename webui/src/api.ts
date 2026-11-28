@@ -157,6 +157,21 @@ export interface AgentInfo {
 
 export interface Job {
   id: string;
+  uid?: string;
+  doctor_managed?: boolean;
+  doctor_recovery?: boolean;
+  doctor_auto_workflow?: boolean;
+  recovery_attempts?: number;
+  recovery_timeout_s?: number;
+  recovery_state?: string;
+  planning_state?: string;
+  parent_job_id?: string;
+  team_agents?: string[];
+  doctor_plan?: {
+    id?: string; agent?: string; team_agents?: string[]; reason?: string; fallback_reason?: string;
+    tools?: string[]; requires_approval?: boolean;
+    subtasks?: { name: string; prompt: string; agents: string[] }[];
+  };
   name: string;
   prompt: string;
   agent: string;
@@ -187,10 +202,16 @@ export interface Job {
 
 export interface JobRun {
   id: number;
+  uid?: string;
+  agent?: string;
+  parent_run_id?: number | null;
+  task_hash?: string;
+  input_hash?: string;
+  execution_prompt?: string;
   job_id: string;
-  kind: 'run' | 'bench';
+  kind: 'run' | 'bench' | 'step';
   trigger: string;
-  status: 'running' | 'ok' | 'error' | 'timeout' | 'cancelled' | 'interrupted';
+  status: 'running' | 'ok' | 'error' | 'timeout' | 'cancelled' | 'interrupted' | 'blocked';
   started: number;
   finished: number | null;
   ms: number | null;

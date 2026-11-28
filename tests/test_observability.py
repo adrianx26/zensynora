@@ -59,6 +59,8 @@ def test_init_tracing_idempotent():
 @pytest.mark.parametrize("inp,expected_fragment", [
     ("Email me at alice@example.com", "<email:redacted>"),
     ("Call +1-555-123-4567", "<phone:redacted>"),
+    ("Call 0712345678", "<phone:redacted>"),
+    ("Call 0712 345 678", "<phone:redacted>"),
     ("token: sk-abcdefghij1234567890qrstuv", "<apikey:redacted>"),
     ("eyJabc.eyJdef.signABC123_xyz-abcDEFG", "<jwt:redacted>"),
 ])
@@ -74,6 +76,11 @@ def test_scrub_pii_hashes_user_id():
     out = scrub_pii("processing for user_id=alice123")
     assert "alice123" not in out
     assert "user_id=user:" in out  # hashed form
+
+
+def test_scrub_pii_keeps_dates_and_short_numbers():
+    text = "Released 2026-11-05; job 123456789."
+    assert scrub_pii(text) == text
 
 
 def test_scrub_pii_handles_empty():

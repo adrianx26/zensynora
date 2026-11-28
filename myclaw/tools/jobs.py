@@ -21,7 +21,6 @@ from typing import Any, Optional
 logger = logging.getLogger(__name__)
 
 MIN_AGENT_INTERVAL = 5  # minutes — agent-made repeating jobs cannot run more often
-MAX_AGENT_JOBS = 50
 
 
 def _runner() -> Any:
@@ -35,16 +34,19 @@ def _runner() -> Any:
 
 
 def _agents() -> list[str]:
+    from ..evolve import fusion_blocks_agent
+
     r = _runner()
     if r is not None:
         try:
-            return list(r._registry().keys())
+            return [name for name in r._registry() if not fusion_blocks_agent(name)]
         except Exception:
             pass
     try:
         from ..config import load_config
 
-        return ["default"] + [a.name for a in load_config().agents.named]
+        return [name for name in ["default", *[a.name for a in load_config().agents.named]]
+                if not fusion_blocks_agent(name)]
     except Exception:
         return ["default"]
 
@@ -109,7 +111,9 @@ def _norm(text: Any) -> str:
 def _same_job(jobs: list[dict[str, Any]], data: dict[str, Any]) -> dict[str, Any] | None:
     """An existing job with the same agent, name, task and schedule, if any."""
     for j in jobs:
-        if (j.get("agent") == data["agent"] and _norm(j.get("name")) == _norm(data["name"])
+        owner_matches = (j.get("doctor_managed") and j.get("created_by") == data["created_by"]
+                         if data.get("doctor_managed") else j.get("agent") == data["agent"])
+        if (owner_matches and _norm(j.get("name")) == _norm(data["name"])
                 and _norm(j.get("prompt")) == _norm(data["prompt"]) and j.get("schedule") == data["schedule"]):
             return j
     return None
@@ -123,7 +127,7 @@ def job_create(name: str, prompt: str, agent: str = "", schedule: str = "manual"
 
     name: short name shown on the Jobs page
     prompt: the task, written so it stands on its own (the agent does not see this chat)
-    agent: which agent runs it (empty = you)
+    agent: which agent runs it (empty = you); ignored when Doctor planning is enabled
     schedule: manual | once | interval | daily | weekly
     when: for "once" — "in 20 minutes", "in 2 hours", "18:30", "tomorrow 09:00" or "2026-10-22 08:30"
     every_minutes: for "interval" (at least 5)
@@ -135,19 +139,26 @@ def job_create(name: str, prompt: str, agent: str = "", schedule: str = "manual"
     max_steps: tool rounds per run (1-30, default 8); timeout_s: seconds per run (default 300)
     """
     from ..events import CURRENT_AGENT, CURRENT_CHANNEL
+    from ..config import load_config
+    from ..evolve import fusion_blocks_agent
     from ..jobs import store
 
     if (msg := _allowed()):
         return msg
     me = CURRENT_AGENT.get() or "default"
+    cfg = load_config()
+    managed = cfg.medic.plan_jobs
     agent = (agent or "").strip().lstrip("@") or me
-    if agent not in _agents():
+    if not managed and (agent not in _agents() or fusion_blocks_agent(agent)):
         return f"Error: no agent called '{agent}'. Agents: {', '.join(_agents())}."
+    if managed:
+        agent = ""
     schedule = (schedule or "manual").strip().lower()
     data: dict[str, Any] = {
         "name": (name or "").strip()[:80], "prompt": (prompt or "").strip(), "agent": agent,
         "schedule": schedule, "success_criteria": (success_criteria or "").strip(),
         "created_by": f"agent:{me}",
+        "doctor_managed": managed,
         "channel_id": (CURRENT_CHANNEL.get() or "") if report_here else "",
     }
     if schedule == "once":
@@ -178,19 +189,24 @@ def job_create(name: str, prompt: str, agent: str = "", schedule: str = "manual"
             return (f"Job {same['id']} \"{same['name']}\" already exists with this task for @{same['agent']} "
                     f"({_describe_schedule(same)}); it was not created again. Run it with job_run('{same['id']}') "
                     f"or check it with job_status('{same['id']}').")
-        if sum(1 for j in jobs if str(j.get("created_by", "")).startswith("agent:")) >= MAX_AGENT_JOBS:
-            return f"Error: agents already created {MAX_AGENT_JOBS} jobs; ask the user to remove some on the Jobs page."
+        limit = cfg.agents.max_created_jobs
+        if limit is not None and sum(1 for j in jobs if str(j.get("created_by", "")).startswith("agent:")) >= limit:
+            return f"Error: agent-created jobs reached agents.max_created_jobs ({limit}); change that setting or remove unused jobs."
         job = store.create_job(data)
+        if managed and run_now:
+            store.request_planning(job["id"], "Run requested at creation.", run_now=True)
     except ValueError as e:
         return f"Error: {e}"
     started = ""
-    if run_now:
+    if run_now and not managed:
         started = " " + job_run(job["id"])
     where = f" Results are posted in #{data['channel_id']}." if data["channel_id"] else ""
     nxt = f" Next run: {_fmt_time(job.get('next_run'))}." if job.get("next_run") else ""
     runner_note = "" if _runner() is not None else " (Jobs run while the Web UI is running.)"
     logger.info("Job %s (%s) created by @%s", job["id"], job["name"], me)
-    return (f"Created job {job['id']} \"{job['name']}\" for @{agent}, {_describe_schedule(job)}.{nxt}{where}"
+    assignment = "unassigned; queued for Doctor analysis" if managed else f"for @{agent}"
+    return (f"Created job {job['id']} \"{job['name']}\" {assignment}, {_describe_schedule(job)}.{nxt}{where}"
+            f" Audit UUID: {job['uid']}."
             f"{runner_note}{started} The user can see and change it on the Jobs page; "
             f"check results with job_status('{job['id']}').")
 
@@ -208,8 +224,10 @@ def job_list() -> str:
     for j in jobs:
         st = j.get("stats") or {}
         rate = f", {int(st['success_rate'] * 100)}% ok of {st['runs']}" if st.get("success_rate") is not None else ""
-        state = "RUNNING" if j["id"] in running else (j.get("last_status") or "never run")
-        lines.append(f"- {j['id']} \"{j['name']}\" @{j['agent']} · {_describe_schedule(j)}"
+        state = "RUNNING" if j["id"] in running else (
+            j["planning_state"] if j["planning_state"] != "ready" else j.get("last_status") or "never run")
+        owner = f"@{j['agent']}" if j["agent"] else "unassigned"
+        lines.append(f"- {j['id']} \"{j['name']}\" {owner} · {_describe_schedule(j)}"
                      f"{'' if j.get('enabled') else ' · PAUSED'} · last: {state}{rate}"
                      f" · next: {_fmt_time(j.get('next_run'))} · by {j.get('created_by') or 'you'}")
     return f"{len(jobs)} job(s):\n" + "\n".join(lines)
@@ -241,6 +259,8 @@ def job_run(job_id: str) -> str:
         return f"Job {job['id']} is already running — check it later with job_status('{job['id']}')."
     if MEMORY_SCOPE.get() == f"job-{job['id']}":
         return "Error: a job cannot start itself."
+    if job["planning_state"] == "needs_approval":
+        return "Error: this job needs approval of its Doctor workflow on the Jobs page before it can run."
     r.run_in_background(job["id"], trigger="agent")
     return f"Started job {job['id']} \"{job['name']}\" (@{job['agent']}). Check the result with job_status('{job['id']}')."
 
@@ -257,9 +277,11 @@ def job_status(job_id: str, runs: int = 3) -> str:
         return f"Error: no job '{job_id}'. Use job_list to see them."
     r = _runner()
     running = r is not None and job["id"] in r.running_job_ids()
-    out = [f"Job {job['id']} \"{job['name']}\" @{job['agent']} · {_describe_schedule(job)}"
+    owner = f"@{job['agent']}" if job["agent"] else "unassigned"
+    out = [f"Job {job['id']} \"{job['name']}\" {owner} · {_describe_schedule(job)}"
            f"{'' if job.get('enabled') else ' · PAUSED'}{' · RUNNING NOW' if running else ''}"
            f" · next: {_fmt_time(job.get('next_run'))}"]
+    out.append(f"Audit UUID: {job['uid']} · Doctor: {job['planning_state']} · Recovery: {job['recovery_state']}")
     history = store.list_runs(job["id"], limit=max(1, min(int(runs or 3), 10)), kind="run")
     if not history:
         out.append("No runs yet.")
@@ -269,7 +291,7 @@ def job_status(job_id: str, runs: int = 3) -> str:
         model = f" · {run.get('provider')}/{run.get('model')}" if run.get("model") else ""
         body = (run.get("output") or run.get("error") or "").strip().replace("\n", " ")
         out.append(f"- run {run['id']} {_fmt_time(run.get('started'))} · {run.get('status')} · {secs}{model}{score}"
-                   f" · trigger {run.get('trigger')}\n  {body[:600] or '(no answer)'}")
+                   f" · trigger {run.get('trigger')} · UUID {run['uid']}\n  {body[:600] or '(no answer)'}")
     return "\n".join(out)
 
 
@@ -326,7 +348,9 @@ def job_update(job_id: str, state: str = "", prompt: str = "", agent: str = "",
     if not changes:
         return "Nothing to change."
     try:
-        new = store.update_job(job["id"], changes)
+        from ..events import CURRENT_AGENT
+
+        new = store.update_job(job["id"], changes, actor=f"agent:{CURRENT_AGENT.get() or 'default'}")
     except ValueError as e:
         return f"Error: {e}"
     if new is None:

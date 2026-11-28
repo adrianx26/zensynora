@@ -48,6 +48,7 @@ interface FusionCandidate {
 interface FusionCandidateResponse {
   candidates: FusionCandidate[]; heuristic_pool: FusionCandidate[]; checked_pairs: number; assessed_pairs: number;
   selection_method: 'model' | 'heuristic_fallback'; rationale: string; evidence_ids: string[]; at: string;
+  selection_error?: string; model_scope?: 'local' | 'configured';
 }
 
 const ACTIONS = [
@@ -75,6 +76,7 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void; o
   const [pair, setPair] = useState({ a: '', b: '' });
   const [preview, setPreview] = useState<Preview | null>(null);
   const [fusionEval, setFusionEval] = useState<FusionCandidateResponse | null>(null);
+  const [configuredFusionModel, setConfiguredFusionModel] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -251,16 +253,22 @@ const EvolveView: React.FC<{ onOpenModels: () => void; onOpenJobs: () => void; o
           <div className="save-actions">
             <button className="ghost-btn" disabled={!!busy}
               onClick={() => act('fuse-eval', async () => {
-                setFusionEval(await api<FusionCandidateResponse>('/api/evolve/fuse/evaluate', { method: 'POST', body: JSON.stringify({ limit: 10 }) }));
+                setFusionEval(await api<FusionCandidateResponse>('/api/evolve/fuse/evaluate', { method: 'POST',
+                  body: JSON.stringify({ limit: 10, configured_model: configuredFusionModel }) }));
               })}>
               {busy === 'fuse-eval' ? 'Evaluating…' : '🤖 Evaluate fusion candidates'}</button>
           </div>
-          <p className="muted small">Uses the local knowledge-decision model configured in Settings → Features. Review the estimates and their evidence; they do not authorize a fusion.</p>
+          <label className="muted small"><input type="checkbox" checked={configuredFusionModel}
+            onChange={e => setConfiguredFusionModel(e.target.checked)} /> Use my configured main / fallback models instead of the loopback model.
+            This sends the sanitized candidate evidence to those providers when you click Evaluate.</label>
+          <p className="muted small">If no valid model is available, heuristic candidates still appear with the reason.
+            Review the estimates and evidence; they do not authorize a fusion.</p>
           {fusionEval && (
             <div className="evolve-suggest">
               <div className="muted small">Assessed {fusionEval.assessed_pairs} of {fusionEval.checked_pairs} candidate pairs at {fusionEval.at}.
-                Selection: {fusionEval.selection_method === 'model' ? 'local model from a deterministic heuristic pool' : 'deterministic heuristic fallback'}.
+                Selection: {fusionEval.selection_method === 'model' ? `${fusionEval.model_scope || 'local'} model from a deterministic heuristic pool` : 'deterministic heuristic fallback'}.
                 No tests, benchmarks or security scans were performed.</div>
+              {fusionEval.selection_error && <p className="notice error">{fusionEval.selection_error}</p>}
               <div className="muted small"><b>Selection rationale:</b> {fusionEval.rationale}{' '}
                 {fusionEval.evidence_ids.length > 0 && <>Evidence: {fusionEval.evidence_ids.join(', ')}.</>}</div>
               <div className="muted small">Top heuristic pool considered: {fusionEval.heuristic_pool.length} of {fusionEval.checked_pairs} pairs.</div>

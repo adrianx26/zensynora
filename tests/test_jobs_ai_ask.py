@@ -178,7 +178,8 @@ def test_delete_refuses_active_job(home, monkeypatch):
     monkeypatch.setattr(
         jobs_api,
         "runner",
-        lambda: SimpleNamespace(running_job_ids=lambda: [job["id"]]),
+        lambda: SimpleNamespace(running_job_ids=lambda: [job["id"]],
+                                job_busy=lambda job_id: job_id == job["id"]),
     )
     app = FastAPI()
     app.include_router(jobs_api.router)

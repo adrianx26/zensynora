@@ -551,6 +551,7 @@ async def evaluate_fusion_candidates(
     config: Any = None,
     limit: int = DEFAULT_LIMIT,
     timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
+    configured_model: bool = False,
 ) -> dict[str, Any]:
     """Rank a heuristic pool and ask the local model to select candidates, read-only."""
     try:
@@ -575,7 +576,6 @@ async def evaluate_fusion_candidates(
             asyncio.to_thread(load_config, force_reload=True),
             timeout=remaining,
         )
-    local_model = _configured_local_model(config)
     remaining = deadline - loop.time()
     if remaining <= 0:
         raise TimeoutError("Fusion candidate selection deadline expired before heuristic evaluation.")
@@ -618,18 +618,23 @@ async def evaluate_fusion_candidates(
             try:
                 from .agent import Agent
 
-                provider, model, base_url, headers = local_model
-                fitter = object.__new__(Agent)
+                if configured_model:
+                    from .provider import complete_with_fallback
+                    from .customize import base_prompt
 
-                async def send(fitted_messages: list[dict[str, str]]) -> str:
-                    return await _local_chat(
-                        provider, model, base_url, headers, fitted_messages, remaining
+                    messages[0]["content"] = base_prompt() + "\n\n" + _SELECTION_SYSTEM
+                    raw, _, _ = await asyncio.wait_for(
+                        complete_with_fallback(config, messages, fitted=True), timeout=remaining
                     )
+                else:
+                    provider, model, base_url, headers = _configured_local_model(config)
+                    fitter = object.__new__(Agent)
 
-                raw = await asyncio.wait_for(
-                    fitter._fitted(provider, model, messages, send),
-                    timeout=remaining,
-                )
+                    async def send(fitted_messages: list[dict[str, str]]) -> str:
+                        return await _local_chat(provider, model, base_url, headers, fitted_messages, remaining)
+
+                    raw = await asyncio.wait_for(
+                        fitter._fitted(provider, model, messages, send), timeout=remaining)
                 selected = _validate_selection(raw, pool, limit, evidence)
                 fallback = selected["candidates"]
                 rationale = selected["rationale"]
@@ -664,6 +669,7 @@ async def evaluate_fusion_candidates(
         "checked_pairs": int(heuristic.get("checked_pairs", 0)),
         "assessed_pairs": len(candidates),
         "selection_method": selection_method,
+        "model_scope": "configured" if configured_model else "local",
         "rationale": rationale,
         "evidence_ids": selection_evidence,
         "heuristic_pool": pool,
@@ -671,7 +677,8 @@ async def evaluate_fusion_candidates(
             "deterministic heuristic pool",
             "local-model selection when valid; deterministic top-pool fallback otherwise",
         ],
-        "scope": "Read-only selection from supplied configuration using a local model.",
+        "scope": ("Read-only selection using explicitly selected configured models." if configured_model else
+                  "Read-only selection from supplied configuration using a local model."),
         "verification_status": "not_verified",
         "limitations": list(_GLOBAL_LIMITATIONS),
         "at": time.strftime("%Y-%m-%d %H:%M:%S"),

@@ -57,7 +57,7 @@ myclaw/
 │                            #   logscan.py (log grouping, redaction), report.py (diagnostics report) [0.8.1]
 ├── evals/                   # Dataset-driven eval harness [Sprint 7]
 ├── events.py                # Agent-to-agent activity events (delegation, tools, jobs) [0.7.1]
-├── jobs/                    # Jobs: store (jobs.db) + runner (schedule, evaluate, benchmark) [0.7.1]
+├── jobs/                    # UUID/audit store, Doctor planning, tracked workflows, recovery and learned context
 │                            #   + medic.py: diagnose / fix failed runs [0.7.5]
 ├── llm_errors.py            # Readable model-server errors + rotation cooldowns [0.7.3]
 ├── model_health.py          # Model health, automatic fallback order, time limits, replace a model in all agents, mismatch check [0.8.1]
@@ -108,7 +108,7 @@ myclaw/
 │   ├── chat_api.py          # Channels REST + /ws/channels/{id} [0.7.1]
 │   ├── models_api.py        # Default model, rotation, prompt generator [0.7.1]; model health, replace in all agents [0.8.1]
 │   ├── provider_keys_api.py # Add / rename / delete / test a provider's API keys [0.7.5]
-│   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark [0.7.1]
+│   ├── jobs_api.py          # Jobs CRUD, run, evaluate, benchmark, Doctor plans/approval/retry/audit
 │   ├── backup_api.py        # Backups/restore + GET /api/backups/process [0.8.5]
 │   ├── medic_api.py         # Change proposals, problems, lessons, self-review [0.7.1]
 │   ├── evolve_api.py        # Evolve page: overview, levels, change requests, fusion, restore [0.8.1]

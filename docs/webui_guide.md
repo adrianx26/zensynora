@@ -312,6 +312,55 @@ reviews on the Doctor page.
 | Clean memory | Each run starts without the previous runs' conversation |
 | Prior runs context | How many previous finished runs the agent sees as background (0–20; default 0 = none) |
 | Insight notes / profile updates | Opt-in: save knowledge-base notes or propose profile updates |
+| Let Doctor assign | Start unassigned and let Doctor propose an active agent, team or ordered subtasks |
+| Doctor recovery | Opt-in investigation and safe retries, bounded by recovery attempts and total time |
+| Automatic workflows | Explicit permission to apply team/subtask plans without a separate approval |
+
+### Doctor-managed jobs
+
+Enable **Settings → Features → Doctor manages new agent-created jobs**
+(`medic.plan_jobs`). Agent-created jobs then start **unassigned**, even when
+the caller names an agent. Doctor analyzes one queued job at a time while
+the Web UI runs. A *Run now* request at creation waits for planning and,
+when required, approval. Manual UI assignments retain their existing behavior;
+individual UI jobs can opt in with **Let Doctor assign this job**.
+Agent-created jobs have no default fixed capacity cap; an optional
+`agents.max_created_jobs` setting can impose an explicit limit.
+
+**Doctor: analyze / reassign** also works explicitly with automatic planning
+off. Doctor uses the configured main/fallback models with a deadline and
+deterministic active-agent routing when models are unavailable. Teams and
+ordered subtasks require **Approve this workflow**, unless the job explicitly
+permits automatic workflows. Tool recommendations never grant permissions.
+Editing a waiting plan invalidates it; analyze again rather than approving
+an outdated suggestion.
+
+Jobs, subtasks and runs have stable **audit UUIDs**. Existing job IDs and
+integer run IDs remain valid. Expand a run to see its UUID, executing agent
+and linked parent run; **Audit / subtasks** shows privacy-filtered changes.
+Complete prior job snapshots remain in the local jobs database, and replaced
+subtasks are retained as superseded revisions.
+Deleting a parent preserves its subtasks and their history as paused
+standalone jobs, with their previous parent link retained in the audit.
+
+Enable **Doctor / Medic assisted recovery on failure**, or select
+**Doctor / Medic: investigate & retry** on a failed run. Doctor diagnoses the
+failure, adjusts safe execution limits, can select another active agent or
+propose a revised workflow, and retries within the job's configured limits
+(defaults: three recovery rounds, 1,800 seconds total). Success criteria are
+checked before calling an assisted run successful. Credentials, code repairs,
+prompt/criteria changes and risky workflow changes wait for review.
+**Stop job / recovery** cancels execution or diagnosis; partial results and
+the reason for stopping remain visible. This is bounded recovery, not a
+guarantee of eventual success.
+Unchanged completed steps are reused when resuming a failed workflow;
+changed subtask prompts invalidate that reuse. A failed team-member retry
+resumes its parent workflow. Repeating an already completed assisted recovery
+returns the existing successful run instead of repeating actions.
+
+With automatic Doctor planning enabled, jobs affected by fusion or agent
+removal enter the same one-at-a-time queue instead of being blindly reassigned.
+Inactive graveyard agents are always blocked, even in stale registries.
 
 **Job insights** (v0.8.5): a run can teach the next one. *Prior runs context*
 gives the agent a bounded, sanitised summary of its last finished runs (status,
@@ -320,7 +369,11 @@ anything reaches the prompt, and a run never sees itself). Job results feed
 your **knowledge base** and **profile** only when you opt in per job
 (*Save insight notes* / *Propose profile updates* in the editor). Insight
 notes are kept as one durable *Job insights* note per job, updated in place
-after each run; profile changes stay **proposals you review** on the Customize
+after each run. Their editable text and recent lessons now enter subsequent
+job prompts as quoted evidence, independently of *Prior runs context*;
+assisted retries can consume the diagnosed failure lesson. Optional model
+distillation extracts a durable lesson, falling back to deterministic text.
+Profile changes stay **proposals you review** on the Customize
 page — your profile is never changed automatically. The
 small **💡 insights** link on a compact tile asks AI Ask what the recent runs
 taught us; the chip is highlighted while either insight option is on.
@@ -804,15 +857,19 @@ anything fails. *Updates → Roll back* undoes it later.
    numbers are uncalibrated model estimates, not measured probabilities;
    progress summarizes available job history. Quality, performance and
    security findings are suggestions, not verified tests or scans. A local
-   loopback provider and model must be configured under Settings → Features;
-   errors are shown if the model is unavailable. Then pick two named agents
+   loopback provider and model can be configured under Settings → Features;
+   if missing or unavailable, heuristic candidates still appear with an
+   explicit fallback reason. The optional **Use my configured main / fallback
+   models** checkbox authorizes sending sanitized candidate evidence to those
+   providers when you click Evaluate; it is off by default. Then pick two named agents
    and *Draft the merged agent*. The default
    model writes a name, description and one system prompt that keeps the
    duties and rules of both; if the model is unavailable, both prompts are
    joined. You edit the draft and pick whose model (provider, key, context
    length) to keep. Skills are combined and the level is the lower of the
    two. *Replace A and B by …* saves it. Channels, direct messages and jobs
-   of both move to the new agent, and the two originals go to the
+   of both move to the new agent (jobs instead enter individual Doctor
+   reassignment when `medic.plan_jobs` is enabled), and the two originals go to the
    **Graveyard** (`~/.myclaw/agents-graveyard.json`), removed from the active
    configuration. Recovery snapshots retain their previous configuration;
    the graveyard overview does not expose it. The guarded revival action

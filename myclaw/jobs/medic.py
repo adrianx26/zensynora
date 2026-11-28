@@ -236,11 +236,13 @@ def _context(job: dict[str, Any], run: dict[str, Any], agents: dict[str, str]) -
 
 
 def _agents(config: Any) -> dict[str, str]:
+    from ..evolve import fusion_blocks_agent
+
     d = config.agents.defaults
     out = {"default": f"{d.provider}/{d.model}"}
     for a in config.agents.named:
         out[a.name] = f"{a.provider or d.provider}/{a.model or d.model}"
-    return out
+    return {name: model for name, model in out.items() if not fusion_blocks_agent(name)}
 
 
 _SECRET_PATTERNS = (
@@ -292,7 +294,9 @@ def _agent_catalog(config: Any, registry: dict[str, Any] | None = None) -> dict[
             continue
         description = getattr(agent, "description", "")
         result[name] = _safe_evidence(description, 300) or "Available agent."
-    return result
+    from ..evolve import fusion_blocks_agent
+
+    return {name: description for name, description in result.items() if not fusion_blocks_agent(name)}
 
 
 def _safe_job_changes(
@@ -398,8 +402,9 @@ async def diagnose(run_id: int, use_model: bool = True) -> dict[str, Any]:
         if rule:
             content += f"\n\nFIRST GUESS (rule-based, may be incomplete): {rule['cause']}"
         try:
-            text, prov, model = await complete_with_fallback(
-                config, [{"role": "system", "content": MEDIC_PROMPT}, {"role": "user", "content": content}])
+            text, prov, model = await asyncio.wait_for(complete_with_fallback(
+                config, [{"role": "system", "content": MEDIC_PROMPT}, {"role": "user", "content": content}],
+                fitted=True), timeout=180)
             result = _clean(_parse(text), list(agents), job)
             result["by"] = f"{prov}/{model}"
         except Exception as e:
@@ -432,7 +437,16 @@ async def apply_fix(run_id: int) -> dict[str, Any]:
     changes = diag.get("job_changes") or {}
     if not changes:
         raise ValueError("The medic suggested no change to the job for this failure.")
-    job = await asyncio.to_thread(store.update_job, run["job_id"], dict(changes))
+    from ..config import load_config
+
+    current = await asyncio.to_thread(store.get_job, run["job_id"])
+    if current is None:
+        raise KeyError(run["job_id"])
+    if any(current.get(key) != value for key, value in diag.get("current", {}).items()):
+        raise ValueError("The job changed after this diagnosis. Ask the Medic to diagnose it again.")
+    if "agent" in changes and changes["agent"] not in _agents(load_config()):
+        raise ValueError("The suggested agent is inactive. Ask Doctor to choose an active replacement.")
+    job = await asyncio.to_thread(store.update_job, run["job_id"], dict(changes), actor="medic")
     if job is None:
         raise KeyError(run["job_id"])
     diag.update(applied=True, applied_at=time.time())

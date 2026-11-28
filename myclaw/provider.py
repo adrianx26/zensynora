@@ -1718,7 +1718,7 @@ def _build_custom_provider(cp) -> BaseLLMProvider:
 
 
 async def complete_with_fallback(config, messages: List[Dict], provider: Optional[str] = None,
-                                 model: Optional[str] = None) -> Tuple[str, str, str]:
+                                 model: Optional[str] = None, *, fitted: bool = False) -> Tuple[str, str, str]:
     """A plain completion for utility work, trying fallbacks (added in v0.7.4).
 
     Writing an agent's prompt and scoring a job used ONLY the default model;
@@ -1751,7 +1751,15 @@ async def complete_with_fallback(config, messages: List[Dict], provider: Optiona
     for prov_name, mdl, kid in usable:
         try:
             prov = get_provider(config, prov_name, key_id=kid) if kid else get_provider(config, prov_name)
-            text = await complete_text(prov, messages, mdl)
+            if fitted:
+                from .agent import Agent
+
+                async def send(fitted_messages):
+                    return await complete_text(prov, fitted_messages, mdl)
+
+                text = await object.__new__(Agent)._fitted(prov_name, mdl, messages, send)
+            else:
+                text = await complete_text(prov, messages, mdl)
         except Exception as e:
             wait = cooldown_for(e)
             if wait:

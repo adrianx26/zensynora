@@ -31,6 +31,8 @@ const EMPTY: Draft = {
   name: '', prompt: '', agent: 'default', schedule: 'manual', every_minutes: 60, at_time: '09:00', days: 'mon,tue,wed,thu,fri',
   enabled: true, channel_id: '', success_criteria: '', auto_evaluate: false, fresh_context: true, timeout_s: 300, retries: 0,
   on_failure: '', max_steps: 8, context_runs: 0, insight_notes: false, insight_profile: false,
+  doctor_managed: false, doctor_recovery: false, doctor_auto_workflow: false,
+  recovery_attempts: 3, recovery_timeout_s: 1800,
 };
 
 // Asked when you click the 💡 insights link on a compact tile — a focused AI Ask question.
@@ -149,6 +151,8 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
   const [aiQuestion, setAIQuestion] = useState('');
   const [aiAnswer, setAIAnswer] = useState<JobAIAnswer | null>(null);
   const [aiBusy, setAIBusy] = useState(false);
+  const [doctorBusy, setDoctorBusy] = useState(false);
+  const [audit, setAudit] = useState<{ jobId: string; text: string } | null>(null);
   const aiRequest = useRef(0);
 
   const loadJobs = useCallback(async () => {
@@ -215,6 +219,18 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
   }, editingId ? 'Job saved.' : 'Job created.');
 
   const runNow = (id: string) => act(() => api(`/api/jobs/${id}/run`, { method: 'POST' }), 'Started — the result appears below.');
+  const doctorAction = async (path: string, body: object = {}) => {
+    setDoctorBusy(true);
+    try {
+      await act(async () => {
+        const result = await api<{ status?: string; run_id?: number; uid?: string }>(path, { method: 'POST', body: JSON.stringify(body) });
+        if (result.status === 'already_completed') setNotice({ kind: 'ok',
+          text: `Already recovered by run #${result.run_id} (${result.uid}); no actions repeated.` });
+      });
+    } finally {
+      setDoctorBusy(false);
+    }
+  };
   const toggle = (j: Job) => act(() => api(`/api/jobs/${j.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !j.enabled }) }));
   // 2026-10-27: delete from the list too, with an inline confirmation instead of a browser dialog.
   const remove = (j: Job) => act(async () => {
@@ -258,7 +274,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
   const applySuggestedAgent = () => aiTarget && aiAnswer && agents.some(a => a.name === aiAnswer.suggested_agent) &&
     act(() => api(`/api/jobs/${aiTarget.jobId}`, {
       method: 'PATCH',
-      body: JSON.stringify({ agent: aiAnswer.suggested_agent }),
+      body: JSON.stringify({ agent: aiAnswer.suggested_agent, doctor_managed: false, team_agents: [] }),
     }), `Job now uses @${aiAnswer.suggested_agent}.`);
   const evaluate = (r: JobRun) => act(() => api(`/api/jobs/runs/${r.id}/evaluate`, { method: 'POST', body: '{}' }), 'Evaluated with the main model.');
   const askMedic = async (r: JobRun) => {
@@ -291,7 +307,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
     `Benchmark started on ${bench.length} model(s).`);
 
   const benchRuns = useMemo(() => runs.filter(r => r.kind === 'bench'), [runs]);
-  const normalRuns = useMemo(() => runs.filter(r => r.kind === 'run'), [runs]);
+  const normalRuns = useMemo(() => runs.filter(r => r.kind === 'run' || r.kind === 'step'), [runs]);
 
   // ── editor ────────────────────────────────────────────────────────────────
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft(d => (d ? { ...d, [k]: v } : d));
@@ -309,7 +325,9 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
         <div className="field"><label className="field-label">Name</label>
           <input className="field-input" value={draft.name} onChange={e => set('name', e.target.value)} /></div>
         <div className="field"><label className="field-label">Agent</label>
-          <select className="field-input" value={draft.agent} onChange={e => set('agent', e.target.value)}>
+          <select className="field-input" value={draft.agent || ''} disabled={draft.doctor_managed}
+            onChange={e => set('agent', e.target.value)}>
+            {!draft.agent && <option value="">Unassigned — Doctor will analyze</option>}
             {agents.map(a => <option key={a.name} value={a.name}>@{a.name}</option>)}
           </select></div>
         <div className="field"><label className="field-label">Post results in</label>
@@ -318,6 +336,14 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
             {channels.map(c => <option key={c.id} value={c.id}>{c.kind === 'dm' ? '@' : '#'}{c.kind === 'dm' ? c.members[0] : c.name}</option>)}
           </select></div>
       </div>
+      <div className="field field-inline">
+        <label className="field-label">Let Doctor assign this job</label>
+        <label className="switch"><input type="checkbox" checked={!!draft.doctor_managed}
+          onChange={e => setDraft(d => d && ({ ...d, doctor_managed: e.target.checked, agent: e.target.checked ? '' : 'default' }))} />
+          <span className="switch-track"><span className="switch-thumb" /></span></label>
+      </div>
+      {draft.doctor_managed && <p className="muted small">Created without an agent. Enable automatic Doctor planning in Settings → Features,
+        or use Analyze / reassign below. Teams and subtasks require approval unless you explicitly allow automatic workflows.</p>}
       <div className="field"><label className="field-label">What the agent should do</label>
         <textarea className="field-input" rows={4} value={draft.prompt} onChange={e => set('prompt', e.target.value)} /></div>
       <div className="agent-editor-grid">
@@ -375,6 +401,8 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
       </div>
       {([['enabled', 'Enabled'], ['auto_evaluate', 'Score every run with the main model'], ['fresh_context', 'Start each run with a clean memory'],
         ['insight_notes', 'Save insight notes to the knowledge base'],
+        ['doctor_recovery', 'Doctor / Medic assisted recovery on failure'],
+        ['doctor_auto_workflow', 'Allow Doctor teams and subtask workflows without another approval'],
         ['insight_profile', 'Propose profile updates from results']] as const).map(([k, label]) => (
         <div className="field field-inline" key={k}>
           <label className="field-label">{label}</label>
@@ -382,6 +410,14 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
             <span className="switch-track"><span className="switch-thumb" /></span></label>
         </div>
       ))}
+      {draft.doctor_recovery && <div className="agent-editor-grid">
+        <div className="field"><label className="field-label">Doctor recovery attempts</label>
+          <input className="field-input" type="number" min={1} value={draft.recovery_attempts ?? 3}
+            onChange={e => set('recovery_attempts', Number(e.target.value))} /></div>
+        <div className="field"><label className="field-label">Total recovery time (seconds)</label>
+          <input className="field-input" type="number" min={10} value={draft.recovery_timeout_s ?? 1800}
+            onChange={e => set('recovery_timeout_s', Number(e.target.value))} /></div>
+      </div>}
       {(draft.insight_notes || draft.insight_profile) && (
         <p className="insight-hint">Insight notes are saved automatically when enabled.
           Profile changes are proposed for your review, not applied automatically.</p>
@@ -421,7 +457,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                   <div className="job-tile-head">
                     <div>
                       <b title={j.name}>{j.name}</b>
-                      <div className="job-tile-sub">@{j.agent} · {scheduleText(j)}</div>
+                      <div className="job-tile-sub">{j.agent ? `@${j.agent}` : `Doctor: ${j.planning_state || 'pending'}`} · {scheduleText(j)}</div>
                     </div>
                     <span className="job-tile-status" title={j.running ? 'Running' : j.last_status || 'Not run'}>
                       {j.running ? '⏳' : STATUS_ICON[j.last_status] || '○'}
@@ -437,7 +473,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                       💡 insights</button>
                   </div>
                   <div className="job-tile-actions row-actions" onClick={e => e.stopPropagation()}>
-                    <button className="icon-btn" disabled={j.running} onClick={() => runNow(j.id)}
+                    <button className="icon-btn" disabled={j.running || j.planning_state === 'needs_approval'} onClick={() => runNow(j.id)}
                       aria-label={`Run ${j.name}`} title="Run now">▶</button>
                     <button className="icon-btn" onClick={() => toggle(j)}
                       aria-label={`${j.enabled ? 'Pause' : 'Resume'} ${j.name}`} title={j.enabled ? 'Pause' : 'Resume'}>
@@ -467,14 +503,14 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                 {jobs.map(j => (
                   <tr key={j.id} className={selected === j.id ? 'selected' : ''} onClick={() => setSelected(j.id)}>
                     <td><b>{j.name}</b>{!j.enabled && <span className="badge">paused</span>}{j.created_by !== 'you' && <span className="badge">by {j.created_by}</span>}</td>
-                    <td>@{j.agent}</td>
+                    <td>{j.agent ? `@${j.agent}` : `Doctor: ${j.planning_state || 'pending'}`}</td>
                     <td>{scheduleText(j)}</td>
                     <td>{j.running ? '⏳ running' : <>{STATUS_ICON[j.last_status] || ''} {ago(j.last_run)}</>}</td>
                     <td>{j.enabled && j.next_run ? ago(j.next_run) : '—'}</td>
                     <td>{j.stats?.success_rate != null ? `${Math.round(j.stats.success_rate * 100)}% of ${j.stats.runs}` : '—'}</td>
                     <td><ScoreBadge score={j.stats?.avg_score} /></td>
                     <td className="row-actions" onClick={e => e.stopPropagation()}>
-                      <button className="ghost-btn" disabled={j.running} onClick={() => runNow(j.id)}>▶ Run</button>
+                      <button className="ghost-btn" disabled={j.running || j.planning_state === 'needs_approval'} onClick={() => runNow(j.id)}>▶ Run</button>
                       <button className="ghost-btn" onClick={() => toggle(j)}>{j.enabled ? 'Pause' : 'Resume'}</button>
                       <button className="ghost-btn" onClick={() => { setDraft({ ...j }); setEditingId(j.id); }}>Edit</button>
                       <button className="ghost-btn" onClick={() => void askAI(j.id)} title="Ask AI about this job">✦ AI Ask</button>
@@ -546,12 +582,36 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
             <div className="card-head">
               <h3>{job.name}</h3>
               <div className="row-actions">
-                <button className="ghost-btn" disabled={job.running} onClick={() => runNow(job.id)}>▶ Run now</button>
+                <button className="ghost-btn" disabled={job.running || doctorBusy || job.planning_state === 'needs_approval'}
+                  onClick={() => runNow(job.id)}>▶ Run now</button>
+                {job.running && <button className="ghost-btn" onClick={() => doctorAction(`/api/jobs/${job.id}/stop`)}>Stop job / recovery</button>}
+                <button className="ghost-btn" disabled={job.running || doctorBusy}
+                  onClick={() => doctorAction(`/api/jobs/${job.id}/plan`)}>Doctor: analyze / reassign</button>
+                <button className="ghost-btn" onClick={() => act(async () => {
+                  const data = await api<unknown>(`/api/jobs/${job.id}/audit`);
+                  setAudit({ jobId: job.id, text: JSON.stringify(data, null, 2) });
+                })}>Audit / subtasks</button>
                 <button className="ghost-btn" onClick={() => { setDraft({ ...job }); setEditingId(job.id); }}>Edit</button>
                 {deleteButtons(job)}
               </div>
             </div>
             <p className="muted pre">{job.prompt}</p>
+            <p className="muted small">Job ID: <code>{job.id}</code> · Audit UUID: <code>{job.uid}</code>
+              {job.parent_job_id && <> · Parent: <code>{job.parent_job_id}</code></>}</p>
+            <p className="muted small">Assignment: {job.agent ? `@${job.agent}` : 'unassigned'} · Doctor: {job.planning_state || 'ready'}
+              {job.team_agents?.length ? ` · team: ${job.team_agents.join(', ')}` : ''}
+              {job.recovery_state && ` · recovery: ${job.recovery_state}`}</p>
+            {job.doctor_plan?.reason && <div className="medic-panel">
+              <b>Doctor plan:</b> {job.doctor_plan.reason}
+              <p>Proposed assignment: @{job.doctor_plan.agent}{job.doctor_plan.team_agents?.length
+                ? ` · team: ${job.doctor_plan.team_agents.join(', ')}` : ''}</p>
+              {job.doctor_plan.fallback_reason && <p className="muted small">Model unavailable; deterministic routing: {job.doctor_plan.fallback_reason}</p>}
+              {job.doctor_plan.subtasks?.map((step, i) => <p key={i}>{i + 1}. {step.name} — {step.agents.join(', ')}<br />{step.prompt}</p>)}
+              {!!job.doctor_plan.tools?.length && <p>Suggested tools (no new permissions): {job.doctor_plan.tools.join(', ')}</p>}
+              {job.planning_state === 'needs_approval' && <button className="primary-btn" disabled={job.running || doctorBusy}
+                onClick={() => doctorAction(`/api/jobs/${job.id}/plan/approve`, { plan_id: job.doctor_plan?.id })}>Approve this workflow</button>}
+            </div>}
+            {audit?.jobId === job.id && <details open><summary>Privacy-filtered audit and subtasks</summary><pre>{audit.text}</pre></details>}
             {job.success_criteria && <p className="muted"><b>Success:</b> {job.success_criteria}</p>}
             <div className="settings-tabs">
               <button className={`settings-tab ${tab === 'runs' ? 'active' : ''}`} onClick={() => setTab('runs')}>Runs ({normalRuns.length})</button>
@@ -566,7 +626,7 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                     <div className="run-head" onClick={() => setOpenRun(openRun === r.id ? null : r.id)}>
                       <span>{STATUS_ICON[r.status] || r.status}{r.diagnosis && <span title="Diagnosed by the medic"> 🩺</span>}</span>
                       <span>{fmtTime(r.started)}</span>
-                      <span className="muted">{r.trigger}{r.attempt > 1 ? ` · attempt ${r.attempt}` : ''}</span>
+                      <span className="muted">{r.kind === 'step' ? 'team step · ' : ''}{r.trigger}{r.attempt > 1 ? ` · attempt ${r.attempt}` : ''}</span>
                       <span className="muted">{r.ms != null ? `${(r.ms / 1000).toFixed(1)} s` : ''}</span>
                       <span className="muted">{r.provider && `${r.provider}/${r.model}`}</span>
                       <ScoreBadge score={r.score} />
@@ -592,10 +652,17 @@ const JobsView: React.FC<Props> = ({ agents, channels }) => {
                             title="The medic finds why this run failed and suggests a fix">
                             {medicBusy === r.id ? '🩺 Diagnosing…' : r.diagnosis ? '🩺 Diagnose again' : '🩺 Ask the medic'}</button>
                         )}
+                        {['error', 'timeout', 'interrupted', 'blocked'].includes(r.status) &&
+                          <button className="ghost-btn" disabled={job.running || doctorBusy}
+                            onClick={() => doctorAction(`/api/jobs/runs/${r.id}/retry-assisted`)}
+                            title="Investigate this failure, adjust safe execution limits, choose active agents and retry within configured limits">
+                            Doctor / Medic: investigate &amp; retry</button>}
                       </span>
                     </div>
                     {openRun === r.id && (
                       <div className="run-body">
+                        <p className="muted small">Run UUID: <code>{r.uid}</code> · Agent: {r.agent || job.agent}
+                          {r.parent_run_id && ` · linked run #${r.parent_run_id}`}</p>
                         {r.error && <div className="probe-err">{r.error}</div>}
                         {r.output && <pre>{r.output}</pre>}
                         {r.diagnosis && (

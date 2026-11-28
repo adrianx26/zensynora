@@ -577,6 +577,7 @@ class AgentsConfig(BaseModel):
     allow_agent_creation: bool = True
     # Agents may create / pause / change jobs on the Jobs page (tools job_create …).
     allow_job_creation: bool = True
+    max_created_jobs: Optional[int] = Field(None, ge=1)
 
 
 class ChannelsConfig(BaseModel):
@@ -787,6 +788,10 @@ class MedicConfig(BaseModel):
     # 2026-11-04: the default model explains new kinds of errors in the background (Doctor → Report).
     # Off by default; only writes explanations, changes nothing.
     auto_explain_errors: bool = False
+    plan_jobs: bool = False
+    job_plan_timeout_s: int = Field(60, ge=1, le=180)
+    job_max_team: int = Field(4, ge=1)
+    job_max_subtasks: int = Field(6, ge=1)
 
 
 class NewTechConfig(BaseModel):

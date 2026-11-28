@@ -16,7 +16,7 @@
   <span class="dot"></span>
   <h1 class="title">Medic &amp; Doctor Guide</h1>
 </div>
-<p class="subtitle">2 diagram(s) extracted from <code>docs/medic_agent_guide.md</code></p>
+<p class="subtitle">3 diagram(s) extracted from <code>docs/medic_agent_guide.md</code></p>
 <div class="legend">
   <div class="legend-item"><span class="legend-swatch external"></span>External / User</div>
   <div class="legend-item"><span class="legend-swatch frontend"></span>Frontend / Gateway</div>
@@ -37,6 +37,26 @@
     activate --&gt; report[&quot;Colored step and recovery outcomes&quot;]
     clean &amp; activate -. failure .-&gt; rollback[&quot;Rollback; show any recovery failure&quot;]
     rollback --&gt; report</div>
+</div>
+<div class="diagram-card">
+  <h2 class="diagram-title">Doctor-managed job planning and recovery</h2>
+  <p class="diagram-desc">The **Jobs** page now supports opt-in Doctor assignment and assisted recovery; see [Doctor-managed jobs](webui_guide.md#doctor-managed-jobs) for controls, limits and audit identities. This is separate from installation repair.</p>
+  <div class="mermaid">flowchart TD
+    create[&quot;Agent creates job: stable UUID, no assignment&quot;] --&gt; queue[&quot;Opt-in Doctor queue: one job at a time&quot;]
+    queue --&gt; plan[&quot;Bounded AI plan or active-agent routing fallback&quot;]
+    plan --&gt; approval{&quot;Team, subtasks or risky change?&quot;}
+    approval -- &quot;review required&quot; --&gt; user[&quot;User approves current plan&quot;]
+    approval -- &quot;single agent or explicit workflow permission&quot; --&gt; run[&quot;Tracked agent or ordered subtask runs&quot;]
+    user --&gt; run
+    run --&gt; result{&quot;Verified success?&quot;}
+    result -- yes --&gt; learn[&quot;Opt-in durable lessons, read by later runs&quot;]
+    result -- no --&gt; optin{&quot;Assisted recovery requested?&quot;}
+    optin -- yes --&gt; diagnose[&quot;Medic investigates: safe limits, active agents, workflow proposals&quot;]
+    diagnose --&gt; stop{&quot;Approval, cancellation or recovery limit?&quot;}
+    stop -- no --&gt; run
+    stop -- yes --&gt; partial[&quot;Keep partial results and explicit stop reason&quot;]
+    optin -- no --&gt; partial
+    inactive[&quot;Fusion or inactive agent&quot;] --&gt; queue</div>
 </div>
 <div class="diagram-card">
   <h2 class="diagram-title">6. Self-update proposals</h2>

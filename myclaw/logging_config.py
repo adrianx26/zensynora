@@ -37,7 +37,7 @@ _API_KEY_RE = re.compile(
     re.IGNORECASE,
 )
 # Phone numbers (simple international shape, 10+ digits with optional +/-/space).
-_PHONE_RE = re.compile(r"\+?\d[\d\-\s]{9,}\d")
+_PHONE_RE = re.compile(r"\+?\d(?:[-\s]*\d){9,}")
 # user_id="..." or user='...' style
 _USER_ID_RE = re.compile(r"user(?:_id)?\s*[:=]\s*['\"]?([^\s'\"\]\)>,]+)", re.IGNORECASE)
 # JWT-ish tokens

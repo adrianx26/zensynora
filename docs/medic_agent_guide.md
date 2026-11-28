@@ -64,6 +64,49 @@ use **Report on GitHub** to open the repository's bug-report form and paste your
 reviewed report. Nothing is uploaded automatically and no GitHub token is stored.
 Do not attach raw logs or configuration containing private data.
 
+### Doctor-managed job planning and recovery
+
+The **Jobs** page now supports opt-in Doctor assignment and assisted recovery;
+see [Doctor-managed jobs](webui_guide.md#doctor-managed-jobs) for controls,
+limits and audit identities. This is separate from installation repair.
+
+```mermaid
+flowchart TD
+    create["Agent creates job: stable UUID, no assignment"] --> queue["Opt-in Doctor queue: one job at a time"]
+    queue --> plan["Bounded AI plan or active-agent routing fallback"]
+    plan --> approval{"Team, subtasks or risky change?"}
+    approval -- "review required" --> user["User approves current plan"]
+    approval -- "single agent or explicit workflow permission" --> run["Tracked agent or ordered subtask runs"]
+    user --> run
+    run --> result{"Verified success?"}
+    result -- yes --> learn["Opt-in durable lessons, read by later runs"]
+    result -- no --> optin{"Assisted recovery requested?"}
+    optin -- yes --> diagnose["Medic investigates: safe limits, active agents, workflow proposals"]
+    diagnose --> stop{"Approval, cancellation or recovery limit?"}
+    stop -- no --> run
+    stop -- yes --> partial["Keep partial results and explicit stop reason"]
+    optin -- no --> partial
+    inactive["Fusion or inactive agent"] --> queue
+```
+
+Graveyard agents never execute jobs. Credentials, code/configuration repairs
+and changed task intent are not automatically applied by the recovery loop.
+Team steps and child jobs keep distinct run UUIDs linked to the parent;
+Completed workflow steps can be reused rather than repeating actions only when
+their task intent and preceding outputs are unchanged. Run results, evaluations
+and diagnoses retain complete local before/after audit snapshots; the audit API
+redacts private text while preserving stable IDs.
+Recovery can revise an existing team or subtask workflow. Changed workflows
+require approval unless automatic workflow changes were explicitly allowed;
+an approved recovery plan executes before another planning request. Planning
+uses current subtask edits, not an old proposal. Task/workflow identity is kept
+separate from execution inputs, so changed dependencies invalidate stale
+results while unchanged completed actions can be retained.
+Approval is bound to the task and workflow as proposed: later subtask edits
+require fresh analysis. Leaf execution inputs include prior-run context and
+saved lessons before reuse is considered; nested workflows check their leaf
+steps individually instead of reusing an entire stale container result.
+
 ---
 
 ## 1. The doctor

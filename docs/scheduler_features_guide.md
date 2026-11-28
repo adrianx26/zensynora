@@ -18,6 +18,12 @@ All additions are **opt-in**: existing `add_job()` callers and existing job
 functions continue to work unchanged. New behaviour is activated only when
 you pass the corresponding kwargs.
 
+For persisted Web UI jobs created with `job_create`, use the separate
+[Doctor-managed job lifecycle](webui_guide.md#doctor-managed-jobs): UUIDs,
+unassigned creation, approved teams/subtasks, assisted recovery and reusable
+job lessons. Enable `medic.plan_jobs` for automatic one-at-a-time planning;
+the scheduler building blocks below do not enable that background process.
+
 ---
 
 ## Files

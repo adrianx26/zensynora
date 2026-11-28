@@ -1745,7 +1745,7 @@ def test_api_routes(home, monkeypatch):  # noqa: F811
     assert r.status_code == 200 and started == [r.json()["job_id"]]
     assert c.post("/api/evolve/fuse", json={"a": "Coder", "b": "Coder", "name": "X", "description": "",
                                             "system_prompt": "p", "model_from": "Coder"}).status_code == 400
-    async def evaluate(*, limit):
+    async def evaluate(*, limit, configured_model=False):
         return {"candidates": [{"a": "Coder", "b": "default"}], "assessed_pairs": 1, "checked_pairs": limit}
 
     monkeypatch.setattr("myclaw.fusion_evaluation.evaluate_fusion_candidates", evaluate)
@@ -1753,7 +1753,7 @@ def test_api_routes(home, monkeypatch):  # noqa: F811
     assert ev.status_code == 200 and ev.json()["checked_pairs"] == 5
     assert "blocked_reason" in ev.json()["candidates"][0]
 
-    async def unavailable(*, limit):
+    async def unavailable(*, limit, configured_model=False):
         raise ValueError("Select a local model.")
 
     monkeypatch.setattr("myclaw.fusion_evaluation.evaluate_fusion_candidates", unavailable)

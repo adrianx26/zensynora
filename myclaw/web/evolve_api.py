@@ -120,6 +120,7 @@ async def fuse(body: FuseIn):
 
 class FuseEvalIn(BaseModel):
     limit: int = Field(8, ge=1, le=50)
+    configured_model: bool = False
 
 
 class ResumeFusionIn(BaseModel):
@@ -141,7 +142,7 @@ async def fuse_evaluate(body: FuseEvalIn = FuseEvalIn()):
     from myclaw.fusion_evaluation import evaluate_fusion_candidates
 
     try:
-        result = await evaluate_fusion_candidates(limit=body.limit)
+        result = await evaluate_fusion_candidates(limit=body.limit, configured_model=body.configured_model)
         for candidate in result["candidates"]:
             try:
                 evolve._pair(candidate["a"], candidate["b"])
